@@ -10,6 +10,8 @@
 #include <ipc/broad_phase/broad_phase.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
 
+#include <limits>
+
 // map BroadPhaseMethod values to JSON as strings
 namespace ipc
 {
@@ -143,6 +145,9 @@ namespace polyfem::solver
 		double dhat() const { return dhat_; }
 		const ipc::Collisions &collision_set() const { return collision_set_; }
 		const ipc::BarrierPotential &barrier_potential() const { return barrier_potential_; }
+
+		double posInfinity = std::numeric_limits<double>::infinity();
+		double negInfinity = -std::numeric_limits<double>::infinity();
 
 	protected:
 		/// @brief Update the cached candidate set for the current solution
