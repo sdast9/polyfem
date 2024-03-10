@@ -312,12 +312,12 @@ namespace polyfem::solver
 				{
 					if (curr_distance < lower && curr_distance < lower && curr_distance < prev_distance_)
 					{
-						// Then decrease the barrier stiffness.
+						// Then imcrease the barrier stiffness.
 						barrier_stiffness_ *= 2.0;
 					}
 
 					if (curr_distance > upper && curr_distance > upper && curr_distance > prev_distance_) {
-					// Then increase the barrier stiffness.
+					// Then decrease the barrier stiffness.
 						barrier_stiffness_ /= 2.0;
 					}
 				}
