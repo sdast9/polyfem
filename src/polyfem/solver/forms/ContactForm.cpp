@@ -299,7 +299,7 @@ namespace polyfem::solver
 			if (is_time_dependent_)
 			{
 				const double prev_barrier_stiffness = barrier_stiffness();
-				const double dhat_epsilon = dhat_epsilon_scale * (ipc::world_bbox_diagonal_length(displaced_surface) + dmin);
+				const double dhat_epsilon = dhat_epsilon_scale * (ipc::world_bbox_diagonal_length(displaced_surface) + dmin_);
 				
 				//These if statements adjusts barrier_stiffness_ to keep the minimum distance around the geometric mean between dhat_epsilon and dhat
 				if (curr_distance < (dhat_epsilon * dhat_)  && curr_distance < (dhat_epsilon * dhat_)
