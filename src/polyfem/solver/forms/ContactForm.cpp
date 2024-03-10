@@ -89,12 +89,10 @@ namespace polyfem::solver
 			nonconvergent_constraints, collision_mesh_, displaced_surface);
 		grad_barrier = collision_mesh_.to_full_dof(grad_barrier);
 
-		if(barrier_stiffness() == 1) //only calculates updated barrier stiffness on first iteration of sim, otherwise uses value from last time step
-		{
+		if(prev_distance_ == -1 || prev_distance_ == posInfinity ||  prev_distance_ == posInfinity)
 			barrier_stiffness_ = ipc::initial_barrier_stiffness(
 				ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 				grad_energy, grad_barrier, max_barrier_stiffness_);
-		}
 		
 		//max_barrier_stiffness not used in this scheme, so set to a very high number for now
 		max_barrier_stiffness_ = 1e30;
@@ -123,7 +121,7 @@ namespace polyfem::solver
 
 		// The barrier stiffness is choosen based on including the acceleration scaling,
 		// but the acceleration scaling will be applied later. Therefore, we need to remove it.
-		if(barrier_stiffness() == 1) //only calculates updated barrier stiffness on first iteration of sim, otherwise uses value from last time step
+		if(prev_distance_ == -1 || prev_distance_ == posInfinity ||  prev_distance_ == posInfinity)
 			barrier_stiffness_ /= weight_;
 
 		logger().debug(
