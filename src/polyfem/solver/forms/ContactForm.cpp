@@ -15,6 +15,8 @@
 
 #include <igl/writePLY.h>
 
+#include <cmath>
+
 namespace polyfem::solver
 {
 	ContactForm::ContactForm(const ipc::CollisionMesh &collision_mesh,
@@ -97,7 +99,7 @@ namespace polyfem::solver
 		//max_barrier_stiffness not used in this scheme, so set to a very high number for now
 		max_barrier_stiffness_ = 1e30;
 		
-		if (use_convergent_formulation())
+		if (use_convergent_formulation() && (prev_distance_ == -1 || prev_distance_ == posInfinity ||  prev_distance_ == posInfinity))
 		{
 			double scaling_factor = 0;
 			if (!nonconvergent_constraints.empty())
@@ -298,20 +300,31 @@ namespace polyfem::solver
 			{
 				const double prev_barrier_stiffness = barrier_stiffness();
 				const double dhat_epsilon = dhat_epsilon_scale * (ipc::world_bbox_diagonal_length(displaced_surface) + dmin_);
+
+				const double upper_log = log10(dhat_)+(log10(dhat_epsilon)-log10(dhat_))/4.0;
+				const double upper = pow(10, upper_log);
+
+				const double lower_log = log10(dhat_)+ 3.0*(log10(dhat_epsilon)-log10(dhat_))/4.0;
+				const double lower = pow(10, lower_log);
 				
 				//These if statements adjusts barrier_stiffness_ to keep the minimum distance around the geometric mean between dhat_epsilon and dhat
-				if (curr_distance < (dhat_epsilon * dhat_)  && curr_distance < (dhat_epsilon * dhat_)
-					&& curr_distance < prev_distance_ && prev_distance_ != -1)
+				if(curr_distance != -1 || curr_distance != posInfinity ||  curr_distance != negInfinity)
 				{
+					if (curr_distance < lower && curr_distance < lower && curr_distance < prev_distance_)
+					{
+						// Then decrease the barrier stiffness.
+						barrier_stiffness_ *= 2.0;
+					}
+
+					if (curr_distance > upper && curr_distance > upper && curr_distance > prev_distance_) {
 					// Then increase the barrier stiffness.
-					barrier_stiffness_ *= 2.0;
+						barrier_stiffness_ /= 2.0;
+					}
 				}
 
-				if (curr_distance > (dhat_epsilon * dhat_) && curr_distance > (dhat_epsilon * dhat_)
-					&& curr_distance > prev_distance_ && prev_distance_ != -1) {
-					// Then decrease the barrier stiffness.
-					barrier_stiffness_ /= 2.0;
-				}
+				//polyfem::logger().debug(
+				//	"Previous distance is {}. Current distance is {}. Upper criteria is {}. Lower criteria is {}",
+				//	prev_distance_, curr_distance, upper, lower);
 
 				if (barrier_stiffness() != prev_barrier_stiffness)
 				{
