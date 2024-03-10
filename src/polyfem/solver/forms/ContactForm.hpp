@@ -196,6 +196,5 @@ namespace polyfem::solver
 		// Probably should declare these as a global constant in ICP toolkit or transfer these changes to the update update_barrier_stiffness in ICP Toolkit
 		// Duplicating based on ipc/barrier/adaptive_stiffness.hpp for now
 		const double dhat_epsilon_scale = 1e-9;
-		const double dmin = 0;
 	};
 } // namespace polyfem::solver
