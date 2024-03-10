@@ -301,10 +301,10 @@ namespace polyfem::solver
 				const double prev_barrier_stiffness = barrier_stiffness();
 				const double dhat_epsilon = dhat_epsilon_scale * (ipc::world_bbox_diagonal_length(displaced_surface) + dmin_);
 
-				const double upper_log = log10(dhat_)+(log10(dhat_epsilon)-log10(dhat_))/4.0;
+				const double upper_log = log10(dhat_ * dhat_)+ 0.01 * (log10(dhat_epsilon * dhat_epsilon)-log10(dhat_ * dhat_));
 				const double upper = pow(10, upper_log);
 
-				const double lower_log = log10(dhat_)+ 3.0*(log10(dhat_epsilon)-log10(dhat_))/4.0;
+				const double lower_log = log10(dhat_ * dhat_)+ 0.5 * (log10(dhat_epsilon * dhat_epsilon)-log10(dhat_ * dhat_));
 				const double lower = pow(10, lower_log);
 				
 				//These if statements adjusts barrier_stiffness_ to keep the minimum distance around the geometric mean between dhat_epsilon and dhat
