@@ -310,13 +310,13 @@ namespace polyfem::solver
 				//These if statements adjusts barrier_stiffness_ to keep the minimum distance around the geometric mean between dhat_epsilon and dhat
 				if(curr_distance != -1 || curr_distance != posInfinity ||  curr_distance != negInfinity)
 				{
-					if (curr_distance < lower && curr_distance < lower && curr_distance < prev_distance_)
+					if (curr_distance < lower && prev_distance_ < lower && curr_distance < prev_distance_)
 					{
 						// Then imcrease the barrier stiffness.
 						barrier_stiffness_ *= 2.0;
 					}
 
-					if (curr_distance > upper && curr_distance > upper && curr_distance > prev_distance_) {
+					if (curr_distance > upper && prev_distance_ > upper && curr_distance > prev_distance_) {
 					// Then decrease the barrier stiffness.
 						barrier_stiffness_ /= 2.0;
 					}
