@@ -18,6 +18,9 @@ namespace polyfem::solver
 		using NLSolver = polysolve::nonlinear::Solver;
 
 	public:
+		static double previous_eta_sa;
+		static double previous_al_weight_sa;
+
 		ALSolver(
 			std::shared_ptr<BCLagrangianForm> lagr_form,
 			std::shared_ptr<BCPenaltyForm> pen_form,
@@ -45,4 +48,5 @@ namespace polyfem::solver
 		// TODO: replace this with a member function
 		std::function<void(const Eigen::VectorXd &)> update_barrier_stiffness;
 	};
+
 } // namespace polyfem::solver
