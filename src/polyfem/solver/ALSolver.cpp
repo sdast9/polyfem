@@ -38,6 +38,7 @@ namespace polyfem::solver
 
 		// --------------------------------------------------------------------
 		double al_weight;
+		int al_check = 0;
 		if(previous_al_weight_sa<initial_al_weight){
 			al_weight = initial_al_weight;
 			previous_al_weight_sa = al_weight;
@@ -94,13 +95,18 @@ namespace polyfem::solver
 			tmp_sol = nl_problem.full_to_reduced(sol);
 			nl_problem.line_search_begin(sol, tmp_sol);
 
-			if (eta <= previous_eta_sa && al_weight < max_al_weight)
+			if ((eta <= previous_eta_sa && eta <= eta_tol) || al_check == 1)
 			{
 				al_weight *= scaling;
 				previous_al_weight_sa = al_weight;
+				al_check = 0;
 			}
 			else
+			{
 				lagr_form->update_lagrangian(sol, al_weight);
+				al_check = 1;
+			}
+
 
 			previous_eta_sa = eta;
 
