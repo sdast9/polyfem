@@ -2,8 +2,13 @@
 
 #include <polyfem/utils/Logger.hpp>
 
+
+
 namespace polyfem::solver
 {
+	double ALSolver::previous_eta_sa = 0.0;
+	double ALSolver::previous_al_weight_sa = 0.0;
+
 	ALSolver::ALSolver(
 		std::shared_ptr<BCLagrangianForm> lagr_form,
 		std::shared_ptr<BCPenaltyForm> pen_form,
@@ -20,6 +25,7 @@ namespace polyfem::solver
 		  eta_tol(eta_tol),
 		  update_barrier_stiffness(update_barrier_stiffness)
 	{
+
 	}
 
 	void ALSolver::solve_al(std::shared_ptr<NLSolver> nl_solver, NLProblem &nl_problem, Eigen::MatrixXd &sol)
@@ -31,8 +37,19 @@ namespace polyfem::solver
 		assert(tmp_sol.size() == nl_problem.reduced_size());
 
 		// --------------------------------------------------------------------
+		double al_weight;
+		int al_check = 0;
+		if(previous_al_weight_sa<initial_al_weight){
+			al_weight = initial_al_weight;
+			previous_al_weight_sa = al_weight;
 
-		double al_weight = initial_al_weight;
+
+		}
+		else{
+			al_weight = ALSolver::previous_al_weight_sa;
+		}
+
+
 		int al_steps = 0;
 		const int iters = nl_solver->stop_criteria().iterations;
 
@@ -78,10 +95,20 @@ namespace polyfem::solver
 			tmp_sol = nl_problem.full_to_reduced(sol);
 			nl_problem.line_search_begin(sol, tmp_sol);
 
-			if (eta < eta_tol && al_weight < max_al_weight)
+			if ((eta <= previous_eta_sa && eta <= eta_tol) || al_check == 1)
+			{
 				al_weight *= scaling;
+				previous_al_weight_sa = al_weight;
+				al_check = 0;
+			}
 			else
+			{
 				lagr_form->update_lagrangian(sol, al_weight);
+				al_check = 1;
+			}
+
+
+			previous_eta_sa = eta;
 
 			post_subsolve(al_weight);
 			++al_steps;
