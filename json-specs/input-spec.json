@@ -1390,6 +1390,7 @@
             "CCD",
             "friction_iterations",
             "friction_convergence_tol",
+            "adaptive_barrier_stiffness",
             "barrier_stiffness"
         ],
         "doc": "Settings for contact handling in the solver."
@@ -1450,17 +1451,15 @@
         "doc": "Tolerence for friction convergence"
     },
     {
-        "pointer": "/solver/contact/barrier_stiffness",
-        "default": "adaptive",
-        "options": [
-            "adaptive"
-        ],
-        "type": "string",
+        "pointer": "/solver/contact/adaptive_barrier_stiffness",
+        "type": "bool",
+        "default": true,
         "doc": "How coefficient of clamped log-barrier function for contact is updated"
     },
     {
         "pointer": "/solver/contact/barrier_stiffness",
         "type": "float",
+        "default": 1.0,
         "doc": "The coefficient of clamped log-barrier function value when not adaptive"
     },
     {
