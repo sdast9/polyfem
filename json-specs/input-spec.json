@@ -1370,7 +1370,7 @@
     },
     {
         "pointer": "/solver/augmented_lagrangian/max_weight",
-        "default": 1e8,
+        "default": 1e40,
         "type": "float",
         "doc": "Maximum weight"
     },
