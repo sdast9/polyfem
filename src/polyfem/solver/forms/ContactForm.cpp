@@ -17,6 +17,7 @@
 #include <cmath>
 #include <iostream>
 
+
 namespace polyfem::solver
 {
 	ContactForm::ContactForm(const ipc::CollisionMesh &collision_mesh,
@@ -80,7 +81,7 @@ namespace polyfem::solver
 
 		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
 
-		// The adative stiffness is designed for the non-convergent formulation,
+		// The additive stiffness is designed for the non-convergent formulation,
 		// so we need to compute the gradient of the non-convergent barrier.
 		// After we can map it to a good value for the convergent formulation.
 		ipc::Collisions nonconvergent_constraints;
@@ -95,16 +96,14 @@ namespace polyfem::solver
 		//	ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 		//	grad_energy, grad_barrier, max_barrier_stiffness_);
 
-		if(barrier_stiffness_ == 1.0 && (prev_distance_ == -1 || prev_distance_ == posInfinity || prev_distance_ == negInfinity))
+		if(barrier_stiffness_ == 1)
 			barrier_stiffness_ = ipc::initial_barrier_stiffness(
 				ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 				grad_energy, grad_barrier, max_barrier_stiffness_);
 
-		//max_barrier_stiffness not used in this scheme, so set to a very high number for now
 		max_barrier_stiffness_ = 1e30;
 
-
-		if (use_convergent_formulation() && (prev_distance_ == -1 || prev_distance_ == posInfinity ||  prev_distance_ == negInfinity))
+		if (use_convergent_formulation() && prev_distance_ ==-1)
 		{
 			double scaling_factor = 0;
 			if (!nonconvergent_constraints.empty())
@@ -123,6 +122,7 @@ namespace polyfem::solver
 				// Hardcoded difference between the non-convergent and convergent barrier
 				scaling_factor = dhat_ * std::pow(dhat_ + 2 * dmin_, 2);
 			}
+			std::cout << "scaling factor is " << scaling_factor;
 			barrier_stiffness_ *= scaling_factor;
 			//max_barrier_stiffness_ *= scaling_factor;
 
@@ -132,14 +132,10 @@ namespace polyfem::solver
 		// but the acceleration scaling will be applied later. Therefore, we need to remove it.
 		//barrier_stiffness_ /= weight_;
 		//max_barrier_stiffness_ /= weight_;
-		if(prev_distance_ == -1 || prev_distance_ == posInfinity ||  prev_distance_ == negInfinity)
-			barrier_stiffness_ /= weight_;
 
 		logger().debug(
-			//"Setting adaptive barrier stiffness to {} (max barrier stiffness: {})",
-			//barrier_stiffness(), max_barrier_stiffness_);
-			"with adaptive barrier stiffness set to {}",
-			barrier_stiffness());
+			"Setting adaptive barrier stiffness to {} (max barrier stiffness: {})",
+			barrier_stiffness(), max_barrier_stiffness_);
 	}
 
 	void ContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
@@ -244,8 +240,6 @@ namespace polyfem::solver
 			igl::writePLY(resolve_output_path("debug_ccd_0.ply"), V0, F, E);
 			igl::writePLY(resolve_output_path("debug_ccd_1.ply"), V1, F, E);
 
-			//std::cout << "Press Enter to continue..." << std::endl;
-			//std::cin.get();
 		}
 
 		double max_step;
@@ -322,7 +316,7 @@ namespace polyfem::solver
 				const double lower = pow(10, lower_log);
 
 				//These if statements adjusts barrier_stiffness_ to keep the minimum distance around the geometric mean between dhat_epsilon and dhat
-				if(prev_distance_ == -1 || prev_distance_ == posInfinity ||  prev_distance_ == negInfinity)
+				if(prev_distance_ != -1 || prev_distance_ != posInfinity ||  prev_distance_ != negInfinity)
 				{
 					if (curr_distance <= lower)
 					{

@@ -9,7 +9,8 @@
 #include <ipc/collision_mesh.hpp>
 #include <ipc/broad_phase/broad_phase.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
-#include <limits>
+
+
 
 // map BroadPhaseMethod values to JSON as strings
 namespace ipc
