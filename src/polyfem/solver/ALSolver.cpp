@@ -93,17 +93,20 @@ namespace polyfem::solver
 				sol = initial_sol;
 			}
 
+			if (eta < eta_tol && al_weight < max_al_weight)
+			{
+				al_weight *= scaling;
+
+			}
+			current_al_weight = al_weight;
+
 			tmp_sol = nl_problem.full_to_reduced(sol);
 			nl_problem.line_search_begin(sol, tmp_sol);
-
-			if (eta < eta_tol && al_weight < max_al_weight)
-
-				al_weight *= scaling;
 
 			for (auto &f : alagr_forms)
 				f->update_lagrangian(sol, al_weight);
 
-			current_al_weight = al_weight;
+
 			post_subsolve(al_weight);
 			++al_steps;
 		}

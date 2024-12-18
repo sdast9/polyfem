@@ -101,7 +101,7 @@ namespace polyfem::solver
 				ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 				grad_energy, grad_barrier, max_barrier_stiffness_);
 
-		max_barrier_stiffness_ = 1e30;
+		max_barrier_stiffness_ = barrier_stiffness_*1e3;
 
 		if (use_convergent_formulation() && prev_distance_ ==-1)
 		{
@@ -233,6 +233,7 @@ namespace polyfem::solver
 		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
 		const Eigen::MatrixXd V1 = compute_displaced_surface(x1);
 
+
 		if (save_ccd_debug_meshes)
 		{
 			const Eigen::MatrixXi E = collision_mesh_.dim() == 2 ? Eigen::MatrixXi() : collision_mesh_.edges();
@@ -307,33 +308,10 @@ namespace polyfem::solver
 			if (is_time_dependent_)
 			{
 				const double prev_barrier_stiffness = barrier_stiffness();
-				const double dhat_epsilon = dhat_epsilon_scale * (ipc::world_bbox_diagonal_length(displaced_surface) + dmin_);
 
-				const double upper_log = log10(dhat_ * dhat_)+ 0.1 * (log10(dhat_epsilon * dhat_epsilon)-log10(dhat_ * dhat_));
-				const double upper = pow(10, upper_log);
-
-				const double lower_log = log10(dhat_ * dhat_)+ 0.25 * (log10(dhat_epsilon * dhat_epsilon)-log10(dhat_ * dhat_));
-				const double lower = pow(10, lower_log);
-
-				//These if statements adjusts barrier_stiffness_ to keep the minimum distance around the geometric mean between dhat_epsilon and dhat
-				if(prev_distance_ != -1 || prev_distance_ != posInfinity ||  prev_distance_ != negInfinity)
-				{
-					if (curr_distance <= lower)
-					{
-						// Then increase the barrier stiffness.
-						barrier_stiffness_ *= 2.0;
-					}
-
-					if (curr_distance > lower && curr_distance <= upper && curr_distance <= prev_distance_) {
-						// Then increase the barrier stiffness.
-						barrier_stiffness_ *= 2.0;
-					}
-				}
-
-
-				//barrier_stiffness_ = ipc::update_barrier_stiffness(
-				//	prev_distance_, curr_distance, max_barrier_stiffness_,
-				//	barrier_stiffness(), ipc::world_bbox_diagonal_length(displaced_surface));
+				barrier_stiffness_ = ipc::update_barrier_stiffness(
+				prev_distance_, curr_distance, max_barrier_stiffness_,
+				barrier_stiffness(), ipc::world_bbox_diagonal_length(displaced_surface));
 
 				if (barrier_stiffness() != prev_barrier_stiffness)
 				{
