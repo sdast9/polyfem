@@ -95,6 +95,8 @@ namespace polyfem::solver
 			assert(row == col); // matrix should be diagonal
 			return !is_boundary_dof[row];
 		});
+		const double avg_mass = masked_lumped_mass_sqrt_.diagonal().head(ndof).mean();
+		masked_lumped_mass_sqrt_ = masked_lumped_mass_sqrt_/avg_mass;
 		masked_lumped_mass_ = masked_lumped_mass_sqrt_;
 		mask_.resize(masked_lumped_mass_.rows(), masked_lumped_mass_.cols());
 		mask_.setIdentity();
