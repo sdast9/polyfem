@@ -96,12 +96,16 @@ namespace polyfem::solver
 		//	ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 		//	grad_energy, grad_barrier, max_barrier_stiffness_);
 
-		if(barrier_stiffness_ == 1)
+
+
+
+		if(barrier_stiffness_ == -1)
 			barrier_stiffness_ = ipc::initial_barrier_stiffness(
 				ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 				grad_energy, grad_barrier, max_barrier_stiffness_);
+		else max_barrier_stiffness_ = barrier_stiffness_*1000;
 
-		max_barrier_stiffness_ = barrier_stiffness_*1e3;
+
 
 		if (use_convergent_formulation() && prev_distance_ ==-1)
 		{
@@ -121,9 +125,10 @@ namespace polyfem::solver
 			{
 				// Hardcoded difference between the non-convergent and convergent barrier
 				scaling_factor = dhat_ * std::pow(dhat_ + 2 * dmin_, 2);
+
 			}
-			std::cout << "scaling factor is " << scaling_factor;
-			barrier_stiffness_ *= scaling_factor;
+
+			//barrier_stiffness_ *= scaling_factor;
 			//max_barrier_stiffness_ *= scaling_factor;
 
 		}
