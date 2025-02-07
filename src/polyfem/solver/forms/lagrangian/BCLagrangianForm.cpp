@@ -55,28 +55,8 @@ namespace polyfem::solver
 		for (const auto bn : boundary_nodes_)
 			is_boundary_dof[bn] = false;
 
-		masked_lumped_mass_sqrt_ = mass.size() == 0 ? polyfem::utils::sparse_identity(ndof, ndof) : polyfem::utils::lump_matrix(mass);
-		{
-			double min_diag = std::numeric_limits<double>::max();
-			double max_diag = 0;
-			for (int k = 0; k < masked_lumped_mass_sqrt_.outerSize(); ++k)
-			{
-				for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_sqrt_, k); it; ++it)
-				{
-					if (it.col() == it.row())
-					{
-						min_diag = std::min(min_diag, it.value());
-						max_diag = std::max(max_diag, it.value());
-					}
-				}
-			}
-			if (max_diag <= 0 || min_diag <= 0 || min_diag / max_diag < 1e-16)
-			{
-				logger().warn("Lumped mass matrix ill-conditioned. Setting lumped mass matrix to identity.");
-				masked_lumped_mass_sqrt_ = polyfem::utils::sparse_identity(ndof, ndof);
-			}
+		masked_lumped_mass_sqrt_ = polyfem::utils::sparse_identity(ndof, ndof) ;
 
-		}
 
 		assert(ndof == masked_lumped_mass_sqrt_.rows() && ndof == masked_lumped_mass_sqrt_.cols());
 
@@ -86,7 +66,7 @@ namespace polyfem::solver
 			const int n_fe_dof = ndof - obstacle_ndof;
 			const double avg_mass = masked_lumped_mass_sqrt_.diagonal().head(n_fe_dof).mean();
 			for (int i = n_fe_dof; i < ndof; ++i)
-				masked_lumped_mass_sqrt_.coeffRef(i, i) = avg_mass;
+				masked_lumped_mass_sqrt_.coeffRef(i, i) = 1.0;
 
 		}
 
@@ -96,7 +76,7 @@ namespace polyfem::solver
 			return !is_boundary_dof[row];
 		});
 		const double avg_mass = masked_lumped_mass_sqrt_.diagonal().head(ndof).mean();
-		masked_lumped_mass_sqrt_ = masked_lumped_mass_sqrt_/avg_mass;
+		//masked_lumped_mass_sqrt_ = masked_lumped_mass_sqrt_/avg_mass;
 		masked_lumped_mass_ = masked_lumped_mass_sqrt_;
 		mask_.resize(masked_lumped_mass_.rows(), masked_lumped_mass_.cols());
 		mask_.setIdentity();
