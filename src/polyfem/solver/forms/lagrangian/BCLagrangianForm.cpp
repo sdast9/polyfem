@@ -64,7 +64,6 @@ namespace polyfem::solver
 		if (obstacle_ndof != 0)
 		{
 			const int n_fe_dof = ndof - obstacle_ndof;
-			const double avg_mass = masked_lumped_mass_sqrt_.diagonal().head(n_fe_dof).mean();
 			for (int i = n_fe_dof; i < ndof; ++i)
 				masked_lumped_mass_sqrt_.coeffRef(i, i) = 1.0;
 

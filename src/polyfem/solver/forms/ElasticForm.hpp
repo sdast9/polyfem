@@ -51,12 +51,16 @@ namespace polyfem::solver
 		/// @param[out] gradv Output gradient of the value wrt x
 		virtual void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const override;
 
+
+
+	public:
 		/// @brief Compute the second derivative of the value wrt x
 		/// @param[in] x Current solution
 		/// @param[out] hessian Output Hessian of the value wrt x
 		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const override;
 
-	public:
+		StiffnessMatrix &get_hessian()  const { return hessian_; }
+
 		/// @brief Determine if a step from solution x0 to solution x1 is allowed
 		/// @param x0 Current solution
 		/// @param x1 Proposed next solution
@@ -127,5 +131,7 @@ namespace polyfem::solver
 
 		mutable std::vector<utils::Tree> quadrature_hierarchy_;
 		int quadrature_order_;
+
+		mutable StiffnessMatrix hessian_;
 	};
 } // namespace polyfem::solver

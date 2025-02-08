@@ -299,14 +299,34 @@ namespace polyfem
 		// Save the subsolve sequence for debugging
 		int subsolve_count = 0;
 		save_subsolve(subsolve_count, t, sol, Eigen::MatrixXd()); // no pressure
-
+        double dt = args["time"]["dt"];
 		// ---------------------------------------------------------------------
+		std::shared_ptr<solver::ElasticForm> elastic_form = std::make_shared<ElasticForm>(n_bases, bases, geom_bases(), *assembler, ass_vals_cache, t, dt,true);
+		StiffnessMatrix check;
+		elastic_form->second_derivative_unweighted(sol,check);
+		const StiffnessMatrix stored_hessian = elastic_form->get_hessian();
+
+		double avg_stiffness = 0;
+		for (int k = 0; k < stored_hessian.outerSize(); ++k)
+		{
+
+			for (StiffnessMatrix::InnerIterator it(stored_hessian, k); it; ++it)
+			{
+				assert(it.col() == k);
+				if (abs(it.value())!=0)
+					avg_stiffness += abs(it.value());
+			}
+		}
+
+		avg_stiffness /= stored_hessian.rows();
+		double initial_weight = args["solver"]["augmented_lagrangian"]["initial_weight"];
+		double al_weight_ = avg_stiffness* dt * dt * initial_weight;
 
 		std::shared_ptr<polysolve::nonlinear::Solver> nl_solver = make_nl_solver(true);
 
 		ALSolver al_solver(
 			solve_data.al_form,
-			args["solver"]["augmented_lagrangian"]["initial_weight"],
+			al_weight_,
 			args["solver"]["augmented_lagrangian"]["scaling"],
 			args["solver"]["augmented_lagrangian"]["max_weight"],
 			args["solver"]["augmented_lagrangian"]["eta"],
