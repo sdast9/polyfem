@@ -19,11 +19,14 @@ namespace polyfem::solver
 
 		inline void set_initial_weight(const double k_al) { k_al_ = k_al; }
 
+		inline double get_momentum_term() const { return max_momentum_;}
+
 		inline const std::vector<int> &constraint_nodes() const { return constraint_nodes_; }
 
 	protected:
 		Eigen::VectorXd lagr_mults_;              ///< vector of lagrange multipliers
 		double k_al_;                             ///< penalty parameter
+		double max_momentum_;					///< momentum term
 		const std::vector<int> constraint_nodes_; ///< constraint nodes
 	};
 } // namespace polyfem::solver

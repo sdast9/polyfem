@@ -135,6 +135,7 @@ namespace polyfem::mesh
 				m.state.args["solver"]["contact"]["CCD"]["broad_phase"],
 				m.state.args["solver"]["contact"]["CCD"]["tolerance"],
 				m.state.args["solver"]["contact"]["CCD"]["max_iterations"],
+				m.state. args["time"]["dt"],
 				// Augmented lagrangian form
 				boundary_nodes, /*obstacle_ndof=*/0, to_projection_quantities.col(i),
 				// Initial guess

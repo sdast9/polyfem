@@ -3,6 +3,8 @@
 #include <polyfem/solver/NLProblem.hpp>
 #include <polysolve/nonlinear/Solver.hpp>
 #include <polyfem/solver/forms/lagrangian/AugmentedLagrangianForm.hpp>
+#include <polyfem/solver/forms/Form.hpp>
+#include <polyfem/solver/forms/ElasticForm.hpp>
 
 
 #include <polyfem/Common.hpp>
@@ -21,6 +23,8 @@ namespace polyfem::solver
 	public:
 		ALSolver(
 			const std::vector<std::shared_ptr<AugmentedLagrangianForm>> &alagr_form,
+			const std::shared_ptr<ElasticForm> &elastic_form,
+			const double dt,
 			const double initial_al_weight,
 			const double scaling,
 			const double max_al_weight,
@@ -38,6 +42,8 @@ namespace polyfem::solver
 		void set_al_weight(NLProblem &nl_problem, const Eigen::VectorXd &x, const double weight);
 
 		std::vector<std::shared_ptr<AugmentedLagrangianForm>> alagr_forms;
+		std::shared_ptr<ElasticForm> elastic_form;
+		const double dt_;
 		const double initial_al_weight;
 		const double scaling;
 		const double max_al_weight;

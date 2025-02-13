@@ -28,6 +28,7 @@ namespace polyfem::solver
 		/// @param obstacle_ndof Obstacle's number of DOF
 		/// @param is_time_dependent Whether the problem is time dependent
 		/// @param t Current time
+		/// @param dt Time step
 		/// @param periodic_bc Periodic boundary conditions
 		BCLagrangianForm(const int ndof,
 						 const std::vector<int> &boundary_nodes,
@@ -39,6 +40,7 @@ namespace polyfem::solver
 						 const size_t obstacle_ndof,
 						 const bool is_time_dependent,
 						 const double t,
+						 const double dt,
 						 const std::shared_ptr<utils::PeriodicBoundary> &periodic_bc = nullptr);
 
 		std::string name() const override
@@ -61,6 +63,11 @@ namespace polyfem::solver
 		/// @brief Compute the value of the form
 		/// @param x Current solution
 		/// @return Computed value
+
+
+
+
+
 		double value_unweighted(const Eigen::VectorXd &x) const override;
 
 		/// @brief Compute the first derivative of the value wrt x
@@ -89,7 +96,8 @@ namespace polyfem::solver
 		Eigen::VectorXd target(const Eigen::VectorXd &) const override { return target_x_; }
 
 		double compute_error(const Eigen::VectorXd &x) const override;
-
+		//const double avg_mass() const {return avg_mass_;}; ///< average mass of the system
+		//void set_avg_mass(const double avg_mass) {avg_mass_ = avg_mass;}; ///< set average mass of the system
 	private:
 		const std::vector<int> &boundary_nodes_;
 		const std::vector<mesh::LocalBoundary> *local_boundary_;
@@ -102,7 +110,7 @@ namespace polyfem::solver
 		StiffnessMatrix masked_lumped_mass_sqrt_; ///< sqrt mass matrix masked by the AL dofs
 		StiffnessMatrix masked_lumped_mass_;      ///< mass matrix masked by the AL dofs
 		StiffnessMatrix mask_;                    ///< identity matrix masked by the AL dofs
-
+		StiffnessMatrix momentum_term_;                    ///< esimate of the momentum based on lumped mass and initial DBC velocity
 		Eigen::MatrixXd target_x_; ///< actually a vector with the same size as x with target nodal positions
 
 		/// @brief Initialize the masked lumped mass matrix
@@ -114,6 +122,7 @@ namespace polyfem::solver
 			const StiffnessMatrix &mass,
 			const size_t obstacle_ndof);
 
+		void init_momentum_term(const Eigen::VectorXd target_x_, const double dt);
 		/// @brief Update target x to the Dirichlet boundary values at time t
 		/// @param t Current time
 		void update_target(const double t);

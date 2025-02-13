@@ -7,7 +7,7 @@
 #include <polyfem/solver/forms/L2ProjectionForm.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
-
+#include <polyfem/solver/SolveData.hpp>
 #include <ipc/ipc.hpp>
 
 #include <polysolve/linear/Solver.hpp>
@@ -86,6 +86,7 @@ namespace polyfem::mesh
 		const ipc::BroadPhaseMethod broad_phase_method,
 		const double ccd_tolerance,
 		const int ccd_max_iterations,
+		const double dt,
 		// Augmented lagrangian form
 		const std::vector<int> &boundary_nodes,
 		const size_t obstacle_ndof,
@@ -133,7 +134,7 @@ namespace polyfem::mesh
 		StaticBoundaryNLProblem problem(ndof, target_x, forms, bc_forms);
 
 		// --------------------------------------------------------------------
-
+		std::shared_ptr<ElasticForm> elastic_form;
 		// Create augmented Lagrangian solver
 		// AL parameters
 		constexpr double al_initial_weight = 1e6;
@@ -142,7 +143,7 @@ namespace polyfem::mesh
 		constexpr double al_eta_tol = 0.99;
 		constexpr size_t al_max_solver_iter = 1000;
 		ALSolver al_solver(
-			bc_forms, al_initial_weight,
+			bc_forms, elastic_form,  dt, al_initial_weight,
 			al_scaling, al_max_weight, al_eta_tol,
 			/*update_barrier_stiffness=*/[&](const Eigen::MatrixXd &x) {});
 

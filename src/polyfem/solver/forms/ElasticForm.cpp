@@ -334,8 +334,6 @@ namespace polyfem::solver
 				geom_bases_, ass_vals_cache_, t_, dt_, x, x_prev_, *mat_cache_, hessian);
 		}
 
-		hessian_ = hessian;
-
 	}
 
 

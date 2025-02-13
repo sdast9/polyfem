@@ -2,18 +2,25 @@
 
 #include <polyfem/utils/Logger.hpp>
 
+
+
 namespace polyfem::solver
 {
+
 	double ALSolver::current_al_weight = -1.0;
 
 	ALSolver::ALSolver(
 		const std::vector<std::shared_ptr<AugmentedLagrangianForm>> &alagr_form,
+		const std::shared_ptr<ElasticForm> &elastic_form,
+		const double dt,
 		const double initial_al_weight,
 		const double scaling,
 		const double max_al_weight,
 		const double eta_tol,
 		const std::function<void(const Eigen::VectorXd &)> &update_barrier_stiffness)
 		: alagr_forms{alagr_form},
+	      elastic_form(elastic_form),
+	      dt_(dt),
 		  initial_al_weight(initial_al_weight),
 		  scaling(scaling),
 		  max_al_weight(max_al_weight),
@@ -26,6 +33,26 @@ namespace polyfem::solver
 
 	void ALSolver::solve_al(std::shared_ptr<NLSolver> nl_solver, NLProblem &nl_problem, Eigen::MatrixXd &sol)
 	{
+
+		StiffnessMatrix hessian_tmp;
+		elastic_form->second_derivative(sol,hessian_tmp);
+
+		double avg_stiffness = 0;
+		for (int k = 0; k < hessian_tmp.outerSize(); ++k)
+		{
+
+			for (StiffnessMatrix::InnerIterator it(hessian_tmp, k); it; ++it)
+			{
+				assert(it.col() == k);
+				if (abs(it.value())>1e-16) //greater than floating point error/rounding error
+					avg_stiffness += abs(it.value());
+			}
+		}
+
+		avg_stiffness /= hessian_tmp.rows();
+		std::cout<<"avg_stiffness"<<avg_stiffness<<std::endl;
+
+
 		assert(sol.size() == nl_problem.full_size());
 
 		const Eigen::VectorXd initial_sol = sol;
@@ -33,21 +60,28 @@ namespace polyfem::solver
 		assert(tmp_sol.size() == nl_problem.reduced_size());
 
 		// --------------------------------------------------------------------
+		double momentum_term = 0.0;
 
-		if (current_al_weight < 0)
-		{
-			current_al_weight = initial_al_weight;
-		}
+		double al_weight = initial_al_weight*avg_stiffness*dt_*dt_;
 
-		double al_weight = current_al_weight;
 		int al_steps = 0;
 		const int iters = nl_solver->stop_criteria().iterations;
 		double initial_error = 0;
-		for (const auto &f : alagr_forms)
-			initial_error += f->compute_error(sol);
+
+		for (const auto &f : alagr_forms){
+		initial_error += f->compute_error(sol);
+		momentum_term += f->get_momentum_term();
+		}
 
 		nl_problem.line_search_begin(sol, tmp_sol);
 
+
+		al_weight += momentum_term;
+
+		if (al_weight < current_al_weight)
+		{
+			 al_weight = current_al_weight;
+		}
 		for (auto &f : alagr_forms)
 			f->set_initial_weight(al_weight);
 
@@ -76,6 +110,7 @@ namespace polyfem::solver
 				if (err_msg.find("f(x) is nan or inf; stopping") != std::string::npos)
 					log_and_throw_error("Failed to solve with AL; f(x) is nan or inf");
 			}
+
 
 			sol = tmp_sol;
 			set_al_weight(nl_problem, sol, -1);

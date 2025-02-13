@@ -39,6 +39,7 @@ namespace polyfem::mesh
 		const ipc::BroadPhaseMethod broad_phase_method,
 		const double ccd_tolerance,
 		const int ccd_max_iterations,
+		const double dt,
 		// Augmented lagrangian form
 		const std::vector<int> &boundary_nodes,
 		const size_t obstacle_ndof,

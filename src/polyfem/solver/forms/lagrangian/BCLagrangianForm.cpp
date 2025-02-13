@@ -4,6 +4,7 @@
 #include <polyfem/assembler/PeriodicBoundary.hpp>
 #include <iostream>
 
+
 namespace polyfem::solver
 {
 	BCLagrangianForm::BCLagrangianForm(const int ndof,
@@ -16,6 +17,7 @@ namespace polyfem::solver
 									   const size_t obstacle_ndof,
 									   const bool is_time_dependent,
 									   const double t,
+									   const double dt,
 									   const std::shared_ptr<utils::PeriodicBoundary> &periodic_bc)
 		: AugmentedLagrangianForm(periodic_bc ? periodic_bc->full_to_periodic(boundary_nodes) : boundary_nodes),
 		  boundary_nodes_(boundary_nodes),
@@ -25,8 +27,10 @@ namespace polyfem::solver
 		  rhs_assembler_(&rhs_assembler),
 		  is_time_dependent_(is_time_dependent)
 	{
+
 		init_masked_lumped_mass(ndof, mass, obstacle_ndof);
 		update_target(t); // initialize target_x_
+		init_momentum_term(target_x_, dt); // initialize momentum_term
 	}
 
 	BCLagrangianForm::BCLagrangianForm(const int ndof,
@@ -43,7 +47,9 @@ namespace polyfem::solver
 		  is_time_dependent_(false),
 		  target_x_(target_x)
 	{
-		init_masked_lumped_mass(ndof, mass, obstacle_ndof);
+
+		//todo add
+		//init_momentum_term(ndof, mass, obstacle_ndof);
 	}
 
 	void BCLagrangianForm::init_masked_lumped_mass(
@@ -55,8 +61,27 @@ namespace polyfem::solver
 		for (const auto bn : boundary_nodes_)
 			is_boundary_dof[bn] = false;
 
-		masked_lumped_mass_sqrt_ = polyfem::utils::sparse_identity(ndof, ndof) ;
-
+		masked_lumped_mass_sqrt_ = mass.size() == 0 ? polyfem::utils::sparse_identity(ndof, ndof) : polyfem::utils::lump_matrix(mass);
+		{
+			double min_diag = std::numeric_limits<double>::max();
+			double max_diag = 0;
+			for (int k = 0; k < masked_lumped_mass_sqrt_.outerSize(); ++k)
+			{
+				for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_sqrt_, k); it; ++it)
+				{
+					if (it.col() == it.row())
+					{
+						min_diag = std::min(min_diag, it.value());
+						max_diag = std::max(max_diag, it.value());
+					}
+				}
+			}
+			if (max_diag <= 0 || min_diag <= 0 || min_diag / max_diag < 1e-16)
+			{
+				logger().warn("Lumped mass matrix ill-conditioned. Setting lumped mass matrix to identity.");
+				masked_lumped_mass_sqrt_ = polyfem::utils::sparse_identity(ndof, ndof);
+			}
+		}
 
 		assert(ndof == masked_lumped_mass_sqrt_.rows() && ndof == masked_lumped_mass_sqrt_.cols());
 
@@ -64,9 +89,11 @@ namespace polyfem::solver
 		if (obstacle_ndof != 0)
 		{
 			const int n_fe_dof = ndof - obstacle_ndof;
+			double avg_mass = (masked_lumped_mass_sqrt_.diagonal().head(n_fe_dof).mean());
 			for (int i = n_fe_dof; i < ndof; ++i)
-				masked_lumped_mass_sqrt_.coeffRef(i, i) = 1.0;
-
+			{
+				masked_lumped_mass_sqrt_.coeffRef(i, i) = avg_mass;
+			}
 		}
 
 		// Remove non-boundary ndof from mass matrix
@@ -74,8 +101,6 @@ namespace polyfem::solver
 			assert(row == col); // matrix should be diagonal
 			return !is_boundary_dof[row];
 		});
-		const double avg_mass = masked_lumped_mass_sqrt_.diagonal().head(ndof).mean();
-		//masked_lumped_mass_sqrt_ = masked_lumped_mass_sqrt_/avg_mass;
 		masked_lumped_mass_ = masked_lumped_mass_sqrt_;
 		mask_.resize(masked_lumped_mass_.rows(), masked_lumped_mass_.cols());
 		mask_.setIdentity();
@@ -95,18 +120,57 @@ namespace polyfem::solver
 			}
 		}
 
-		masked_lumped_mass_sqrt_.setFromTriplets(tmp_triplets.begin(), tmp_triplets.end());
-		masked_lumped_mass_sqrt_.makeCompressed();
+		masked_lumped_mass_sqrt_ .setFromTriplets(tmp_triplets.begin(), tmp_triplets.end());
+		masked_lumped_mass_sqrt_ .makeCompressed();
 
 		lagr_mults_.resize(ndof);
 		lagr_mults_.setZero();
+	}
+
+
+	void BCLagrangianForm::init_momentum_term(const Eigen::VectorXd target_x_, const double dt)
+	{
+
+		double current_dist = 0.0;
+		//todo update for dim < 3
+		for (int k = 0; k<target_x_.size()-3; k+=3)
+		{
+			double dist_mag = target_x_(k)*target_x_(k) + target_x_(k+1)*target_x_(k+1) + target_x_(k+2)*target_x_(k+2);
+			dist_mag = sqrt(abs(dist_mag));
+			if (abs(dist_mag)>current_dist)
+			{
+				current_dist = abs(dist_mag);
+			}
+		}
+		double ini_velocity = current_dist/dt;
+
+		momentum_term_ = ini_velocity*ini_velocity*masked_lumped_mass_sqrt_;
+
+		double max_momentum = 0;
+		for (int k = 0; k < momentum_term_ .outerSize(); ++k)
+		{
+
+			for (StiffnessMatrix::InnerIterator it(momentum_term_ , k); it; ++it)
+			{
+				assert(it.col() == k);
+				if (abs(it.value())>max_momentum)
+					max_momentum += abs(it.value());
+			}
+		}
+
+		max_momentum_ = max_momentum;
+
+
+
+
+
 	}
 
 	double BCLagrangianForm::value_unweighted(const Eigen::VectorXd &x) const
 	{
 		const Eigen::VectorXd dist = x - target_x_;
 		const double L_penalty = -lagr_mults_.transpose() * masked_lumped_mass_sqrt_ * dist;
-		const double A_penalty = 0.5 * dist.transpose() * masked_lumped_mass_ * dist;
+		const double A_penalty = 0.5 * dist.transpose() * masked_lumped_mass_sqrt_ * dist;
 
 		return L_penalty + k_al_ * A_penalty;
 	}

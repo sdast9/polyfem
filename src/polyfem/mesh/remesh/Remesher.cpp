@@ -195,7 +195,7 @@ namespace polyfem::mesh
 		Eigen::MatrixXd projected_quantities(to_projection_quantities.rows(), n_quantities());
 		const int n_constrained_quantaties = n_quantities() / 3;
 		const int n_unconstrained_quantaties = n_quantities() - n_constrained_quantaties;
-
+		const double ddt = state. args["time"]["dt"];
 		const std::vector<int> boundary_nodes = this->boundary_nodes(to_vertex_to_basis);
 		for (int i = 0; i < n_constrained_quantaties; ++i)
 		{
@@ -214,6 +214,7 @@ namespace polyfem::mesh
 				state.args["solver"]["contact"]["CCD"]["broad_phase"],
 				state.args["solver"]["contact"]["CCD"]["tolerance"],
 				state.args["solver"]["contact"]["CCD"]["max_iterations"],
+				state. args["time"]["dt"],
 				// Augmented lagrangian form
 				boundary_nodes, obstacle().ndof(), to_projection_quantities.col(i),
 				// Initial guess

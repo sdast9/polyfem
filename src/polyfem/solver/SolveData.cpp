@@ -103,7 +103,7 @@ namespace polyfem::solver
 	{
 		const bool is_time_dependent = time_integrator != nullptr;
 		assert(!is_time_dependent || time_integrator != nullptr);
-		const double dt = is_time_dependent ? time_integrator->dt() : 0.0;
+		const double dt = time_integrator->dt();
 		const int ndof = n_bases * dim;
 		// if (is_formulation_mixed) // mixed not supported
 		// 	ndof_ += n_pressure_bases; // pressure is a scalar
@@ -178,7 +178,7 @@ namespace polyfem::solver
 
 			al_form.push_back(std::make_shared<BCLagrangianForm>(
 				ndof, boundary_nodes, local_boundary, local_neumann_boundary,
-				n_boundary_samples, mass_tmp, *rhs_assembler, obstacle_ndof, is_time_dependent, t, periodic_bc));
+				n_boundary_samples, mass_tmp, *rhs_assembler, obstacle_ndof, is_time_dependent, t, dt, periodic_bc));
 			forms.push_back(al_form.back());
 		}
 
