@@ -62,7 +62,7 @@ namespace polyfem::solver
 		// --------------------------------------------------------------------
 		double momentum_term = 0.0;
 
-		double al_weight = initial_al_weight*avg_stiffness*dt_*dt_;
+		double al_weight = avg_stiffness*dt_*dt_;
 
 		int al_steps = 0;
 		const int iters = nl_solver->stop_criteria().iterations;
@@ -77,6 +77,7 @@ namespace polyfem::solver
 
 
 		al_weight += momentum_term;
+		al_weight *= initial_al_weight;
 
 		if (al_weight < current_al_weight)
 		{
