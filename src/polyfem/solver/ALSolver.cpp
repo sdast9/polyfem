@@ -50,7 +50,6 @@ namespace polyfem::solver
 		}
 
 		avg_stiffness /= hessian_tmp.rows();
-		std::cout<<"avg_stiffness"<<avg_stiffness<<std::endl;
 
 
 		assert(sol.size() == nl_problem.full_size());
