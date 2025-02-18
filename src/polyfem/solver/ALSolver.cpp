@@ -69,8 +69,8 @@ namespace polyfem::solver
 		double initial_error = 0;
 
 		for (const auto &f : alagr_forms){
-		initial_error += f->compute_error(sol);
-		momentum_term += f->get_momentum_term();
+			initial_error += f->compute_error(sol);
+			momentum_term += f->get_momentum_term();
 		}
 
 		nl_problem.line_search_begin(sol, tmp_sol);

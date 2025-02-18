@@ -61,7 +61,7 @@ namespace polyfem::solver
 		for (const auto bn : boundary_nodes_)
 			is_boundary_dof[bn] = false;
 
-		masked_lumped_mass_sqrt_ = mass.size() == 0 ? polyfem::utils::sparse_identity(ndof, ndof) : polyfem::utils::lump_matrix(mass);
+		masked_lumped_mass_sqrt_ = polyfem::utils::sparse_identity(ndof, ndof);
 		{
 			double min_diag = std::numeric_limits<double>::max();
 			double max_diag = 0;
@@ -89,10 +89,9 @@ namespace polyfem::solver
 		if (obstacle_ndof != 0)
 		{
 			const int n_fe_dof = ndof - obstacle_ndof;
-			double avg_mass = (masked_lumped_mass_sqrt_.diagonal().head(n_fe_dof).mean());
 			for (int i = n_fe_dof; i < ndof; ++i)
 			{
-				masked_lumped_mass_sqrt_.coeffRef(i, i) = avg_mass;
+				masked_lumped_mass_sqrt_.coeffRef(i, i) = 1.0;
 			}
 		}
 
@@ -144,7 +143,7 @@ namespace polyfem::solver
 		}
 		double ini_velocity = current_dist/dt;
 
-		momentum_term_ = ini_velocity*ini_velocity*masked_lumped_mass_sqrt_;
+		momentum_term_ = ini_velocity*ini_velocity*masked_lumped_mass_;
 
 		double max_momentum = 0;
 		for (int k = 0; k < momentum_term_ .outerSize(); ++k)
