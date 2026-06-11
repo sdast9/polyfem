@@ -2,6 +2,8 @@
 
 #include <polyfem/utils/Logger.hpp>
 
+#include <cmath>
+
 namespace polyfem::solver
 {
 	ALSolver::ALSolver(
@@ -10,14 +12,97 @@ namespace polyfem::solver
 		const double scaling,
 		const double max_al_weight,
 		const double eta_tol,
-		const std::function<void(const Eigen::VectorXd &)> &update_barrier_stiffness)
+		const std::function<void(const Eigen::VectorXd &)> &update_barrier_stiffness,
+		const StallRestartOptions &stall_opts,
+		const std::function<void(const Eigen::VectorXd &)> &on_stall)
 		: alagr_forms{alagr_form},
 		  initial_al_weight(initial_al_weight),
 		  scaling(scaling),
 		  max_al_weight(max_al_weight),
 		  eta_tol(eta_tol),
-		  update_barrier_stiffness(update_barrier_stiffness)
+		  update_barrier_stiffness(update_barrier_stiffness),
+		  stall_opts(stall_opts),
+		  on_stall(on_stall)
 	{
+	}
+
+	void ALSolver::minimize_with_stall_restarts(
+		NLProblem &nl_problem,
+		Eigen::VectorXd &tmp_sol,
+		const json &nl_solver_params,
+		const json &linear_solver,
+		const double characteristic_length,
+		const std::shared_ptr<NLSolver> &nl_solverin)
+	{
+		const bool detect_stalls = stall_opts.enabled && on_stall != nullptr;
+
+		int restarts = 0;
+		while (true)
+		{
+			bool stalled = false;
+			int stall_count = 0;
+
+			const auto scale = nl_problem.normalize_forms();
+			auto nl_solver = nl_solverin == nullptr ? polysolve::nonlinear::Solver::create(
+														  nl_solver_params, linear_solver, characteristic_length * scale, logger())
+													: nl_solverin;
+
+			if (detect_stalls)
+			{
+				nl_solver->set_iteration_callback([&](const polysolve::nonlinear::Criteria &crit) -> bool {
+					if (int(crit.iterations) < stall_opts.min_iterations)
+						return false;
+
+					if (std::isfinite(crit.alpha) && crit.alpha < stall_opts.alpha_threshold)
+						++stall_count;
+					else
+						stall_count = 0;
+
+					stalled = stall_count >= stall_opts.patience
+							  || (stall_opts.soft_iteration_limit > 0
+								  && int(crit.iterations) >= stall_opts.soft_iteration_limit);
+					return stalled;
+				});
+			}
+
+			try
+			{
+				nl_solver->minimize(nl_problem, tmp_sol);
+				nl_problem.finish();
+			}
+			catch (...)
+			{
+				// nl_solverin may be shared with later solves
+				nl_solver->set_iteration_callback(nullptr);
+				throw;
+			}
+			nl_solver->set_iteration_callback(nullptr);
+
+			if (!stalled)
+				return;
+
+			if (restarts >= stall_opts.max_restarts)
+			{
+				logger().warn(
+					"Line-search stall persisted after {} restart(s); continuing with the current solution",
+					restarts);
+				return;
+			}
+
+			++restarts;
+			// Identity when the problem is in full size
+			const Eigen::VectorXd full_sol = nl_problem.reduced_to_full(tmp_sol);
+			logger().warn(
+				"Line-search stall detected (alpha < {:g} for {} iterations); retuning barrier stiffness and restarting ({}/{})",
+				stall_opts.alpha_threshold, stall_opts.patience, restarts, stall_opts.max_restarts);
+
+			// on_stall is responsible for retuning the barrier stiffness at
+			// full_sol (the update_barrier_stiffness callback may capture a
+			// stale solution vector, so it is NOT called here).
+			on_stall(full_sol);
+			nl_problem.init(full_sol);
+			tmp_sol = nl_problem.full_to_reduced(full_sol);
+		}
 	}
 
 	void ALSolver::solve_al(NLProblem &nl_problem, Eigen::MatrixXd &sol,
@@ -68,12 +153,9 @@ namespace polyfem::solver
 
 			try
 			{
-				const auto scale = nl_problem.normalize_forms();
-				auto nl_solver = nl_solverin == nullptr ? polysolve::nonlinear::Solver::create(
-															  nl_solver_params, linear_solver, characteristic_length * scale, logger())
-														: nl_solverin;
-				nl_solver->minimize(nl_problem, tmp_sol);
-				nl_problem.finish();
+				minimize_with_stall_restarts(
+					nl_problem, tmp_sol, nl_solver_params, linear_solver,
+					characteristic_length, nl_solverin);
 			}
 			catch (const std::runtime_error &e)
 			{
@@ -143,12 +225,9 @@ namespace polyfem::solver
 		update_barrier_stiffness(sol);
 		try
 		{
-			const auto scale = nl_problem.normalize_forms();
-			auto nl_solver = nl_solverin == nullptr ? polysolve::nonlinear::Solver::create(
-														  nl_solver_params, linear_solver, characteristic_length * scale, logger())
-													: nl_solverin;
-			nl_solver->minimize(nl_problem, tmp_sol);
-			nl_problem.finish();
+			minimize_with_stall_restarts(
+				nl_problem, tmp_sol, nl_solver_params, linear_solver,
+				characteristic_length, nl_solverin);
 		}
 		catch (const std::runtime_error &e)
 		{

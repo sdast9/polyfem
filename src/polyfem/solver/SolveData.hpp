@@ -116,6 +116,7 @@ namespace polyfem::solver
 			const bool use_physical_barrier,
 			const json &barrier_stiffness,
 			const double initial_barrier_stiffness,
+			const json &semi_implicit_opts,
 			const ipc::BroadPhaseMethod broad_phase,
 			const double ccd_tolerance,
 			const long ccd_max_iterations,

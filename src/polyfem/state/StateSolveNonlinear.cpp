@@ -4,6 +4,7 @@
 #include <polyfem/assembler/ViscousDamping.hpp>
 #include <polyfem/Common.hpp>
 
+#include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/solver/forms/BodyForm.hpp>
 #include <polyfem/solver/forms/ContactForm.hpp>
 #include <polyfem/solver/forms/ElasticForm.hpp>
@@ -285,6 +286,7 @@ namespace polyfem
 			args["contact"]["use_convergent_formulation"] ? bool(args["contact"]["use_physical_barrier"]) : false,
 			args["solver"]["contact"]["barrier_stiffness"],
 			args["solver"]["contact"]["initial_barrier_stiffness"],
+			args["solver"]["contact"]["semi_implicit"],
 			args["solver"]["contact"]["CCD"]["broad_phase"],
 			args["solver"]["contact"]["CCD"]["tolerance"],
 			args["solver"]["contact"]["CCD"]["max_iterations"],
@@ -372,15 +374,60 @@ namespace polyfem
 
 		std::shared_ptr<polysolve::nonlinear::Solver> nl_solver = make_nl_solver(true);
 
+		// Optionally scale the initial AL weight to the system elastic
+		// Hessian so the penalty dominates the problem curvature.
+		double initial_al_weight;
+		if (args["solver"]["augmented_lagrangian"]["initial_weight"].is_string())
+		{
+			assert(args["solver"]["augmented_lagrangian"]["initial_weight"] == "hessian_scaled");
+			if (solve_data.elastic_form == nullptr)
+				log_and_throw_error("augmented_lagrangian/initial_weight=\"hessian_scaled\" requires an elastic form!");
+
+			StiffnessMatrix elastic_hessian;
+			solve_data.elastic_form->second_derivative(sol, elastic_hessian);
+			double max_entry = 0;
+			for (int k = 0; k < elastic_hessian.outerSize(); ++k)
+				for (StiffnessMatrix::InnerIterator it(elastic_hessian, k); it; ++it)
+					max_entry = std::max(max_entry, std::abs(it.value()));
+
+			const double multiplier = args["solver"]["augmented_lagrangian"]["initial_weight_multiplier"];
+			initial_al_weight = std::max(multiplier * max_entry, 1.0);
+			logger().info("Using hessian-scaled initial AL weight: {:g} (max |H| = {:g})", initial_al_weight, max_entry);
+		}
+		else
+			initial_al_weight = args["solver"]["augmented_lagrangian"]["initial_weight"];
+
+		// Stall detection: restart the nonlinear solve with retuned barrier
+		// stiffness when the line search collapses (semi-implicit mode only).
+		solver::StallRestartOptions stall_opts;
+		std::function<void(const Eigen::VectorXd &)> on_stall = nullptr;
+		if (auto barrier_form = std::dynamic_pointer_cast<solver::BarrierContactForm>(solve_data.contact_form);
+			barrier_form != nullptr && barrier_form->uses_semi_implicit_stiffness())
+		{
+			const json &restart_opts = args["solver"]["contact"]["semi_implicit"]["restart"];
+			stall_opts.enabled = restart_opts["enabled"];
+			stall_opts.alpha_threshold = restart_opts["alpha_threshold"];
+			stall_opts.patience = restart_opts["patience"];
+			stall_opts.min_iterations = restart_opts["min_iterations"];
+			stall_opts.soft_iteration_limit = restart_opts["soft_iteration_limit"];
+			stall_opts.max_restarts = restart_opts["max_restarts"];
+
+			const double stall_trim_factor = restart_opts["stall_trim_factor"];
+			on_stall = [barrier_form, stall_trim_factor](const Eigen::VectorXd &x) {
+				barrier_form->retune_on_stall(x, stall_trim_factor);
+			};
+		}
+
 		ALSolver al_solver(
 			solve_data.al_form,
-			args["solver"]["augmented_lagrangian"]["initial_weight"],
+			initial_al_weight,
 			args["solver"]["augmented_lagrangian"]["scaling"],
 			args["solver"]["augmented_lagrangian"]["max_weight"],
 			args["solver"]["augmented_lagrangian"]["eta"],
 			[&](const Eigen::VectorXd &x) {
 				this->solve_data.update_barrier_stiffness(sol);
-			});
+			},
+			stall_opts, on_stall);
 
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(

@@ -103,6 +103,11 @@ namespace polyfem::solver
 			collision_set.build(
 				collision_mesh_, displaced_surface, barrier_contact->dhat(), /*dmin=*/0, broad_phase.get());
 
+			// Per-contact stiffness scales so the lagged friction normal
+			// forces see trim * kappa_i instead of a single global stiffness.
+			if (barrier_contact->uses_semi_implicit_stiffness())
+				barrier_contact->assign_collision_stiffness(collision_set);
+
 			ipc::BarrierPotential bp = barrier_contact->barrier_potential();
 			bp.set_stiffness(barrier_contact->barrier_stiffness());
 			friction_collision_set_.build(
