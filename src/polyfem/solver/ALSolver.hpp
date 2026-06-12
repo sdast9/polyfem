@@ -55,7 +55,7 @@ namespace polyfem::solver
 		void solve_reduced(NLProblem &nl_problem, Eigen::MatrixXd &sol,
 						   std::shared_ptr<polysolve::nonlinear::Solver> nl_solver)
 		{
-			solve_al(nl_problem, sol, json{}, json{}, 1, nl_solver);
+			solve_reduced(nl_problem, sol, json{}, json{}, 1, nl_solver);
 		}
 
 		void solve_reduced(NLProblem &nl_problem, Eigen::MatrixXd &sol,

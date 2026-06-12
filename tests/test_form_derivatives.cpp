@@ -302,6 +302,92 @@ TEST_CASE("barrier contact form derivatives", "[form][form_derivatives][contact_
 	test_form(form, *state_ptr);
 }
 
+TEST_CASE("semi-implicit barrier contact form derivatives", "[form][form_derivatives][contact_form]")
+{
+	const int dim = GENERATE(2, 3);
+	const auto state_ptr = get_state(dim);
+	const int ndof = state_ptr->n_bases * dim;
+
+	const double dhat = 1e-3;
+	const bool is_time_dependent = GENERATE(true, false);
+	const ipc::BroadPhaseMethod broad_phase_method = ipc::BroadPhaseMethod::HASH_GRID;
+	const double ccd_tolerance = 1e-6;
+	const int ccd_max_iterations = static_cast<int>(1e6);
+
+	// Unit lumped masses exercise the m/d^2 term of the per-contact stiffness
+	const Eigen::VectorXd lumped_masses =
+		Eigen::VectorXd::Ones(state_ptr->collision_mesh.full_num_vertices());
+
+	BarrierContactForm form(
+		state_ptr->collision_mesh, dhat, state_ptr->avg_mass,
+		/*use_area_weighting=*/false, /*use_improved_max_operator=*/false,
+		/*use_physical_barrier=*/false, /*use_adaptive_barrier_stiffness=*/true,
+		is_time_dependent, /*enable_shape_derivatives=*/false, broad_phase_method,
+		ccd_tolerance, ccd_max_iterations,
+		BarrierStiffnessMode::SemiImplicit, json::object(), lumped_masses);
+
+	// Synthetic SPD system Hessian (position-independent)
+	form.set_system_hessian_provider(
+		[ndof](const Eigen::VectorXd &, StiffnessMatrix &hessian) {
+			hessian.resize(ndof, ndof);
+			hessian.setIdentity();
+			hessian *= 1e4;
+		});
+
+	// Freeze the per-contact stiffness snapshot at x = 0; the FD probe then
+	// validates the derivatives of the frozen-kappa objective, which is the
+	// invariant the solver relies on within a Newton solve.
+	form.init(Eigen::VectorXd::Zero(ndof));
+	form.update_barrier_stiffness(Eigen::VectorXd::Zero(ndof), Eigen::MatrixXd());
+	form.set_barrier_stiffness(2.0); // arbitrary global trim
+
+	test_form(form, *state_ptr);
+}
+
+TEST_CASE("semi-implicit friction form derivatives", "[form][form_derivatives][friction_form]")
+{
+	const int dim = GENERATE(2, 3);
+	const auto state_ptr = get_state(dim);
+	const int ndof = state_ptr->n_bases * dim;
+
+	const double epsv = 1e-3;
+	const double mu = 0.1;
+	const double dhat = 1e-3;
+	const bool is_time_dependent = GENERATE(true, false);
+	const ipc::BroadPhaseMethod broad_phase_method = ipc::BroadPhaseMethod::HASH_GRID;
+	const double ccd_tolerance = 1e-6;
+	const int ccd_max_iterations = static_cast<int>(1e6);
+
+	const Eigen::VectorXd lumped_masses =
+		Eigen::VectorXd::Ones(state_ptr->collision_mesh.full_num_vertices());
+
+	BarrierContactForm contact_form(
+		state_ptr->collision_mesh, dhat, state_ptr->avg_mass,
+		/*use_area_weighting=*/false, /*use_improved_max_operator=*/false,
+		/*use_physical_barrier=*/false, /*use_adaptive_barrier_stiffness=*/true,
+		is_time_dependent, /*enable_shape_derivatives=*/false, broad_phase_method,
+		ccd_tolerance, ccd_max_iterations,
+		BarrierStiffnessMode::SemiImplicit, json::object(), lumped_masses);
+
+	contact_form.set_system_hessian_provider(
+		[ndof](const Eigen::VectorXd &, StiffnessMatrix &hessian) {
+			hessian.resize(ndof, ndof);
+			hessian.setIdentity();
+			hessian *= 1e4;
+		});
+	contact_form.init(Eigen::VectorXd::Zero(ndof));
+	contact_form.update_barrier_stiffness(Eigen::VectorXd::Zero(ndof), Eigen::MatrixXd());
+	contact_form.set_barrier_stiffness(2.0);
+
+	// Exercises FrictionForm::update_lagging's per-collision stiffness
+	// assignment (lagged normal forces see trim * kappa_i).
+	FrictionForm form(
+		state_ptr->collision_mesh, nullptr, epsv, mu, broad_phase_method, contact_form,
+		/*n_lagging_iters=*/-1);
+
+	test_form(form, *state_ptr);
+}
+
 TEST_CASE("smooth contact form derivatives", "[form][form_derivatives][contact_form]")
 {
 	const int dim = GENERATE(2, 3);
