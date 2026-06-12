@@ -89,6 +89,10 @@ namespace polyfem::solver
 		///        collapsed below the band (capped at 256 per bump).
 		double collapse_bump_factor(const double avg_d2) const;
 
+		/// @brief Collapse measure combining the average active gap and the
+		///        (slack-relaxed) minimum gap, both squared distances.
+		double collapse_severity(const double avg_d2, const double min_d2) const;
+
 		/// @brief Retune the trim after a line-search stall: increase it when
 		///        the average active gap is below the band (barrier too soft),
 		///        decrease it otherwise (barrier too stiff), then refresh the

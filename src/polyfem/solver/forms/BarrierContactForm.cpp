@@ -62,6 +62,21 @@ namespace polyfem::solver
 		}
 	}
 
+	double BarrierContactForm::collapse_severity(const double avg_d2, const double min_d2) const
+	{
+		// A single contact collapsing far below the band is as dangerous as
+		// the average collapsing: take the worse of the average gap and the
+		// minimum gap relaxed by min_gap_slack (the minimum may sit well
+		// below the average in healthy states).
+		constexpr double min_gap_slack = 1e2;
+		double severity = std::numeric_limits<double>::infinity();
+		if (std::isfinite(avg_d2))
+			severity = avg_d2;
+		if (std::isfinite(min_d2))
+			severity = std::min(severity, min_d2 * min_gap_slack);
+		return severity;
+	}
+
 	double BarrierContactForm::collapse_bump_factor(const double avg_d2) const
 	{
 		// Force balance gives kappa_eff ~ F / gap, so the trim needed to lift
@@ -82,14 +97,19 @@ namespace polyfem::solver
 
 	void BarrierContactForm::retune_on_stall(const Eigen::VectorXd &x, const double factor)
 	{
-		// A stall with the gap below the band means the barrier is too soft
-		// (the solver is crawling against CCD); otherwise the barrier is
-		// likely dominating the elasticity and should be softened.
+		// A stall with the gap below the band (average OR a single collapsed
+		// contact) means the barrier is too soft (the solver is crawling
+		// against CCD); otherwise the barrier is likely dominating the
+		// elasticity and should be softened.
+		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
 		const double avg_d2 = collision_set_.compute_avg_distance(
-			collision_mesh_, compute_displaced_surface(x), dhat_);
+			collision_mesh_, displaced_surface, dhat_);
+		const double min_d2 = collision_set_.compute_minimum_distance(
+			collision_mesh_, displaced_surface);
+		const double severity = collapse_severity(avg_d2, min_d2);
 
-		if (std::isfinite(avg_d2) && avg_d2 < trim_lower_ * dhat_ * dhat_)
-			bump_trim(std::max(factor, collapse_bump_factor(avg_d2)));
+		if (std::isfinite(severity) && severity < trim_lower_ * dhat_ * dhat_)
+			bump_trim(std::max(factor, collapse_bump_factor(severity)));
 		else
 			bump_trim(1.0 / factor);
 
@@ -440,17 +460,20 @@ namespace polyfem::solver
 			// upward-only bump when the gap is collapsing below the band.
 			const double avg_d2 = collision_set_.compute_avg_distance(
 				collision_mesh_, displaced_surface, dhat_);
+			const double severity = collapse_severity(avg_d2, curr_distance);
 			++iters_since_trim_;
-			if (std::isfinite(avg_d2))
+			if (std::isfinite(severity))
 			{
 				constexpr int emergency_cooldown = 3;
-				if (avg_d2 < trim_lower_ * dhat_ * dhat_
+				if (severity < trim_lower_ * dhat_ * dhat_
 					&& iters_since_trim_ >= emergency_cooldown)
-					bump_trim(collapse_bump_factor(avg_d2));
+					bump_trim(collapse_bump_factor(severity));
 
 				polyfem::logger().debug(
-					"Semi-implicit barrier stiffness: trim={:g}, sqrt(avg d2)/dhat={:g}",
-					barrier_stiffness(), sqrt(avg_d2) / dhat_);
+					"Semi-implicit barrier stiffness: trim={:g}, sqrt(avg d2)/dhat={:g}, sqrt(min d2)/dhat={:g}",
+					barrier_stiffness(),
+					std::isfinite(avg_d2) ? sqrt(avg_d2) / dhat_ : -1.0,
+					std::isfinite(curr_distance) ? sqrt(curr_distance) / dhat_ : -1.0);
 			}
 
 			// Optional per-iteration refresh for experimentation (changes
