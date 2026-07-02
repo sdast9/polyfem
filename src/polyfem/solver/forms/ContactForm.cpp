@@ -63,11 +63,36 @@ namespace polyfem::solver
 		update_collision_set(compute_displaced_surface(new_x));
 	}
 
+	namespace
+	{
+		// Trial steps in distorted states can move surface vertices by
+		// hundreds of barrier supports -- pricing such a sweep is wasted
+		// CCD work and, in the broad phase, a candidate/memory explosion
+		// on thin geometry. Clamp the interval handed to the contact
+		// machinery to this many barrier supports of maximum vertex
+		// displacement; the returned step fraction is rescaled so callers
+		// still reason over the original [x0, x1]. Healthy steps near
+		// contact are far below the cap.
+		constexpr double CCD_TRIAL_DISPLACEMENT_CAP = 50.0;
+
+		double trial_clamp_factor(
+			const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1, const double support)
+		{
+			const double Linf = (V1 - V0).lpNorm<Eigen::Infinity>();
+			const double cap = CCD_TRIAL_DISPLACEMENT_CAP * support;
+			return (Linf > cap && cap > 0) ? cap / Linf : 1.0;
+		}
+	} // namespace
+
 	double ContactForm::max_step_size(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const
 	{
 		// Extract surface only
 		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
-		const Eigen::MatrixXd V1 = compute_displaced_surface(x1);
+		Eigen::MatrixXd V1 = compute_displaced_surface(x1);
+
+		const double trial_clamp = trial_clamp_factor(V0, V1, barrier_support_size());
+		if (trial_clamp < 1.0)
+			V1 = V0 + trial_clamp * (V1 - V0);
 
 		if (save_ccd_debug_meshes)
 		{
@@ -107,17 +132,38 @@ namespace polyfem::solver
 		}
 #endif
 
+		// Rescale to a fraction of the ORIGINAL (unclamped) interval.
+		max_step *= trial_clamp;
+
+		if (max_step < 1e-3)
+			logger().debug(
+				"CCD-bound step: max_step={:g} over {} candidates (trial Linf={:g}, trial_clamp={:g})",
+				max_step, candidates_.size(),
+				(V1 - V0).lpNorm<Eigen::Infinity>() / trial_clamp, trial_clamp);
+
 		return max_step;
 	}
 
 	void ContactForm::line_search_begin(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1)
 	{
+		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
+		Eigen::MatrixXd V1 = compute_displaced_surface(x1);
+
+		// Same absolute-displacement clamp as max_step_size, so the cached
+		// candidates always cover the (clamped) interval CCD prices.
+		const double trial_clamp = trial_clamp_factor(V0, V1, barrier_support_size());
+		if (trial_clamp < 1.0)
+			V1 = V0 + trial_clamp * (V1 - V0);
+
 		candidates_.build(
-			collision_mesh_,
-			compute_displaced_surface(x0),
-			compute_displaced_surface(x1),
+			collision_mesh_, V0, V1,
 			/*inflation_radius=*/barrier_support_size() / 2,
 			broad_phase_.get());
+
+		logger().debug(
+			"Broad phase over trial step: {} candidates (trial Linf={:g}, trial_clamp={:g})",
+			candidates_.size(), (V1 - V0).lpNorm<Eigen::Infinity>() / trial_clamp,
+			trial_clamp);
 
 		use_cached_candidates_ = true;
 	}

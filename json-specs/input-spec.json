@@ -1578,6 +1578,7 @@
             "kappa_spread",
             "conditioning_cap",
             "controller_interval",
+            "gap_floor",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1629,6 +1630,12 @@
         "default": 1e4,
         "type": "float",
         "doc": "Cap each per-contact stiffness at kappa_spread times the median of its refresh batch (guards against exploded Hessians of crushed elements)."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/gap_floor",
+        "default": 0,
+        "type": "float",
+        "doc": "EXPERIMENTAL. Fraction of dhat below which the barrier force saturates (C1 linear continuation of the clamped-log barrier). Removes the Newton-direction poisoning of a pair at the floating-point floor, but without constraint projection the pair then collapses freely until CCD becomes the deadlock; disabled (0) by default."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",

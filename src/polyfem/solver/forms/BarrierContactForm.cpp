@@ -6,7 +6,10 @@
 #include <polyfem/utils/Types.hpp>
 
 #include <ipc/barrier/adaptive_stiffness.hpp>
+#include <ipc/barrier/barrier.hpp>
 #include <ipc/utils/world_bbox_diagonal_length.hpp>
+
+#include <memory>
 
 #include <algorithm>
 #include <vector>
@@ -15,6 +18,74 @@
 
 namespace polyfem::solver
 {
+	namespace
+	{
+		/// Clamped-log barrier with a C1 linear continuation below a
+		/// squared-distance floor: the force saturates at b'(floor) instead
+		/// of blowing up as d -> 0. A single pair driven to the
+		/// floating-point floor of the coordinates (scissored thin surfaces,
+		/// impact at first contact) otherwise injects ~1/d^4 terms into the
+		/// gradient/Hessian and poisons the Newton direction for the whole
+		/// mesh; CCD already guarantees non-penetration, so a bounded
+		/// push-back is safe.
+		class FlooredClampedLogBarrier : public ipc::ClampedLogBarrier
+		{
+		public:
+			FlooredClampedLogBarrier(const double floor_sq) : floor_sq_(floor_sq) {}
+
+			double operator()(const double d, const double dhat) const override
+			{
+				if (d >= floor_sq_)
+					return ipc::ClampedLogBarrier::operator()(d, dhat);
+				return ipc::ClampedLogBarrier::operator()(floor_sq_, dhat)
+					   + ipc::ClampedLogBarrier::first_derivative(floor_sq_, dhat)
+							 * (d - floor_sq_);
+			}
+
+			double first_derivative(const double d, const double dhat) const override
+			{
+				return ipc::ClampedLogBarrier::first_derivative(
+					std::max(d, floor_sq_), dhat);
+			}
+
+			double second_derivative(const double d, const double dhat) const override
+			{
+				return d < floor_sq_
+						   ? 0.0
+						   : ipc::ClampedLogBarrier::second_derivative(d, dhat);
+			}
+
+		private:
+			double floor_sq_;
+		};
+
+		ipc::BarrierPotential make_barrier_potential(
+			const double dhat,
+			const bool use_physical_barrier,
+			const BarrierStiffnessMode stiffness_mode,
+			const json &semi_implicit_opts)
+		{
+			if (stiffness_mode == BarrierStiffnessMode::SemiImplicit)
+			{
+				// Disabled by default: saturating the barrier removes the
+				// direction poisoning but lets a tension-driven pair collapse
+				// freely to the fp floor (measured: 1e-11 -> 6.6e-15 on the
+				// draping wall) where CCD becomes the deadlock instead. The
+				// full treatment is constraint projection at the floor.
+				const double gap_floor =
+					semi_implicit_opts.is_object()
+						? semi_implicit_opts.value("gap_floor", 0.0)
+						: 0.0;
+				if (gap_floor > 0)
+					return ipc::BarrierPotential(
+						std::make_shared<FlooredClampedLogBarrier>(
+							std::pow(gap_floor * dhat, 2)),
+						dhat, 1.0, use_physical_barrier);
+			}
+			return ipc::BarrierPotential(dhat, 1.0, use_physical_barrier);
+		}
+	} // namespace
+
 	BarrierContactForm::BarrierContactForm(const ipc::CollisionMesh &collision_mesh,
 										   const double dhat,
 										   const double avg_mass,
@@ -29,7 +100,7 @@ namespace polyfem::solver
 										   const int ccd_max_iterations,
 										   const BarrierStiffnessMode stiffness_mode,
 										   const json &semi_implicit_opts,
-										   const Eigen::VectorXd &lumped_vertex_masses) : ContactForm(collision_mesh, dhat, avg_mass, use_adaptive_barrier_stiffness, is_time_dependent, enable_shape_derivatives, broad_phase_method, ccd_tolerance, ccd_max_iterations), barrier_potential_(dhat, 1.0, use_physical_barrier), stiffness_mode_(stiffness_mode), lumped_vertex_masses_(lumped_vertex_masses)
+										   const Eigen::VectorXd &lumped_vertex_masses) : ContactForm(collision_mesh, dhat, avg_mass, use_adaptive_barrier_stiffness, is_time_dependent, enable_shape_derivatives, broad_phase_method, ccd_tolerance, ccd_max_iterations), barrier_potential_(make_barrier_potential(dhat, use_physical_barrier, stiffness_mode, semi_implicit_opts)), stiffness_mode_(stiffness_mode), lumped_vertex_masses_(lumped_vertex_masses)
 	{
 		// collision_set_.set_use_convergent_formulation(use_convergent_formulation);
 		collision_set_.set_use_area_weighting(use_area_weighting);
