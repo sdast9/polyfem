@@ -36,6 +36,13 @@ namespace polyfem::solver
 	{
 		const bool detect_stalls = stall_opts.enabled && on_stall != nullptr;
 
+		// A restart from a wedged iterate (a contact hotspot at CCD scale)
+		// cannot escape no matter how the stiffness is retuned: revert to
+		// where this solve STARTED and re-solve with the accumulated
+		// (retuned) stiffness so the collapse path is never walked again.
+		const Eigen::VectorXd subsolve_initial_sol = tmp_sol;
+		int hard_stalls = 0;
+
 		int restarts = 0;
 		while (true)
 		{
@@ -108,6 +115,19 @@ namespace polyfem::solver
 			}
 
 			++restarts;
+
+			// A hard stall (line search failed on every strategy) means the
+			// CURRENT iterate is wedged; after the first retune fails to
+			// free it, revert to the subsolve's initial solution and let the
+			// accumulated stiffness prevent the collapse from re-forming.
+			if (hard_stall && ++hard_stalls > 1)
+			{
+				logger().warn(
+					"Hard stall persists at the current iterate; reverting to the subsolve's initial solution (restart {}/{})",
+					restarts, stall_opts.max_restarts);
+				tmp_sol = subsolve_initial_sol;
+			}
+
 			// Identity when the problem is in full size
 			const Eigen::VectorXd full_sol = nl_problem.reduced_to_full(tmp_sol);
 			logger().warn(
@@ -139,6 +159,7 @@ namespace polyfem::solver
 
 		double al_weight = initial_al_weight;
 		int al_steps = 0;
+		int consecutive_failures = 0;
 
 		double initial_error = 0;
 		for (const auto &f : alagr_forms)
@@ -174,6 +195,7 @@ namespace polyfem::solver
 				minimize_with_stall_restarts(
 					nl_problem, tmp_sol, nl_solver_params, linear_solver,
 					characteristic_length, nl_solverin);
+				consecutive_failures = 0;
 			}
 			catch (const std::runtime_error &e)
 			{
@@ -183,6 +205,16 @@ namespace polyfem::solver
 					log_and_throw_error("Failed to solve with AL; f(x) is nan or inf");
 				if (err_msg.find("Reached iteration limit") != std::string::npos)
 					log_and_throw_error("Reached iteration limit in AL");
+
+				// Otherwise continuing with a scaled weight is a legitimate
+				// retry -- but only finitely often: an iterate the solver
+				// cannot move from at ANY weight would loop forever here
+				// (each retry doubles the weight and grants a fresh restart
+				// budget).
+				if (++consecutive_failures >= 3)
+					log_and_throw_error(
+						"AL subsolve failed {} times in a row ({}); giving up",
+						consecutive_failures, err_msg);
 			}
 
 			sol = tmp_sol;
