@@ -66,6 +66,12 @@ namespace polyfem::solver
 
 		std::function<void(const double)> post_subsolve = [](const double) {};
 
+		/// @brief Optional filter applied to every Newton update direction
+		///        (installed on the nonlinear solver for each subsolve);
+		///        used to project out the closing components of contact
+		///        pairs pinned at the constraint floor.
+		std::function<void(const Eigen::VectorXd &, Eigen::VectorXd &)> direction_filter = nullptr;
+
 	protected:
 		/// @brief Run nl_solver->minimize with stall detection; on a stall,
 		///        retune via on_stall and restart (bounded by max_restarts).

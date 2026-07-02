@@ -126,6 +126,7 @@ namespace polyfem::solver
 				kappa_spread_ = semi_implicit_opts.value("kappa_spread", kappa_spread_);
 				conditioning_cap_ = semi_implicit_opts.value("conditioning_cap", conditioning_cap_);
 				controller_interval_ = semi_implicit_opts.value("controller_interval", controller_interval_);
+				constraint_floor_ = semi_implicit_opts.value("constraint_floor", constraint_floor_);
 			}
 
 			refresh_interval_ = std::max(refresh_interval_, 0);
@@ -166,6 +167,80 @@ namespace polyfem::solver
 			barrier_stiffness_ = new_trim;
 			iters_since_trim_ = 0;
 		}
+	}
+
+	int BarrierContactForm::project_floor_pairs(const Eigen::VectorXd &x, Eigen::VectorXd &dir) const
+	{
+		if (!(constraint_floor_ > 0) || collision_set_.empty())
+			return 0;
+
+		const double floor_d2 = std::pow(constraint_floor_ * dhat_, 2);
+		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const int dim = collision_mesh_.dim();
+
+		// Gather the (full-DOF) squared-distance gradients of pairs below
+		// the floor. The gradient points in the OPENING direction of d^2,
+		// so a direction with g . dir < 0 closes the pair.
+		std::vector<std::vector<std::pair<int, double>>> constraints;
+		for (size_t i = 0; i < collision_set_.size(); i++)
+		{
+			const ipc::NormalCollision &collision = collision_set_[i];
+			const ipc::VectorMax12d positions = collision.dof(displaced_surface, E, F);
+			if (collision.compute_distance(positions) >= floor_d2)
+				continue;
+
+			const ipc::VectorMax12d local_grad = collision.compute_distance_gradient(positions);
+			const auto vids = collision.vertex_ids(E, F);
+
+			std::vector<std::pair<int, double>> entries;
+			for (int a = 0; a < collision.num_vertices(); a++)
+			{
+				const long va = collision_mesh_.to_full_vertex_id(vids[a]);
+				if (dim * va + dim > dir.size())
+					continue; // obstacle DOF: fixed, not part of the direction
+				for (int k = 0; k < dim; k++)
+					entries.emplace_back(dim * va + k, local_grad(dim * a + k));
+			}
+			if (!entries.empty())
+				constraints.push_back(std::move(entries));
+		}
+
+		if (constraints.empty())
+			return 0;
+
+		// One-sided Gauss-Seidel projection: remove the closing component
+		// of the direction for each floor pair (sliding and separation stay
+		// free). A few sweeps handle the (typically tiny) coupled set.
+		constexpr int n_sweeps = 4;
+		for (int sweep = 0; sweep < n_sweeps; sweep++)
+		{
+			bool any = false;
+			for (const auto &g : constraints)
+			{
+				double dot = 0, nrm2 = 0;
+				for (const auto &[idx, val] : g)
+				{
+					dot += val * dir[idx];
+					nrm2 += val * val;
+				}
+				if (dot < 0 && nrm2 > 0)
+				{
+					const double s = dot / nrm2;
+					for (const auto &[idx, val] : g)
+						dir[idx] -= s * val;
+					any = true;
+				}
+			}
+			if (!any)
+				break;
+		}
+
+		logger().debug(
+			"Constraint floor: projected closing components of {} pair(s) below {:g}*dhat",
+			constraints.size(), constraint_floor_);
+		return int(constraints.size());
 	}
 
 	void BarrierContactForm::retune_on_stall(const Eigen::VectorXd &x, const double factor)
@@ -554,7 +629,30 @@ namespace polyfem::solver
 		// line-search trial states), so the per-collision stiffnesses are
 		// always in sync with the current collision set.
 		if (uses_semi_implicit_stiffness())
+		{
 			assign_collision_stiffness(collision_set_);
+
+			// Active-set treatment of pairs below the constraint floor:
+			// remove them from the barrier objective entirely (scale 0) so
+			// the direction filter's projection stays consistent with the
+			// energy the solver vets against; CCD guards feasibility and
+			// the projection forbids further closing. The pair rejoins the
+			// barrier as soon as it reopens above the floor.
+			if (constraint_floor_ > 0)
+			{
+				const double floor_d2 = std::pow(constraint_floor_ * dhat_, 2);
+				const Eigen::MatrixXi &E = collision_mesh_.edges();
+				const Eigen::MatrixXi &F = collision_mesh_.faces();
+				for (size_t i = 0; i < collision_set_.size(); i++)
+				{
+					ipc::NormalCollision &collision = collision_set_[i];
+					if (collision.compute_distance(
+							collision.dof(displaced_surface, E, F))
+						< floor_d2)
+						collision.stiffness_scale = 0.0;
+				}
+			}
+		}
 	}
 
 	double BarrierContactForm::value_unweighted(const Eigen::VectorXd &x) const

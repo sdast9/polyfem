@@ -829,6 +829,23 @@ namespace polyfem::varform
 			},
 			stall_opts, on_stall);
 
+		if (auto barrier_form = std::dynamic_pointer_cast<solver::BarrierContactForm>(solve_data.contact_form);
+			barrier_form != nullptr && barrier_form->uses_semi_implicit_stiffness())
+		{
+			// Active-constraint treatment of pairs pinned at the numerical
+			// floor: project their closing components out of every Newton
+			// direction (sliding/separation stay free). reduced_to_full /
+			// full_to_reduced are affine, so mapping directions as
+			// differences is exact in both full- and reduced-size modes.
+			al_solver.direction_filter =
+				[&nl_problem, barrier_form](const Eigen::VectorXd &x, Eigen::VectorXd &dir) {
+					const Eigen::VectorXd x_full = nl_problem.reduced_to_full(x);
+					Eigen::VectorXd dir_full = nl_problem.reduced_to_full(x + dir) - x_full;
+					if (barrier_form->project_floor_pairs(x_full, dir_full) > 0)
+						dir = nl_problem.full_to_reduced(x_full + dir_full) - x;
+				};
+		}
+
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(
 				{{"type", al_weight > 0 ? "al" : "rc"},

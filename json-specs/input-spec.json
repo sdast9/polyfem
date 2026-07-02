@@ -1579,6 +1579,7 @@
             "conditioning_cap",
             "controller_interval",
             "gap_floor",
+            "constraint_floor",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1636,6 +1637,12 @@
         "default": 0,
         "type": "float",
         "doc": "EXPERIMENTAL. Fraction of dhat below which the barrier force saturates (C1 linear continuation of the clamped-log barrier). Removes the Newton-direction poisoning of a pair at the floating-point floor, but without constraint projection the pair then collapses freely until CCD becomes the deadlock; disabled (0) by default."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/constraint_floor",
+        "default": 1e-4,
+        "type": "float",
+        "doc": "Pairs with gap below this fraction of dhat are treated as active constraints: their closing component is projected out of every Newton direction (sliding and separation stay free). No normal-force law can hold a kinematically driven pair at the numerical floor -- singular barriers poison the search direction, saturated ones let it collapse; the projection lets the rest of the mesh proceed. 0 disables."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",

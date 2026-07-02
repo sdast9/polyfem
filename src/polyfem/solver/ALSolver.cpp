@@ -54,6 +54,9 @@ namespace polyfem::solver
 														  nl_solver_params, linear_solver, characteristic_length * scale, logger())
 													: nl_solverin;
 
+			if (direction_filter)
+				nl_solver->set_direction_filter(direction_filter);
+
 			if (detect_stalls)
 			{
 				nl_solver->set_iteration_callback([&](const polysolve::nonlinear::Criteria &crit) -> bool {
@@ -82,6 +85,7 @@ namespace polyfem::solver
 			{
 				// nl_solverin may be shared with later solves
 				nl_solver->set_iteration_callback(nullptr);
+				nl_solver->set_direction_filter(nullptr);
 
 				// A line search that fails on every strategy is the terminal
 				// form of a stall: the iterate is wedged (e.g. a contact
@@ -99,9 +103,11 @@ namespace polyfem::solver
 			catch (...)
 			{
 				nl_solver->set_iteration_callback(nullptr);
+				nl_solver->set_direction_filter(nullptr);
 				throw;
 			}
 			nl_solver->set_iteration_callback(nullptr);
+				nl_solver->set_direction_filter(nullptr);
 
 			if (!stalled && !hard_stall)
 				return;
