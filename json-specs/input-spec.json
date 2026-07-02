@@ -1576,6 +1576,8 @@
             "trim_max",
             "kappa_min",
             "kappa_spread",
+            "conditioning_cap",
+            "controller_interval",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1588,9 +1590,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/trim_lower",
-        "default": 1e-4,
+        "default": 0.5,
         "type": "float",
-        "doc": "Increase the global trim when the average active squared gap drops below this fraction of dhat^2. The default acts as a safety band against gap collapse; set to ~0.5 to actively target a large gap."
+        "doc": "Increase the global trim when the average active squared gap drops below this fraction of dhat^2. The default actively centers the gap high in the dhat band (interior-point-style), stiffening the barrier as the load grows and long before any contact nears the singular region; lowering it makes the controller a collapse-only safety net."
     },
     {
         "pointer": "/solver/contact/semi_implicit/trim_upper",
@@ -1606,15 +1608,15 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/trim_min",
-        "default": 1.52587890625e-05,
+        "default": 2.3283064365386963e-10,
         "type": "float",
-        "doc": "Lower clamp for the global trim factor (2^-16)."
+        "doc": "Lower clamp for the global trim factor (2^-32). The gradient-balance calibration sets the trim directly at subsolve starts, so the bounds only guard against degenerate balances."
     },
     {
         "pointer": "/solver/contact/semi_implicit/trim_max",
-        "default": 65536.0,
+        "default": 4294967296.0,
         "type": "float",
-        "doc": "Upper clamp for the global trim factor (2^16)."
+        "doc": "Upper clamp for the global trim factor (2^32)."
     },
     {
         "pointer": "/solver/contact/semi_implicit/kappa_min",
@@ -1627,6 +1629,18 @@
         "default": 1e4,
         "type": "float",
         "doc": "Cap each per-contact stiffness at kappa_spread times the median of its refresh batch (guards against exploded Hessians of crushed elements)."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/conditioning_cap",
+        "default": 1e3,
+        "type": "float",
+        "doc": "When a refresh finds the contact unloaded (no gradient-balance signal), cap the effective barrier stiffness at conditioning_cap times the max absolute entry of the system Hessian. Bounds the Newton system's dynamic range until the load provides a force-balance calibration."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/controller_interval",
+        "default": 30,
+        "type": "int",
+        "doc": "Newton-iteration cadence of the in-solve downward trim step when the average gap stays pinned above the band (barrier dominating the elasticity). 0 disables the in-solve downward step."
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart",

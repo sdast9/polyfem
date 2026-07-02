@@ -69,6 +69,19 @@ namespace polyfem::solver
 		///        Hessian of the elastic energy at a given solution.
 		void set_system_hessian_provider(const std::function<void(const Eigen::VectorXd &, StiffnessMatrix &)> &provider) { system_hessian_provider_ = provider; }
 
+		/// @brief Set the callback used to assemble the (weighted) gradient of
+		///        all non-contact energies at a given solution; used to
+		///        calibrate the global trim by gradient balance.
+		void set_system_gradient_provider(const std::function<void(const Eigen::VectorXd &, Eigen::VectorXd &)> &provider) { system_gradient_provider_ = provider; }
+
+		/// @brief One-shot trim calibration by gradient balance (classic IPC's
+		///        initialization applied to the per-contact-scaled barrier):
+		///        trim = -<grad B, grad E> / (weight * ||grad B||^2). Requires
+		///        the gradient provider and a *loaded* contact (the balance is
+		///        degenerate when the barrier force is negligible or opposes
+		///        nothing). @return true if the trim was calibrated.
+		bool calibrate_trim(const Eigen::VectorXd &x);
+
 		/// @brief Refresh the frozen snapshot (displaced surface + system
 		///        Hessian) used to compute per-contact stiffnesses, and
 		///        assign stiffness scales to the current collision set.
@@ -137,6 +150,11 @@ namespace polyfem::solver
 		///        energy at a given solution; injected by SolveData.
 		std::function<void(const Eigen::VectorXd &, StiffnessMatrix &)> system_hessian_provider_;
 
+		/// @brief Callback assembling the (weighted) gradient of all
+		///        non-contact energies at a given solution; injected by
+		///        SolveData, used for gradient-balance trim calibration.
+		std::function<void(const Eigen::VectorXd &, Eigen::VectorXd &)> system_gradient_provider_;
+
 		/// @brief Lumped mass per full-mesh vertex (zeros when quasistatic)
 		Eigen::VectorXd lumped_vertex_masses_;
 
@@ -154,16 +172,37 @@ namespace polyfem::solver
 		/// @brief Frozen per-contact stiffness cap (kappa_spread * median of
 		///        the refresh batch); part of the snapshot for determinism
 		double kappa_cap_ = std::numeric_limits<double>::infinity();
+		/// @brief Median per-contact stiffness of the last refresh batch
+		double kappa_median_ = 0.0;
+		/// @brief Whether the collision set was non-empty at the last refresh
+		///        (detects contact born mid-solve in post_step)
+		bool kappa_snapshot_had_contacts_ = false;
+		/// @brief Trim value at the end of the last refresh; the in-solve
+		///        emergency bumps may climb at most a fixed factor above it
+		///        (unbounded in-solve climbing rails the trim to trim_max
+		///        before the physics can respond)
+		double trim_solve_anchor_ = 1.0;
+		/// @brief Max absolute entry of the frozen system Hessian
+		double kappa_hessian_max_ = 0.0;
 		// Parsed semi-implicit options (see input-spec.json defaults)
 		/// @brief 0 = refresh only at solve starts and stall restarts (frozen
 		///        objective within a solve); N > 0 = also every N iterations
 		int refresh_interval_ = 0;
-		double trim_lower_ = 1e-4;
+		double trim_lower_ = 0.5;
 		double trim_upper_ = 0.9;
 		double trim_factor_ = 2.0;
-		double trim_min_ = std::pow(2.0, -16);
-		double trim_max_ = std::pow(2.0, 16);
+		double trim_min_ = std::pow(2.0, -32);
+		double trim_max_ = std::pow(2.0, 32);
 		double kappa_min_ = 0.0;
 		double kappa_spread_ = 1e4;
+		/// @brief Cap on effective stiffness relative to max|system Hessian|
+		///        applied when the gradient balance is degenerate (unloaded
+		///        contact): past ~8 orders of dynamic range the linear solver
+		///        loses the elastic block, and an unloaded barrier has no
+		///        force-balance signal to justify more stiffness.
+		double conditioning_cap_ = 1e3;
+		/// @brief Newton-iteration cadence of the in-solve downward trim step
+		///        (gap pinned above the band); 0 disables it.
+		int controller_interval_ = 30;
 	};
 } // namespace polyfem::solver

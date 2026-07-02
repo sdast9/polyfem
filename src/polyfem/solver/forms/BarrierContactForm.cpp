@@ -53,6 +53,8 @@ namespace polyfem::solver
 				trim_max_ = semi_implicit_opts.value("trim_max", trim_max_);
 				kappa_min_ = semi_implicit_opts.value("kappa_min", kappa_min_);
 				kappa_spread_ = semi_implicit_opts.value("kappa_spread", kappa_spread_);
+				conditioning_cap_ = semi_implicit_opts.value("conditioning_cap", conditioning_cap_);
+				controller_interval_ = semi_implicit_opts.value("controller_interval", controller_interval_);
 			}
 
 			refresh_interval_ = std::max(refresh_interval_, 0);
@@ -100,20 +102,29 @@ namespace polyfem::solver
 		// A stall with the gap below the band (average OR a single collapsed
 		// contact) means the barrier is too soft (the solver is crawling
 		// against CCD); otherwise the barrier is likely dominating the
-		// elasticity and should be softened.
-		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
+		// elasticity: recalibrate it against the driving forces, falling
+		// back to a blind softening when the balance is degenerate.
+		refresh_semi_implicit_stiffness(x, /*run_trim_controller=*/false);
+		if (collision_set_.empty())
+			return; // stall unrelated to contact; leave the trim alone
+
 		const double avg_d2 = collision_set_.compute_avg_distance(
-			collision_mesh_, displaced_surface, dhat_);
+			collision_mesh_, kappa_surface_, dhat_);
 		const double min_d2 = collision_set_.compute_minimum_distance(
-			collision_mesh_, displaced_surface);
+			collision_mesh_, kappa_surface_);
 		const double severity = collapse_severity(avg_d2, min_d2);
 
 		if (std::isfinite(severity) && severity < trim_lower_ * dhat_ * dhat_)
 			bump_trim(std::max(factor, collapse_bump_factor(severity)));
-		else
-			bump_trim(1.0 / factor);
-
-		refresh_semi_implicit_stiffness(x, /*run_trim_controller=*/false);
+		else if (!calibrate_trim(x))
+		{
+			// Only soften blindly when the gap is pinned above the band
+			// (barrier clearly dominating); a mid-band stall with no
+			// balance signal has no direction -- restart on the fresh
+			// snapshot with the trim untouched.
+			if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
+				bump_trim(1.0 / factor);
+		}
 	}
 
 	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller)
@@ -123,26 +134,12 @@ namespace polyfem::solver
 		if (!system_hessian_provider_)
 			log_and_throw_error("Semi-implicit barrier stiffness requires a system Hessian provider!");
 
-		// Two-sided trim controller, one step per refresh (i.e., per subsolve
-		// or stall restart, NOT per Newton iteration -- the objective must
-		// stay fixed within a solve): keep the average active squared gap in
-		// [trim_lower, trim_upper] * dhat^2.
-		if (run_trim_controller)
-		{
-			const double avg_d2 = collision_set_.compute_avg_distance(
-				collision_mesh_, compute_displaced_surface(x), dhat_);
-			if (std::isfinite(avg_d2))
-			{
-				const double dhat_sq = dhat_ * dhat_;
-				if (avg_d2 < trim_lower_ * dhat_sq)
-					bump_trim(collapse_bump_factor(avg_d2));
-				else if (avg_d2 > trim_upper_ * dhat_sq)
-					bump_trim(1.0 / trim_factor_);
-			}
-		}
-
 		kappa_surface_ = compute_displaced_surface(x);
 		system_hessian_provider_(x, kappa_hessian_);
+		kappa_hessian_max_ = 0.0;
+		for (int k = 0; k < kappa_hessian_.outerSize(); k++)
+			for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
+				kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
 		kappa_cache_.clear();
 		iters_since_refresh_ = 0;
 
@@ -150,20 +147,80 @@ namespace polyfem::solver
 		// the batch (guards against exploded Hessian blocks of crushed
 		// elements); the cap is part of the snapshot for determinism.
 		kappa_cap_ = std::numeric_limits<double>::infinity();
+		kappa_median_ = 0.0;
+		const bool first_contact = !kappa_snapshot_had_contacts_ && !collision_set_.empty();
+		kappa_snapshot_had_contacts_ = !collision_set_.empty();
 		assign_collision_stiffness(collision_set_);
-		if (!collision_set_.empty() && std::isfinite(kappa_spread_) && kappa_spread_ > 0)
+		if (!collision_set_.empty())
 		{
 			std::vector<double> kappas(collision_set_.size());
 			for (size_t i = 0; i < collision_set_.size(); i++)
 				kappas[i] = collision_set_[i].stiffness_scale;
 			std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
-			kappa_cap_ = kappa_spread_ * kappas[kappas.size() / 2];
+			kappa_median_ = kappas[kappas.size() / 2];
 
-			// Re-clamp the already-assigned scales with the frozen cap.
-			for (size_t i = 0; i < collision_set_.size(); i++)
-				collision_set_[i].stiffness_scale =
-					std::min(collision_set_[i].stiffness_scale, kappa_cap_);
+			if (std::isfinite(kappa_spread_) && kappa_spread_ > 0)
+			{
+				kappa_cap_ = kappa_spread_ * kappa_median_;
+				// Re-clamp the already-assigned scales with the frozen cap.
+				for (size_t i = 0; i < collision_set_.size(); i++)
+					collision_set_[i].stiffness_scale =
+						std::min(collision_set_[i].stiffness_scale, kappa_cap_);
+			}
 		}
+
+		// Trim controller, one step per refresh: below the gap band the
+		// barrier is too soft (proportional upward bump); otherwise calibrate
+		// the trim by gradient balance against the current driving forces.
+		// When the balance is degenerate (unloaded contact, no gradient
+		// provider) fall back to a conditioning cap on the effective
+		// stiffness plus the band's downward step.
+		if (run_trim_controller && !collision_set_.empty())
+		{
+			const double avg_d2 = collision_set_.compute_avg_distance(
+				collision_mesh_, kappa_surface_, dhat_);
+			const double min_d2 = collision_set_.compute_minimum_distance(
+				collision_mesh_, kappa_surface_);
+			const double severity = collapse_severity(avg_d2, min_d2);
+			const double dhat_sq = dhat_ * dhat_;
+
+			if (std::isfinite(severity) && severity < trim_lower_ * dhat_sq)
+			{
+				bump_trim(collapse_bump_factor(severity));
+			}
+			else if (!calibrate_trim(x))
+			{
+				// No force-balance signal. On a first-contact event the
+				// fresh kappas have never been vetted, so cap the effective
+				// stiffness by conditioning; on later refreshes the
+				// persistent trim carries the accumulated load history and
+				// must NOT be reset (the emergency bumps and the calibration
+				// are the only things allowed to move it, plus the band's
+				// downward step when the gap is pinned above the band).
+				// (Never cap during an active collapse -- a collapsed first
+				// contact needs strength, not conditioning.)
+				if (first_contact && kappa_median_ > 0 && kappa_hessian_max_ > 0
+					&& !(std::isfinite(severity) && severity < trim_lower_ * dhat_sq))
+				{
+					const double cap = std::clamp(
+						conditioning_cap_ * kappa_hessian_max_ / (weight_ * kappa_median_),
+						trim_min_, trim_max_);
+					if (barrier_stiffness_ > cap)
+					{
+						logger().debug(
+							"Conditioning cap on first contact: trim {:g} -> {:g}",
+							barrier_stiffness_, cap);
+						barrier_stiffness_ = cap;
+						iters_since_trim_ = 0;
+					}
+				}
+				if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
+					bump_trim(1.0 / trim_factor_);
+			}
+		}
+
+		// Re-anchor the in-solve emergency climbing budget.
+		trim_solve_anchor_ = barrier_stiffness_;
 
 		if (!collision_set_.empty())
 		{
@@ -226,14 +283,18 @@ namespace polyfem::solver
 				// during the line search).
 				const ipc::VectorMax12d positions = collision.dof(kappa_surface_, E, F);
 
+				// NOTE: Ando's m/d^2 feasibility term is intentionally NOT
+				// used: with a frozen snapshot, a collapsed snapshot distance
+				// bakes an unbounded stiffness into the objective, and the
+				// log barrier already guarantees non-penetration. Inertia
+				// enters through the system Hessian provider instead
+				// (elastic + inertia curvature of the incremental potential).
 				ipc::VectorMax4d local_mass = ipc::VectorMax4d::Zero(n_verts);
 				ipc::MatrixMax12d local_hess =
 					ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
 				for (int a = 0; a < n_verts; a++)
 				{
 					const long va = collision_mesh_.to_full_vertex_id(vids[a]);
-					if (va < lumped_vertex_masses_.size())
-						local_mass[a] = lumped_vertex_masses_[va];
 					for (int b = 0; b < n_verts; b++)
 					{
 						const long vb = collision_mesh_.to_full_vertex_id(vids[b]);
@@ -250,6 +311,16 @@ namespace polyfem::solver
 				// kappa = avg_mass / d^2 + w^T H w [Ando 2024]
 				kappa = ipc::semi_implicit_stiffness(
 					collision, positions, local_mass, local_hess, dmin_);
+
+				// Unit conversion: the Ando stiffness is an interface SPRING
+				// stiffness [force/length], while the clamped-log barrier
+				// acts on squared distances (units length^4), so its
+				// coefficient carries [force/length^3]. Dividing by dhat^2
+				// makes the barrier's interface stiffness at gaps ~ dhat
+				// match the local elasticity, independent of the dhat scale
+				// (without this the trim controller must bridge a 1/dhat^2
+				// factor and starves for small dhat).
+				kappa /= dhat_ * dhat_;
 
 				// w^T H w can be negative for an unprojected indefinite
 				// Hessian, and avg_mass / d^2 can overflow at tiny distances.
@@ -270,12 +341,70 @@ namespace polyfem::solver
 		}
 	}
 
+	bool BarrierContactForm::calibrate_trim(const Eigen::VectorXd &x)
+	{
+		if (!system_gradient_provider_ || collision_set_.empty())
+			return false;
+
+		Eigen::VectorXd grad_energy;
+		system_gradient_provider_(x, grad_energy);
+
+		// The barrier gradient includes the per-contact stiffness_scale, so
+		// the least-squares balance ratio against the driving forces is
+		// directly the trim (up to the form weight, which multiplies the
+		// barrier but not grad_energy).
+		Eigen::VectorXd grad_barrier = barrier_potential_.gradient(
+			collision_set_, collision_mesh_, compute_displaced_surface(x));
+		grad_barrier = collision_mesh_.to_full_dof(grad_barrier);
+
+		const double gb_norm = grad_barrier.norm();
+		const double ge_norm = grad_energy.norm();
+		if (!(gb_norm > 0) || !(ge_norm > 0))
+			return false;
+
+		// The balance is only meaningful when the driving forces actually
+		// load the contact: require a minimum opposition between the energy
+		// gradient and the barrier force. A barely-touching contact has
+		// ||grad B|| ~ 0 and a near-random direction, so the raw quotient
+		// -<gB,gE>/||gB||^2 divides noise by noise and can explode to
+		// either clamp; the cosine gate rejects exactly those states.
+		const double cos_opposition =
+			-grad_barrier.dot(grad_energy) / (gb_norm * ge_norm);
+		constexpr double min_opposition = 0.1;
+		if (!std::isfinite(cos_opposition) || cos_opposition < min_opposition)
+			return false;
+
+		// = -<gB,gE> / (weight * ||gB||^2), the least-squares balance.
+		const double kappa_gb = cos_opposition * ge_norm / (weight_ * gb_norm);
+		if (!std::isfinite(kappa_gb) || kappa_gb <= 0)
+			return false;
+
+		// Upward-only: the balance is dominated by the comfortable bulk of
+		// the contacts and cannot see a single collapsing hotspot, so
+		// letting it LOWER the trim starves exactly the contacts that are
+		// about to fail. Downward motion belongs to the band machinery
+		// (first-contact conditioning cap + pinned-above-band steps).
+		const double new_trim = std::clamp(kappa_gb, trim_min_, trim_max_);
+		if (new_trim > barrier_stiffness_)
+		{
+			logger().debug(
+				"Gradient-balance trim calibration: {:g} -> {:g}",
+				barrier_stiffness_, new_trim);
+			barrier_stiffness_ = new_trim;
+			iters_since_trim_ = 0;
+		}
+		return true;
+	}
+
 	void BarrierContactForm::update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy)
 	{
 		if (uses_semi_implicit_stiffness())
 		{
 			// barrier_stiffness_ is the trim multiplier in this mode; it is
 			// initialized to 1 by SolveData and persists across (sub)solves.
+			// The refresh recalibrates it by gradient balance (via the
+			// injected gradient provider), so the grad_energy argument is
+			// unused here.
 			refresh_semi_implicit_stiffness(x);
 			return;
 		}
@@ -454,10 +583,19 @@ namespace polyfem::solver
 
 		if (uses_semi_implicit_stiffness())
 		{
-			// The two-sided trim controller acts at refresh points so the
-			// objective stays fixed within a Newton solve. The single
-			// exception (mirroring classic IPC's emergency doubling) is an
-			// upward-only bump when the gap is collapsing below the band.
+			// Contact born mid-solve: the snapshot predates any contact, so
+			// the trim was never initialized against these kappas. Refresh
+			// immediately (with the controller, so the conditioning cap
+			// softens the barrier while the contact is still unloaded).
+			if (!kappa_snapshot_had_contacts_ && !collision_set_.empty())
+				refresh_semi_implicit_stiffness(data.x);
+
+			// In-solve trim controller (mirrors classic IPC's emergency
+			// doubling, made two-sided): an upward proportional bump when
+			// the gap collapses below the band, and a slower-cadenced
+			// downward step when the gap stays pinned above it (barrier
+			// dominating the elasticity). Only the global trim moves
+			// mid-solve; the per-contact snapshot stays frozen.
 			const double avg_d2 = collision_set_.compute_avg_distance(
 				collision_mesh_, displaced_surface, dhat_);
 			const double severity = collapse_severity(avg_d2, curr_distance);
@@ -465,9 +603,28 @@ namespace polyfem::solver
 			if (std::isfinite(severity))
 			{
 				constexpr int emergency_cooldown = 3;
-				if (severity < trim_lower_ * dhat_ * dhat_
+				// Cap the total in-solve upward excursion above the last
+				// refresh: climbing further requires a refresh (stall
+				// retune), which re-anchors the budget and lets the
+				// calibration weigh in. Without this, a persistent pinch
+				// rails the trim to trim_max within a few dozen iterations,
+				// destroying the Newton system long before the physics can
+				// respond.
+				constexpr double max_in_solve_climb = 256.0;
+				const double dhat_sq = dhat_ * dhat_;
+				if (severity < trim_lower_ * dhat_sq
 					&& iters_since_trim_ >= emergency_cooldown)
-					bump_trim(collapse_bump_factor(severity));
+				{
+					const double allowed =
+						trim_solve_anchor_ * max_in_solve_climb / barrier_stiffness_;
+					if (allowed > 1)
+						bump_trim(std::min(collapse_bump_factor(severity), allowed));
+				}
+				else if (
+					controller_interval_ > 0
+					&& std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_sq
+					&& iters_since_trim_ >= controller_interval_)
+					bump_trim(1.0 / trim_factor_);
 
 				polyfem::logger().debug(
 					"Semi-implicit barrier stiffness: trim={:g}, sqrt(avg d2)/dhat={:g}, sqrt(min d2)/dhat={:g}",

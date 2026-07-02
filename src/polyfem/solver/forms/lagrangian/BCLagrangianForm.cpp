@@ -66,6 +66,19 @@ namespace polyfem::solver
 		A_.makeCompressed();
 
 		masked_lumped_mass_ = mass.size() == 0 ? polyfem::utils::sparse_identity(n_dofs_, n_dofs_) : polyfem::utils::lump_matrix(mass);
+		if (mass.size() != 0)
+		{
+			// Normalize the lumped mass so its mean diagonal is 1: the AL
+			// penalty keeps the relative (mass-weighted) node importance but
+			// its weight k_al gets force units, independent of the absolute
+			// mass scale. Without this, fine/light meshes (diagonal ~1e-9)
+			// make any curvature-scaled initial weight ineffective and the
+			// weight ratchet has to climb ~8 orders before the penalty acts.
+			const double mean_diag =
+				masked_lumped_mass_.diagonal().mean();
+			if (mean_diag > 0 && std::isfinite(mean_diag))
+				masked_lumped_mass_ /= mean_diag;
+		}
 		{
 			double min_diag = std::numeric_limits<double>::max();
 			double max_diag = 0;

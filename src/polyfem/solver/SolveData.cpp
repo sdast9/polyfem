@@ -426,15 +426,44 @@ namespace polyfem::solver
 					assert(barrier_form != nullptr);
 					if (elastic_form != nullptr)
 					{
-						// The weighted elastic Hessian as it appears in the
-						// Newton system (includes acceleration scaling).
+						// The weighted elastic (+ inertia, when transient)
+						// Hessian as it appears in the Newton system: the
+						// local curvature of the incremental potential.
 						std::weak_ptr<ElasticForm> weak_elastic = elastic_form;
+						std::weak_ptr<InertiaForm> weak_inertia = inertia_form;
 						barrier_form->set_system_hessian_provider(
-							[weak_elastic](const Eigen::VectorXd &x, StiffnessMatrix &hessian) {
+							[weak_elastic, weak_inertia](const Eigen::VectorXd &x, StiffnessMatrix &hessian) {
 								auto ef = weak_elastic.lock();
 								if (!ef)
 									log_and_throw_error("Elastic form expired in semi-implicit stiffness provider!");
 								ef->second_derivative(x, hessian);
+								if (auto inf = weak_inertia.lock(); inf && inf->enabled())
+								{
+									StiffnessMatrix inertia_hessian;
+									inf->second_derivative(x, inertia_hessian);
+									hessian += inertia_hessian;
+								}
+							});
+
+						// Weighted gradient of all non-contact energies
+						// (same set as the classic adaptive path uses in
+						// update_barrier_stiffness); the barrier form
+						// balances its own gradient against it to calibrate
+						// the global trim.
+						std::array<std::weak_ptr<Form>, 4> weak_energy_forms{
+							{elastic_form, inertia_form, body_form, pressure_form}};
+						barrier_form->set_system_gradient_provider(
+							[weak_energy_forms](const Eigen::VectorXd &x, Eigen::VectorXd &grad_energy) {
+								grad_energy = Eigen::VectorXd::Zero(x.size());
+								for (const auto &weak_form : weak_energy_forms)
+								{
+									auto form = weak_form.lock();
+									if (!form || !form->enabled())
+										continue;
+									Eigen::VectorXd grad_form;
+									form->first_derivative(x, grad_form);
+									grad_energy += grad_form;
+								}
 							});
 					}
 					else
@@ -513,8 +542,9 @@ namespace polyfem::solver
 		if (contact_form == nullptr || !contact_form->use_adaptive_barrier_stiffness())
 			return;
 
-		// The semi-implicit per-contact stiffness uses the system Hessian
-		// (via the injected provider), not the energy gradient.
+		// Semi-implicit mode assembles its own energy gradient through the
+		// injected gradient provider (it also needs it at stall restarts and
+		// post-step refreshes, where this method is not called).
 		if (auto barrier_form = std::dynamic_pointer_cast<BarrierContactForm>(contact_form);
 			barrier_form != nullptr && barrier_form->uses_semi_implicit_stiffness())
 		{
