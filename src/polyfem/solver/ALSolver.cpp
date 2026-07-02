@@ -65,20 +65,38 @@ namespace polyfem::solver
 				});
 			}
 
+			bool hard_stall = false;
 			try
 			{
 				nl_solver->minimize(nl_problem, tmp_sol);
 				nl_problem.finish();
 			}
-			catch (...)
+			catch (const std::runtime_error &e)
 			{
 				// nl_solverin may be shared with later solves
+				nl_solver->set_iteration_callback(nullptr);
+
+				// A line search that fails on every strategy is the terminal
+				// form of a stall: the iterate is wedged (e.g. a contact
+				// hotspot at CCD scale). Retuning the barrier stiffness and
+				// restarting is exactly the remedy, so treat it like one
+				// while restart budget remains instead of crashing.
+				if (detect_stalls && restarts < stall_opts.max_restarts
+					&& std::string(e.what()).find("Line search failed") != std::string::npos)
+				{
+					hard_stall = true;
+				}
+				else
+					throw;
+			}
+			catch (...)
+			{
 				nl_solver->set_iteration_callback(nullptr);
 				throw;
 			}
 			nl_solver->set_iteration_callback(nullptr);
 
-			if (!stalled)
+			if (!stalled && !hard_stall)
 				return;
 
 			if (restarts >= stall_opts.max_restarts)

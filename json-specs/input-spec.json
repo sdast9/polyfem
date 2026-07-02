@@ -1665,9 +1665,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/alpha_threshold",
-        "default": 0.0001,
+        "default": 0.01,
         "type": "float",
-        "doc": "Line-search step sizes below this value count towards a stall."
+        "doc": "Line-search step sizes below this value count towards a stall. An eager threshold restarts (with a stiffness retune) before the solver digs into a wedged state; restarts are cheap relative to grinding."
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/patience",
@@ -1689,9 +1689,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/max_restarts",
-        "default": 5,
+        "default": 20,
         "type": "int",
-        "doc": "Maximum number of stall restarts per nonlinear solve."
+        "doc": "Maximum number of stall restarts per nonlinear solve. Each restart retunes the barrier stiffness and re-freezes the per-contact snapshot; hard loading ramps can legitimately need 15+ retunes within one solve."
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/stall_trim_factor",
