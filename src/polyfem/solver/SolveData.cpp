@@ -50,6 +50,7 @@ namespace polyfem::solver
 		const assembler::AssemblyValsCache &mass_ass_vals_cache,
 		const double jacobian_threshold,
 		const ElementInversionCheck check_inversion,
+		const unsigned conservative_max_iter,
 
 		// Body form
 		const int n_pressure_bases,
@@ -143,7 +144,7 @@ namespace polyfem::solver
 
 		elastic_form = std::make_shared<ElasticForm>(
 			n_bases, bases, geom_bases, assembler, ass_vals_cache,
-			t, dt, is_volume, jacobian_threshold, check_inversion);
+			t, dt, is_volume, jacobian_threshold, check_inversion, conservative_max_iter);
 		forms.push_back(elastic_form);
 
 		if (rhs_assembler != nullptr)
@@ -184,7 +185,8 @@ namespace polyfem::solver
 			if (damping_assembler != nullptr)
 			{
 				damping_form = std::make_shared<ElasticForm>(
-					n_bases, bases, geom_bases, *damping_assembler, ass_vals_cache, t, dt, is_volume);
+					n_bases, bases, geom_bases, *damping_assembler, ass_vals_cache, t, dt, is_volume,
+					0., ElementInversionCheck::Discrete, conservative_max_iter);
 				forms.push_back(damping_form);
 			}
 		}
