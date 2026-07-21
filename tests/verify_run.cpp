@@ -323,3 +323,10 @@ TEST_CASE("runners-polyspline", tagsrun)
 {
 	run_data("polyspline_test_list", POLYFEM_POLYSPLINE_DIR);
 }
+
+#ifdef POLYFEM_WITH_MISO
+TEST_CASE("miso", tagsrun)
+{
+	run_data("miso", POLYFEM_DATA_DIR);
+}
+#endif
