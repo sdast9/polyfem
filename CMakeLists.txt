@@ -74,7 +74,14 @@ option(POLYFEM_WITH_TESTS     "Build tests"                                 ON)
 option(POLYFEM_WITH_CLIPPER   "Use clipper, necessary for polygonal bases"  ON)
 option(POLYFEM_WITH_MMG       "Build MMG utils for remeshing"              OFF)
 option(POLYFEM_WITH_TRIANGLE  "Build target igl_restricted::triangle"      OFF)
-set(POLYFEM_WITH_MISO "Use miso-generated code for Jacobian check" ON)
+# Fork default: OFF. Upstream ships this as `set(POLYFEM_WITH_MISO "..." ON)`,
+# a plain set() that silently overrides any -DPOLYFEM_WITH_MISO=OFF, so the flag
+# cannot be turned off from the command line. The miso P3 validity solvers also
+# take hours to compile on a first build and have broken student builds. They
+# are only needed for the "Conservative" high-order (P3) inversion check used in
+# convergence studies; with miso off, polyfem falls back to Discrete jacobian
+# checking for all meshes. Turn on when needed: cmake -DPOLYFEM_WITH_MISO=ON ..
+option(POLYFEM_WITH_MISO "Use miso-generated code for the conservative P3 Jacobian check (long first-build compile)" OFF)
 option(POLYFEM_BUILD_DOCS     "Build documentation using Doxygen"          OFF)
 option(POLYFEM_REGENERATE_AUTOGEN    "Generate the python autogen files" OFF)
 set(POLYFEM_THREADING "TBB" CACHE STRING "Multithreading library to use (options: CPP, TBB, NONE)")
