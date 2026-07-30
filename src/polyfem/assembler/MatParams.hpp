@@ -4,6 +4,10 @@
 #include <polyfem/utils/Types.hpp>
 #include <polyfem/utils/ExpressionValue.hpp>
 
+#include <memory>
+#include <string>
+#include <vector>
+
 namespace polyfem::assembler
 {
 	class GenericMatParam
@@ -203,10 +207,16 @@ namespace polyfem::assembler
 
 		// Per-element fiber file branch: global el_id -> unit a0.
 		// Populated only when "fiber_direction" uses the per_element_file object
-		// form; operator() then short-circuits to per_el_fibers_[el_id] and dir_
+		// form; operator() then short-circuits to (*per_el_fibers_)[el_id] and dir_
 		// is left empty. See FiberDirection::add_multimaterial in MatParams.cpp.
-		std::vector<Eigen::Vector3d> per_el_fibers_;
+		// Shared (and process-cached) because add_multimaterial runs once per
+		// element: re-reading and re-storing the file per element is O(n^2) in
+		// both time and memory.
+		std::shared_ptr<const std::vector<Eigen::Vector3d>> per_el_fibers_;
 		bool use_per_element_file_ = false;
+		// Identity of the loaded file, so a second, different file reaching the
+		// same instance is an error rather than a silent last-writer-wins.
+		std::string per_el_key_;
 	};
 
 } // namespace polyfem::assembler

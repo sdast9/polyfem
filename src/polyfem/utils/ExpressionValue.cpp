@@ -11,6 +11,8 @@
 #include <tinyexpr.h>
 #include <filesystem>
 #include <memory>
+#include <mutex>
+#include <unordered_map>
 #ifdef POLYFEM_WITH_PYTHON
 // pybind11 enables a debug-only reference counter when NDEBUG is not defined.
 // On MSVC that path can fail with C2480 because it uses a function-local
@@ -231,7 +233,7 @@ namespace polyfem
 		void ExpressionValue::clear()
 		{
 			expr_ = "";
-			mat_.resize(0, 0);
+			mat_.reset();
 			mat_expr_ = {};
 			sfunc_ = nullptr;
 			tfunc_ = nullptr;
@@ -249,7 +251,7 @@ namespace polyfem
 		{
 			clear();
 
-			mat_ = val;
+			mat_ = std::make_shared<Eigen::MatrixXd>(val);
 		}
 
 		void ExpressionValue::init(const std::string &expr, const std::string &root_path)
@@ -267,7 +269,27 @@ namespace polyfem
 			{
 				if (std::filesystem::is_regular_file(path))
 				{
-					read_matrix(path.string(), mat_);
+					// Material params are initialized once per mesh element, so
+					// reading (and storing) the file per element is O(n^2) in time
+					// and memory. Share one immutable copy per path per process;
+					// set_mat() copies on write for the few mutating callers.
+					static std::mutex cache_mutex;
+					static std::unordered_map<std::string, std::shared_ptr<Eigen::MatrixXd>> cache;
+
+					const std::string key = path.string();
+					std::lock_guard<std::mutex> lock(cache_mutex);
+					const auto it = cache.find(key);
+					if (it != cache.end())
+					{
+						mat_ = it->second;
+					}
+					else
+					{
+						auto loaded = std::make_shared<Eigen::MatrixXd>();
+						read_matrix(key, *loaded);
+						cache[key] = loaded;
+						mat_ = loaded;
+					}
 					return;
 				}
 			}
@@ -320,13 +342,13 @@ namespace polyfem
 			{
 				if (vals.empty() || vals[0].is_number())
 				{
-					mat_.resize(vals.size(), 1);
+					mat_ = std::make_shared<Eigen::MatrixXd>(vals.size(), 1);
 
-					for (int i = 0; i < mat_.size(); ++i)
+					for (int i = 0; i < mat_->size(); ++i)
 					{
 						if (!vals[i].is_number())
 							log_and_throw_error("Expression arrays must contain either only numbers or only expressions.");
-						mat_(i) = vals[i].get<double>();
+						(*mat_)(i) = vals[i].get<double>();
 					}
 				}
 				else
@@ -345,7 +367,7 @@ namespace polyfem
 				}
 
 				if (t_index_.size() > 0)
-					if (mat_.size() != t_index_.size() && mat_expr_.size() != t_index_.size())
+					if (mat_size() != t_index_.size() && mat_expr_.size() != t_index_.size())
 						logger().error("Specifying varying dirichlet over time, however 'time_reference' does not match dirichlet boundary conditions.");
 			}
 			else if (vals.is_object())
@@ -439,7 +461,7 @@ namespace polyfem
 					t_index_[std::round(t[i].get<double>() * 1000.) / 1000.] = i;
 				}
 
-				if (mat_.size() != t_index_.size() && mat_expr_.size() != t_index_.size())
+				if (mat_size() != t_index_.size() && mat_expr_.size() != t_index_.size())
 					logger().error("Specifying varying dirichlet over time, however 'time_reference' does not match dirichlet boundary conditions.");
 			}
 		}
@@ -454,8 +476,8 @@ namespace polyfem
 					t = std::round(t * 1000.) / 1000.;
 					if (t_index_.count(t) != 0)
 					{
-						if (mat_.size() > 0)
-							return mat_(t_index_.at(t));
+						if (mat_size() > 0)
+							return (*mat_)(t_index_.at(t));
 						else if (mat_expr_.size() > 0)
 							return mat_expr_[t_index_.at(t)](x, y, z, t, index);
 					}
@@ -466,8 +488,17 @@ namespace polyfem
 					}
 				}
 
-				if (mat_.size() > 0)
-					result = mat_(index);
+				if (mat_size() > 0)
+				{
+					// Per-element value files are indexed by global element id;
+					// a file with too few rows would otherwise read out of bounds.
+					if (index < 0 || index >= mat_->size())
+						log_and_throw_error(fmt::format(
+							"Value list/file has {} entries but entry {} was requested "
+							"(per-element material files must have one row per global element).",
+							mat_->size(), index));
+					result = (*mat_)(index);
+				}
 				else if (sfunc_)
 					result = sfunc_(x, y, z, t, index);
 				else if (tfunc_)

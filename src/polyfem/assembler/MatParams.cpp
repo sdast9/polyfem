@@ -6,6 +6,9 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <map>
+#include <memory>
+#include <mutex>
 
 namespace polyfem::assembler
 {
@@ -591,13 +594,13 @@ namespace polyfem::assembler
 		// column vector so downstream is_a_vector logic is unchanged.
 		if (use_per_element_file_)
 		{
-			if (el_id < 0 || el_id >= static_cast<int>(per_el_fibers_.size()))
+			if (el_id < 0 || el_id >= static_cast<int>(per_el_fibers_->size()))
 				log_and_throw_error(fmt::format(
-					"Fiber el_id {} out of range [0,{})", el_id, per_el_fibers_.size()));
+					"Fiber el_id {} out of range [0,{})", el_id, per_el_fibers_->size()));
 			Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 3, 3> res;
 			res.resize(size_, 1);
 			for (int i = 0; i < size_; ++i)
-				res(i, 0) = per_el_fibers_[el_id](i);
+				res(i, 0) = (*per_el_fibers_)[el_id](i);
 			return res;
 		}
 
@@ -667,19 +670,54 @@ namespace polyfem::assembler
 		{
 			const std::string field = dir.value("field", std::string("FIB_DIR1"));
 			const std::string p = utils::resolve_path(dir.at("path").get<std::string>(), root_path);
+			const std::string key = p + "\n" + field;
 
-			per_el_fibers_ = read_cell_vectors_legacy_vtk(p, field);
-			for (auto &v : per_el_fibers_)
+			// add_multimaterial runs once per element, so loading here without a
+			// cache re-reads and re-stores the whole file per element (O(n^2) in
+			// time and memory). Load once per (path, field) per process.
+			if (use_per_element_file_)
 			{
-				const double n = v.norm();
-				if (n < 1e-12)
-					log_and_throw_error("Zero-length fiber vector in per-element file");
-				v /= n;
+				if (key != per_el_key_)
+					log_and_throw_error(fmt::format(
+						"Conflicting per-element fiber files for one material: '{}' and '{}'. "
+						"All bodies sharing a material model must name the same file/field.",
+						per_el_key_.substr(0, per_el_key_.find('\n')), p));
+				return; // already loaded
 			}
+
+			static std::mutex cache_mutex;
+			static std::map<std::string, std::shared_ptr<const std::vector<Eigen::Vector3d>>> cache;
+
+			std::shared_ptr<const std::vector<Eigen::Vector3d>> fibers;
+			{
+				std::lock_guard<std::mutex> lock(cache_mutex);
+				const auto it = cache.find(key);
+				if (it != cache.end())
+				{
+					fibers = it->second;
+				}
+				else
+				{
+					auto loaded = std::make_shared<std::vector<Eigen::Vector3d>>(
+						read_cell_vectors_legacy_vtk(p, field));
+					for (auto &v : *loaded)
+					{
+						const double n = v.norm();
+						if (n < 1e-12)
+							log_and_throw_error("Zero-length fiber vector in per-element file");
+						v /= n;
+					}
+					logger().info("FiberDirection: loaded {} per-element fibers ('{}') from {}",
+								  loaded->size(), field, p);
+					fibers = loaded;
+					cache[key] = fibers;
+				}
+			}
+
+			per_el_fibers_ = fibers;
+			per_el_key_ = key;
 			use_per_element_file_ = true;
 			has_rotation_ = false; // a direction vector, not a rotation matrix
-			logger().info("FiberDirection: loaded {} per-element fibers ('{}') from {}",
-						  per_el_fibers_.size(), field, p);
 			return; // dir_ left empty; operator() short-circuits
 		}
 
