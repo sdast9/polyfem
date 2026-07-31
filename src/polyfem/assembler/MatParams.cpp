@@ -718,7 +718,7 @@ namespace polyfem::assembler
 			per_el_key_ = key;
 			use_per_element_file_ = true;
 			has_rotation_ = false; // a direction vector, not a rotation matrix
-			return; // dir_ left empty; operator() short-circuits
+			return;                // dir_ left empty; operator() short-circuits
 		}
 
 		for (int i = dir_.size(); i <= index; ++i)

@@ -107,7 +107,7 @@ namespace polyfem::solver
 				throw;
 			}
 			nl_solver->set_iteration_callback(nullptr);
-				nl_solver->set_direction_filter(nullptr);
+			nl_solver->set_direction_filter(nullptr);
 
 			if (!stalled && !hard_stall)
 				return;

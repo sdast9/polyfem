@@ -412,8 +412,10 @@ namespace polyfem::solver
 			else if (collision_set.is_edge_edge(i))
 				type_tag = 2;
 
+			// Doubly braced: std::array wraps a C array, and GCC's
+			// -Werror=missing-braces (on in CI) rejects the flat form clang accepts.
 			const std::array<long, 5> key = {
-				type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])};
+				{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}};
 
 			double kappa;
 			const auto cached = kappa_cache_.find(key);
