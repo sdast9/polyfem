@@ -70,6 +70,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="" \
             -DPOLYFEM_THREADING=${{ matrix.threading }} \
+            -DPOLYFEM_WITH_TRIANGLE=ON \
             -DPOLYFEM_PORTABLE_BUILD=ON
       - name: Build
         run: cmake --build build && ccache --show-stats
@@ -128,7 +129,8 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="" \
-            -DPOLYFEM_THREADING=${{ matrix.threading }}
+            -DPOLYFEM_THREADING=${{ matrix.threading }} \
+            -DPOLYFEM_WITH_TRIANGLE=ON
 
       - name: Build
         run: cmake --build build && ccache --show-stats
@@ -149,12 +151,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # You might be wondering why it's MinSizeRel instead of Release here.
-        # The reason is that release build on windows is very buggy. Takes 2.5
-        # hours and cause 2 unit tests to segfault.
-        #
-        # Track this bug at https://github.com/polyfem/polyfem/issues/467
-        config: [DebugNoSymbols, MinSizeRel]
+        config: [DebugNoSymbols, Release]
         threading: [CPP]
     steps:
       - name: Checkout repository

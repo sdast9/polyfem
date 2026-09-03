@@ -92,6 +92,11 @@ option(POLYFEM_WITH_PYTHON "Enable Python interpreter support" ON)
 option(POLYFEM_SILENCE_DEP_WARNINGS "Silence all compiler warnings for dependencies" OFF)
 option(POLYFEM_PORTABLE_BUILD "Avoid host-specific CPU instruction flags in dependencies" OFF)
 
+if(POLYFEM_WITH_OPTIMIZATION AND NOT POLYFEM_WITH_MMG)
+    message(STATUS "Enabling MMG because optimization support requires remeshing")
+    set(POLYFEM_WITH_MMG ON CACHE BOOL "Build MMG utils for remeshing" FORCE)
+endif()
+
 if(POLYFEM_PORTABLE_BUILD)
     set(CMAKE_DISABLE_FIND_PACKAGE_AVX ON CACHE BOOL "Disable AVX autodetection for portable builds" FORCE)
 
@@ -226,6 +231,8 @@ target_link_libraries(polyfem PUBLIC ipc::toolkit)
 
 # Threading
 if(POLYFEM_THREADING STREQUAL "CPP")
+    # IPC Toolkit uses TBB internally even when PolyFEM uses C++ threads.
+    target_link_libraries(polyfem PUBLIC TBB::tbb)
     target_compile_definitions(polyfem PUBLIC POLYFEM_WITH_CPP_THREADS)
     # These definitions help avoid problems with GCC using TBB backend
     target_compile_definitions(polyfem PUBLIC PSTL_USE_PARALLEL_POLICIES=0)
@@ -338,9 +345,15 @@ jse_add_spec(polyfem_objective_spec
 	LINK_SPECS polysolve::linear::spec polysolve::polysolve::spec
 )
 
+jse_add_spec(polyfem_dirichlet_spec
+	ALIAS polyfem::dirichlet_spec
+	INPUT "${POLYFEM_JSON_SPEC_DIR}/dirichlet-boundary-condition.json"
+	OUTPUT "${POLYFEM_EMBEDDED_SPEC_DIR}/polyfem_dirichlet.hpp"
+)
+
 target_include_directories(polyfem PRIVATE "$<BUILD_INTERFACE:${POLYFEM_GENERATED_INCLUDE_DIR}>")
-add_dependencies(polyfem polyfem_spec polyfem_opt_spec polyfem_objective_spec)
-target_link_libraries(polyfem PUBLIC polyfem::spec polyfem::opt_spec polyfem::objective_spec)
+add_dependencies(polyfem polyfem_spec polyfem_opt_spec polyfem_objective_spec polyfem_dirichlet_spec)
+target_link_libraries(polyfem PUBLIC polyfem::spec polyfem::opt_spec polyfem::objective_spec polyfem::dirichlet_spec)
 
 ################################################################################
 # Optional libraries
@@ -356,7 +369,7 @@ endif()
 
 # # MMG wrapper
 if(POLYFEM_WITH_MMG)
-    include(mmg)
+    include(mmg_remesh)
     target_link_libraries(polyfem PUBLIC mmg::mmg)
     target_compile_definitions(polyfem PUBLIC -DPOLYFEM_WITH_MMG)
 endif()

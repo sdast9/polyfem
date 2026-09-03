@@ -238,6 +238,7 @@ namespace polyfem
 			sfunc_ = nullptr;
 			tfunc_ = nullptr;
 			value_ = 0;
+			index_ = -1;
 		}
 
 		void ExpressionValue::init(const double val)
@@ -492,12 +493,14 @@ namespace polyfem
 				{
 					// Per-element value files are indexed by global element id;
 					// a file with too few rows would otherwise read out of bounds.
-					if (index < 0 || index >= mat_->size())
+					// index_, when set, overrides the caller-supplied index.
+					const Eigen::Index mat_index = index_ >= 0 ? Eigen::Index(index_) : Eigen::Index(index);
+					if (mat_index < 0 || mat_index >= mat_->size())
 						log_and_throw_error(fmt::format(
 							"Value list/file has {} entries but entry {} was requested "
 							"(per-element material files must have one row per global element).",
-							mat_->size(), index));
-					result = (*mat_)(index);
+							mat_->size(), mat_index));
+					result = (*mat_)(mat_index);
 				}
 				else if (sfunc_)
 					result = sfunc_(x, y, z, t, index);

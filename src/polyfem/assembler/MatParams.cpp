@@ -92,6 +92,8 @@ namespace polyfem::assembler
 		if (params.count(param_name_))
 		{
 			param_[index].init(params[param_name_], root_path);
+			if (params.contains(MATERIAL_ELEMENT_INDEX))
+				param_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
 		}
 	}
 
@@ -139,6 +141,8 @@ namespace polyfem::assembler
 			}
 
 			params_.at(i).param_[index].init(params_array[i], root_path);
+			if (params.contains(MATERIAL_ELEMENT_INDEX))
+				params_.at(i).param_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
 		}
 	}
 
@@ -485,6 +489,12 @@ namespace polyfem::assembler
 			mu_or_nu_[index].set_unit_type(stress_unit);
 			is_lambda_mu_ = true;
 		}
+
+		if (params.contains(MATERIAL_ELEMENT_INDEX))
+		{
+			lambda_or_E_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
+			mu_or_nu_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
+		}
 	}
 
 	void LameParameters::set_e_nu(const int index, const json &E, const json &nu, const std::string &stress_unit, const std::string &root_path)
@@ -531,6 +541,8 @@ namespace polyfem::assembler
 		{
 			rho_[index].init(params["density"], root_path);
 		}
+		if (params.contains(MATERIAL_ELEMENT_INDEX))
+			rho_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
 
 		rho_[index].set_unit_type(density_unit);
 	}

@@ -10,6 +10,8 @@
 
 namespace polyfem::assembler
 {
+	inline constexpr const char *MATERIAL_ELEMENT_INDEX = "__polyfem_material_element_index";
+
 	class GenericMatParam
 	{
 	public:

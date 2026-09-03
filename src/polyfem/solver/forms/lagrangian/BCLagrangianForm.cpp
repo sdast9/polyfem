@@ -14,7 +14,8 @@ namespace polyfem::solver
 									   const assembler::RhsAssembler &rhs_assembler,
 									   const size_t obstacle_ndof,
 									   const bool is_time_dependent,
-									   const double t)
+									   const double t,
+									   const BCLumpingMode lumping)
 		: boundary_nodes_(boundary_nodes),
 		  local_boundary_(&local_boundary),
 		  local_neumann_boundary_(&local_neumann_boundary),
@@ -23,6 +24,7 @@ namespace polyfem::solver
 		  is_time_dependent_(is_time_dependent),
 		  n_dofs_(ndof)
 	{
+		lumping_ = lumping;
 		init_masked_lumped_mass(mass, obstacle_ndof);
 		update_target(t); // initialize b_
 	}
@@ -65,26 +67,12 @@ namespace polyfem::solver
 		A_.setFromTriplets(A_triplets.begin(), A_triplets.end());
 		A_.makeCompressed();
 
-		masked_lumped_mass_ = mass.size() == 0 ? polyfem::utils::sparse_identity(n_dofs_, n_dofs_) : polyfem::utils::lump_matrix(mass);
-		if (mass.size() != 0)
-		{
-			// Normalize the lumped mass so its mean diagonal is 1: the AL
-			// penalty keeps the relative (mass-weighted) node importance but
-			// its weight k_al gets force units, independent of the absolute
-			// mass scale. Without this, fine/light meshes (diagonal ~1e-9)
-			// make any curvature-scaled initial weight ineffective and the
-			// weight ratchet has to climb ~8 orders before the penalty acts.
-			const double mean_diag =
-				masked_lumped_mass_.diagonal().mean();
-			if (mean_diag > 0 && std::isfinite(mean_diag))
-				masked_lumped_mass_ /= mean_diag;
-		}
-		{
+		const auto is_ill_conditioned = [](const StiffnessMatrix &lumped) {
 			double min_diag = std::numeric_limits<double>::max();
 			double max_diag = 0;
-			for (int k = 0; k < masked_lumped_mass_.outerSize(); ++k)
+			for (int k = 0; k < lumped.outerSize(); ++k)
 			{
-				for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_, k); it; ++it)
+				for (StiffnessMatrix::InnerIterator it(lumped, k); it; ++it)
 				{
 					if (it.col() == it.row())
 					{
@@ -93,11 +81,58 @@ namespace polyfem::solver
 					}
 				}
 			}
-			if (max_diag <= 0 || min_diag <= 0 || min_diag / max_diag < 1e-16)
+			return max_diag <= 0 || min_diag <= 0 || min_diag / max_diag < 1e-16;
+		};
+
+		if (mass.size() == 0)
+			masked_lumped_mass_ = polyfem::utils::sparse_identity(n_dofs_, n_dofs_);
+		else if (lumping_ == BCLumpingMode::HRZ)
+			masked_lumped_mass_ = polyfem::utils::lump_matrix_hrz(mass);
+		else
+		{
+			masked_lumped_mass_ = polyfem::utils::lump_matrix(mass);
+			if (is_ill_conditioned(masked_lumped_mass_))
 			{
-				logger().warn("Lumped mass matrix ill-conditioned. Setting lumped mass matrix to identity.");
+				// row-sum lumping is invalid for bases of order >= 2 (rows of the
+				// consistent mass can sum to zero or negative values)
+				logger().warn("Row-sum lumped mass ill-conditioned (expected for order >= 2); using HRZ-style diagonal-scaling lumping for the BC penalty metric.");
+				masked_lumped_mass_ = polyfem::utils::lump_matrix_hrz(mass);
+			}
+		}
+
+		// Last resort: only reject NONPOSITIVE metrics (a large diagonal spread
+		// is physical grading, not damage). A plain identity is the right
+		// fallback because the metric is normalized just below; upstream scales
+		// it by the average nodal mass, which that normalization would undo.
+		if (mass.size() != 0)
+		{
+			double min_diag = std::numeric_limits<double>::max();
+			for (int k = 0; k < masked_lumped_mass_.outerSize(); ++k)
+				for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_, k); it; ++it)
+					if (it.col() == it.row())
+						min_diag = std::min(min_diag, it.value());
+			if (min_diag <= 0)
+			{
+				logger().warn("Lumped mass matrix has nonpositive entries; using identity for the BC penalty metric.");
 				masked_lumped_mass_ = polyfem::utils::sparse_identity(n_dofs_, n_dofs_);
 			}
+		}
+
+		// Normalize the metric to mean diagonal 1. Relative (mass-weighted) node
+		// importance is preserved, but the absolute mass scale moves out of the
+		// metric and into k_al. That is what makes k_al commensurate with
+		// max|H_elastic| (see the "hessian_scaled" initial weight), and it puts
+		// this form on the same footing as the other AugmentedLagrangianForms
+		// (MatrixLagrangianForm, PeriodicBoundaryLagrangianForm, ...), which use
+		// a dimensionless metric and share the single al_weight that ALSolver
+		// ratchets. Without it a fine/light mesh (diagonal ~1e-9) needs ~30
+		// doublings to take effect, far past the default max_weight of 1e8, so
+		// the Dirichlet BC is silently never imposed.
+		if (mass.size() != 0)
+		{
+			const double mean_diag = masked_lumped_mass_.diagonal().mean();
+			if (mean_diag > 0 && std::isfinite(mean_diag))
+				masked_lumped_mass_ /= mean_diag;
 		}
 
 		assert(n_dofs_ == masked_lumped_mass_.rows() && n_dofs_ == masked_lumped_mass_.cols());
