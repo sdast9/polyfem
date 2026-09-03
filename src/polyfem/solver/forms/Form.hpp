@@ -67,6 +67,18 @@ namespace polyfem::solver
 		/// @return Maximum allowable step size
 		virtual double max_step_size(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const { return 1; }
 
+		/// @brief Whether this form wants FullNLProblem to clamp the trial
+		///        interval sequentially (each form bounding the step over the
+		///        interval already clamped by the forms before it) rather than
+		///        taking the minimum over the full interval.
+		/// @return False by default. The two agree in exact arithmetic, but the
+		///         inversion and CCD bounds are not scale-consistent -- both use
+		///         absolute tolerances and iteration caps -- so a shortened sweep
+		///         yields a slightly different fraction. Enabling this globally
+		///         perturbs converged solutions everywhere, including scenes with
+		///         no contact, so it is opt-in.
+		virtual bool wants_sequential_step_clamping() const { return false; }
+
 		/// @brief Initialize variables used during the line search
 		/// @param x0 Current solution
 		/// @param x1 Next solution

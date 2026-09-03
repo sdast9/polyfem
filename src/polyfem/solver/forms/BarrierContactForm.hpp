@@ -65,6 +65,27 @@ namespace polyfem::solver
 		/// @brief Is the semi-implicit per-contact stiffness mode active?
 		bool uses_semi_implicit_stiffness() const { return stiffness_mode_ == BarrierStiffnessMode::SemiImplicit; }
 
+		/// @brief Cap trial-step surface displacement only in semi-implicit
+		///        mode, where Newton trial steps in distorted states can move
+		///        vertices by hundreds of barrier supports -- pricing that
+		///        sweep is wasted CCD work and a broad-phase memory risk on
+		///        thin geometry. Every other mode keeps the base class's
+		///        uncapped behaviour, since the cap also bounds the step when
+		///        CCD finds no collision.
+/// @brief Opt into sequential clamping only in semi-implicit mode, where
+		///        the trial steps that make it worthwhile actually occur.
+		bool wants_sequential_step_clamping() const override
+		{
+			return uses_semi_implicit_stiffness();
+		}
+
+				double trial_displacement_cap() const override
+		{
+			return uses_semi_implicit_stiffness()
+					   ? trial_displacement_cap_
+					   : std::numeric_limits<double>::infinity();
+		}
+
 		/// @brief Set the callback used to assemble the (weighted) system
 		///        Hessian of the elastic energy at a given solution.
 		void set_system_hessian_provider(const std::function<void(const Eigen::VectorXd &, StiffnessMatrix &)> &provider) { system_hessian_provider_ = provider; }
@@ -218,5 +239,8 @@ namespace polyfem::solver
 		///        active constraints by the direction filter (see
 		///        project_floor_pairs); 0 disables the projection.
 		double constraint_floor_ = 1e-4;
+		/// @brief Trial-step displacement cap, in barrier supports. Only
+		///        applied while the semi-implicit stiffness mode is active.
+		double trial_displacement_cap_ = 50.0;
 	};
 } // namespace polyfem::solver

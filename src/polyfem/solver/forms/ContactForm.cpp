@@ -65,21 +65,23 @@ namespace polyfem::solver
 
 	namespace
 	{
-		// Trial steps in distorted states can move surface vertices by
-		// hundreds of barrier supports -- pricing such a sweep is wasted
-		// CCD work and, in the broad phase, a candidate/memory explosion
-		// on thin geometry. Clamp the interval handed to the contact
-		// machinery to this many barrier supports of maximum vertex
-		// displacement; the returned step fraction is rescaled so callers
-		// still reason over the original [x0, x1]. Healthy steps near
-		// contact are far below the cap.
-		constexpr double CCD_TRIAL_DISPLACEMENT_CAP = 50.0;
-
+		// Clamp the interval handed to the contact machinery to `cap_multiple`
+		// barrier supports of maximum vertex displacement; the returned step
+		// fraction is rescaled so callers still reason over the original
+		// [x0, x1]. An infinite cap_multiple disables the clamp entirely.
+		//
+		// NOTE: because the fraction is rescaled, a finite cap bounds the step
+		// even when CCD reports no collision. That is only acceptable where the
+		// trial steps are known to be pathological -- see
+		// ContactForm::trial_displacement_cap.
 		double trial_clamp_factor(
-			const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1, const double support)
+			const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1,
+			const double support, const double cap_multiple)
 		{
+			if (!std::isfinite(cap_multiple))
+				return 1.0;
 			const double Linf = (V1 - V0).lpNorm<Eigen::Infinity>();
-			const double cap = CCD_TRIAL_DISPLACEMENT_CAP * support;
+			const double cap = cap_multiple * support;
 			return (Linf > cap && cap > 0) ? cap / Linf : 1.0;
 		}
 	} // namespace
@@ -90,7 +92,8 @@ namespace polyfem::solver
 		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
 		Eigen::MatrixXd V1 = compute_displaced_surface(x1);
 
-		const double trial_clamp = trial_clamp_factor(V0, V1, barrier_support_size());
+		const double trial_clamp =
+			trial_clamp_factor(V0, V1, barrier_support_size(), trial_displacement_cap());
 		if (trial_clamp < 1.0)
 			V1 = V0 + trial_clamp * (V1 - V0);
 
@@ -151,7 +154,8 @@ namespace polyfem::solver
 
 		// Same absolute-displacement clamp as max_step_size, so the cached
 		// candidates always cover the (clamped) interval CCD prices.
-		const double trial_clamp = trial_clamp_factor(V0, V1, barrier_support_size());
+		const double trial_clamp =
+			trial_clamp_factor(V0, V1, barrier_support_size(), trial_displacement_cap());
 		if (trial_clamp < 1.0)
 			V1 = V0 + trial_clamp * (V1 - V0);
 

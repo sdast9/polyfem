@@ -1519,6 +1519,7 @@
             "controller_interval",
             "gap_floor",
             "constraint_floor",
+            "trial_displacement_cap",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1582,6 +1583,12 @@
         "default": 1e-4,
         "type": "float",
         "doc": "Pairs with gap below this fraction of dhat are treated as active constraints: their closing component is projected out of every Newton direction (sliding and separation stay free). No normal-force law can hold a kinematically driven pair at the numerical floor -- singular barriers poison the search direction, saturated ones let it collapse; the projection lets the rest of the mesh proceed. 0 disables."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/trial_displacement_cap",
+        "default": 50.0,
+        "type": "float",
+        "doc": "Cap on trial-step surface displacement handed to CCD, in barrier supports. Semi-implicit Newton trial steps in distorted states can move vertices by hundreds of supports; pricing that sweep is wasted CCD work and, in the broad phase, a candidate/memory explosion on thin geometry. The returned step fraction is rescaled to the original interval, so the cap also bounds the step when CCD reports no collision -- which is why it applies only in semi-implicit mode. Infinity disables the clamp."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",

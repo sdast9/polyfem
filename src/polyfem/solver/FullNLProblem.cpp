@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "FullNLProblem.hpp"
 #include <polyfem/utils/Logger.hpp>
 
@@ -77,7 +78,7 @@ namespace polyfem::solver
 
 	double FullNLProblem::max_step_size(const TVector &x0, const TVector &x1)
 	{
-		// Clamp SEQUENTIALLY: each form bounds the step over the interval
+		// Sequential clamping: each form bounds the step over the interval
 		// already clamped by the forms before it, instead of the full
 		// [x0, x1]. Forms are ordered elastic-first, contact-last, so the
 		// inversion-free bound shrinks the sweep the (expensive) contact
@@ -85,11 +86,29 @@ namespace polyfem::solver
 		// orders larger than any acceptable step, and CCD on such a sweep
 		// is wasted work and, in the broad phase, a memory explosion risk
 		// for thin geometry.
+		//
+		// This is opt-in rather than the default: it telescopes to the same
+		// minimum in exact arithmetic, but the inversion and CCD bounds use
+		// absolute tolerances, so evaluating them on a shortened sweep shifts
+		// the result in the last digits. Applied unconditionally it perturbs
+		// converged solutions in every scene, contact or not.
+		const bool sequential = std::any_of(
+			forms_.begin(), forms_.end(), [](const std::shared_ptr<Form> &f) {
+				return f->enabled() && f->wants_sequential_step_clamping();
+			});
+
 		double step = 1;
 		for (auto &f : forms_)
 		{
 			if (!f->enabled())
 				continue;
+
+			if (!sequential)
+			{
+				step = std::min(step, f->max_step_size(x0, x1));
+				continue;
+			}
+
 			const double s =
 				f->max_step_size(x0, step == 1 ? x1 : TVector(x0 + step * (x1 - x0)));
 			step *= s;

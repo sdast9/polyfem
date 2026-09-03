@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include "Form.hpp"
 
 #include <polyfem/Common.hpp>
@@ -130,6 +131,20 @@ namespace polyfem::solver
 		virtual void update_collision_set(const Eigen::MatrixXd &displaced_surface) = 0;
 
 		virtual double barrier_support_size() const { return dhat_; }
+
+		/// @brief Cap on the trial-step surface displacement handed to CCD,
+		///        as a multiple of the barrier support size.
+		/// @return Infinity by default, i.e. no cap: the trial interval is
+		///         priced as given. Only the semi-implicit barrier, whose
+		///         Newton trial steps can be orders larger than any
+		///         acceptable step, opts into a finite cap -- see
+		///         BarrierContactForm. Returning a finite value here caps
+		///         the step even when CCD finds no collision at all, so it
+		///         must not be enabled globally.
+		virtual double trial_displacement_cap() const
+		{
+			return std::numeric_limits<double>::infinity();
+		}
 
 		/// @brief Collision mesh
 		const ipc::CollisionMesh &collision_mesh_;

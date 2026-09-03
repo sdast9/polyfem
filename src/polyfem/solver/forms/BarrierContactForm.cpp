@@ -127,6 +127,7 @@ namespace polyfem::solver
 				conditioning_cap_ = semi_implicit_opts.value("conditioning_cap", conditioning_cap_);
 				controller_interval_ = semi_implicit_opts.value("controller_interval", controller_interval_);
 				constraint_floor_ = semi_implicit_opts.value("constraint_floor", constraint_floor_);
+				trial_displacement_cap_ = semi_implicit_opts.value("trial_displacement_cap", trial_displacement_cap_);
 			}
 
 			refresh_interval_ = std::max(refresh_interval_, 0);
