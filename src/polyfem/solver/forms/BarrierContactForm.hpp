@@ -65,6 +65,13 @@ namespace polyfem::solver
 		/// @brief Is the semi-implicit per-contact stiffness mode active?
 		bool uses_semi_implicit_stiffness() const { return stiffness_mode_ == BarrierStiffnessMode::SemiImplicit; }
 
+		/// @brief Opt into sequential clamping only in semi-implicit mode, where
+		///        the trial steps that make it worthwhile actually occur.
+		bool wants_sequential_step_clamping() const override
+		{
+			return uses_semi_implicit_stiffness();
+		}
+
 		/// @brief Cap trial-step surface displacement only in semi-implicit
 		///        mode, where Newton trial steps in distorted states can move
 		///        vertices by hundreds of barrier supports -- pricing that
@@ -72,14 +79,7 @@ namespace polyfem::solver
 		///        thin geometry. Every other mode keeps the base class's
 		///        uncapped behaviour, since the cap also bounds the step when
 		///        CCD finds no collision.
-/// @brief Opt into sequential clamping only in semi-implicit mode, where
-		///        the trial steps that make it worthwhile actually occur.
-		bool wants_sequential_step_clamping() const override
-		{
-			return uses_semi_implicit_stiffness();
-		}
-
-				double trial_displacement_cap() const override
+		double trial_displacement_cap() const override
 		{
 			return uses_semi_implicit_stiffness()
 					   ? trial_displacement_cap_
