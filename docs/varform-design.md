@@ -2,8 +2,8 @@
 
 ## Status
 
-This document describes the VarForm architecture on the `varform` branch after
-the legacy `State` split.
+This document describes the VarForm architecture in the sdast9 fork on `main`,
+reviewed September 5, 2026 after integration of upstream `6c9e7a390`.
 
 The current migration target is:
 
@@ -29,11 +29,10 @@ one coherent design without partially supporting legacy-only features.
 
 Current reasons to select the legacy path include:
 
-- optimization and adjoint workflows;
 - remeshing;
-- periodic boundary conditions and periodic contact;
+- periodic-contact configurations outside the supported factory combinations;
 - formulations not represented by a VarForm;
-- homogenisation;
+- forward homogenisation (optimization has separate support checks);
 - unsupported combinations of contact, pressure boundary conditions, and
   constraints.
 
@@ -58,7 +57,7 @@ Every current VarForm has one primary FE space. The base class owns the data and
 operations shared by that primary space:
 
 - the mesh and geometric mapping data;
-- the primary FE bases and discretization orders;
+- the primary `FESpace`, which groups FE bases and discretization data;
 - the primary assembler, mass assemblers, RHS assembler, and assembly caches;
 - boundary-node and boundary-element data;
 - preparation, common output, statistics, and output-file lifecycle;
@@ -80,8 +79,11 @@ Derived VarForms own physics-specific behavior and any additional FE spaces.
   Navier-Stokes.
 - `IncompressibleElasticVarForm` owns its duplicated pressure space and mixed
   assemblers.
-- `BilaplacianVarForm` owns its duplicated auxiliary scalar space and mixed
-  assemblers.
+- `BilaplacianVarForm` owns its auxiliary scalar space and mixed assemblers.
+- `ThermoElasticVarForm` owns a temperature `FESpace` alongside displacement,
+  stacked solution handling, and per-space time integration.
+- `NavierStokesFSIVarForm` extends the fluid path for supported transient FSI setups.
+- Differentiable scalar and elastic VarForms supply the optimization interfaces.
 
 Duplicating auxiliary-space bookkeeping in mixed VarForms is intentional. It
 keeps the base class honest: the only universal FE-space assumption is that a
@@ -92,7 +94,13 @@ formulation has at least one primary space.
 The legacy state is a preserved implementation for functionality that has not
 been migrated. New VarForms and new I/O must not depend on it.
 
-Optimization and adjoint code currently use the legacy state explicitly.
+Optimization now uses `varform::DifferentiableVarForm` and its scalar, linear
+elastic, and nonlinear elastic subclasses. `optimization::OptState` builds and
+validates those forms; `optimization::VarFormDiff` provides differentiation support.
+`VarFormFactory::supports(..., is_optimization)` distinguishes optimization from
+forward support. Additional checks in `OptState.cpp` reject unsupported choices,
+including nonconstant contact barrier stiffness. Optimization is no longer a
+blanket reason to route through `legacy::State`.
 
 ## Lifecycle
 
@@ -242,27 +250,26 @@ Direct legacy-versus-VarForm comparisons are useful for a small representative
 set while the migration is active. They should not become a permanent
 requirement after the legacy path is removed.
 
-## Known Gaps
+## Validation boundaries
 
-The following are known migration or hardening tasks, not intended parts of the
-final architecture:
+Support is formulation-specific. Factory routing and optimization validation are
+the current authorities; unsupported forward cases may use the legacy path,
+whereas unsupported optimization setups are rejected. The historical migration
+TODO list has not been retained as a statement of current failures.
 
-- restore and diagnose the disabled 2D homogenization integration test;
-- design state-file naming and restart behavior for VarForms with multiple
-  independent time integrators;
-- add stronger output-field and legacy-equivalence tests;
-- remove remaining compatibility-only output after the legacy path is retired.
+For the dated build and regression status of this fork, see the
+[repository README](../README.md). Targeted semi-implicit checks do not establish
+coverage of every mixed-space, restart, or adjoint configuration.
 
-## Deferred Work
+## Multiphysics and remaining boundaries
 
-Thermoelasticity is intentionally deferred. It will be the first substantial
-test of:
+Thermoelasticity is implemented in `ThermoElasticVarForm`; it is no longer deferred.
+The form owns displacement/temperature blocks, temperature boundary data and FE
+space, and time-integration configuration for each space. FSI is represented by
+`NavierStokesFSIVarForm`. Their supported contact, pressure, constraint, and time
+combinations are defined by `VarFormFactory::supports` and formulation-specific
+validation rather than a blanket promise of support.
 
-- multiple named or identified FE spaces;
-- multiple time integrators in one VarForm;
-- coupled nonlinear and auxiliary blocks;
-- FE-space selection in materials, boundary conditions, and discretization
-  configuration.
-
-That work should build on the current ownership boundary rather than making the
-base `VarForm` a container for every possible auxiliary space.
+The legacy walkthrough in `docs/main.md` remains useful for historical assembler
+and basis concepts, but its monolithic `State` ownership description is not the
+current application architecture.

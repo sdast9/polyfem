@@ -1,5 +1,10 @@
 # PolyFEM
 
+> Historical walkthrough: the `State` ownership and method names below describe
+> the pre-VarForm implementation. For current routing, ownership, and optimization
+> integration, read [VarForm architecture](varform-design.md). Build instructions
+> are maintained in the [repository README](../README.md).
+
 ![Build](https://github.com/polyfem/polyfem/workflows/Build/badge.svg)
 ![Commit](https://img.shields.io/github/last-commit/polyfem/polyfem)
 [![License](https://img.shields.io/github/license/polyfem/polyfem.svg?color=blue)](https://github.com/polyfem/polyfem/blob/main/LICENSE)
@@ -158,7 +163,7 @@ After assembling the necessary matrices/vectors, the `State::solve_problem` func
 
 A diagram showing the relationships discussed above is included below. Each block represents its own class. `polyfem::State` is shown in orange and `basis::LagrangeBasis2d` in red. The basis storage classes are blue, the value storage classes purple, and the assembly-related classes green. Relationships between classes are shown with arrows. Bold arrows represent calling a member function and dashed ones represent inheritance.
 
-![Overall diagram](example_diagram.png)
+![Overall diagram](_doxygen/img/example_diagram.png)
 
 #### Technical Note: Matrix Caching
 

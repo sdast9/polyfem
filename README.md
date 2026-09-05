@@ -9,6 +9,22 @@
 
 PolyFEM is a polyvalent C++ FEM library.
 
+### sdast9 fork
+
+`main` includes the semi-implicit per-contact barrier mode and the upstream merge
+through `6c9e7a390` (September 2, 2026). On September 5, `sync-upstream` was
+fast-forwarded into `main` at solver baseline `db180eb3a`.
+See [semi-implicit usage and defaults](scenes/semi-implicit/README.md) and
+[VarForm architecture](docs/varform-design.md).
+
+The CMake recipes pin `sdast9/ipc-toolkit@9da3094` and
+`sdast9/polysolve@012658e`; fresh builds retrieve these companion revisions.
+Before promotion, the build, two semi-implicit derivative tests (160 assertions),
+and five smoke scenes passed. The September 4 full-suite record was 243/244 cases
+passing, with a GCP `cube-on-floor` reference mismatch still unresolved. This is
+not a claim of a fully passing suite or cross-platform validation.
+
+
 Compilation
 -----------
 
