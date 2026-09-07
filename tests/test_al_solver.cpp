@@ -421,3 +421,37 @@ TEST_CASE("Normalized BC AL matches mass metric with converted parameters", "[bc
 		}
 	}
 }
+
+TEST_CASE("AL clears direction filters on every exit", "[al_solver][direction_filter]")
+{
+	QuarticProblem problem;
+	ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+	int calls = 0;
+	solver.direction_filter = [&](const auto &, auto &) { ++calls; };
+	auto options = parameters();
+	bool fails = false;
+	SECTION("convergence") {}
+	SECTION("interruption")
+	{
+		options["max_iterations"] = 1;
+		options["allow_out_of_iterations"] = true;
+		fails = true;
+	}
+	SECTION("exception")
+	{
+		problem.block_steps = true;
+		fails = true;
+	}
+	std::shared_ptr<polysolve::nonlinear::Solver> shared = polysolve::nonlinear::Solver::create(options, linear, 1, logger());
+	Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+	if (fails)
+		CHECK_THROWS(solver.solve_reduced(problem, sol, shared));
+	else
+		REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, shared));
+	REQUIRE(calls > 0);
+	const int previous_calls = calls;
+	problem.block_steps = false;
+	Eigen::VectorXd x = Eigen::VectorXd::Constant(1, 10);
+	REQUIRE_NOTHROW(shared->minimize(problem, x));
+	CHECK(calls == previous_calls);
+}

@@ -4,6 +4,7 @@
 
 set(test_sources
   test_al_solver.cpp
+  test_direction_filter.cpp
   test_assembler.cpp
   test_bases.cpp
   test_clipping.cpp

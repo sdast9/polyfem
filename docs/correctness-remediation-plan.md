@@ -202,7 +202,11 @@ PF-05: implemented and validated; see the [validation record](pf-05-validation.m
 The BC AL gradient now matches the existing objective and Hessian at nonunit
 form scales, with nonzero multipliers and prescribed targets covered by finite
 differences. Production form normalization remains one.
-PF-06 through PF-09 remain unimplemented; PF-09 retains its model-decision gate.
+PF-06: implemented and validated; see the [validation record](pf-06-validation.md).
+Filtered directions now use the objective slope g^T p, with finite-difference,
+real floor-filter, stopping-tolerance and cleanup regressions. The direction
+filter and contact defaults remain; PF-02/PF-09 model concerns are not resolved.
+PF-07 through PF-09 remain unimplemented; PF-09 retains its model-decision gate.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.
