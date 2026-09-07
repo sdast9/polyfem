@@ -46,7 +46,7 @@ namespace polyfem::solver
 
 		b_ = target_x;
 		b_proj_ = b_;
-		igl::slice(b_, constraints_, 1, b_);
+		b_ = igl::slice(b_, constraints_, 1);
 	}
 
 	void BCLagrangianForm::init_masked_lumped_mass(
@@ -118,33 +118,28 @@ namespace polyfem::solver
 			}
 		}
 
-		// Normalize the metric to mean diagonal 1. Relative (mass-weighted) node
-		// importance is preserved, but the absolute mass scale moves out of the
-		// metric and into k_al. That is what makes k_al commensurate with
-		// max|H_elastic| (see the "hessian_scaled" initial weight), and it puts
-		// this form on the same footing as the other AugmentedLagrangianForms
-		// (MatrixLagrangianForm, PeriodicBoundaryLagrangianForm, ...), which use
-		// a dimensionless metric and share the single al_weight that ALSolver
-		// ratchets. Without it a fine/light mesh (diagonal ~1e-9) needs ~30
-		// doublings to take effect, far past the default max_weight of 1e8, so
-		// the Dirichlet BC is silently never imposed.
-		if (mass.size() != 0)
+		assert(n_dofs_ == masked_lumped_mass_.rows() && n_dofs_ == masked_lumped_mass_.cols());
+		assert(obstacle_ndof <= n_dofs_);
+		const int n_fe_dof = n_dofs_ - obstacle_ndof;
+
+		// Normalize using FEM DOFs only: obstacle placeholders must not change
+		// the reference mass. Preserve relative lumped weights and move the
+		// absolute mass scale into the AL penalty and multipliers. This metric
+		// is initialized once and stays fixed throughout the AL sequence.
+		if (mass.size() != 0 && n_fe_dof > 0)
 		{
-			const double mean_diag = masked_lumped_mass_.diagonal().mean();
+			const double mean_diag = masked_lumped_mass_.diagonal().head(n_fe_dof).mean();
 			if (mean_diag > 0 && std::isfinite(mean_diag))
 				masked_lumped_mass_ /= mean_diag;
 		}
 
-		assert(n_dofs_ == masked_lumped_mass_.rows() && n_dofs_ == masked_lumped_mass_.cols());
-		// Give the collision obstacles a entry in the lumped mass matrix
+		// Obstacle weights use the normalized FEM mean (one for valid metrics).
+		// With no FEM DOFs there is no mass reference; use unit weights.
 		if (obstacle_ndof != 0)
 		{
-			const int n_fe_dof = n_dofs_ - obstacle_ndof;
-			const double avg_mass = masked_lumped_mass_.diagonal().head(n_fe_dof).mean();
+			const double avg_mass = n_fe_dof > 0 ? masked_lumped_mass_.diagonal().head(n_fe_dof).mean() : 1.0;
 			for (int i = n_fe_dof; i < n_dofs_; ++i)
-			{
 				masked_lumped_mass_.coeffRef(i, i) = avg_mass;
-			}
 		}
 
 		igl::slice(masked_lumped_mass_, constraints_, 1, masked_lumped_mass_);

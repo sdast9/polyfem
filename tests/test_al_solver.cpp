@@ -220,3 +220,145 @@ TEST_CASE("AL final solve preserves the descending slope tolerance", "[al_solver
 	CHECK(solver.info()["outcome"] == "converged");
 	CHECK(solver.info()["termination_reason"] == "Configured directional-derivative tolerance reached");
 }
+
+TEST_CASE("BC metric normalization excludes obstacle placeholders", "[bc_metric]")
+{
+	for (int nobs : {0, 1, 3, 20})
+	{
+		CAPTURE(nobs);
+		const int n = 2 + nobs;
+		StiffnessMatrix mass(n, n);
+		mass.coeffRef(0, 0) = 1;
+		mass.coeffRef(1, 1) = 3;
+		std::vector<int> boundary;
+		for (int i = 0; i < n; ++i)
+			boundary.push_back(i);
+		BCLagrangianForm form(n, boundary, mass, nobs, Eigen::VectorXd::Zero(n));
+		form.set_initial_weight(1);
+		StiffnessMatrix h;
+		form.second_derivative(Eigen::VectorXd::Zero(n), h);
+		CHECK(std::abs(h.coeff(0, 0) - 0.5) < 1e-12);
+		CHECK(std::abs(h.coeff(1, 1) - 1.5) < 1e-12);
+		for (int i = 2; i < n; ++i)
+			CHECK(std::abs(h.coeff(i, i) - 1) < 1e-12);
+	}
+}
+
+TEST_CASE("BC fixed targets retain inhomogeneous values after slicing", "[bc_metric]")
+{
+	std::vector<int> boundary{0, 2};
+	Eigen::VectorXd target(3);
+	target << 0.3, 7, -0.4;
+	BCLagrangianForm form(3, boundary, StiffnessMatrix(), 0, target);
+	form.set_initial_weight(1);
+	REQUIRE(form.constraint_value().rows() == 2);
+	CHECK(std::abs(form.constraint_value()(0, 0) - target[0]) < 1e-12);
+	CHECK(std::abs(form.constraint_value()(1, 0) - target[2]) < 1e-12);
+	CHECK(form.compute_error(target) < 1e-24);
+	CHECK(form.value(target) < 1e-24);
+}
+
+TEST_CASE("BC metric preserves lumping and identity fallbacks", "[bc_metric]")
+{
+	for (int nobs : {0, 3})
+		for (int mode = 0; mode < 4; ++mode)
+		{
+			CAPTURE(nobs, mode);
+			const int n = 2 + nobs;
+			std::vector<int> boundary{1}; // Reference includes unconstrained FEM DOFs too.
+			if (nobs)
+				boundary.push_back(n - 1);
+			StiffnessMatrix mass(n, n);
+			double expected = 1;
+			if (mode == 0) // Positive row sums
+			{
+				mass.coeffRef(0, 0) = 0.5;
+				mass.coeffRef(0, 1) = 0.5;
+				mass.coeffRef(1, 0) = 0.5;
+				mass.coeffRef(1, 1) = 2.5;
+				expected = 1.5;
+			}
+			else if (mode == 1) // Invalid row sums use HRZ relative weights
+			{
+				mass.coeffRef(0, 0) = 1;
+				mass.coeffRef(0, 1) = -2;
+				mass.coeffRef(1, 0) = -2;
+				mass.coeffRef(1, 1) = 9;
+				expected = 1.8;
+			}
+			else if (mode == 2) // Nonpositive HRZ uses identity
+			{
+				mass.coeffRef(0, 0) = -1;
+				mass.coeffRef(1, 1) = 3;
+			}
+			else // No mass uses identity
+			{
+				mass.resize(0, 0);
+			}
+			BCLagrangianForm form(n, boundary, mass, nobs, Eigen::VectorXd::Zero(n));
+			form.set_initial_weight(1);
+			StiffnessMatrix h;
+			form.second_derivative(Eigen::VectorXd::Zero(n), h);
+			CHECK(std::abs(h.coeff(0, 0)) < 1e-12);
+			CHECK(std::abs(h.coeff(1, 1) - expected) < 1e-12);
+			if (nobs)
+				CHECK(std::abs(h.coeff(n - 1, n - 1) - 1) < 1e-12);
+		}
+}
+
+TEST_CASE("Normalized BC AL matches mass metric with converted parameters", "[bc_metric]")
+{
+	// Independent upstream mass-metric equations, at the existing form scale 1.
+	// PF-05 covers nonunit form-scale derivatives separately.
+	class SeededBC : public BCLagrangianForm
+	{
+	public:
+		using BCLagrangianForm::BCLagrangianForm;
+		void seed(const Eigen::VectorXd &lambda) { lagr_mults_ = lambda; }
+	};
+	for (double mass_scale : {1e-9, 1.0, 1e9})
+	{
+		CAPTURE(mass_scale);
+		std::vector<int> boundary{0, 2};
+		StiffnessMatrix mass(3, 3);
+		mass.coeffRef(0, 0) = mass_scale;
+		mass.coeffRef(1, 1) = 3 * mass_scale;
+		Eigen::VectorXd target(3), x(3), lambda(2), raw(2);
+		target << 0.3, 7, -0.4;
+		x << 0.8, 0.1, 0.6;
+		raw << mass_scale, 2 * mass_scale;
+		const double mean = 2 * mass_scale;
+		lambda << 0.7 / std::sqrt(mean), -0.4 / std::sqrt(mean);
+		SeededBC form(3, boundary, mass, 1, target);
+		form.seed(std::sqrt(mean) * lambda);
+		for (double rho : {2.0, 5.0, 11.0})
+		{
+			const double upstream_rho = rho / mean;
+			form.set_initial_weight(rho);
+			Eigen::VectorXd residual(2);
+			residual << x[0] - target[0], x[2] - target[2];
+			const Eigen::VectorXd sqrt_raw = raw.array().sqrt();
+			const double value = -lambda.dot(sqrt_raw.cwiseProduct(residual))
+								 + 0.5 * upstream_rho * residual.dot(raw.cwiseProduct(residual));
+			const Eigen::VectorXd constrained_g = -sqrt_raw.cwiseProduct(lambda)
+												  + upstream_rho * raw.cwiseProduct(residual);
+			Eigen::VectorXd expected_g = Eigen::VectorXd::Zero(3), g;
+			expected_g[0] = constrained_g[0];
+			expected_g[2] = constrained_g[1];
+			Eigen::MatrixXd expected_h = Eigen::MatrixXd::Zero(3, 3);
+			expected_h(0, 0) = upstream_rho * raw[0];
+			expected_h(2, 2) = upstream_rho * raw[1];
+			StiffnessMatrix h;
+			form.first_derivative(x, g);
+			form.second_derivative(x, h);
+			CHECK(std::abs(form.value(x) - value) < 1e-11);
+			CHECK((g - expected_g).norm() < 1e-11);
+			CHECK((Eigen::MatrixXd(h) - expected_h).norm() < 1e-11);
+			// Both multiplier updates preserve lambda_f = sqrt(mean) lambda_u.
+			form.update_lagrangian(x, rho);
+			lambda -= upstream_rho * sqrt_raw.cwiseProduct(residual);
+			form.update_quantities(1.0, x); // Does not renormalize during AL.
+			x *= 0.7;
+		}
+	}
+}

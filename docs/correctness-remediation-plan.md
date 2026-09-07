@@ -191,8 +191,10 @@ PF-02: the [first characterization stage](pf-02-contact-floor.md) compares the
 current floor with the floor-disabled baseline, reproduces the energy/projection
 defects and a refresh inconsistency, and records approved scene evidence. The
 production model/default decision and broader physical validation remain open.
-PF-03 through PF-09: not implemented. PF-09 retains its model-decision gate;
-PF-03/PF-04/PF-05 can be addressed independently.
+PF-03: implemented and validated; see the [validation record](pf-03-validation.md).
+The BC metric uses the FEM-only reference mean, and fixed prescribed targets
+survive constructor slicing. PF-04 through PF-09 remain unimplemented; PF-09
+retains its model-decision gate. PF-04/PF-05 can be addressed independently.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.
