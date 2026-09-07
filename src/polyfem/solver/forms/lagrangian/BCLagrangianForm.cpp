@@ -267,7 +267,8 @@ namespace polyfem::solver
 
 	void BCLagrangianForm::first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const
 	{
-		gradv = L_weight() * A_.transpose() * (-(masked_lumped_mass_sqrt_ * lagr_mults_) + A_weight() * (masked_lumped_mass_ * (A_ * x - b_)));
+		// Each objective term already carries its own inverse form scale.
+		gradv = A_.transpose() * (-L_weight() * (masked_lumped_mass_sqrt_ * lagr_mults_) + A_weight() * (masked_lumped_mass_ * (A_ * x - b_)));
 	}
 
 	void BCLagrangianForm::second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const

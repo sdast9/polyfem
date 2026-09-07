@@ -198,7 +198,11 @@ PF-04: implemented and validated; see the [validation record](pf-04-validation.m
 Scalar and fiber material files share simulation-owned immutable snapshots;
 fresh input initialization reloads changed files, while existing readers remain
 stable. Parallel loading and copy-on-write are covered by regressions.
-PF-05 through PF-09 remain unimplemented; PF-09 retains its model-decision gate.
+PF-05: implemented and validated; see the [validation record](pf-05-validation.md).
+The BC AL gradient now matches the existing objective and Hessian at nonunit
+form scales, with nonzero multipliers and prescribed targets covered by finite
+differences. Production form normalization remains one.
+PF-06 through PF-09 remain unimplemented; PF-09 retains its model-decision gate.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.

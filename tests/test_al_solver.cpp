@@ -306,6 +306,65 @@ TEST_CASE("BC metric preserves lumping and identity fallbacks", "[bc_metric]")
 		}
 }
 
+TEST_CASE("BC AL derivatives match the objective at nonunit form scales", "[bc_scale]")
+{
+	class SeededBC : public BCLagrangianForm
+	{
+	public:
+		using BCLagrangianForm::BCLagrangianForm;
+		void seed(const Eigen::VectorXd &lambda) { lagr_mults_ = lambda; }
+	};
+	const std::vector<int> boundary{0, 2};
+	StiffnessMatrix mass(3, 3);
+	mass.coeffRef(0, 0) = 1;
+	mass.coeffRef(1, 1) = 2;
+	mass.coeffRef(2, 2) = 3;
+	Eigen::VectorXd target(3), x(3), lambda(2);
+	target << 0.3, 7, -0.4;
+	x << 0.8, 0.1, 0.6;
+	lambda << 0.7, -0.4;
+	for (double scale : {0.5, 1.0, 2.0})
+	{
+		CAPTURE(scale);
+		SeededBC form(3, boundary, mass, 0, target);
+		form.set_initial_weight(3);
+		form.set_scale(scale);
+		form.seed(lambda);
+		// Verify the inhomogeneous fixture before differentiating it.
+		REQUIRE(form.constraint_value().rows() == 2);
+		REQUIRE(form.constraint_value()(0, 0) == target[0]);
+		REQUIRE(form.constraint_value()(1, 0) == target[2]);
+		Eigen::VectorXd residual(2), metric(2);
+		residual << x[0] - target[0], x[2] - target[2];
+		metric << 0.5, 1.5;
+		const double expected_value = (-lambda.dot(metric.array().sqrt().matrix().cwiseProduct(residual))
+									   + 1.5 * residual.dot(metric.cwiseProduct(residual)))
+									  / scale;
+		CHECK(std::abs(form.value(x) - expected_value) < 1e-12);
+		Eigen::VectorXd g;
+		StiffnessMatrix h;
+		form.first_derivative(x, g);
+		form.second_derivative(x, h);
+		Eigen::VectorXd fd_g(3);
+		Eigen::MatrixXd fd_h(3, 3);
+		const double eps = 1e-5;
+		for (int i = 0; i < 3; ++i)
+		{
+			Eigen::VectorXd plus = x, minus = x, gp, gm;
+			plus[i] += eps;
+			minus[i] -= eps;
+			fd_g[i] = (form.value(plus) - form.value(minus)) / (2 * eps);
+			form.first_derivative(plus, gp);
+			form.first_derivative(minus, gm);
+			fd_h.col(i) = (gp - gm) / (2 * eps);
+		}
+		CHECK((g - fd_g).norm() < 1e-8);
+		CHECK((Eigen::MatrixXd(h) - fd_h).norm() < 1e-8);
+		CHECK(g[1] == 0);
+		CHECK(h.coeff(1, 1) == 0);
+	}
+}
+
 TEST_CASE("Normalized BC AL matches mass metric with converted parameters", "[bc_metric]")
 {
 	// Independent upstream mass-metric equations, at the existing form scale 1.
