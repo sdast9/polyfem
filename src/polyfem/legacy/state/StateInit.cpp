@@ -139,6 +139,7 @@ namespace polyfem::legacy
 
 	void State::init(const json &p_args_in, const bool strict_validation)
 	{
+		material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 		json args_in = p_args_in; // mutable copy
 
 		has_constraints_ = p_args_in.contains("constraints");
@@ -423,7 +424,7 @@ namespace polyfem::legacy
 			body_ids[i] = mesh->get_body_id(i);
 
 		for (auto &a : assemblers)
-			a->set_materials(body_ids, args["materials"], units, root_path());
+			a->set_materials(body_ids, args["materials"], units, root_path(), material_file_cache_);
 	}
 
 	void State::set_materials(assembler::Assembler &assembler) const
@@ -438,7 +439,7 @@ namespace polyfem::legacy
 		for (int i = 0; i < mesh->n_elements(); ++i)
 			body_ids[i] = mesh->get_body_id(i);
 
-		assembler.set_materials(body_ids, args["materials"], units, root_path());
+		assembler.set_materials(body_ids, args["materials"], units, root_path(), material_file_cache_);
 	}
 
 } // namespace polyfem::legacy

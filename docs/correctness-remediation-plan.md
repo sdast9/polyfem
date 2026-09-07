@@ -193,8 +193,12 @@ defects and a refresh inconsistency, and records approved scene evidence. The
 production model/default decision and broader physical validation remain open.
 PF-03: implemented and validated; see the [validation record](pf-03-validation.md).
 The BC metric uses the FEM-only reference mean, and fixed prescribed targets
-survive constructor slicing. PF-04 through PF-09 remain unimplemented; PF-09
-retains its model-decision gate. PF-04/PF-05 can be addressed independently.
+survive constructor slicing.
+PF-04: implemented and validated; see the [validation record](pf-04-validation.md).
+Scalar and fiber material files share simulation-owned immutable snapshots;
+fresh input initialization reloads changed files, while existing readers remain
+stable. Parallel loading and copy-on-write are covered by regressions.
+PF-05 through PF-09 remain unimplemented; PF-09 retains its model-decision gate.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.

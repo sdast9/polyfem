@@ -276,6 +276,7 @@ namespace polyfem::varform
 	void VarForm::init(const std::string &formulation, const Units &units, const json &args, const std::string &out_path)
 	{
 		reset();
+		material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 
 		this->units = units;
 		this->args = args;
@@ -878,7 +879,7 @@ namespace polyfem::varform
 		for (int i = 0; i < mesh_->n_elements(); ++i)
 			body_ids[i] = mesh_->get_body_id(i);
 
-		assembler.set_materials(body_ids, args["materials"], units, root_path);
+		assembler.set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 	}
 
 	void VarForm::ensure_output_sampler() const

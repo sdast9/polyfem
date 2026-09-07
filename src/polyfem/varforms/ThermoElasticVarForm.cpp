@@ -296,17 +296,17 @@ namespace polyfem::varform
 		const json elastic_materials = elastic_material_args();
 
 		primary_assembler_->set_size(mesh.dimension());
-		primary_assembler_->set_materials(body_ids, elastic_materials, units, root_path);
+		primary_assembler_->set_materials(body_ids, elastic_materials, units, root_path, material_file_cache_);
 		thermoelastic_assembler_->set_size(mesh.dimension());
-		thermoelastic_assembler_->set_materials(body_ids, args["materials"], units, root_path);
+		thermoelastic_assembler_->set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 		mass_assembler_->set_size(mesh.dimension());
-		mass_assembler_->set_materials(body_ids, elastic_materials, units, root_path);
+		mass_assembler_->set_materials(body_ids, elastic_materials, units, root_path, material_file_cache_);
 		pure_mass_assembler_->set_size(mass_assembler_->size());
 
 		temperature_assembler_->set_size(1);
-		temperature_assembler_->set_materials(body_ids, args["materials"], units, root_path);
+		temperature_assembler_->set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 		temperature_mass_assembler_->set_size(1);
-		temperature_mass_assembler_->set_materials(body_ids, args["materials"], units, root_path);
+		temperature_mass_assembler_->set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 		temperature_pure_mass_assembler_->set_size(1);
 
 		problem->init(mesh);

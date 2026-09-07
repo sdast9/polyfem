@@ -30,6 +30,7 @@ set(SOURCES
 	JSONUtils.hpp
 	Logger.cpp
 	Logger.hpp
+	MaterialFileCache.hpp
 	MatrixCache.cpp
 	MatrixCache.hpp
 	MatrixUtils.cpp

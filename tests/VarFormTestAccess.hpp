@@ -56,6 +56,11 @@ namespace polyfem::test
 	class VarFormTestAccess
 	{
 	public:
+		static const assembler::Assembler &material_assembler(const varform::VarForm &form)
+		{
+			return *dynamic_cast<const varform::ElasticVarForm &>(form).primary_assembler_;
+		}
+
 		static void prepare(varform::VarForm &form)
 		{
 			form.prepare();

@@ -3,6 +3,7 @@
 #include <polyfem/Common.hpp>
 #include <polyfem/utils/Types.hpp>
 #include <polyfem/utils/ExpressionValue.hpp>
+#include <polyfem/utils/MaterialFileCache.hpp>
 
 #include <memory>
 #include <string>
@@ -211,7 +212,7 @@ namespace polyfem::assembler
 		// Populated only when "fiber_direction" uses the per_element_file object
 		// form; operator() then short-circuits to (*per_el_fibers_)[el_id] and dir_
 		// is left empty. See FiberDirection::add_multimaterial in MatParams.cpp.
-		// Shared (and process-cached) because add_multimaterial runs once per
+		// Shared within the input snapshot because add_multimaterial runs once per
 		// element: re-reading and re-storing the file per element is O(n^2) in
 		// both time and memory.
 		std::shared_ptr<const std::vector<Eigen::Vector3d>> per_el_fibers_;
@@ -219,6 +220,7 @@ namespace polyfem::assembler
 		// Identity of the loaded file, so a second, different file reaching the
 		// same instance is an error rather than a silent last-writer-wins.
 		std::string per_el_key_;
+		std::weak_ptr<utils::MaterialFileCache> per_el_snapshot_;
 	};
 
 } // namespace polyfem::assembler

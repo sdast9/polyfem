@@ -67,11 +67,8 @@ namespace polyfem
 				assert(is_mat());
 				assert(mat_->rows() == mat.rows());
 				assert(mat_->cols() == mat.cols());
-				// mat_ may be shared with the process-wide file cache (see
-				// init(string)); never write through a shared buffer.
-				if (mat_.use_count() > 1)
-					mat_ = std::make_shared<Eigen::MatrixXd>(*mat_);
-				*mat_ = mat;
+				// Cached storage is immutable. Mutations replace only this value.
+				mat_ = std::make_shared<const Eigen::MatrixXd>(mat);
 			}
 
 			double get_val() const
@@ -86,11 +83,8 @@ namespace polyfem
 
 			std::string expr_;
 			double value_;
-			// Shared so that a value loaded from a file (init(string) below) is
-			// read and stored once per path per process: these are initialized
-			// once per mesh element, so an owning copy would be O(n^2) in both
-			// time and memory. Mutation goes through set_mat's copy-on-write.
-			std::shared_ptr<Eigen::MatrixXd> mat_;
+			// Shared within an explicitly owned input snapshot; set_mat detaches.
+			std::shared_ptr<const Eigen::MatrixXd> mat_;
 			std::vector<ExpressionValue> mat_expr_;
 			std::map<double, int> t_index_;
 			int index_ = -1;

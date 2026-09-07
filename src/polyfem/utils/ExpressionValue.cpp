@@ -1,4 +1,5 @@
 #include "ExpressionValue.hpp"
+#include "MaterialFileCache.hpp"
 
 #include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -11,8 +12,6 @@
 #include <tinyexpr.h>
 #include <filesystem>
 #include <memory>
-#include <mutex>
-#include <unordered_map>
 #ifdef POLYFEM_WITH_PYTHON
 // pybind11 enables a debug-only reference counter when NDEBUG is not defined.
 // On MSVC that path can fail with C2480 because it uses a function-local
@@ -268,29 +267,18 @@ namespace polyfem
 
 			try
 			{
+				const auto snapshot = MaterialFileCacheScope::current();
+				mat_ = snapshot->find_matrix(path.string());
+				if (mat_)
+					return;
 				if (std::filesystem::is_regular_file(path))
 				{
-					// Material params are initialized once per mesh element, so
-					// reading (and storing) the file per element is O(n^2) in time
-					// and memory. Share one immutable copy per path per process;
-					// set_mat() copies on write for the few mutating callers.
-					static std::mutex cache_mutex;
-					static std::unordered_map<std::string, std::shared_ptr<Eigen::MatrixXd>> cache;
-
-					const std::string key = path.string();
-					std::lock_guard<std::mutex> lock(cache_mutex);
-					const auto it = cache.find(key);
-					if (it != cache.end())
-					{
-						mat_ = it->second;
-					}
-					else
-					{
-						auto loaded = std::make_shared<Eigen::MatrixXd>();
-						read_matrix(key, *loaded);
-						cache[key] = loaded;
-						mat_ = loaded;
-					}
+					mat_ = snapshot->matrix(path.string(), [&]() {
+						Eigen::MatrixXd loaded;
+						if (!read_matrix(path.string(), loaded))
+							log_and_throw_error("Cannot read material matrix: {}", path.string());
+						return loaded;
+					});
 					return;
 				}
 			}
@@ -343,14 +331,15 @@ namespace polyfem
 			{
 				if (vals.empty() || vals[0].is_number())
 				{
-					mat_ = std::make_shared<Eigen::MatrixXd>(vals.size(), 1);
+					auto loaded = std::make_shared<Eigen::MatrixXd>(vals.size(), 1);
 
-					for (int i = 0; i < mat_->size(); ++i)
+					for (int i = 0; i < loaded->size(); ++i)
 					{
 						if (!vals[i].is_number())
 							log_and_throw_error("Expression arrays must contain either only numbers or only expressions.");
-						(*mat_)(i) = vals[i].get<double>();
+						(*loaded)(i) = vals[i].get<double>();
 					}
+					mat_ = std::move(loaded);
 				}
 				else
 				{

@@ -1,4 +1,5 @@
 #include "MatParams.hpp"
+#include <polyfem/utils/MaterialFileCache.hpp>
 
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -8,7 +9,6 @@
 #include <sstream>
 #include <map>
 #include <memory>
-#include <mutex>
 
 namespace polyfem::assembler
 {
@@ -686,7 +686,8 @@ namespace polyfem::assembler
 
 			// add_multimaterial runs once per element, so loading here without a
 			// cache re-reads and re-stores the whole file per element (O(n^2) in
-			// time and memory). Load once per (path, field) per process.
+			// time and memory). Load once per (path, field) per input snapshot.
+			const auto snapshot = utils::MaterialFileCacheScope::current();
 			if (use_per_element_file_)
 			{
 				if (key != per_el_key_)
@@ -694,40 +695,25 @@ namespace polyfem::assembler
 						"Conflicting per-element fiber files for one material: '{}' and '{}'. "
 						"All bodies sharing a material model must name the same file/field.",
 						per_el_key_.substr(0, per_el_key_.find('\n')), p));
-				return; // already loaded
+				if (per_el_snapshot_.lock() == snapshot)
+					return; // already loaded within this snapshot
 			}
 
-			static std::mutex cache_mutex;
-			static std::map<std::string, std::shared_ptr<const std::vector<Eigen::Vector3d>>> cache;
-
-			std::shared_ptr<const std::vector<Eigen::Vector3d>> fibers;
-			{
-				std::lock_guard<std::mutex> lock(cache_mutex);
-				const auto it = cache.find(key);
-				if (it != cache.end())
+			per_el_fibers_ = snapshot->fibers(p, field, [&]() {
+				auto loaded = read_cell_vectors_legacy_vtk(p, field);
+				for (auto &v : loaded)
 				{
-					fibers = it->second;
+					const double n = v.norm();
+					if (n < 1e-12)
+						log_and_throw_error("Zero-length fiber vector in per-element file");
+					v /= n;
 				}
-				else
-				{
-					auto loaded = std::make_shared<std::vector<Eigen::Vector3d>>(
-						read_cell_vectors_legacy_vtk(p, field));
-					for (auto &v : *loaded)
-					{
-						const double n = v.norm();
-						if (n < 1e-12)
-							log_and_throw_error("Zero-length fiber vector in per-element file");
-						v /= n;
-					}
-					logger().info("FiberDirection: loaded {} per-element fibers ('{}') from {}",
-								  loaded->size(), field, p);
-					fibers = loaded;
-					cache[key] = fibers;
-				}
-			}
+				logger().info("FiberDirection: loaded {} per-element fibers ('{}') from {}", loaded.size(), field, p);
+				return loaded;
+			});
 
-			per_el_fibers_ = fibers;
 			per_el_key_ = key;
+			per_el_snapshot_ = snapshot;
 			use_per_element_file_ = true;
 			has_rotation_ = false; // a direction vector, not a rotation matrix
 			return;                // dir_ left empty; operator() short-circuits

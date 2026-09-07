@@ -1,4 +1,5 @@
 #pragma once
+#include <polyfem/utils/MaterialFileCache.hpp>
 
 #include <polyfem/assembler/Assembler.hpp>
 #include <polyfem/assembler/Problem.hpp>
@@ -220,6 +221,9 @@ namespace polyfem
 			/// runtime statistics
 			io::OutRuntimeData timings;
 
+			// Call after child init and before child material loading.
+			void share_material_input_with(VarForm &child) const { child.material_file_cache_ = material_file_cache_; }
+			std::shared_ptr<utils::MaterialFileCache> material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 			std::string root_path;
 			std::string output_path;
 

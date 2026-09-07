@@ -177,8 +177,9 @@ namespace polyfem::assembler
 		}
 	} // namespace
 
-	void Assembler::set_materials(const std::vector<int> &body_ids, const json &body_params, const Units &units, const std::string &root_path)
+	void Assembler::set_materials(const std::vector<int> &body_ids, const json &body_params, const Units &units, const std::string &root_path, const std::shared_ptr<utils::MaterialFileCache> &snapshot)
 	{
+		const utils::MaterialFileCacheScope cache_scope(snapshot);
 		if (!body_params.is_array())
 		{
 			this->add_multimaterial(0, body_params, units, root_path);
