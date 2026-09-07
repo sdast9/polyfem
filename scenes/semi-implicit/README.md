@@ -74,7 +74,11 @@ All semi-implicit options are optional. Defaults from
 ```
 
 `gap_floor = 0` disables experimental force saturation. `constraint_floor = 1e-4`
-enables floor projection within this mode; set it to zero to disable projection.
+enables floor projection and removes below-floor pairs from the barrier energy
+on collision-set rebuilds within this mode. Set it to zero to disable both
+effects. The [PF-02 investigation](../../docs/pf-02-contact-floor.md) records
+the discontinuity, boundary projection limits, and comparison evidence; this
+option is not a validated hard-contact formulation.
 `trial_displacement_cap = 50` bounds trial surface displacement in barrier-support
 units. It is enabled by default within semi-implicit mode, not in other modes.
 `refresh_interval > 0` deliberately refreshes the snapshot inside the solve.

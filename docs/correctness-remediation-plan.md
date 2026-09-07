@@ -27,10 +27,12 @@ scope in the 2026-09-05 memory plan; it does not certify all contact heuristics.
 5. Separate **a reproduced implementation defect**, **a modeling concern**, and
    **an optional redesign**. A synthetic counterexample establishes its specific
    failure mode; it does not establish that every production scene is inaccurate.
-6. Preserve user inputs/outputs. Validate with isolated copies of the two named
+6. Preserve user inputs/outputs. Validate with isolated copies of approved
    scenes, record any input-schema translation, and keep timestep/load schedule
    unchanged for full runs. A partial run is not a full pass. Do not regenerate
    golden data or relax tolerances to manufacture a pass.
+   **User constraint (2026-09-06): do not run `teseo_problem` unless explicitly
+   asked.** References to its historical results do not authorize a new run.
 7. Read current AGENTS.md, branch state and dependency pins before each session.
    Save incoming uncommitted work before narrowing edits. Rebuild, test, then
    commit/push according to project instructions. Record commits and exact
@@ -68,7 +70,8 @@ measured energy discontinuity and fixed-DOF projection defect remain concerns,
 but feasibility alone and smooth-barrier equilibrium are different contracts.
 Document exactly which phase invokes the floor and what problem it is intended
 to solve. Compare current behavior, a floor-disabled barrier baseline, and any
-proposed correction on fixed obstacles, prescribed motion, and both user scenes.
+proposed correction on fixed obstacles, prescribed motion, and Ballburst.
+Teseo is excluded from new testing unless the user explicitly requests it.
 
 A barrier-only candidate must retain CCD and a coherent coefficient definition
 through each line search, including newly created contacts. Retuning, if moved
@@ -184,8 +187,12 @@ failure. The narrow regression suite passes. PF-01's phase-handling correction
 is validated; reproducible full-scene robustness and physical accuracy are not
 established. Investigate the path-dependent final-stage stall separately; do not
 accept a callback interruption as convergence.
-PF-02 through PF-09: not implemented by PF-01. PF-02 and PF-09 contain explicit
-investigation/decision gates; PF-03/PF-04/PF-05 can be addressed independently.
+PF-02: the [first characterization stage](pf-02-contact-floor.md) compares the
+current floor with the floor-disabled baseline, reproduces the energy/projection
+defects and a refresh inconsistency, and records approved scene evidence. The
+production model/default decision and broader physical validation remain open.
+PF-03 through PF-09: not implemented. PF-09 retains its model-decision gate;
+PF-03/PF-04/PF-05 can be addressed independently.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.

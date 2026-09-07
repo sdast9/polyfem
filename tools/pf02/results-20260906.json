@@ -1,0 +1,540 @@
+[
+  {
+    "ccd_limited_segment_collision_free": true,
+    "constraint_floor": 0.0001,
+    "crossing_segment_collision_free": false,
+    "crossing_segment_max_step": 0.399993896484375,
+    "initial_collision_count": 1,
+    "projection": [
+      {
+        "full_gap_velocity": 0.0,
+        "gap_velocity_after_restoring_prescribed_edge": -0.3333333333333333,
+        "pairs": 1,
+        "prescribed_edge_velocity": 0.0,
+        "projected_edge_velocity": -0.3333333333333333,
+        "projected_point_velocity": -0.3333333333333333
+      },
+      {
+        "full_gap_velocity": 0.0,
+        "gap_velocity_after_restoring_prescribed_edge": -0.41666666666666663,
+        "pairs": 1,
+        "prescribed_edge_velocity": 0.25,
+        "projected_edge_velocity": -0.16666666666666666,
+        "projected_point_velocity": -0.16666666666666666
+      }
+    ],
+    "refresh_at_fixed_position": {
+      "after": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.3761399416,
+        "energy": 1980.69750060376,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.94624182,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.3761399416
+      },
+      "after_nearby_rebuild": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5.0001e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      "before": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      "returned_to_same_position": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      }
+    },
+    "scalar_equilibrium": {
+      "bracketed": false,
+      "load": 4000000.0,
+      "lower_residual": 4000000.0,
+      "method": "bisection on real point force, frozen snapshot",
+      "upper_residual": 3979967.162122648
+    },
+    "snapshot_gap": 0.2,
+    "threshold_secant_dE_dgap": 921033018781.6008,
+    "trial_samples": [
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999800.7168866757,
+        "energy": 1842.048038546817,
+        "gap": 0.00010001,
+        "gradient_norm": 2449245.6718121795,
+        "kappa": 100.0,
+        "point_vertical_gradient": -1999800.7168866757
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970336195,
+        "energy": 1842.0660375632017,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101574101,
+        "kappa": 100.0,
+        "point_vertical_gradient": -1999980.6970336195
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 9.9999e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 9.999e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970336195,
+        "energy": 1842.0660375632017,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101574101,
+        "kappa": 100.0,
+        "point_vertical_gradient": -1999980.6970336195
+      }
+    ],
+    "wall_seconds": 0.1686270833015442
+  },
+  {
+    "ccd_limited_segment_collision_free": true,
+    "constraint_floor": 0.0001,
+    "crossing_segment_collision_free": false,
+    "crossing_segment_max_step": 0.399993896484375,
+    "initial_collision_count": 0,
+    "projection": [
+      {
+        "full_gap_velocity": 0.0,
+        "gap_velocity_after_restoring_prescribed_edge": -0.3333333333333333,
+        "pairs": 1,
+        "prescribed_edge_velocity": 0.0,
+        "projected_edge_velocity": -0.3333333333333333,
+        "projected_point_velocity": -0.3333333333333333
+      },
+      {
+        "full_gap_velocity": 0.0,
+        "gap_velocity_after_restoring_prescribed_edge": -0.41666666666666663,
+        "pairs": 1,
+        "prescribed_edge_velocity": 0.25,
+        "projected_edge_velocity": -0.16666666666666666,
+        "projected_point_velocity": -0.16666666666666666
+      }
+    ],
+    "refresh_at_fixed_position": {
+      "after": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.376131059,
+        "energy": 1980.697500603316,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.946230941,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.376131059
+      },
+      "after_nearby_rebuild": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5.0001e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      "before": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      "returned_to_same_position": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      }
+    },
+    "scalar_equilibrium": {
+      "bracketed": false,
+      "load": 4000000.0,
+      "lower_residual": 4000000.0,
+      "method": "bisection on real point force, frozen snapshot",
+      "upper_residual": 3979967.162122648
+    },
+    "snapshot_gap": 1.2,
+    "threshold_secant_dE_dgap": 921033018781.5178,
+    "trial_samples": [
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999800.716888341,
+        "energy": 1842.0480385469841,
+        "gap": 0.00010001,
+        "gradient_norm": 2449245.6718142186,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -1999800.716888341
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970319545,
+        "energy": 1842.0660375630357,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101572062,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -1999980.6970319545
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 9.9999e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 9.999e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 0.0,
+        "energy": 0.0,
+        "gap": 5e-05,
+        "gradient_norm": 0.0,
+        "kappa": 0.0,
+        "point_vertical_gradient": 0.0
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970319545,
+        "energy": 1842.0660375630357,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101572062,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -1999980.6970319545
+      }
+    ],
+    "wall_seconds": 0.011594874784350395
+  },
+  {
+    "ccd_limited_segment_collision_free": true,
+    "constraint_floor": 0.0,
+    "crossing_segment_collision_free": false,
+    "crossing_segment_max_step": 0.399993896484375,
+    "initial_collision_count": 1,
+    "projection": [
+      {
+        "full_gap_velocity": -1.0,
+        "gap_velocity_after_restoring_prescribed_edge": -1.0,
+        "pairs": 0,
+        "prescribed_edge_velocity": 0.0,
+        "projected_edge_velocity": 0.0,
+        "projected_point_velocity": -1.0
+      },
+      {
+        "full_gap_velocity": -1.25,
+        "gap_velocity_after_restoring_prescribed_edge": -1.25,
+        "pairs": 0,
+        "prescribed_edge_velocity": 0.25,
+        "projected_edge_velocity": 0.25,
+        "projected_point_velocity": -1.0
+      }
+    ],
+    "refresh_at_fixed_position": {
+      "after": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.3761399416,
+        "energy": 1980.69750060376,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.94624182,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.3761399416
+      },
+      "after_nearby_rebuild": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 3999920.3777466738,
+        "energy": 1980.6935006433853,
+        "gap": 5.0001e-05,
+        "gradient_norm": 4898881.968619946,
+        "kappa": 100.0,
+        "point_vertical_gradient": -3999920.3777466738
+      },
+      "before": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.3761399416,
+        "energy": 1980.69750060376,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.94624182,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.3761399416
+      },
+      "returned_to_same_position": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.3761399416,
+        "energy": 1980.69750060376,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.94624182,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.3761399416
+      }
+    },
+    "scalar_equilibrium": {
+      "bracketed": true,
+      "load": 4000000.0,
+      "lower_residual": -196000000.0104524,
+      "method": "bisection on real point force, frozen snapshot",
+      "solution": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.00000089,
+        "energy": 1980.6974817968032,
+        "free_vertical_residual": -8.898787200450897e-07,
+        "gap": 5.000000470174737e-05,
+        "gradient_norm": 4898979.485567446,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.00000089,
+        "relative_force_balance_error": 2.2246968001127242e-13
+      },
+      "upper_residual": 3979967.162122648
+    },
+    "snapshot_gap": 0.2,
+    "threshold_secant_dE_dgap": -2000000.6956024661,
+    "trial_samples": [
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999800.7168866757,
+        "energy": 1842.048038546817,
+        "gap": 0.00010001,
+        "gradient_norm": 2449245.6718121795,
+        "kappa": 100.0,
+        "point_vertical_gradient": -1999800.7168866757
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970336195,
+        "energy": 1842.0660375632017,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101574101,
+        "kappa": 100.0,
+        "point_vertical_gradient": -1999980.6970336195
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 2000020.697021266,
+        "energy": 1842.070037564593,
+        "gap": 9.9999e-05,
+        "gradient_norm": 2449515.0913538267,
+        "kappa": 100.0,
+        "point_vertical_gradient": -2000020.697021266
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 2000200.716767655,
+        "energy": 1842.0880385609212,
+        "gap": 9.999e-05,
+        "gradient_norm": 2449735.569614966,
+        "kappa": 100.0,
+        "point_vertical_gradient": -2000200.716767655
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.3761399416,
+        "energy": 1980.69750060376,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.94624182,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.3761399416
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970336195,
+        "energy": 1842.0660375632017,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101574101,
+        "kappa": 100.0,
+        "point_vertical_gradient": -1999980.6970336195
+      }
+    ],
+    "wall_seconds": 0.013237375766038895
+  },
+  {
+    "ccd_limited_segment_collision_free": true,
+    "constraint_floor": 0.0,
+    "crossing_segment_collision_free": false,
+    "crossing_segment_max_step": 0.399993896484375,
+    "initial_collision_count": 0,
+    "projection": [
+      {
+        "full_gap_velocity": -1.0,
+        "gap_velocity_after_restoring_prescribed_edge": -1.0,
+        "pairs": 0,
+        "prescribed_edge_velocity": 0.0,
+        "projected_edge_velocity": 0.0,
+        "projected_point_velocity": -1.0
+      },
+      {
+        "full_gap_velocity": -1.25,
+        "gap_velocity_after_restoring_prescribed_edge": -1.25,
+        "pairs": 0,
+        "prescribed_edge_velocity": 0.25,
+        "projected_edge_velocity": 0.25,
+        "projected_point_velocity": -1.0
+      }
+    ],
+    "refresh_at_fixed_position": {
+      "after": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.376131059,
+        "energy": 1980.697500603316,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.946230941,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.376131059
+      },
+      "after_nearby_rebuild": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 3999920.377748894,
+        "energy": 1980.6935006434965,
+        "gap": 5.0001e-05,
+        "gradient_norm": 4898881.968622665,
+        "kappa": 100.0,
+        "point_vertical_gradient": -3999920.377748894
+      },
+      "before": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.376131061,
+        "energy": 1980.6975006033165,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.946230944,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -4000000.376131061
+      },
+      "returned_to_same_position": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.376131059,
+        "energy": 1980.697500603316,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.946230941,
+        "kappa": 100.0,
+        "point_vertical_gradient": -4000000.376131059
+      }
+    },
+    "scalar_equilibrium": {
+      "bracketed": true,
+      "load": 4000000.0,
+      "lower_residual": -196000000.0271058,
+      "method": "bisection on real point force, frozen snapshot",
+      "solution": {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.000005332,
+        "energy": 1980.6974817970258,
+        "free_vertical_residual": -5.3318217396736145e-06,
+        "gap": 5.0000004701789e-05,
+        "gradient_norm": 4898979.485572886,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -4000000.000005332,
+        "relative_force_balance_error": 1.3329554349184036e-12
+      },
+      "upper_residual": 3979967.162122648
+    },
+    "snapshot_gap": 1.2,
+    "threshold_secant_dE_dgap": -2000000.8621536833,
+    "trial_samples": [
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999800.716888341,
+        "energy": 1842.0480385469841,
+        "gap": 0.00010001,
+        "gradient_norm": 2449245.6718142186,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -1999800.716888341
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970319545,
+        "energy": 1842.0660375630357,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101572062,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -1999980.6970319545
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 2000020.6970229319,
+        "energy": 1842.07003756476,
+        "gap": 9.9999e-05,
+        "gradient_norm": 2449515.091355867,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -2000020.6970229319
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 2000200.716766545,
+        "energy": 1842.088038560811,
+        "gap": 9.999e-05,
+        "gradient_norm": 2449735.5696136067,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -2000200.716766545
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 4000000.376131061,
+        "energy": 1980.6975006033165,
+        "gap": 5e-05,
+        "gradient_norm": 4898979.946230944,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -4000000.376131061
+      },
+      {
+        "collision_count": 1,
+        "edge_vertical_gradient_sum": 1999980.6970319545,
+        "energy": 1842.0660375630357,
+        "gap": 0.000100001,
+        "gradient_norm": 2449466.101572062,
+        "kappa": 100.00000000000003,
+        "point_vertical_gradient": -1999980.6970319545
+      }
+    ],
+    "wall_seconds": 0.012549874372780323
+  }
+]

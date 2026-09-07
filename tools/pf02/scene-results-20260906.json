@@ -1,0 +1,123 @@
+{
+  "solver_baseline": "4b6e970c322328f7701d0da93ff39f970528e037",
+  "scenes": [
+    {
+      "scene": "ballburst",
+      "mode": "current",
+      "exit_code": 0,
+      "wall_seconds": 264.05760241672397,
+      "min_logged_gap": 1.1284793562984888e-07,
+      "min_logged_gap_over_dhat": 0.011284793562984887,
+      "floor_projection_log_count": 0,
+      "restart_log_count": 0,
+      "configured_slope_exit_log_count": 200,
+      "final_reduced_failure_count": 0,
+      "last_completed_step": [
+        "200",
+        "200",
+        "60"
+      ],
+      "last_solver_finish": "[2026-09-06 22:25:37.760] [polyfem] [error] [SparseNewton][RobustArmijo] Finished: Search direction not a descent direction took 0.380621s (iters=8 \u0394f=6.65926e-12 \u2016\u2207f\u2016=0.223305 \u2016\u2207f\u2016_rel=2.49158e-05 \u2016\u0394x\u2016=2.12093e-15 \u2016\u0394x\u2016_rel=1.91772e-07 \u0394x\u22c5\u2207f(x)=-4.62469e-18 1/2\u0394x^TH\u0394x=nan) (stopping criteria: iters=5000 \u0394f=0 \u2016\u2207f\u2016=6.38943e-09 \u2016\u2207f\u2016_rel=1e-10 \u2016\u0394x\u2016=0 \u2016\u0394x\u2016_rel=0 \u0394x\u22c5\u2207f(x)=-1.40572e-15 1/2\u0394x^TH\u0394x=0)",
+      "saved_F_frames_checked": 201,
+      "min_saved_det_F": 0.9354769642452309,
+      "nonpositive_saved_F_samples": 0,
+      "nonfinite_saved_F_samples": 0,
+      "min_saved_tet_det_F": 0.9354769642452309,
+      "nonpositive_saved_tet_F_samples": 0,
+      "nonfinite_saved_tet_F_samples": 0,
+      "saved_nonvolume_F_samples": 0
+    },
+    {
+      "scene": "ballburst",
+      "mode": "floor_disabled",
+      "exit_code": 0,
+      "wall_seconds": 261.45959008298814,
+      "min_logged_gap": 1.1284793824324537e-07,
+      "min_logged_gap_over_dhat": 0.011284793824324535,
+      "floor_projection_log_count": 0,
+      "restart_log_count": 0,
+      "configured_slope_exit_log_count": 200,
+      "final_reduced_failure_count": 0,
+      "last_completed_step": [
+        "200",
+        "200",
+        "60"
+      ],
+      "last_solver_finish": "[2026-09-06 22:29:59.296] [polyfem] [error] [SparseNewton][RobustArmijo] Finished: Search direction not a descent direction took 0.381991s (iters=8 \u0394f=6.38828e-12 \u2016\u2207f\u2016=0.229881 \u2016\u2207f\u2016_rel=2.56496e-05 \u2016\u0394x\u2016=2.12097e-15 \u2016\u0394x\u2016_rel=1.91776e-07 \u0394x\u22c5\u2207f(x)=-4.62718e-18 1/2\u0394x^TH\u0394x=nan) (stopping criteria: iters=5000 \u0394f=0 \u2016\u2207f\u2016=6.38943e-09 \u2016\u2207f\u2016_rel=1e-10 \u2016\u0394x\u2016=0 \u2016\u0394x\u2016_rel=0 \u0394x\u22c5\u2207f(x)=-1.40572e-15 1/2\u0394x^TH\u0394x=0)",
+      "saved_F_frames_checked": 201,
+      "min_saved_det_F": 0.9354769642606062,
+      "nonpositive_saved_F_samples": 0,
+      "nonfinite_saved_F_samples": 0,
+      "min_saved_tet_det_F": 0.9354769642606062,
+      "nonpositive_saved_tet_F_samples": 0,
+      "nonfinite_saved_tet_F_samples": 0,
+      "saved_nonvolume_F_samples": 0
+    },
+    {
+      "scene": "prescribed_cube_fixed_slab",
+      "mode": "current",
+      "exit_code": 0,
+      "wall_seconds": 4.278040666133165,
+      "min_logged_gap": 0.00010010344271942084,
+      "min_logged_gap_over_dhat": 0.10010344271942084,
+      "floor_projection_log_count": 0,
+      "restart_log_count": 0,
+      "configured_slope_exit_log_count": 0,
+      "final_reduced_failure_count": 0,
+      "last_completed_step": [
+        "4",
+        "4",
+        "1"
+      ],
+      "last_solver_finish": "[2026-09-06 22:30:04.449] [polyfem] [info] [SparseNewton][RobustArmijo] Finished: Gradient vector norm too small took 0.0154812s (iters=6 \u0394f=3.27418e-11 \u2016\u2207f\u2016=1.2595e-07 \u2016\u2207f\u2016_rel=4.88414e-14 \u2016\u0394x\u2016=nan \u2016\u0394x\u2016_rel=nan \u0394x\u22c5\u2207f(x)=nan 1/2\u0394x^TH\u0394x=nan) (stopping criteria: iters=500 \u0394f=0 \u2016\u2207f\u2016=2.27951e-06 \u2016\u2207f\u2016_rel=1e-10 \u2016\u0394x\u2016=0 \u2016\u0394x\u2016_rel=0 \u0394x\u22c5\u2207f(x)=-0 1/2\u0394x^TH\u0394x=0)",
+      "saved_F_frames_checked": 5,
+      "min_saved_det_F": 0.0,
+      "nonpositive_saved_F_samples": 20,
+      "nonfinite_saved_F_samples": 0,
+      "min_saved_tet_det_F": 0.8571172721409703,
+      "nonpositive_saved_tet_F_samples": 0,
+      "nonfinite_saved_tet_F_samples": 0,
+      "saved_nonvolume_F_samples": 20
+    },
+    {
+      "scene": "prescribed_cube_fixed_slab",
+      "mode": "floor_disabled",
+      "exit_code": 0,
+      "wall_seconds": 4.298712999559939,
+      "min_logged_gap": 0.0001001034427194486,
+      "min_logged_gap_over_dhat": 0.1001034427194486,
+      "floor_projection_log_count": 0,
+      "restart_log_count": 0,
+      "configured_slope_exit_log_count": 0,
+      "final_reduced_failure_count": 0,
+      "last_completed_step": [
+        "4",
+        "4",
+        "1"
+      ],
+      "last_solver_finish": "[2026-09-06 22:30:08.772] [polyfem] [info] [SparseNewton][RobustArmijo] Finished: Gradient vector norm too small took 0.0163297s (iters=6 \u0394f=1.81899e-11 \u2016\u2207f\u2016=1.26406e-07 \u2016\u2207f\u2016_rel=4.90179e-14 \u2016\u0394x\u2016=nan \u2016\u0394x\u2016_rel=nan \u0394x\u22c5\u2207f(x)=nan 1/2\u0394x^TH\u0394x=nan) (stopping criteria: iters=500 \u0394f=0 \u2016\u2207f\u2016=2.27951e-06 \u2016\u2207f\u2016_rel=1e-10 \u2016\u0394x\u2016=0 \u2016\u0394x\u2016_rel=0 \u0394x\u22c5\u2207f(x)=-0 1/2\u0394x^TH\u0394x=0)",
+      "saved_F_frames_checked": 5,
+      "min_saved_det_F": 0.0,
+      "nonpositive_saved_F_samples": 20,
+      "nonfinite_saved_F_samples": 0,
+      "min_saved_tet_det_F": 0.8571172721409703,
+      "nonpositive_saved_tet_F_samples": 0,
+      "nonfinite_saved_tet_F_samples": 0,
+      "saved_nonvolume_F_samples": 20
+    }
+  ],
+  "final_displacement_comparison": [
+    {
+      "scene": "ballburst",
+      "step": 200,
+      "max_abs_displacement_difference": 1.520090856573647e-12,
+      "relative_l2_displacement_difference": 2.2807534734291135e-10
+    },
+    {
+      "scene": "prescribed_cube_fixed_slab",
+      "step": 4,
+      "max_abs_displacement_difference": 2.42861286636753e-16,
+      "relative_l2_displacement_difference": 3.8168403058997185e-16
+    }
+  ]
+}
