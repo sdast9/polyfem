@@ -206,7 +206,13 @@ PF-06: implemented and validated; see the [validation record](pf-06-validation.m
 Filtered directions now use the objective slope g^T p, with finite-difference,
 real floor-filter, stopping-tolerance and cleanup regressions. The direction
 filter and contact defaults remain; PF-02/PF-09 model concerns are not resolved.
-PF-07 through PF-09 remain unimplemented; PF-09 retains its model-decision gate.
+PF-07: bounded continuation corrections implemented and initializer limits
+characterized; see the [validation record](pf-07-validation.md). Penalty growth
+respects its ceiling and zero initial BC residual has defined progress. Converted
+unit/density regressions cover final reduced solutions. Optional curvature-based
+initialization, geometric continuation budgets and early-snap optimization remain
+deferred; the initializer policy is unchanged.
+PF-08 remains unimplemented; PF-09 retains its model-decision gate.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.

@@ -1059,8 +1059,10 @@ namespace polyfem::varform
 		std::shared_ptr<polysolve::nonlinear::Solver> nl_solver =
 			polysolve::nonlinear::Solver::create(args["solver"]["augmented_lagrangian"]["nonlinear"], args["solver"]["linear"], units.characteristic_length(), logger());
 
-		// Optionally scale the initial AL weight to the system elastic
-		// Hessian so the penalty dominates the problem curvature.
+		// Heuristic initializer from the weighted elastic Hessian only.
+		// This is not a curvature bound relative to the BC metric: inertia,
+		// other forms and coupling are omitted. The numeric floor 1 is
+		// expressed in internal objective/displacement-squared units.
 		double initial_al_weight;
 		if (args["solver"]["augmented_lagrangian"]["initial_weight"].is_string())
 		{

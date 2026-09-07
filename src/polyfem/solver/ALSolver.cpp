@@ -2,6 +2,7 @@
 
 #include <polyfem/utils/Logger.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace polyfem::solver
@@ -267,7 +268,12 @@ namespace polyfem::solver
 			for (const auto &f : alagr_forms)
 				current_error += f->compute_error(sol);
 			logger().debug("Current error = {}", current_error);
-			const double eta = 1 - sqrt(current_error / initial_error);
+			// Zero initial residual has no relative progress to measure.
+			// Preserve rollback if it grows; otherwise allow penalty continuation
+			// while the separate geometric snap checks remain unsatisfied.
+			const double eta = initial_error > 0
+								   ? 1 - std::sqrt(current_error) / std::sqrt(initial_error)
+								   : (current_error > 0 ? -1.0 : 0.0);
 
 			logger().debug("Current eta = {}", eta);
 
@@ -282,11 +288,15 @@ namespace polyfem::solver
 			nl_problem.line_search_begin(sol, tmp_sol);
 
 			if (eta < eta_tol && al_weight < max_al_weight)
-				al_weight *= scaling;
+				al_weight = std::min(al_weight * scaling, max_al_weight);
 
 			for (auto &f : alagr_forms)
 				f->update_lagrangian(sol, al_weight);
 
+			solve_info_["al_initial_error"] = initial_error;
+			solve_info_["al_current_error"] = current_error;
+			solve_info_["al_relative_progress"] = eta;
+			solve_info_["al_next_weight"] = al_weight;
 			post_subsolve(al_weight);
 			++al_steps;
 		}

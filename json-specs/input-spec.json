@@ -1445,7 +1445,7 @@
             "hessian_scaled"
         ],
         "type": "string",
-        "doc": "Scale the initial AL weight to initial_weight_multiplier * max|H| where H is the system elastic Hessian at the solve start."
+        "doc": "Heuristic initializer max(initial_weight_multiplier * max|H_elastic|, 1) using the weighted elastic Hessian at the solve start. It omits inertia and other forms and is not a curvature bound relative to the normalized BC metric. The numeric floor 1 uses internal objective/displacement-squared units."
     },
     {
         "pointer": "/solver/augmented_lagrangian/initial_weight_multiplier",
@@ -1471,7 +1471,7 @@
         "pointer": "/solver/augmented_lagrangian/max_weight",
         "default": 1e8,
         "type": "float",
-        "doc": "Maximum weight"
+        "doc": "Ceiling for continuation increases; an explicitly larger initial weight is preserved."
     },
     {
         "pointer": "/solver/augmented_lagrangian/eta",

@@ -382,8 +382,10 @@ namespace polyfem::legacy
 
 		std::shared_ptr<polysolve::nonlinear::Solver> nl_solver = make_nl_solver(true);
 
-		// Optionally scale the initial AL weight to the system elastic
-		// Hessian so the penalty dominates the problem curvature.
+		// Heuristic initializer from the weighted elastic Hessian only.
+		// This is not a curvature bound relative to the BC metric: inertia,
+		// other forms and coupling are omitted. The numeric floor 1 is
+		// expressed in internal objective/displacement-squared units.
 		double initial_al_weight;
 		if (args["solver"]["augmented_lagrangian"]["initial_weight"].is_string())
 		{

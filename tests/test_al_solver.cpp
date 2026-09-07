@@ -455,3 +455,125 @@ TEST_CASE("AL clears direction filters on every exit", "[al_solver][direction_fi
 	REQUIRE_NOTHROW(shared->minimize(problem, x));
 	CHECK(calls == previous_calls);
 }
+
+TEST_CASE("AL continuation handles zero initial error and caps penalty growth", "[al_solver][al_continuation]")
+{
+	struct TwoQuartics : Form
+	{
+		std::string name() const override { return "two-quartics"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return .25 * x.array().pow(4).sum(); }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override { g = x.array().cube(); }
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override
+		{
+			h.resize(2, 2);
+			h.setZero();
+			for (int i = 0; i < 2; ++i)
+				h.coeffRef(i, i) = 3 * x[i] * x[i];
+		}
+	};
+	struct SnapProblem : NLProblem
+	{
+		SnapProblem(std::shared_ptr<AugmentedLagrangianForm> bc, const StiffnessMatrix &mass)
+			: NLProblem(2, 0, {std::make_shared<TwoQuartics>()}, {bc}, polysolve::linear::Solver::create(linear, logger()), 1, 1, mass, 1) {}
+		bool is_step_collision_free(const TVector &from, const TVector &to) override
+		{
+			// Synthetic geometric gate: snapping the prescribed coordinate
+			// is safe only after the free coordinate moves below 0.5.
+			if (from.size() == 2 && to.size() == 1)
+				return from[1] < .5;
+			return NLProblem::is_step_collision_free(from, to);
+		}
+	};
+	StiffnessMatrix mass(2, 2);
+	mass.setIdentity();
+	const std::vector<int> boundary{0};
+	auto bc = std::make_shared<BCLagrangianForm>(2, boundary, mass, 0, Eigen::VectorXd::Zero(2));
+	SnapProblem problem(bc, mass);
+	ALSolver preparation({bc}, 3, 2, 5, 1.0, [](const auto &) {}, restart_options(0), [](const auto &) {});
+	int interruptions = 0;
+	std::vector<double> weights;
+	preparation.post_subsolve = [&](double weight) { if (preparation.info()["outcome"] == "interrupted") ++interruptions; weights.push_back(weight); };
+	Eigen::MatrixXd sol = Eigen::VectorXd::Constant(2, 10);
+	SECTION("nonzero initial BC error") {}
+	SECTION("zero initial BC error") { sol(0, 0) = 0; }
+	REQUIRE_NOTHROW(preparation.solve_al(problem, sol, parameters(), linear, 1));
+	CHECK(interruptions >= 3);
+	REQUIRE_FALSE(weights.empty());
+	for (double weight : weights)
+		CHECK(weight <= 5);
+	CHECK(weights.front() == 5);
+	CHECK(sol(1, 0) < .5);
+	CHECK(std::pow(sol(1, 0), 3) > 1e-12);
+	ALSolver final_solve({bc}, 1, 2, 1e8, .99, [](const auto &) {});
+	REQUIRE_NOTHROW(final_solve.solve_reduced(problem, sol, parameters(), linear, 1));
+	CHECK(sol(0, 0) == 0);
+	CHECK(std::abs(std::pow(sol(1, 0), 3)) < 1e-12);
+}
+
+TEST_CASE("AL converted units and density preserve reduced solutions", "[al_solver][al_continuation]")
+{
+	class Quadratic : public Form
+	{
+	public:
+		Eigen::Matrix2d h;
+		std::string name() const override { return "scaled-elastic-plus-inertia"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return .5 * x.dot(h * x); }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override { g = h * x; }
+		void second_derivative_unweighted(const Eigen::VectorXd &, StiffnessMatrix &out) const override { out = h.sparseView(); }
+	};
+	struct SnapProblem : NLProblem
+	{
+		double length;
+		SnapProblem(std::shared_ptr<Form> f, std::shared_ptr<AugmentedLagrangianForm> bc, const StiffnessMatrix &m, double length)
+			: NLProblem(2, 0, {f}, {bc}, polysolve::linear::Solver::create(linear, logger()), 1, 1, m, 1), length(length) {}
+		bool is_step_collision_free(const TVector &from, const TVector &to) override
+		{
+			// Synthetic feasibility gate, not a collision model. Exercise
+			// the real AL loop until the prescribed-coordinate gap shrinks.
+			if (from.size() == 2 && to.size() == 1)
+				return std::abs(from[0] / length - .3) < .05;
+			return NLProblem::is_step_collision_free(from, to);
+		}
+	};
+	for (double length : {1e-3, 1.0, 1e3})
+		for (double energy : {1e-4, 1.0, 1e4})
+			for (double density : {0.0, 1.0, 100.0})
+			{
+				CAPTURE(length, energy, density);
+				const double stiffness = energy / (length * length);
+				auto f = std::make_shared<Quadratic>();
+				// Dimensionless elastic K plus inertial density*diag(1,3).
+				f->h << 2 + density, -1, -1, 2 + 3 * density;
+				f->h *= stiffness;
+				StiffnessMatrix mass(2, 2);
+				// Uniform conversion of FEM masses leaves the BC metric fixed.
+				mass.coeffRef(0, 0) = energy * std::max(density, 1.0);
+				mass.coeffRef(1, 1) = 3 * mass.coeff(0, 0);
+				const std::vector<int> boundary{0};
+				Eigen::Vector2d target(.3 * length, 0);
+				auto bc = std::make_shared<BCLagrangianForm>(2, boundary, mass, 0, target);
+				SnapProblem problem(f, bc, mass, length);
+				ALSolver solver({bc}, .2 * stiffness, 2, 1000 * stiffness, .99, [](const auto &) {});
+				int passes = 0;
+				solver.post_subsolve = [&](double weight) {
+					if (weight > 0)
+					{
+						++passes;
+						REQUIRE(passes < 200); // Test watchdog, not a production budget.
+						CHECK(weight <= 1000 * stiffness);
+						CHECK(std::isfinite(solver.info()["al_relative_progress"].get<double>()));
+					}
+				};
+				auto params = parameters();
+				params["grad_norm_tol"] = 1e-9 * energy / length;
+				params["advanced"]["derivative_along_delta_x_tol"] = 0;
+				Eigen::MatrixXd sol = Eigen::Vector2d(0, length);
+				REQUIRE_NOTHROW(solver.solve_al(problem, sol, params, linear, length));
+				CHECK(passes > 0);
+				REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, params, linear, length));
+				CHECK(std::abs(sol(0, 0) / length - .3) < 1e-12);
+				CHECK(std::abs(sol(1, 0) / length - .3 / (2 + 3 * density)) < 1e-9);
+				CHECK(std::abs((f->h * sol)(1, 0)) * length / energy < 1e-9);
+				CHECK(solver.info()["outcome"] == "converged");
+			}
+}
