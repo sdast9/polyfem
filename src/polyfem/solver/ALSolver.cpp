@@ -26,7 +26,7 @@ namespace polyfem::solver
 	{
 	}
 
-	void ALSolver::minimize_with_stall_restarts(
+	ALSolver::SubsolveOutcome ALSolver::minimize_with_stall_restarts(
 		NLProblem &nl_problem,
 		Eigen::VectorXd &tmp_sol,
 		const json &nl_solver_params,
@@ -35,6 +35,7 @@ namespace polyfem::solver
 		const std::shared_ptr<NLSolver> &nl_solverin)
 	{
 		const bool detect_stalls = stall_opts.enabled && on_stall != nullptr;
+		solve_info_ = {{"outcome", "failed"}};
 
 		// A restart from a wedged iterate (a contact hotspot at CCD scale)
 		// cannot escape no matter how the stiffness is retuned: revert to
@@ -80,9 +81,41 @@ namespace polyfem::solver
 			{
 				nl_solver->minimize(nl_problem, tmp_sol);
 				nl_problem.finish();
+
+				// Preserve PolySolve's configured convergence contract. A
+				// callback or iteration budget stop is not convergence, but
+				// a permitted step/energy criterion must not become a new
+				// gradient-only requirement (especially in the AL phase).
+				using polysolve::nonlinear::Status;
+				const auto status = nl_solver->status();
+				// PolySolve also uses NotDescentDirection for its configured
+				// negative slope tolerance. A genuinely non-descending Newton
+				// direction throws above; distinguish the finite negative case.
+				const double slope = nl_solver->current_criteria().xDeltaDotGrad;
+				const bool slope_tolerance = status == Status::NotDescentDirection
+											 && nl_solver->stop_criteria().xDeltaDotGrad < 0
+											 && std::isfinite(slope) && slope < 0;
+				const bool converged = slope_tolerance || status == Status::GradNormTolerance
+									   || status == Status::RelGradNormTolerance
+									   || (nl_solver->allow_non_grad_convergence
+										   && polysolve::nonlinear::is_converged_status(status));
+				solve_info_ = nl_solver->info();
+				solve_info_["outcome"] = converged ? "converged" : "interrupted";
+				solve_info_["termination_reason"] = slope_tolerance
+														? "Configured directional-derivative tolerance reached"
+														: polysolve::nonlinear::status_message(status);
+				solve_info_["directional_derivative"] = slope;
+				solve_info_["restarts"] = restarts;
+				if (converged)
+				{
+					nl_solver->set_iteration_callback(nullptr);
+					nl_solver->set_direction_filter(nullptr);
+					return SubsolveOutcome::Converged;
+				}
 			}
 			catch (const std::runtime_error &e)
 			{
+				solve_info_ = {{"outcome", "failed"}, {"error", e.what()}, {"restarts", restarts}};
 				// nl_solverin may be shared with later solves
 				nl_solver->set_iteration_callback(nullptr);
 				nl_solver->set_direction_filter(nullptr);
@@ -102,6 +135,7 @@ namespace polyfem::solver
 			}
 			catch (...)
 			{
+				solve_info_["outcome"] = "failed";
 				nl_solver->set_iteration_callback(nullptr);
 				nl_solver->set_direction_filter(nullptr);
 				throw;
@@ -110,14 +144,14 @@ namespace polyfem::solver
 			nl_solver->set_direction_filter(nullptr);
 
 			if (!stalled && !hard_stall)
-				return;
+				return SubsolveOutcome::Interrupted;
 
 			if (restarts >= stall_opts.max_restarts)
 			{
 				logger().warn(
-					"Line-search stall persisted after {} restart(s); continuing with the current solution",
+					"Line-search stall persisted after {} restart(s); subsolve interrupted (not converged)",
 					restarts);
-				return;
+				return SubsolveOutcome::Interrupted;
 			}
 
 			++restarts;
@@ -201,6 +235,9 @@ namespace polyfem::solver
 				minimize_with_stall_restarts(
 					nl_problem, tmp_sol, nl_solver_params, linear_solver,
 					characteristic_length, nl_solverin);
+				// AL only prepares a feasible snap to the prescribed BCs.
+				// An interrupted inner solve is a valid continuation iterate,
+				// not a failure: adopt it and check snap feasibility below.
 				consecutive_failures = 0;
 			}
 			catch (const std::runtime_error &e)
@@ -221,6 +258,7 @@ namespace polyfem::solver
 					log_and_throw_error(
 						"AL subsolve failed {} times in a row ({}); giving up",
 						consecutive_failures, err_msg);
+				logger().warn("{}", err_msg);
 			}
 
 			sol = tmp_sol;
@@ -279,17 +317,12 @@ namespace polyfem::solver
 
 		nl_problem.init(sol);
 		update_barrier_stiffness(sol);
-		try
-		{
-			minimize_with_stall_restarts(
-				nl_problem, tmp_sol, nl_solver_params, linear_solver,
-				characteristic_length, nl_solverin);
-		}
-		catch (const std::runtime_error &e)
-		{
-			sol = nl_problem.reduced_to_full(tmp_sol);
-			throw e;
-		}
+		// Keep the caller's solution unchanged on interruption or failure.
+		const auto outcome = minimize_with_stall_restarts(
+			nl_problem, tmp_sol, nl_solver_params, linear_solver,
+			characteristic_length, nl_solverin);
+		if (outcome != SubsolveOutcome::Converged)
+			log_and_throw_error("Final reduced solve did not converge: {}", solve_info_.dump());
 		sol = nl_problem.reduced_to_full(tmp_sol);
 
 		post_subsolve(0);

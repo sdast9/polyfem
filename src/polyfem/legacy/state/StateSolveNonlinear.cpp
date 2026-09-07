@@ -441,7 +441,7 @@ namespace polyfem::legacy
 			stats.solver_info.push_back(
 				{{"type", al_weight > 0 ? "al" : "rc"},
 				 {"t", step}, // TODO: null if static?
-				 {"info", nl_solver->info()}});
+				 {"info", al_solver.info()}});
 			if (al_weight > 0)
 				stats.solver_info.back()["weight"] = al_weight;
 			save_subsolve(++subsolve_count, step, sol, Eigen::MatrixXd()); // no pressure

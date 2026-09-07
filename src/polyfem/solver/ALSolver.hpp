@@ -29,6 +29,16 @@ namespace polyfem::solver
 		using NLSolver = polysolve::nonlinear::Solver;
 
 	public:
+		// Converged means the configured PolySolve criteria, not an extra
+		// gradient-only test. Interrupted is usable by AL continuation.
+		enum class SubsolveOutcome
+		{
+			Converged,
+			Interrupted
+		};
+
+		/// Diagnostics for the actual last inner solve, including failures.
+		const json &info() const { return solve_info_; }
 		ALSolver(
 			const std::vector<std::shared_ptr<AugmentedLagrangianForm>> &alagr_form,
 			const double initial_al_weight,
@@ -75,8 +85,9 @@ namespace polyfem::solver
 	protected:
 		/// @brief Run nl_solver->minimize with stall detection; on a stall,
 		///        retune via on_stall and restart (bounded by max_restarts).
-		/// @return True if the final minimize ended without a stall request.
-		void minimize_with_stall_restarts(
+		/// @return Interrupted iterates are continuation states only. Hard
+		/// failures throw; a final reduced solve requires Converged.
+		SubsolveOutcome minimize_with_stall_restarts(
 			NLProblem &nl_problem,
 			Eigen::VectorXd &tmp_sol,
 			const json &nl_solver_params,
@@ -85,6 +96,7 @@ namespace polyfem::solver
 			const std::shared_ptr<NLSolver> &nl_solverin);
 
 		std::vector<std::shared_ptr<AugmentedLagrangianForm>> alagr_forms;
+		json solve_info_ = json::object();
 		const double initial_al_weight;
 		const double scaling;
 		const double max_al_weight;

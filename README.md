@@ -15,7 +15,9 @@ PolyFEM is a polyvalent C++ FEM library.
 through `6c9e7a390` (September 2, 2026). On September 5, `sync-upstream` was
 fast-forwarded into `main` at solver baseline `db180eb3a`.
 See [semi-implicit usage and defaults](scenes/semi-implicit/README.md) and
-[VarForm architecture](docs/varform-design.md).
+[VarForm architecture](docs/varform-design.md). The
+[phase-aware correctness plan](docs/correctness-remediation-plan.md) separates
+AL feasibility, reduced convergence, and the remaining contact investigations.
 
 The CMake recipes pin `sdast9/ipc-toolkit@9da3094` and
 `sdast9/polysolve@012658e`; fresh builds retrieve these companion revisions.

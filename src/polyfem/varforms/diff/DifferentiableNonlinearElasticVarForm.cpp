@@ -315,7 +315,7 @@ namespace polyfem::varform
 			stats.solver_info.push_back(
 				{{"type", al_weight > 0 ? "al" : "rc"},
 				 {"t", step},
-				 {"info", nl_solver->info()}});
+				 {"info", al_solver.info()}});
 			if (al_weight > 0)
 				stats.solver_info.back()["weight"] = al_weight;
 			save_subsolve(stats.solver_info.size(), step, solution);
