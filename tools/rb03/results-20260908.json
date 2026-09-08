@@ -1,0 +1,140 @@
+{
+  "NLProblem_prescribed": {
+    "gradient_relative_error": 7.620360051042133e-11,
+    "hessian_relative_error": 3.450616878076344e-11,
+    "reduced_dofs": 4
+  },
+  "candidate_force_effects": {
+    "actual_vertex_sampling": {
+      "energy": 212.60031048089488,
+      "force_norm": 837.6469254007455,
+      "kappa": 71.66666666666666
+    },
+    "minimum_energy_lift_candidate": {
+      "energy": 647.68931797668,
+      "force_norm": 2551.9010983139,
+      "kappa": 218.33333333333337
+    },
+    "minimum_norm_lift_candidate": {
+      "energy": 1003.671233200504,
+      "force_norm": 3954.472694333754,
+      "kappa": 338.3333333333334
+    },
+    "transpose_direction_candidate": {
+      "energy": 262.0422431508705,
+      "force_norm": 1032.448535959059,
+      "kappa": 88.33333333333336
+    }
+  },
+  "checks": 97,
+  "external_builder": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 1.0506956095949642e-10,
+    "hessian_relative_error": 1.1804484870224607e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "fixed_form_interpolation": {
+    "energy": 2.9665159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 9.26714161050625e-11,
+    "hessian_relative_error": 1.1647031907577122e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "fixed_obstacle": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 1.0506956095949642e-10,
+    "hessian_relative_error": 1.1804484870224607e-07,
+    "reduced_dofs": 4,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "identity": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 6,
+    "gradient_relative_error": 6.918130004241871e-11,
+    "hessian_relative_error": 3.7603383384087787e-07,
+    "reduced_dofs": 6,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "interpolation": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 1.0506956095949642e-10,
+    "hessian_relative_error": 1.1804484870224607e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "interpolation_curvature": {
+    "actual_vertex_sampling": 71.66666666666666,
+    "minimum_energy_lift_candidate": 218.33333333333337,
+    "minimum_norm_lift_candidate": 338.3333333333334,
+    "transpose_direction_candidate": 88.33333333333336
+  },
+  "moving_obstacle": {
+    "energy": 362.542000511673,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 6.5834784373649e-11,
+    "hessian_relative_error": 2.2147265380421527e-07,
+    "reduced_dofs": 4,
+    "rotation_energy_error": 5.684341886080802e-14,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "obstacle_curvature": {
+    "actual_with_fem_only_hessian": 83.33333333333333,
+    "note": "proxy IDs are not FEM/obstacle DOF IDs"
+  },
+  "permutation": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 6,
+    "gradient_relative_error": 6.918130004241871e-11,
+    "hessian_relative_error": 3.76033833840878e-07,
+    "reduced_dofs": 6,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 5.551115123125783e-17
+  },
+  "permutation_curvature": {
+    "actual": 71.66666666666666,
+    "identity": 71.66666666666666,
+    "required_by_permutation": 26.66666666666667
+  },
+  "prescribed_contact_work": {
+    "dE_dt": 74.82702537802237,
+    "fem_force_y": 1496.5405075604474,
+    "finite_difference_dE_dt": 74.8270254007366,
+    "obstacle_force_y": -1496.5405075604474
+  },
+  "status": "characterized; mapping stiffness decision pending",
+  "surface_selection": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 6.918130004241871e-11,
+    "hessian_relative_error": 3.7603383384087787e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  }
+}
