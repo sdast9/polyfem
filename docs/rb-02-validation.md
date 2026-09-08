@@ -29,7 +29,8 @@ this item; their unresolved scope remains explicit.
 ## Baseline and reproduction
 
 PolyFEM started on clean tracked `main` at `cfc41224c`; existing untracked
-simulation/VTK artifacts were preserved. IPC recipe and effective CPM checkout
+simulation/VTK artifacts were present; their final location check is recorded
+below. IPC recipe and effective CPM checkout
 are `9da3094a46bcc054cc19024a5c748557c5bb6b9e` at
 `~/.cache/CPM/ipc-toolkit/0c20`, clean detached checkout. The companion IPC tree
 is clean on `semi-implicit-stiffness`. PolySolve recipe and effective local
@@ -169,7 +170,13 @@ record, the coefficient contract and the RB-02 plan row to `sdast9/polyfem:main`
 The task completion reports the resulting commit. The linked result records
 unchanged production library revision `cfc41224c` through local provenance and
 source/binary hashes; probe source is separately hashed. No dependency or HDA
-publication is required. Incoming untracked artifacts remain untouched.
+publication is required. No audit command intentionally moved or deleted incoming
+untracked artifacts. Final verification found the 432 original untracked paths
+absent from the repository; all 432 names exist in the pre-existing local
+`outputs/pf-08/` evidence directory. Baseline artifact content hashes were not
+collected, so identity and the cause of the location change are not established.
+The audit did not restore or overwrite either location. Production binary hashes
+are unchanged and the tracked checkout is clean.
 The parent workspace README is updated locally to reflect this characterization.
 
 Reproduction uses the [tool README](../tools/rb02/README.md) and current build's
