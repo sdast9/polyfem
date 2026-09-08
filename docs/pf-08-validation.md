@@ -1,6 +1,10 @@
 # PF-08 physical and numerical validation — 2026-09-07
 
-**Validation stage implemented; physical certification remains open.** No solver,
+**Historical validation stage implemented; physical certification remains open.**
+The constraint floor was subsequently removed; see [retirement](pf-02-floor-removal.md).
+The current probe no longer installs the removed projection and marks its results
+`constraint_floor_retired=true`. The measurements below remain the original
+pre-removal evidence and are not overwritten by subsequent runs. No solver,
 contact-floor, friction-lagging, recovery, or tolerance defaults were changed.
 This stage adds reproducible measurements, including negative results, after
 PF-01 and PF-03–PF-07. PF-02's production-model decision is still open. Teseo

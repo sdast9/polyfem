@@ -229,3 +229,14 @@ retaining CCD and the existing semi-implicit coefficient/refresh policies.
 Explicit positive settings remain available as legacy behavior with known PF-02
 defects. PF-09 hard-contact implementation is deferred. This default change is
 not a physical-accuracy certification; PF-08 limitations remain open.
+
+## September 7 retirement of the constraint floor
+
+Following preliminary user testing without a recurrence of the memory blow-up,
+the user authorized full removal of the defective floor mechanism. Barrier
+masking and the floor projection/caller are deleted; the legacy JSON key is an
+ignored compatibility input, not an opt-in feature. The HDA control and export
+are removed. The separate trial-displacement cap, CCD, coefficient refresh,
+friction and stopping policies remain unchanged. See [validation](pf-02-floor-removal.md).
+PF-02's defective floor mechanism is retired; a generally coherent coefficient
+lifecycle and PF-08 physical validation remain open. PF-09 is deferred.

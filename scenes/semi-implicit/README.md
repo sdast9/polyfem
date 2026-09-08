@@ -54,7 +54,6 @@ All semi-implicit options are optional. Defaults from
                 "kappa_min": 0,
                 "kappa_spread": 10000.0,
                 "gap_floor": 0,
-                "constraint_floor": 0,
                 "trial_displacement_cap": 50.0,
                 "conditioning_cap": 1000.0,
                 "controller_interval": 30,
@@ -73,12 +72,13 @@ All semi-implicit options are optional. Defaults from
 }
 ```
 
-`gap_floor = 0` disables experimental force saturation. `constraint_floor = 0`
-is the default and disables both floor projection and below-floor barrier deletion.
-A positive value explicitly enables the legacy floor. Existing JSON inputs and
-saved Houdini nodes with a positive value must be changed to zero to disable it. The [PF-02 investigation](../../docs/pf-02-contact-floor.md) records
-the discontinuity, boundary projection limits, and comparison evidence; this
-option is not a validated hard-contact formulation.
+`gap_floor = 0` disables experimental force saturation. The constraint-floor
+barrier deletion and direction projection have been removed. Old JSON inputs
+may still contain `constraint_floor`; this compatibility key is ignored, with
+a warning for nonzero values. It cannot reactivate the retired mechanism.
+The [PF-02 investigation](../../docs/pf-02-contact-floor.md) records the original
+defects; the [removal record](../../docs/pf-02-floor-removal.md) documents the
+replacement behavior and targeted validation.
 `trial_displacement_cap = 50` bounds trial surface displacement in barrier-support
 units. It is enabled by default within semi-implicit mode, not in other modes.
 `refresh_interval > 0` deliberately refreshes the snapshot inside the solve.

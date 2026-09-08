@@ -127,16 +127,6 @@ namespace polyfem::solver
 		///        (slack-relaxed) minimum gap, both squared distances.
 		double collapse_severity(const double avg_d2, const double min_d2) const;
 
-		/// @brief One-sided projection of the closing components of contact
-		///        pairs pinned below the constraint floor out of a Newton
-		///        direction (full-DOF). A pair at the numerical floor cannot
-		///        be held by any normal-force law (singular barriers poison
-		///        the direction, saturated ones let it collapse); treating it
-		///        as an active constraint -- free to slide and separate,
-		///        forbidden to close -- lets the rest of the mesh proceed.
-		/// @return Number of pairs projected.
-		int project_floor_pairs(const Eigen::VectorXd &x, Eigen::VectorXd &dir) const;
-
 		/// @brief Retune the trim after a line-search stall: increase it when
 		///        the average active gap is below the band (barrier too soft),
 		///        decrease it otherwise (barrier too stiff), then refresh the
@@ -235,10 +225,6 @@ namespace polyfem::solver
 		/// @brief Newton-iteration cadence of the in-solve downward trim step
 		///        (gap pinned above the band); 0 disables it.
 		int controller_interval_ = 30;
-		/// @brief Legacy floor fraction: deletes below-floor barriers and
-		///        filters closing directions (not a complete hard-contact solve).
-		///        Disabled by default; see docs/pf-02-contact-floor.md.
-		double constraint_floor_ = 0;
 		/// @brief Trial-step displacement cap, in barrier supports. Only
 		///        applied while the semi-implicit stiffness mode is active.
 		double trial_displacement_cap_ = 50.0;

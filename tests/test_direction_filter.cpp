@@ -49,7 +49,7 @@ TEST_CASE("Filtered solver slope differentiates the objective", "[direction_filt
 		// A fixed coordinate eliminated from a full direction is represented
 		// here by a reduced filter: lift (a,b) to (0,a,b),
 		// project a closing pair with normal (-1,0,1), then eliminate DOF 0.
-		// This is the same lift/project/restrict pattern as the floor caller.
+		// Exercise a general lift/project/restrict adapter with fixed DOFs.
 		solver->set_direction_filter([](const auto &, auto &d) { if (d[1] < 0) d[1] *= .5; });
 		p[1] *= .5;
 	}
@@ -88,35 +88,66 @@ TEST_CASE("Filtered ascent is rejected before line search", "[direction_filter]"
 	CHECK(x.norm() == 0);
 }
 
-TEST_CASE("Real floor filter slope with a fixed edge", "[direction_filter]")
+TEST_CASE("Retired contact floor cannot remove barrier forces", "[contact_floor_retired]")
 {
+	json opts = json::object();
+	SECTION("omitted legacy option") {}
+	SECTION("legacy zero") { opts["constraint_floor"] = 0.; }
+	SECTION("legacy positive") { opts["constraint_floor"] = 1e-4; }
 	Eigen::MatrixXd vertices(3, 2);
-	vertices << -1, 0, 1, 0, 0, 5e-5;
+	vertices << -1, 0, 1, 0, 0, .2;
 	Eigen::MatrixXi edges(1, 2);
 	edges << 0, 1;
 	ipc::CollisionMesh mesh(vertices, edges);
 	BarrierContactForm contact(mesh, 1., 1., false, false, false, true, false, false,
 							   ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000,
-							   BarrierStiffnessMode::SemiImplicit, {{"constraint_floor", 1e-4}}, Eigen::VectorXd::Ones(3));
-	Eigen::VectorXd full = Eigen::VectorXd::Zero(6);
-	contact.init(full);
-	CoupledQuadratic problem;
-	problem.H << 1, 2, 2, 5; // Newton step (-3,1) separates from the edge.
-	auto solver = polysolve::nonlinear::Solver::create(params(), linear, 1, logger());
-	int pairs = 0;
-	solver->set_direction_filter([&](const auto &, auto &d) {
-		Eigen::VectorXd lifted = Eigen::VectorXd::Zero(6);
-		lifted.tail(2) = d;
-		pairs = contact.project_floor_pairs(full, lifted);
-		d = lifted.tail(2);
+							   BarrierStiffnessMode::SemiImplicit, opts, Eigen::VectorXd::Ones(3));
+	contact.set_system_hessian_provider([](const Eigen::VectorXd &, StiffnessMatrix &h) {
+		h.resize(6, 6);
+		h.setIdentity();
+		h *= 100.;
 	});
-	Eigen::VectorXd x = Eigen::VectorXd::Zero(2);
-	REQUIRE_NOTHROW(solver->minimize(problem, x));
-	REQUIRE(pairs > 0);
-	Eigen::Vector2d p(-3, 1);
-	const double eps = 1e-6;
-	const double fd = (problem.value(eps * p) - problem.value(-eps * p)) / (2 * eps);
-	CHECK(std::abs(fd + 2) < 1e-9);
-	CHECK(std::abs(solver->current_criteria().xDeltaDotGrad - fd) < 1e-9);
-	CHECK(x.norm() == 0);
+	Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
+	contact.init(x);
+	contact.update_barrier_stiffness(x, Eigen::MatrixXd());
+	contact.set_barrier_stiffness(1.);
+	auto at_gap = [](double gap) -> Eigen::VectorXd {
+		Eigen::VectorXd y = Eigen::VectorXd::Zero(6);
+		y[5] = gap - .2;
+		return y;
+	};
+	auto energy = [&](double gap) {
+		const Eigen::VectorXd y = at_gap(gap);
+		contact.solution_changed(y);
+		return contact.value(y);
+	};
+	const double eps = 1e-9;
+	const double slope = (energy(1e-4 + eps) - energy(1e-4 - eps)) / (2 * eps);
+	x = at_gap(1e-4);
+	contact.solution_changed(x);
+	Eigen::VectorXd g;
+	contact.first_derivative(x, g);
+	CHECK(std::abs(slope - g[5]) / 2e6 < 1e-6);
+	x = at_gap(5e-5);
+	contact.solution_changed(x);
+	const double before = contact.value(x);
+	contact.first_derivative(x, g);
+	CHECK(before > 1900.);
+	CHECK(std::abs(g[5] + 4e6) / 4e6 < 1e-6);
+	CHECK(std::abs(g[1] + g[3] + g[5]) < 1e-6);
+	contact.update_barrier_stiffness(x, Eigen::MatrixXd());
+	contact.set_barrier_stiffness(1.);
+	CHECK(std::abs(contact.value(x) - before) < 1e-8);
+	energy(5.0001e-5);
+	CHECK(std::abs(energy(5e-5) - before) < 1e-8);
+	// Retiring the floor must retain CCD and the separate trial-displacement cap.
+	const Eigen::VectorXd crossing = at_gap(-1e-4);
+	contact.line_search_begin(x, crossing);
+	CHECK_FALSE(contact.is_step_collision_free(x, crossing));
+	const double alpha = contact.max_step_size(x, crossing);
+	CHECK(alpha > 0.);
+	CHECK(alpha < 1.);
+	CHECK(contact.is_step_collision_free(x, x + alpha * (crossing - x)));
+	contact.line_search_end();
+	CHECK(contact.trial_displacement_cap() == 50.);
 }

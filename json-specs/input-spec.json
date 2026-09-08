@@ -1582,7 +1582,7 @@
         "pointer": "/solver/contact/semi_implicit/constraint_floor",
         "default": 0,
         "type": "float",
-        "doc": "Legacy experimental floor, disabled by default (0). A positive fraction of dhat deletes below-floor barrier contributions and filters closing directions. This has known energy, prescribed-DOF projection and stiffness-refresh inconsistencies; it is not a validated hard-contact formulation. CCD remains enabled when the floor is disabled."
+        "doc": "RETIRED compatibility key. Accepted only to read existing inputs; all values are ignored. Nonzero values issue a warning in semi-implicit mode. Barrier deletion and floor projection have been removed. Remove this key from new inputs. CCD and trial_displacement_cap remain active."
     },
     {
         "pointer": "/solver/contact/semi_implicit/trial_displacement_cap",

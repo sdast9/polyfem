@@ -82,7 +82,7 @@ int main(int argc, char **argv)
 	StiffnessMatrix mass(8, 8);
 	mass.setIdentity();
 	std::vector<int> fixed{0, 1, 2, 3, 4, 5};
-	json result = {{"length_scale", L}, {"objective_scale", S}, {"steps", steps}, {"moving", moving}, {"coupled", coupled}, {"floor", floor}, {"inversions", "not applicable: no volume elements"}};
+	json result = {{"constraint_floor_retired", true}, {"length_scale", L}, {"objective_scale", S}, {"steps", steps}, {"moving", moving}, {"coupled", coupled}, {"floor", floor}, {"inversions", "not applicable: no volume elements"}};
 	Eigen::MatrixXd solution = zero;
 	bool passed = true;
 	for (int step = 0; step <= steps; ++step)
@@ -115,12 +115,6 @@ int main(int argc, char **argv)
 		NLProblem problem(8, 0, {spring, contact}, {bc},
 						  polysolve::linear::Solver::create(linear, logger()), L, S / L, mass, 2);
 		ALSolver solver({bc}, 1e3 * S / (L * L), 2, 1e8 * S / (L * L), .99, [](const auto &) {});
-		solver.direction_filter = [&](const V &x, V &p) {
-			const V full = problem.reduced_to_full(x);
-			V direction = problem.reduced_to_full(x + p) - full;
-			if (contact->project_floor_pairs(full, direction) > 0)
-				p = problem.full_to_reduced(full + direction) - x;
-		};
 		V exact_contact_gradient, exact_spring_gradient;
 		contact->solution_changed(exact);
 		contact->first_derivative(exact, exact_contact_gradient);

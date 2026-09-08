@@ -9,7 +9,8 @@ using namespace polyfem;
 using namespace polyfem::solver;
 using V = Eigen::VectorXd;
 
-// Characterization experiment, not a production solver or a golden test.
+// Current barrier characterization and retired-option compatibility probe.
+// Historical active-floor reproduction requires commit 6279b3492 or earlier.
 // Run each option in a fresh process: update_collision_set currently has a
 // function-static position cache shared across contact-form instances.
 int main(int argc, char **argv)
@@ -60,25 +61,12 @@ int main(int argc, char **argv)
 	const double above = sample(center + eps)["energy"];
 	const double below = sample(center - eps)["energy"];
 	result["threshold_secant_dE_dgap"] = (above - below) / (2 * eps);
-	// Model the same full-coordinate projection and subsequent elimination
-	// used by the caller. Prescribed velocities are a direction-level example,
-	// not a claim that the reduced solver advances BCs during its line search.
+	// The floor projection was retired. This legacy CLI argument now checks
+	// compatibility only; no positive setting can reactivate the mechanism.
+	result["constraint_floor_retired"] = true;
 	x = at_gap(0.000099999);
 	contact.solution_changed(x);
-	for (double edge_velocity : {0., .25})
-	{
-		V dir = V::Zero(6);
-		dir[1] = dir[3] = edge_velocity;
-		dir[5] = -1.;
-		const int pairs = contact.project_floor_pairs(x, dir);
-		result["projection"].push_back({{"prescribed_edge_velocity", edge_velocity},
-										{"pairs", pairs},
-										{"projected_point_velocity", dir[5]},
-										{"projected_edge_velocity", .5 * (dir[1] + dir[3])},
-										{"full_gap_velocity", dir[5] - .5 * (dir[1] + dir[3])},
-										{"gap_velocity_after_restoring_prescribed_edge", dir[5] - edge_velocity}});
-	}
-	// CCD still rejects a segment that crosses the edge in either model.
+	// CCD still rejects a segment that crosses the edge.
 	V crossing = at_gap(-0.0001);
 	contact.line_search_begin(x, crossing);
 	result["crossing_segment_collision_free"] = contact.is_step_collision_free(x, crossing);

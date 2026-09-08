@@ -1,12 +1,13 @@
 # PF-02: contact-floor characterization — 2026-09-06
 
-**September 7 follow-up:** The user selected a floor-disabled default for
-practical instability testing. The schema, C++ fallback and Houdini default now
-use `constraint_floor=0`; explicit positive settings retain legacy behavior.
-This bypasses the characterized floor defects in the default path; it does not
-repair the opt-in floor or establish full physical accuracy. The historical
-measurements below used the original defaults. See the
-[floor-disabled validation](pf-02-floor-disabled-validation.md).
+**September 7 retirement:** After initially disabling the default, the user
+requested full removal. Barrier deletion and floor projection are now removed;
+old `constraint_floor` values are accepted only as ignored compatibility data.
+Nonzero values warn in semi-implicit mode and cannot enable the mechanism.
+See the [removal record](pf-02-floor-removal.md). The measurements below are
+historical; use commit `6279b3492` or earlier to reproduce the active-floor
+comparison. The current probe instead verifies retained barrier behavior for
+both omitted/zero and legacy positive inputs; it no longer applies projection.
 
 The following records the first experimental stage of PF-02. At that stage,
 the production solver and its defaults were unchanged. The experiment uses solver baseline `4b6e970c3`, IPC

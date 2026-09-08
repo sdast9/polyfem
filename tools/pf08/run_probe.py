@@ -46,7 +46,7 @@ for L in (1e-3, 1, 1e3):
         for coupled in (0, 1):
             for moving in (0, 1):
                 for steps in (2, 4, 8):
-                    cmd = [str(binary), str(L), str(S), str(steps), str(moving), str(coupled), "0.0001"]
+                    cmd = [str(binary), str(L), str(S), str(steps), str(moving), str(coupled), "0"]
                     run = subprocess.run(cmd, cwd=out, text=True, capture_output=True)
                     name = f"L{L}-S{S}-c{coupled}-m{moving}-n{steps}"
                     (out / (name + ".stdout")).write_text(run.stdout)
