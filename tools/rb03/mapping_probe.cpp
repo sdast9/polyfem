@@ -205,8 +205,18 @@ int main()
 		double expected = (pa.transpose() * w).dot(h * (pa.transpose() * w));
 		double actual = permuted.coefficient();
 		check(close(original.coefficient(), w.dot(h * w)), "identity curvature control");
-		check(std::abs(actual - expected) > 1, "reproduce permutation curvature defect");
+		check(close(actual, expected), "permutation curvature matches mapped reference");
 		out["permutation_curvature"] = {{"actual", actual}, {"required_by_permutation", expected}, {"identity", original.coefficient()}};
+		V separated = V::Zero(6);
+		separated[1] = 2.; // proxy contact point selects system node 0
+		Probe born(pm, h);
+		born.start(separated);
+		check(born.collision_set().empty(), "permuted empty refresh snapshot");
+		born.solution_changed(V::Zero(6));
+		check(close(born.coefficient(), expected), "new contact uses mapped frozen stiffness");
+		born.solution_changed(separated);
+		born.solution_changed(V::Zero(6));
+		check(close(born.coefficient(), expected), "reappearing contact uses mapped cache");
 		M b = M::Zero(3, 4);
 		b(0, 0) = b(1, 1) = 1;
 		b(2, 2) = b(2, 3) = .5;
@@ -325,8 +335,26 @@ int main()
 		Probe obstacle_h(om, 100 * M::Identity(4, 4));
 		obstacle_h.start(V::Zero(8));
 		out["obstacle_curvature"] = {{"actual_with_fem_only_hessian", obstacle_h.coefficient()}, {"note", "proxy IDs are not FEM/obstacle DOF IDs"}};
+		// Exact external selection: proxy point 0 selects FEM node 1;
+		// appended obstacle proxies 1,2 select system nodes 2,3. Neither
+		// obstacle contributes curvature to this FEM-only Hessian.
+		M selector(1, 2);
+		selector << 0, 1;
+		ipc::CollisionMesh selected_obstacle;
+		external(selected_obstacle, point, selector, obstacle);
+		V selector_diagonal(4);
+		selector_diagonal << 10, 10, 100, 100;
+		Probe selected_h(selected_obstacle, M(selector_diagonal.asDiagonal()));
+		selected_h.start(V::Zero(8));
+		const double selected_k = selected_h.coefficient();
+		check(close(selected_k, 100. * 2. / 3.), "external selector obstacle FEM-only curvature");
+		selected_h.start(ox);
+		check(close(selected_h.coefficient(), selected_k), "external moving obstacle selector curvature");
+		check(close(obstacle_h.coefficient(), 250. / 3.), "interpolated obstacle legacy behavior retained");
+		check(close(ip.coefficient(), 215. / 3.), "interpolated contact legacy behavior retained");
+		out["exact_selector_obstacle_curvature"] = {{"actual", selected_k}, {"expected", 100. * 2. / 3.}};
 		out["checks"] = checks;
-		out["status"] = "characterized; mapping stiffness decision pending";
+		out["status"] = "exact selector indexing repaired; interpolation stiffness decision pending";
 		std::cout << out.dump(2) << std::endl;
 		return 0;
 	}

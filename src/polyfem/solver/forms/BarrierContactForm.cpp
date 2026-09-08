@@ -109,6 +109,25 @@ namespace polyfem::solver
 
 		if (uses_semi_implicit_stiffness())
 		{
+			// IPC's to_full_vertex_id reverses surface selection only: its
+			// result is a proxy ID, not necessarily a system Hessian node ID.
+			// Read S*T once in O(nnz + rows + cols), without a dense
+			// map. Only exact unit selectors have the established local
+			// curvature contract used below; do not round interpolation rows.
+			const auto &map = collision_mesh_.displacement_map();
+			stiffness_node_ids_ = Eigen::VectorXi::Constant(map.rows(), -1);
+			Eigen::VectorXi counts = Eigen::VectorXi::Zero(map.rows());
+			for (int col = 0; col < map.outerSize(); ++col)
+				for (Eigen::SparseMatrix<double>::InnerIterator it(map, col); it; ++it)
+					if (it.value() != 0.)
+					{
+						++counts[it.row()];
+						stiffness_node_ids_[it.row()] = it.value() == 1. ? it.col() : -1;
+					}
+			for (int row = 0; row < counts.size(); ++row)
+				if (counts[row] != 1)
+					stiffness_node_ids_[row] = -1;
+
 			if (enable_shape_derivatives)
 				log_and_throw_error("Semi-implicit barrier stiffness does not support shape derivatives!");
 			if (use_physical_barrier)
@@ -368,12 +387,28 @@ namespace polyfem::solver
 				ipc::VectorMax4d local_mass = ipc::VectorMax4d::Zero(n_verts);
 				ipc::MatrixMax12d local_hess =
 					ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
+				// Exact selector/permutation stencils use system node IDs.
+				// Preserve the WHOLE legacy stencil if any row is interpolated,
+				// scaled, empty, or duplicates another selected node: choosing
+				// an energy lift for such a stencil is a separate RB-03 decision.
+				std::array<long, 4> node_ids;
+				bool exact_selection = true;
+				for (int a = 0; a < n_verts; ++a)
+				{
+					node_ids[a] = stiffness_node_ids_[vids[a]];
+					exact_selection = exact_selection && node_ids[a] >= 0;
+					for (int b = 0; b < a; ++b)
+						exact_selection = exact_selection && node_ids[a] != node_ids[b];
+				}
+				if (!exact_selection)
+					for (int a = 0; a < n_verts; ++a)
+						node_ids[a] = collision_mesh_.to_full_vertex_id(vids[a]);
 				for (int a = 0; a < n_verts; a++)
 				{
-					const long va = collision_mesh_.to_full_vertex_id(vids[a]);
+					const long va = node_ids[a];
 					for (int b = 0; b < n_verts; b++)
 					{
-						const long vb = collision_mesh_.to_full_vertex_id(vids[b]);
+						const long vb = node_ids[b];
 						if (dim * va + dim > kappa_hessian_.rows()
 							|| dim * vb + dim > kappa_hessian_.cols())
 							continue; // e.g., obstacle DOF not in the Hessian

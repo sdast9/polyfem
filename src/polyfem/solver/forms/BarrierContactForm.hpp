@@ -179,6 +179,11 @@ namespace polyfem::solver
 		/// @brief Lumped mass per full-mesh vertex (zeros when quasistatic)
 		Eigen::VectorXd lumped_vertex_masses_;
 
+		/// @brief Collision vertex to system node for exact unit selector rows;
+		///        -1 marks a row whose stiffness definition remains unresolved.
+		///        CollisionMesh's displacement map is immutable during form use.
+		Eigen::VectorXi stiffness_node_ids_;
+
 		/// @brief Displaced surface frozen at the last stiffness refresh
 		Eigen::MatrixXd kappa_surface_;
 		/// @brief System Hessian (full DOF) frozen at the last refresh

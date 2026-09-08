@@ -1,7 +1,8 @@
 # RB-03 — Collision/FEM coordinate contract
 
-Date: 2026-09-08. Characterization, with an unresolved stiffness definition and
-an unrepaired indexing counterexample. See [validation](rb-03-validation.md).
+Date: 2026-09-08. Original characterization, followed by an exact-selector
+indexing repair (validated within its stated scope). Interpolation stiffness remains
+unresolved. See [validation](rb-03-validation.md).
 This does not certify the semi-implicit model or arbitrary collision meshes.
 
 ## Coordinates and the established chain rule
@@ -74,7 +75,7 @@ node. Consequently the obstacle's proxy ID and system-node ID generally differ.
 The collision filter intentionally uses proxy IDs to reject obstacle–obstacle
 pairs. That use does not need a FEM ID conversion.
 
-## Reproduced stiffness mismatch
+## Reproduced stiffness mismatch — pre-repair baseline
 
 The driving Hessian is the weighted elastic plus enabled inertia Hessian from
 `SolveData`, in full system displacement coordinates. At refresh, the form saves
@@ -92,10 +93,9 @@ then applies the existing sign/fallback, weight, cap and trim rules described in
 For an orthogonal permutation P, the required coordinate transformation is
 unambiguous: H_surface = P H_system P^T. The tiny fixture gives actual kappa
 71.6666667 versus required 26.6666667. The identity negative control matches
-71.6666667. This is a reproduced indexing defect, **not repaired** in this
-characterization stage. An exact selector/permutation repair can be pursued
-without choosing an interpolation model; it must preserve full/reduced and
-obstacle indexing, and avoid dense map reconstruction on production meshes.
+71.6666667. This was a reproduced indexing defect at characterization. The exact-selector
+repair below now corrects it without selecting an interpolation model or
+constructing a dense production map.
 
 For interpolation, B^T H_surface B = H_system generally has no solution: FEM
 energy can vary along ker(B), although surface coordinates do not. Nor is
@@ -155,6 +155,29 @@ The obstacle coefficient probe additionally returns 83.3333 from a FEM-only
 This exposes the same ID mismatch; it does not establish a uniquely correct
 interpolated obstacle curvature. The derivative fixtures use synthetic constant
 H, including placeholders where stated, not an assembled continuum Hessian.
-RB-03 remains characterized—decision pending, with the indexing repair pending
-and the interpolation model unresolved. RB-04 may use the proven chain rule,
-but must retain this limit on stiffness/physical claims.
+RB-03 remains characterized—decision pending for the interpolation model.
+The exact-selector indexing repair below is validated within its stated scope.
+RB-04 may use that scope and the proven chain rule, while retaining the
+interpolated-stiffness and physical-validation limits.
+
+
+## Current exact-selector implementation
+
+The original counterexamples above describe the pre-repair baseline. The bounded
+repair uses IPC's const `displacement_map()` accessor, whose rows are included
+collision vertices and columns are system displacement nodes. It includes both
+selection and supplied interpolation; `to_full_vertex_id` still returns proxy
+IDs and remains appropriate for proxy-indexed geometry/filter operations.
+
+Only stencil maps with distinct exact unit-selector rows use mapped system IDs
+for curvature extraction. This implements the selector/permutation transform
+without a dense surface Hessian. System nodes outside the supplied Hessian
+contribute zero blocks, preserving the existing FEM-only obstacle convention.
+The map lookup is constructed only in semi-implicit mode and assumes the mesh
+map remains fixed during form use. Force/Hessian chain rules are unchanged.
+
+A stencil with any non-selector or duplicate row retains its entire legacy
+sampling path, including its obstacle rows. No hybrid interpolation law is
+introduced. Thus the original interpolation comparison and its mixed-obstacle
+counterexample remain relevant. See the repair stage in the validation record
+for current acceptance checks and publication status.

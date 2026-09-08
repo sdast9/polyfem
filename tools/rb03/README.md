@@ -1,4 +1,4 @@
-# RB-03 mapping characterization
+# RB-03 mapping characterization and exact-selector regression
 
 From the PolyFEM root, with an existing Makefiles build of PolyFEM_bin and
 unit_tests:
@@ -16,11 +16,18 @@ supplies the transformation defaults expected by the production builder.
 
 [Contract](../../docs/rb-03-contract.md) and
 [validation](../../docs/rb-03-validation.md) explain the coordinate spaces,
-97 checks, measured defects, candidate definitions and limitations.
-[The dated result](results-20260908.json) records unchanged production behavior.
-Passing includes assertions that reproduce an **unrepaired** permutation defect;
-it is not a regression claiming the defect is fixed. Replace those expectations
-with mapped-reference agreement when implementing the bounded indexing repair.
+measured defects, candidate definitions, indexing repair and remaining limits.
+[The original dated result](results-20260908.json) preserves the pre-repair
+97-check characterization and its defect measurements; it is not regenerated.
+
+[The separate repair result](results-20260908-indexing.json) records 110 passing
+checks against the repaired implementation. The current probe requires permutation stiffness to match the mapped reference,
+checks contacts born/reappearing after an empty mapped snapshot, and tests the
+actual external selector/obstacle builder with a FEM-only Hessian. Interpolated
+stiffness and its mixed-obstacle behavior remain explicitly unresolved and
+unchanged. The associated `[contact_stiffness_mapping]` unit tests compare
+energy, gradient and Hessian against an independent surface-coordinate reference
+for exact selectors, including 2D/3D edge-point cases and prescribed obstacles.
 
 Tiny dense inverse/lift calculations compare models only. They are not proposed
 production implementations. No arbitrary interpolated-stiffness model, high-order

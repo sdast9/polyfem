@@ -1,9 +1,10 @@
 # RB-03 — Collision/FEM coordinate mapping
 
 Date: 2026-09-08
-Status: **characterized—decision pending**
-Selected stage: mapping contract, bounded counterexamples and comparative
-curvature definitions. No production repair; exact indexing repair remains pending.
+Status: **exact selector indexing validated within stated scope; interpolation decision pending**
+
+The characterization below is historical. The indexing repair stage is recorded
+at the end of this document; its targeted validation is complete.
 
 ## Contract and authorization
 
@@ -152,3 +153,107 @@ indefiniteness, before introducing a lift/inverse/projection. No such choice is
 implied by this record. RB-04 can reuse the established derivative maps and
 prescribed-work convention; physical stiffness support remains limited. No
 arbitrary high-order or remeshed support is advertised.
+
+
+## Exact selector indexing repair — 2026-09-08
+
+The user selected the recommended first implementation step: repair exact
+selector/permutation and obstacle indexing, then validate and publish. No new
+interpolation curvature definition, coefficient law or controller policy was
+selected. Starting PolyFEM commit was `eae30966b`, with clean tracked sources;
+IPC was `9da3094` and PolySolve `4d372fa8`. No active solver/build was found.
+
+The original 97-check mapping probe passed its historical defect assertions.
+New `[contact_stiffness_mapping]` tests then ran against unchanged production
+code: 2 cases / 80 assertions, 48 failures (process exit 42); identity/rectangular
+identity controls passed. Tests compare against an independently constructed
+small surface-coordinate `P H P^T` reference, including cross-node and
+cross-component terms, 2D/3D edge-point contact, inclusion plus permutation,
+FEM-only and full Hessians, stationary/prescribed obstacle positions, mapped
+energy/gradient/Hessian, repeated assignment and refresh. Tolerances were
+specified before the baseline: absolute-plus-relative 1e-10 at moderate stiffness
+and finite gap. No tolerance was relaxed.
+
+The implementation exposes IPC's existing sparse `S*T` displacement map through
+a const accessor, and records the exact unit-selector system-node ID of each
+collision vertex when a semi-implicit form is constructed. Stencils whose rows
+select distinct system nodes extract the Hessian blocks using those IDs.
+Out-of-Hessian obstacle nodes contribute zero blocks, as in the identity contract.
+Other contact modes do not build or use this lookup. Storage is linear in surface
+vertex count; there is no dense production map/inverse or per-contact map scan.
+CollisionMesh topology and its displacement map must remain unchanged during a
+form's lifetime, consistent with the existing form ownership contract.
+
+If any stencil row is interpolated, scaled, empty, or selects a duplicate system
+node, the **entire stencil** retains the legacy proxy-ID sampling. This is an
+explicit unresolved limitation, not a claim that such stiffness is correct.
+Mixed interpolated FEM/obstacle stencils are therefore not repaired by this stage.
+The new regression suite locks down that scope boundary. The standalone probe
+now requires the corrected permutation coefficient 26.6666667 instead of the
+historical 71.6666667, and adds an actual external selector/obstacle builder case
+with a FEM-only Hessian and expected coefficient 66.6666667.
+
+IPC companion commit `af317a65d69d0ac7c5efa4bf103bf75e280c323b` adds only the
+const map accessor. PolyFEM pins that revision. For verification the existing
+build now uses an explicit `CPM_ipc-toolkit_SOURCE` pointing at the companion
+checkout, whose committed revision must match the pin. The original CPM cache
+checkout is untouched; all other build choices and the PolySolve override remain.
+
+Evidence: `outputs/rb-03/20260908-145544-indexing/` relative to the parent workspace.
+Baseline states/hashes and original CMake cache, build logs, baseline failures,
+probe copies/results, and subsequent verification are retained there. One early
+attempt to change the probe used an incorrect relative path and did not edit it;
+its following run simply repeated the historical 97-check probe. The decisive
+baseline failure is the new Catch regression above.
+
+### Repair validation and publication
+
+| Check | Result | Exit |
+| --- | --- | --- |
+| Configure and rebuild `PolyFEM_bin unit_tests -j 6` | Complete with the pinned IPC companion source | 0 |
+| `[contact_stiffness_mapping]`, seed 1 | 3 cases / 88 assertions pass; includes 8 additional assertions preserving unresolved map behavior | 0 |
+| Affected contact/cache/AL/BC/filter/derivative selection, seed 1 | 26 cases / 1,892 assertions pass | 0 |
+| Recompiled standalone mapping probe | 110 checks pass; original tolerances retained | 0 |
+| quasistatic-adaptive | Four steps to t=1, zero error lines | 0 |
+| quasistatic-semi-alhess | Four steps to t=1, zero error lines | 0 |
+| quasistatic-semi-friction | Four steps to t=1, zero error lines | 0 |
+| quasistatic-semi | Four steps to t=1, zero error lines | 0 |
+| transient-semi | Four steps to t=1, zero error lines | 0 |
+| HDA `test_polyfem_hda.py`, Houdini 22.0.429 | Real-binary scene/export/import round trip passes | 0 |
+| C++ formatting, local document links, diff whitespace | Checked | pass |
+
+Each smoke's process exit was independently extracted from the copied runner's
+log. Every PVD has times `[0,.25,.5,.75,1]`. Only the runner's OUT variable changed.
+Expected negative-test error messages in the affected suite did not fail tests.
+No goldens or prior measurement files were regenerated. The original
+`results-20260908.json` remains historical; the new
+[repair result](../tools/rb03/results-20260908-indexing.json) is separate.
+
+The permutation fixture now measures 26.6666667, matching its independent
+reference; identity remains 71.6666667. The actual external selector/obstacle
+fixture measures 66.6666667 with stationary and moving obstacles and a FEM-only
+Hessian. Newly appearing and reappearing permuted contacts retain the mapped
+coefficient after an empty snapshot. The original interpolated-contact and
+interpolated-obstacle values remain 71.6666667 and 83.3333333 respectively.
+The 2D standalone probe's maximum gradient relative error is 1.051e-10 and
+maximum energy-only Hessian relative error is 3.761e-7. Its original 1e-6 and
+1e-5 acceptance thresholds are unchanged. 3D coverage is the unit suite's tiny
+edge-point reference comparison, not general 3D contact certification.
+
+No new coefficient, friction, stopping, CCD, trial-cap, resource/recovery or
+HDA asset policy was introduced. The constraint floor remains retired. No
+Teseo, Ballburst, private scene, complete solver/HDA suite, other platform,
+continuum accuracy, total work balance, mesh/time refinement or arbitrary
+high-order validation was run. The existing HDA assets were hashed, not rebuilt.
+
+Publish the accessor to `sdast9/ipc-toolkit:semi-implicit-stiffness` at
+`af317a65d69d0ac7c5efa4bf103bf75e280c323b`, and this repair, dependency pin, tests,
+probe/result and records to `sdast9/polyfem:main`. The completion message reports
+the resulting PolyFEM commit. The local parent README is updated separately.
+`tested-manifest.json` records binary/library/input/HDA and modified-source hashes;
+the source patch and new test source are retained with the evidence.
+
+RB-04 can proceed using the established derivative maps and exact-selector
+stiffness support. It must keep interpolated/mixed-stencil stiffness and RB-02's
+coefficient/lifecycle decisions explicitly unresolved. This closes the bounded
+indexing repair, not the entire RB-03 model decision.
