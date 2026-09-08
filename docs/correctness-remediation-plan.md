@@ -212,7 +212,11 @@ respects its ceiling and zero initial BC residual has defined progress. Converte
 unit/density regressions cover final reduced solutions. Optional curvature-based
 initialization, geometric continuation budgets and early-snap optimization remain
 deferred; the initializer policy is unchanged.
-PF-08 remains unimplemented; PF-09 retains its model-decision gate.
+PF-08: a first physical/numerical validation stage is implemented; see the
+[validation record](pf-08-validation.md). Independent contact and FEM measurements,
+unit/load/mesh sweeps, and recovery failures are recorded. Physical certification
+remains open: full contact residual/work accounting, mesh convergence and robust
+load refinement are not established. PF-09 retains its model-decision gate.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.
