@@ -98,7 +98,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | ID | Deliverable | Prerequisite | Current status |
 | --- | --- | --- | --- |
 | RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
-| RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | not started |
+| RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [characterized—decision pending](rb-02-validation.md) |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | not started |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | not started |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
