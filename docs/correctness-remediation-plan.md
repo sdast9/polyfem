@@ -220,3 +220,12 @@ load refinement are not established. PF-09 retains its model-decision gate.
 See the local `outputs/pf-01-correction/` folder for preserved incoming changes,
 copied scene inputs and execution logs. Update status from actual code/history
 before resuming; a saved plan is not proof a session completed.
+
+## September 7 model decision
+
+The user selected `constraint_floor=0` as the default and will report recurring
+instabilities for investigation. This disables floor deletion/projection while
+retaining CCD and the existing semi-implicit coefficient/refresh policies.
+Explicit positive settings remain available as legacy behavior with known PF-02
+defects. PF-09 hard-contact implementation is deferred. This default change is
+not a physical-accuracy certification; PF-08 limitations remain open.

@@ -1,13 +1,21 @@
 # PF-02: contact-floor characterization — 2026-09-06
 
-This is the first experimental stage of PF-02. The production solver and its
-defaults are unchanged. The experiment uses solver baseline `4b6e970c3`, IPC
+**September 7 follow-up:** The user selected a floor-disabled default for
+practical instability testing. The schema, C++ fallback and Houdini default now
+use `constraint_floor=0`; explicit positive settings retain legacy behavior.
+This bypasses the characterized floor defects in the default path; it does not
+repair the opt-in floor or establish full physical accuracy. The historical
+measurements below used the original defaults. See the
+[floor-disabled validation](pf-02-floor-disabled-validation.md).
+
+The following records the first experimental stage of PF-02. At that stage,
+the production solver and its defaults were unchanged. The experiment uses solver baseline `4b6e970c3`, IPC
 `9da3094`, and PolySolve `012658e`; the effective build dependencies match those
 pins. Teseo is excluded from new tests by the user's September 6 instruction.
 
 ## Which behavior is being compared
 
-`solver.contact.semi_implicit.constraint_floor` defaults to `1e-4`; its gap
+At the characterization baseline, `solver.contact.semi_implicit.constraint_floor` defaulted to `1e-4`; its gap
 threshold is that value times `dhat`. It has two distinct effects:
 
 1. `BarrierContactForm::update_collision_set` sets a below-threshold pair's

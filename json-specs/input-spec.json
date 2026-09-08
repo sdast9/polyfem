@@ -1580,9 +1580,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/constraint_floor",
-        "default": 1e-4,
+        "default": 0,
         "type": "float",
-        "doc": "Pairs with gap below this fraction of dhat are treated as active constraints: their closing component is projected out of every Newton direction (sliding and separation stay free). No normal-force law can hold a kinematically driven pair at the numerical floor -- singular barriers poison the search direction, saturated ones let it collapse; the projection lets the rest of the mesh proceed. 0 disables."
+        "doc": "Legacy experimental floor, disabled by default (0). A positive fraction of dhat deletes below-floor barrier contributions and filters closing directions. This has known energy, prescribed-DOF projection and stiffness-refresh inconsistencies; it is not a validated hard-contact formulation. CCD remains enabled when the floor is disabled."
     },
     {
         "pointer": "/solver/contact/semi_implicit/trial_displacement_cap",

@@ -235,10 +235,10 @@ namespace polyfem::solver
 		/// @brief Newton-iteration cadence of the in-solve downward trim step
 		///        (gap pinned above the band); 0 disables it.
 		int controller_interval_ = 30;
-		/// @brief Pairs with gap below this fraction of dhat are treated as
-		///        active constraints by the direction filter (see
-		///        project_floor_pairs); 0 disables the projection.
-		double constraint_floor_ = 1e-4;
+		/// @brief Legacy floor fraction: deletes below-floor barriers and
+		///        filters closing directions (not a complete hard-contact solve).
+		///        Disabled by default; see docs/pf-02-contact-floor.md.
+		double constraint_floor_ = 0;
 		/// @brief Trial-step displacement cap, in barrier supports. Only
 		///        applied while the semi-implicit stiffness mode is active.
 		double trial_displacement_cap_ = 50.0;
