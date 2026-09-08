@@ -11,20 +11,36 @@ PolyFEM is a polyvalent C++ FEM library.
 
 ### sdast9 fork
 
-`main` includes the semi-implicit per-contact barrier mode and the upstream merge
-through `6c9e7a390` (September 2, 2026). On September 5, `sync-upstream` was
-fast-forwarded into `main` at solver baseline `db180eb3a`.
-See [semi-implicit usage and defaults](scenes/semi-implicit/README.md) and
-[VarForm architecture](docs/varform-design.md). The
-[phase-aware correctness plan](docs/correctness-remediation-plan.md) separates
-AL feasibility, reduced convergence, and the remaining contact investigations.
+As of September 8, 2026, the last implementation baseline is `97bd180a4`:
+PF-01 and PF-03–PF-07 corrections are implemented and the constraint-floor
+barrier deletion/projection has been removed. Old `constraint_floor` input values
+are ignored compatibility data; positive values warn. CCD and the semi-implicit
+trial-displacement cap remain. PF-09 hard contact is deferred.
 
-The CMake recipes pin `sdast9/ipc-toolkit@9da3094` and
-`sdast9/polysolve@012658e`; fresh builds retrieve these companion revisions.
-Before promotion, the build, two semi-implicit derivative tests (160 assertions),
-and five smoke scenes passed. The September 4 full-suite record was 243/244 cases
-passing, with a GCP `cube-on-floor` reference mismatch still unresolved. This is
-not a claim of a fully passing suite or cross-platform validation.
+Start new bounded sessions with the **[RB robustness plan](docs/robustness-plan.md)**
+and its [validation-record template](docs/robustness-record-template.md).
+All RB items initially remain unimplemented. The
+[historical PF plan](docs/correctness-remediation-plan.md) retains the phase
+invariants and completion records. See also
+[floor retirement](docs/pf-02-floor-removal.md),
+[semi-implicit usage](scenes/semi-implicit/README.md) and
+[VarForm architecture](docs/varform-design.md).
+
+The dependency recipes pin `sdast9/ipc-toolkit@9da3094` and
+`sdast9/polysolve@4d372fa8`. Verify effective local overrides before builds.
+PolyFEM incorporates upstream through `6c9e7a390` (September 2); the September 5
+`sync-upstream` promotion is historical. Later documentation commits may advance
+`main` without changing the implementation baseline.
+
+Retirement validation passed 22 selected cases / 1,189 assertions, five standard
+contact smokes, a legacy-positive-input smoke and all 13 HDA test scripts against
+HDA revision `f455d36`. This is targeted validation. The last full-suite record
+is pre-retirement PF-08: 266/267 cases passed, with the GCP cube-on-floor golden
+comparison unresolved. The full suite was not rerun for retirement.
+[PF-08](docs/pf-08-validation.md) also records incomplete physical accounting,
+mesh sensitivity and intermittent solve failures. No full physical-accuracy or
+cross-platform certification is claimed. The badges above link upstream CI;
+they do not establish that this fork/revision passed those checks.
 
 
 Compilation

@@ -4,6 +4,15 @@ Revised 2026-09-06 after reviewing the initial PF-01 implementation against
 `ballburst_thin_membrane` and `teseo_problem`. This supersedes the implementation
 scope in the 2026-09-05 memory plan; it does not certify all contact heuristics.
 
+## New work after floor retirement
+
+For new robustness sessions, use [RB-01 onward](robustness-plan.md) and its
+[record template](robustness-record-template.md). This PF plan remains the
+historical correction record and source of phase invariants. The later
+[constraint-floor retirement](pf-02-floor-removal.md) supersedes older instructions
+here to retain/test the active floor as production behavior. Do not restore it.
+PF-09 remains deferred. RB plan creation does not mark any RB item implemented.
+
 ## Invariants for every session
 
 1. **AL prepares a geometrically safe snap to prescribed Dirichlet values.**
