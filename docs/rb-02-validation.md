@@ -174,8 +174,9 @@ publication is required. No audit command intentionally moved or deleted incomin
 untracked artifacts. Final verification found the 432 original untracked paths
 absent from the repository; all 432 names exist in the pre-existing local
 `outputs/pf-08/` evidence directory. Baseline artifact content hashes were not
-collected, so identity and the cause of the location change are not established.
-The audit did not restore or overwrite either location. Production binary hashes
+collected, so content identity is not established. The user subsequently confirmed
+that they cleaned up the repository artifacts during this session. The audit did
+not restore or overwrite either location. Production binary hashes
 are unchanged and the tracked checkout is clean.
 The parent workspace README is updated locally to reflect this characterization.
 
