@@ -542,10 +542,12 @@ namespace polyfem::solver
 
 	void BarrierContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
 	{
-		// Store the previous value used to compute the constraint set to avoid duplicate computation.
-		static Eigen::MatrixXd cached_displaced_surface;
-		if (cached_displaced_surface.size() == displaced_surface.size() && cached_displaced_surface == displaced_surface)
-			return;
+		// Position equality is not a complete cache key: another form can use
+		// the same coordinates with different topology/configuration, and this
+		// form's candidates or mesh collision filter can change at fixed x.
+		// Rebuild on every notification; retain the instance-owned candidate
+		// and frozen per-stencil stiffness caches below. Independent forms do
+		// not share mutable collision state (same-form mutation is not concurrent).
 
 		if (use_cached_candidates_)
 			collision_set_.build(
@@ -553,7 +555,6 @@ namespace polyfem::solver
 		else
 			collision_set_.build(
 				collision_mesh_, displaced_surface, dhat_, dmin_, broad_phase_.get());
-		cached_displaced_surface = displaced_surface;
 
 		// Every rebuild flows through here (init, solution_changed, and
 		// line-search trial states), so the per-collision stiffnesses are

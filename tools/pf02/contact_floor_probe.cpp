@@ -11,8 +11,8 @@ using V = Eigen::VectorXd;
 
 // Current barrier characterization and retired-option compatibility probe.
 // Historical active-floor reproduction requires commit 6279b3492 or earlier.
-// Run each option in a fresh process: update_collision_set currently has a
-// function-static position cache shared across contact-form instances.
+// The runner uses a fresh process per option for isolated provenance.
+// Contact-set rebuilds are instance-owned after RB-01.
 int main(int argc, char **argv)
 {
 	if (argc != 3)
