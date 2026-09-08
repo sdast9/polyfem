@@ -1,7 +1,7 @@
 # Fork robustness: session-ready work plan
 
 Created 2026-09-08 after PF-01–PF-08 and constraint-floor retirement.
-**Planning only: no RB implementation or new physical certification is claimed.**
+**Current implementation status is recorded below; no new physical certification is claimed.**
 Use the `RB-` identifiers below; do not renumber or reuse the historical PF items.
 
 ## Start here in every session
@@ -90,13 +90,14 @@ A user instruction in the current session can explicitly change scope; record it
 
 ## Status and order
 
-All rows start **not started**. Dependencies mean the indicated results must be
+Rows began **not started** at plan creation; the table tracks current status.
+Dependencies mean the indicated results must be
 available before dependent implementation; they do not require unrelated work.
 RB-02 and RB-03 can expose decisions needed before later physical certification.
 
-| ID | Deliverable | Prerequisite | Initial status |
+| ID | Deliverable | Prerequisite | Current status |
 | --- | --- | --- | --- |
-| RB-01 | Contact-cache ownership and invalidation | none | not started |
+| RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | not started |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | not started |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | not started |
@@ -142,14 +143,18 @@ choices precisely and continue independent evidence gathering where possible.
 
 ## RB-01 — Contact-cache ownership and invalidation
 
+Completed 2026-09-08: [validation and lifecycle limits](rb-01-validation.md).
+The stages below retain the baseline reproduction/acceptance protocol.
+
 **Invariant:** one contact form must never skip its own required rebuild because
 another form evaluated the same positions. Cache validity includes the relevant
 geometry/topology, candidates and configuration, not merely coordinate equality.
 
 **Read:** `src/polyfem/solver/forms/BarrierContactForm.{cpp,hpp}`
 (`update_collision_set`), `ContactForm.{cpp,hpp}` (candidate lifecycle), and
-`tools/pf02/contact_floor_probe.cpp`. The current function-static position cache
-is a code-supported concern; do not call it a reproduced scene failure yet.
+`tools/pf02/contact_floor_probe.cpp`. The baseline function-static position cache
+was reproduced and removed in RB-01; see the record. This does not establish
+the cause of a historical scene failure.
 
 **Stages / required cases:**
 1. Add `[contact_cache]` tests with two real forms sharing numerical positions
