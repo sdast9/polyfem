@@ -312,3 +312,17 @@ upper-band fixture. These observations make the comparison interpretable but do
 not repair RB-02's discontinuity/zero-median/unit counterexamples or RB-03's
 unresolved interpolation law. RB-04 remains in progress; do not replace the
 user's finite-lag policy with a global coupled-gradient requirement.
+
+
+## Coherent-candidate boundary comparison (2026-09-09)
+
+Standalone tool stage against `e652fae53`; no production edits. Both the original
+66-check and extended 68-check probes passed. Energy/gradient jumps, independent
+finite differences, fixed/semi uniform-curvature normalization, unit conversions
+and split midpoint path integration support advancing the fixed-positive-scalar
+barrier as a comparison candidate. The existing feature-dependent law retains
+an approximately 44.49774 energy/work discrepancy across the RB-02 transition;
+the Fixed k=70 mismatch decreases to 7.98e-7 with quadrature refinement.
+See [candidate comparison](rb-04-candidate-comparison.md) and its linked data for
+all measurements and limitations. No scene coefficient or default was changed;
+full trajectory/model validation remains pending.

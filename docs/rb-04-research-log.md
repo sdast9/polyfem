@@ -350,3 +350,24 @@ energy/gradient jump for the candidate where supported, not an unjustified
 continuous Hessian. No scene-scale coefficient has been selected or inferred
 from endpoint min/max ranges. Both Luna tasks were read-only, with no progress
 polling; their bounded outputs were reviewed against source/units.
+
+
+## Completed fixed-coefficient boundary and work probe (2026-09-09)
+
+The predeclared comparison and follow-up are now complete; see
+[candidate comparison](rb-04-candidate-comparison.md) for exact numerical results,
+limits, evidence paths and next experiment. First probe: 66 checks. Extended
+probe: 68 checks. All passed against the tested `e652fae53` production build.
+H7 supported on this fixture: uniform positive fixed k removes the reproduced
+feature-coefficient energy jump. Gradient-path quadrature error converges to zero
+for Fixed k=70 (~7.98e-7 at 1024 panels/side), while Semi converges to a missing
+jump of -44.4977388. The fixed candidate also passes interior derivatives,
+uniform-curvature normalization and length/energy conversion controls.
+
+Advance the fixed-positive-scalar ordinary barrier family as the next coherent
+candidate. This is a recommendation, not a production default or calibrated k.
+Remaining: declared public-scene reference coefficient, load/unload comparison
+including active upper trim control, and separate friction-lag refinement.
+Do not repeat these boundary probes unless relevant code changes or a new
+counterexample warrants it. Do not interpret pre-contact run failures as a
+causal trim-band result. All original failures and successful repeats remain.

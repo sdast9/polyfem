@@ -92,3 +92,15 @@ diagnostics build; multiple runs can be supplied. The analysis records both side
 of the final friction lag update and the declared common-coefficient contact
 energy decomposition. It does not identify that decomposition with a gradient
 path integral across RB-02's unresolved feature discontinuities.
+
+
+### Fixed-coefficient candidate fixture
+
+`python3 tools/rb04/run_candidate_probe.py --build build --output /new/evidence`
+compiles/runs `candidate_probe.cpp` against the existing unit-test link libraries.
+The output directory must be new. No scenes or production settings are changed.
+It reproduces the RB-02 EV/VV transition, compares Fixed k=70, checks derivatives
+and units, and integrates the gradient across the boundary. See
+[candidate comparison](../../docs/rb-04-candidate-comparison.md) for normalization,
+results, interpretation and remaining scene work. Committed compact data are
+`candidate-results-20260909.json`; raw outputs retain both successful probe runs.

@@ -76,3 +76,78 @@ Combine this comparison with fixed-snapshot contact-path quadrature and an
 upper-band unloading fixture. Existing data justify state-identity requirements
 and keeping .5/.9 as a working comparison baseline, not choosing a universal
 sweet spot or certifying a new constant coefficient.
+
+## Predeclared boundary-work follow-up
+
+After the first fixture passed (66 checks), integrate the point-x gradient along
+x=.9 to 1.1, with all other coordinates fixed and the original center snapshot.
+Split midpoint quadrature at the feature boundary x=1; use 16, 64, 256, 1024
+panels per side, avoiding an arbitrary derivative convention at the boundary.
+Compare the integral with endpoint energy change. Hypothesis: Fixed k=70 error
+converges to zero; Semi error tends to the independently measured energy jump.
+This is a local contact-path test, not full trajectory or friction certification.
+
+## Completed fixture and candidate determination
+
+The first fixture passed 66 checks; the extended work fixture passed 68 checks.
+Evidence: parent `outputs/rb-04/20260909-fixed-candidate/` and
+`outputs/rb-04/20260909-fixed-candidate-work/`, including exact source copies,
+compiler/link commands, executable hashes, raw JSON/stderr and exit records.
+Compiled against the existing tested build at production commit `e652fae53`.
+No production law, configuration or dependency changed in this fixture stage.
+Portable results: [candidate-results-20260909.json](../tools/rb04/candidate-results-20260909.json).
+
+At epsilon=1e-9, Semi retains energy jump -44.4977394 and gradient jump norm
+247.9419714. Fixed k=70 gives energy difference 0 at floating-point precision
+and gradient difference norm 5.81417e-6; the latter shrinks approximately linearly
+with epsilon. At epsilon=1e-3 its energy difference was -0.00204539, shrinking
+quadratically until roundoff. Both interior finite-difference checks passed:
+gradient relative error 5.95e-11, Hessian relative error 3.96e-7. Uniform k=100
+matches the H=100I Semi control, and all nine length/energy unit conversions
+pass for energy, force and Hessian.
+
+| Midpoint panels per side | Semi: energy change minus gradient integral | Fixed k=70: same mismatch |
+| --- | ---: | ---: |
+| 16 | -44.49517139 | 0.003268374 |
+| 64 | -44.49757896 | 0.000204202 |
+| 256 | -44.49772938 | 0.000012762 |
+| 1024 | -44.49773878 | 0.000000798 |
+
+This isolates a persistent missing jump contribution in the existing featurewise
+energy/gradient contract. It is not resolved by tighter smooth-region quadrature.
+The fixed candidate is consistent on this specific path to the tested accuracy;
+it is not a proof for all collision configurations. The inherited raw `trim`
+field is global barrier stiffness in this standalone helper: for Fixed it is
+k_fixed, not an active trim controller.
+
+**Candidate determination:** advance a strictly positive, fixed scalar coefficient
+multiplying the ordinary barrier potential as the coherent comparison model.
+Hold it fixed over a trajectory and retain exact collision/FEM pullback. Solver
+heuristics may assist minimization, but changes to physical coefficients must be
+explicit model changes with energy accounting. The present curvature-dependent
+feature coefficients and adaptive trim cannot be treated solely as optimization
+heuristics: they change energy and forces. A fixed coefficient also avoids
+choosing interpolated driving curvature, but does not validate arbitrary proxy
+geometry or replace RB-03 mapping requirements.
+
+This selects the next model family for comparison, not a production default or
+universal numerical coefficient. k=70 is only the predeclared EV-side fixture
+normalization. Keep .5/.9 as the current comparison band; available data do not
+establish an optimal lower/upper band.
+
+## Exact next experiment and unresolved decisions
+
+1. Select a public frictionless, uniformly scaled contact fixture and declare a
+   coefficient reference rule before running. A directly measured reference
+   coefficient is required; endpoint min/max do not determine its median.
+2. Compare physical force/displacement and barrier energy under load-increment
+   refinement at fixed physical k. Record gap, strain, residual and determinant
+   checks. Account for Fixed/Semi solver-policy differences explicitly.
+3. Add loading/unloading that actually exercises the upper trim bound. The
+   earlier compression-only data cannot identify an upper-band sweet spot or
+   establish absence of path-dependent energy from retuning.
+4. Keep the solved friction-lag state associated with its endpoint. Compare lag
+   refinement separately; do not silently tighten its production acceptance.
+
+No scene-scale k, interpolation redesign, lag budget, convergence gate, CCD or
+trial-cap change has been selected or implemented. RB-04 remains in progress.
