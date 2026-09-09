@@ -72,6 +72,32 @@ pre-existing output mismatch is documented, not used as the kinetic oracle.
 
 ## Observation without retuning
 
+### Physical-state pairs (2026-09-09)
+
+The final `lagging` object optionally retains `friction_before_update` and
+`friction_after_update`, each with the full friction gradient in physical force
+units, evaluated at the same returned coordinates. Missing observations carry
+an unavailable reason. These label the two sides of the final lag update, not
+every earlier lag event. Calling the const friction derivative does not advance
+the lag state or integrator. Original numerical and finite-lag policy stays intact.
+
+For supported complete residuals, `full_residual_with_pre_update_friction` and
+`free_residual_norm_with_pre_update_friction` replace only the endpoint's friction
+gradient by the observed pre-update gradient. Other endpoint forms remain fixed.
+This is an explicitly identified force-state reconstruction; it does not assert
+that an arbitrary returned solve is converged. The measured default fixtures
+have small pre-update-friction residuals and much larger updated-lag residuals.
+
+`barrier_start_energy_with_endpoint_snapshot` evaluates the solver's incoming
+coordinates with a private copy of the returned endpoint coefficient snapshot.
+In the tested fixed-mesh time loop those coordinates are the previous physical
+endpoint. It supplies B(x_(n-1);theta_n) for the decomposition in the
+[work convention](rb-04-work-convention.md). It is neither the original start
+energy nor an integral of numerical retune events. It remains meaningful as an
+energy evaluation across feature regions, but equality to a gradient line
+integral requires separate continuity/path-quadrature evidence. Extra observations
+remain opt-in; diagnostic on/off comparisons cover the added evaluations.
+
 Contact geometry/stencils are rebuilt in a **copy** of the barrier form, using
 a fresh broad phase. Only the copy can memoize new stencil coefficients. It
 retains the frozen production snapshot, cap and trim. It never calls refresh,

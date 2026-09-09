@@ -80,3 +80,15 @@ The summarizer reprocesses saved outputs without rerunning or replacing solver
 failures; `work_reference.py` independently integrates transient P1 mass work.
 See [work conventions](../../docs/rb-04-work-convention.md) before interpreting
 right/trapezoidal component costs, friction state, or incomplete energy budgets.
+
+# Physical-state pair analysis
+
+```sh
+python3 tools/rb04/analyze_state_pairs.py /absolute/run-directory --output /absolute/new-summary.json
+```
+
+Supply directories containing `params.json` and `output/` from the new paired
+diagnostics build; multiple runs can be supplied. The analysis records both sides
+of the final friction lag update and the declared common-coefficient contact
+energy decomposition. It does not identify that decomposition with a gradient
+path integral across RB-02's unresolved feature discontinuities.

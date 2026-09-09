@@ -262,3 +262,53 @@ the real solver was exercised without rebuilding unchanged production sources.
 The next measurements are pre/post lag force pairs and a common-coefficient
 energy decomposition at physical endpoints. RB-04 and candidate selection remain
 in progress; no new production coefficient or friction policy is selected.
+
+## Physical coefficient/friction-state pairs — 2026-09-09
+
+Starting clean source `798cd4bd6` and unchanged effective dependencies. Only
+the opt-in VarForm writer/observations change production C++; no coefficient,
+friction, lag budget, acceptance or default changes. New fields are specified
+in [the contract](rb-04-contract.md) and [work convention](rb-04-work-convention.md).
+Evidence: parent `outputs/rb-04/20260909-physical-state-pairs/`.
+
+| Validation | Result |
+| --- | --- |
+| Rebuild solver/unit_tests | Exit 0 |
+| Affected contact/cache/mapping/AL/BC/diagnostic selection | 2178 assertions / 31 cases, exit 0 |
+| Three public diagnostic off/on pairs | All six complete four steps; max displacement difference 2.004e-14 |
+| Independent baseline endpoint measurements | Original energy/det(F)/BC/reaction/kinetic tolerances pass |
+| Deliberate restart failure off/on | Both -6, no accepted step 1; original failure contract preserved |
+| Five public smokes | Exit 0, zero error lines, all four steps through t=1 |
+| HDA E2E with final binary | Pass |
+| Common-snapshot alternate reconstruction | 75 applicable endpoints; max energy discrepancy 1.137e-13 |
+| Paired-state refined runs | 9 complete trajectories / 84 endpoints across three types and increments, plus one retained failed fine friction attempt |
+
+The alternate common-snapshot reconstruction uses the independent solve-start
+event energy and final/start global trim ratio when the refresh ID stays fixed;
+the writer separately rebuilds/evaluates the endpoint snapshot at start coordinates.
+Paired post-update friction gradients agree with the separately recorded endpoint
+friction component under the original 1e-9 relative-plus-absolute reference screen.
+The energy decomposition is a bookkeeping identity, not a proof of physical balance.
+
+The fine default-band friction attempt failed at step 1 before contact, with
+20 restarts; one identical new run completed all 16 steps. The failure is retained
+alongside the repeat, not replaced or attributed to a band, thread or sleep cause.
+No test tolerance changed. Jobs overlapped during validation; timing is not an
+overhead benchmark. A misspelled initial output-path command failed directory
+creation before launching a solver and was corrected using cwd-derived paths.
+
+Key result: the coarse friction endpoint has pre-update-friction residual
+1.236e-8 and updated-lag residual 59485.575. The difference between accumulated
+pre/post friction resistance-work estimates (9289.886) accounts for the earlier
+updated-lag virtual-work discrepancy in that fixture. This identifies a force-state
+distinction, not a failure of the completed frozen-lag minimization or a physical
+accuracy certification. The finite-lag approximation remains increment-dependent.
+The three-increment table and coefficient-state energy terms are in the work
+convention and [paired results](../tools/rb04/physical-state-pairs-results-20260909.json).
+
+Remaining for candidate determination: fixed-snapshot gradient-path integration
+versus feature jumps, a concrete coherent-coefficient comparison, and an informative
+upper-band fixture. These observations make the comparison interpretable but do
+not repair RB-02's discontinuity/zero-median/unit counterexamples or RB-03's
+unresolved interpolation law. RB-04 remains in progress; do not replace the
+user's finite-lag policy with a global coupled-gradient requirement.

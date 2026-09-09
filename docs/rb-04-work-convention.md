@@ -89,3 +89,45 @@ quadrature/feature-boundary checks must distinguish quadrature error from jumps.
 
 Until those observations exist, no sum of external work, endpoint barrier energy,
 friction objective and numerical event deltas is called a complete balance.
+
+## Paired-state observation extension (2026-09-09)
+
+The source extension records `friction_before_update` and
+`friction_after_update` gradients in the final `lagging` object, plus the full/free
+residual reconstructed with the former friction gradient and other endpoint
+forms held fixed. It records `barrier_start_energy_with_endpoint_snapshot`,
+which supplies the common-coefficient start energy in the decomposition above.
+No gradient used by a minimization, lag budget or coefficient law changes.
+
+In the coarse default friction fixture, the pre-update-friction residual is
+1.236e-8 versus 59485.575 after updating. Accumulated right friction work is
+13640.494 before and 22930.380 after. Their difference, 9289.886, matches the
+earlier updated-lag residual-work discrepancy (up to numerical error). This
+locates that discrepancy in the selected force-state convention; it does not
+certify friction's physical accuracy. The finite-lag approximation still has
+the measured load-increment dependence and must be assessed as such.
+
+For coarse frictionless quasistatics, the physical-start convention gives
+accumulated parameter energy +544.163 and fixed-snapshot motion energy -138.763,
+which sum to final barrier storage 405.401. The negative motion contribution
+is not automatically a defect: coefficient stiffening evaluated at prior
+coordinates can create stored barrier energy that is released along the next
+segment. Equality of this bookkeeping identity does not prove that the contact
+gradient integral equals the motion-energy difference across feature switches.
+
+At dt=.25,.125,.0625 the default-band friction pre-update right work estimates
+are 13640.494,14893.843,15558.075, while post-update estimates are
+22930.380,19050.134,17557.237. The corresponding final pre-update-friction
+residuals are 1.236e-8,1.250e-8,2.260e-6; updated residuals are
+59485.575,27779.768,13348.598. This supports interpreting the discrepancy as
+a finite-lag force-state difference, with a measured load-increment dependence.
+It neither mandates a larger lag budget nor establishes physical convergence.
+The fine friction run initially failed before contact, then an identical repeat
+completed. Both outcomes remain in the compact paired-state data.
+
+For frictionless quasistatics, physical-start parameter energy is
+544.163,589.017,625.316 across those increments, while final barrier storage is
+405.401,387.038,377.952. This term does not disappear in the measured refinement;
+it must remain explicit in a numerical barrier-energy account. The refresh after
+the final published endpoint is outside this final endpoint's coefficient state;
+it is not silently added to its physical-time budget.

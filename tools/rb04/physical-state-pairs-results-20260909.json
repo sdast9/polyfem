@@ -1,0 +1,1036 @@
+{
+  "analysis_sha256": "f8fa4fee8383e1bfc04b5850019504ff0f5f605ed32ab9d8338bb960e7691c76",
+  "convention": "Change coefficient state at prior physical coordinates, then move at fixed endpoint snapshot. Motion energy is not asserted equal to a gradient line integral across feature jumps.",
+  "friction_convention": "Right endpoint force-gradient dot physical increment, separately before/after final lag update; no lag policy or physical threshold change.",
+  "runs": [
+    {
+      "run": "quasistatic-semi-on",
+      "evidence_subpath": "endpoints/quasistatic-semi-on",
+      "dt": 0.25,
+      "quasistatic": true,
+      "friction_coefficient": 0.0,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 53.74989487846337,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 53.74989487846337,
+          "free_residual_post_update": 3.818797587996846e-05,
+          "free_residual_pre_update_friction": null
+        },
+        {
+          "step": 2,
+          "barrier_energy": 158.873596770202,
+          "barrier_start_energy_with_endpoint_snapshot": 116.4479261107211,
+          "accumulated_parameter_energy_change_at_physical_starts": 62.698031232257726,
+          "accumulated_fixed_snapshot_motion_energy_change": 96.17556553794427,
+          "free_residual_post_update": 2.1238363254018348e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 3,
+          "barrier_energy": 349.60024013382514,
+          "barrier_start_energy_with_endpoint_snapshot": 181.28379215491992,
+          "accumulated_parameter_energy_change_at_physical_starts": 85.10822661697566,
+          "accumulated_fixed_snapshot_motion_energy_change": 264.4920135168495,
+          "free_residual_post_update": 3.6311477633902355e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 2.842170943040401e-14
+        },
+        {
+          "step": 4,
+          "barrier_energy": 405.4006528361485,
+          "barrier_start_energy_with_endpoint_snapshot": 808.6552236061171,
+          "accumulated_parameter_energy_change_at_physical_starts": 544.1632100892676,
+          "accumulated_fixed_snapshot_motion_energy_change": -138.76255725311916,
+          "free_residual_post_update": 1.1001660616624125e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "transient-semi-on",
+      "evidence_subpath": "endpoints/transient-semi-on",
+      "dt": 0.25,
+      "quasistatic": false,
+      "friction_coefficient": 0.0,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 53.71373653285729,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 53.71373653285729,
+          "free_residual_post_update": 3.7750166888485395e-05,
+          "free_residual_pre_update_friction": null
+        },
+        {
+          "step": 2,
+          "barrier_energy": 158.8947550556863,
+          "barrier_start_energy_with_endpoint_snapshot": 116.36344969550115,
+          "accumulated_parameter_energy_change_at_physical_starts": 62.649713162643856,
+          "accumulated_fixed_snapshot_motion_energy_change": 96.24504189304244,
+          "free_residual_post_update": 2.1288092870178632e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -1.4210854715202004e-14
+        },
+        {
+          "step": 3,
+          "barrier_energy": 349.5999135236938,
+          "barrier_start_energy_with_endpoint_snapshot": 181.31307969084406,
+          "accumulated_parameter_energy_change_at_physical_starts": 85.06803779780162,
+          "accumulated_fixed_snapshot_motion_energy_change": 264.5318757258922,
+          "free_residual_post_update": 3.643126362621688e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -2.842170943040401e-14
+        },
+        {
+          "step": 4,
+          "barrier_energy": 405.40201442229056,
+          "barrier_start_energy_with_endpoint_snapshot": 808.6491129185802,
+          "accumulated_parameter_energy_change_at_physical_starts": 544.117237192688,
+          "accumulated_fixed_snapshot_motion_energy_change": -138.71522277039742,
+          "free_residual_post_update": 1.075972823081742e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "quasistatic-semi-friction-on",
+      "evidence_subpath": "endpoints/quasistatic-semi-friction-on",
+      "dt": 0.25,
+      "quasistatic": true,
+      "friction_coefficient": 0.3,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 53.74989487846702,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 53.74989487846702,
+          "free_residual_post_update": 35736.212704240395,
+          "free_residual_pre_update_friction": 3.81877067787275e-05,
+          "accumulated_friction_work_before_update": 0.0,
+          "accumulated_friction_work_after_update": 1565.732828239285,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 2,
+          "barrier_energy": 166.2404391098199,
+          "barrier_start_energy_with_endpoint_snapshot": 116.44792611073835,
+          "accumulated_parameter_energy_change_at_physical_starts": 62.69803123227133,
+          "accumulated_fixed_snapshot_motion_energy_change": 103.54240787754857,
+          "free_residual_post_update": 57252.7617039379,
+          "free_residual_pre_update_friction": 7.578952679003427e-05,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 1854.6419143745566,
+          "accumulated_friction_work_after_update": 6246.935056753771,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 3,
+          "barrier_energy": 253.1998672966941,
+          "barrier_start_energy_with_endpoint_snapshot": 379.12127782639993,
+          "accumulated_parameter_energy_change_at_physical_starts": 275.5788699488514,
+          "accumulated_fixed_snapshot_motion_energy_change": -22.37900265215727,
+          "free_residual_post_update": 57544.955282323666,
+          "free_residual_pre_update_friction": 7.79121470687218e-07,
+          "common_snapshot_reference_error": 1.1368683772161603e-13,
+          "accumulated_friction_work_before_update": 6168.104223788219,
+          "accumulated_friction_work_after_update": 12999.964560736309,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 4,
+          "barrier_energy": 455.53906516973666,
+          "barrier_start_energy_with_endpoint_snapshot": 292.50116992521555,
+          "accumulated_parameter_energy_change_at_physical_starts": 314.88017257737283,
+          "accumulated_fixed_snapshot_motion_energy_change": 140.65889259236383,
+          "free_residual_post_update": 59485.57475681446,
+          "free_residual_pre_update_friction": 1.236444035933056e-08,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 13640.49410224288,
+          "accumulated_friction_work_after_update": 22930.380404367024,
+          "lagging_state": "not converged"
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "lower-0.5-dt-0.125",
+      "evidence_subpath": "quasistatic-semi/lower-0.5-dt-0.125",
+      "dt": 0.125,
+      "quasistatic": true,
+      "friction_coefficient": 0.0,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 6.974995087082805,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.974995087082805,
+          "free_residual_post_update": 1.7581769297545442e-06,
+          "free_residual_pre_update_friction": null
+        },
+        {
+          "step": 2,
+          "barrier_energy": 53.164693738194416,
+          "barrier_start_energy_with_endpoint_snapshot": 7.119933213677829,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.14493812659502403,
+          "accumulated_fixed_snapshot_motion_energy_change": 53.01975561159939,
+          "free_residual_post_update": 1.2521861849317341e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -8.881784197001252e-16
+        },
+        {
+          "step": 3,
+          "barrier_energy": 128.86555054054594,
+          "barrier_start_energy_with_endpoint_snapshot": 56.50369479129161,
+          "accumulated_parameter_energy_change_at_physical_starts": 3.483939179692216,
+          "accumulated_fixed_snapshot_motion_energy_change": 125.38161136085373,
+          "free_residual_post_update": 1.7007799969280208e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -7.105427357601002e-15
+        },
+        {
+          "step": 4,
+          "barrier_energy": 153.00729520124037,
+          "barrier_start_energy_with_endpoint_snapshot": 274.7862689801216,
+          "accumulated_parameter_energy_change_at_physical_starts": 149.40465761926785,
+          "accumulated_fixed_snapshot_motion_energy_change": 3.602637581972516,
+          "free_residual_post_update": 1.2486544898918298e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 5.684341886080802e-14
+        },
+        {
+          "step": 5,
+          "barrier_energy": 236.1615341694679,
+          "barrier_start_energy_with_endpoint_snapshot": 163.73155966840298,
+          "accumulated_parameter_energy_change_at_physical_starts": 160.12892208643046,
+          "accumulated_fixed_snapshot_motion_energy_change": 76.03261208303744,
+          "free_residual_post_update": 3.357608879706507e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -2.842170943040401e-14
+        },
+        {
+          "step": 6,
+          "barrier_energy": 335.33832475133414,
+          "barrier_start_energy_with_endpoint_snapshot": 253.4916720513795,
+          "accumulated_parameter_energy_change_at_physical_starts": 177.45905996834207,
+          "accumulated_fixed_snapshot_motion_energy_change": 157.87926478299207,
+          "free_residual_post_update": 4.785930230237731e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -2.842170943040401e-14
+        },
+        {
+          "step": 7,
+          "barrier_energy": 299.5354722120402,
+          "barrier_start_energy_with_endpoint_snapshot": 722.4432596121732,
+          "accumulated_parameter_energy_change_at_physical_starts": 564.5639948291811,
+          "accumulated_fixed_snapshot_motion_energy_change": -265.0285226171409,
+          "free_residual_post_update": 1.8812311733702543e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 8,
+          "barrier_energy": 387.0376136076302,
+          "barrier_start_energy_with_endpoint_snapshot": 323.9887642891121,
+          "accumulated_parameter_energy_change_at_physical_starts": 589.017286906253,
+          "accumulated_fixed_snapshot_motion_energy_change": -201.9796732986228,
+          "free_residual_post_update": 1.0628561561062709e-06,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -5.684341886080802e-14
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "lower-0.5-dt-0.0625",
+      "evidence_subpath": "quasistatic-semi/lower-0.5-dt-0.0625",
+      "dt": 0.0625,
+      "quasistatic": true,
+      "friction_coefficient": 0.0,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 0.0,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 0.0,
+          "free_residual_post_update": 1.7425262190443544e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 2,
+          "barrier_energy": 6.907948099187681,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.907948099187681,
+          "free_residual_post_update": 6.818128696634477e-06,
+          "free_residual_pre_update_friction": null
+        },
+        {
+          "step": 3,
+          "barrier_energy": 25.593850356801674,
+          "barrier_start_energy_with_endpoint_snapshot": 6.923206187450143,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.015258088262461555,
+          "accumulated_fixed_snapshot_motion_energy_change": 25.578592268539214,
+          "free_residual_post_update": 4.24463594821774e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 1.7763568394002505e-15
+        },
+        {
+          "step": 4,
+          "barrier_energy": 52.25489963815549,
+          "barrier_start_energy_with_endpoint_snapshot": 26.37461040458528,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.796018136046067,
+          "accumulated_fixed_snapshot_motion_energy_change": 51.45888150210943,
+          "free_residual_post_update": 4.095553126486458e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 5,
+          "barrier_energy": 86.07109685342418,
+          "barrier_start_energy_with_endpoint_snapshot": 53.89167324202966,
+          "accumulated_parameter_energy_change_at_physical_starts": 2.4327917399202352,
+          "accumulated_fixed_snapshot_motion_energy_change": 83.63830511350395,
+          "free_residual_post_update": 5.407754589433003e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 6,
+          "barrier_energy": 126.49310191914157,
+          "barrier_start_energy_with_endpoint_snapshot": 88.83679533879335,
+          "accumulated_parameter_energy_change_at_physical_starts": 5.198490225289406,
+          "accumulated_fixed_snapshot_motion_energy_change": 121.29461169385216,
+          "free_residual_post_update": 5.229914165043185e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 7,
+          "barrier_energy": 115.28066511411994,
+          "barrier_start_energy_with_endpoint_snapshot": 261.3230210886987,
+          "accumulated_parameter_energy_change_at_physical_starts": 140.02840939484653,
+          "accumulated_fixed_snapshot_motion_energy_change": -24.747744280726593,
+          "free_residual_post_update": 7.737315824921568e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -5.684341886080802e-14
+        },
+        {
+          "step": 8,
+          "barrier_energy": 150.02596716122125,
+          "barrier_start_energy_with_endpoint_snapshot": 119.21854293198066,
+          "accumulated_parameter_energy_change_at_physical_starts": 143.96628721270724,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.059679948513988,
+          "free_residual_post_update": 6.538340589035142e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 1.4210854715202004e-14
+        },
+        {
+          "step": 9,
+          "barrier_energy": 188.72750341711424,
+          "barrier_start_energy_with_endpoint_snapshot": 155.2304572583464,
+          "accumulated_parameter_energy_change_at_physical_starts": 149.1707773098324,
+          "accumulated_fixed_snapshot_motion_energy_change": 39.55672610728182,
+          "free_residual_post_update": 9.4871013147574e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -2.842170943040401e-14
+        },
+        {
+          "step": 10,
+          "barrier_energy": 231.32799190676116,
+          "barrier_start_energy_with_endpoint_snapshot": 195.4394303024654,
+          "accumulated_parameter_energy_change_at_physical_starts": 155.88270419518358,
+          "accumulated_fixed_snapshot_motion_energy_change": 75.44528771157756,
+          "free_residual_post_update": 1.0074472786539872e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 2.842170943040401e-14
+        },
+        {
+          "step": 11,
+          "barrier_energy": 277.80619986740163,
+          "barrier_start_energy_with_endpoint_snapshot": 239.7614587635042,
+          "accumulated_parameter_energy_change_at_physical_starts": 164.31617105192663,
+          "accumulated_fixed_snapshot_motion_energy_change": 113.49002881547499,
+          "free_residual_post_update": 1.0946700891082786e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 2.842170943040401e-14
+        },
+        {
+          "step": 12,
+          "barrier_energy": 328.15162703863433,
+          "barrier_start_energy_with_endpoint_snapshot": 288.187322700545,
+          "accumulated_parameter_energy_change_at_physical_starts": 174.69729388507,
+          "accumulated_fixed_snapshot_motion_energy_change": 153.45433315356433,
+          "free_residual_post_update": 8.455115169553663e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 5.684341886080802e-14
+        },
+        {
+          "step": 13,
+          "barrier_energy": 382.3625044911804,
+          "barrier_start_energy_with_endpoint_snapshot": 340.71923145675856,
+          "accumulated_parameter_energy_change_at_physical_starts": 187.26489830319423,
+          "accumulated_fixed_snapshot_motion_energy_change": 195.09760618798617,
+          "free_residual_post_update": 8.004146485538926e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -5.684341886080802e-14
+        },
+        {
+          "step": 14,
+          "barrier_energy": 292.88217838391216,
+          "barrier_start_energy_with_endpoint_snapshot": 794.7373758801939,
+          "accumulated_parameter_energy_change_at_physical_starts": 599.6397696922077,
+          "accumulated_fixed_snapshot_motion_energy_change": -306.75759130829556,
+          "free_residual_post_update": 1.9045094131726425e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 15,
+          "barrier_energy": 333.9933321293754,
+          "barrier_start_energy_with_endpoint_snapshot": 304.78973418632927,
+          "accumulated_parameter_energy_change_at_physical_starts": 611.5473254946248,
+          "accumulated_fixed_snapshot_motion_energy_change": -277.5539933652494,
+          "free_residual_post_update": 1.284206201684906e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 16,
+          "barrier_energy": 377.9523756524539,
+          "barrier_start_energy_with_endpoint_snapshot": 347.7618960637521,
+          "accumulated_parameter_energy_change_at_physical_starts": 625.3158894290016,
+          "accumulated_fixed_snapshot_motion_energy_change": -247.36351377654762,
+          "free_residual_post_update": 2.2056664516971236e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "lower-0.5-dt-0.125",
+      "evidence_subpath": "transient-semi/lower-0.5-dt-0.125",
+      "dt": 0.125,
+      "quasistatic": false,
+      "friction_coefficient": 0.0,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 6.927476489253308,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.927476489253308,
+          "free_residual_post_update": 1.878374029654824e-06,
+          "free_residual_pre_update_friction": null
+        },
+        {
+          "step": 2,
+          "barrier_energy": 53.22906715246261,
+          "barrier_start_energy_with_endpoint_snapshot": 7.070569411338861,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.14309292208555302,
+          "accumulated_fixed_snapshot_motion_energy_change": 53.08597423037706,
+          "free_residual_post_update": 1.253148018375535e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 1.7763568394002505e-15
+        },
+        {
+          "step": 3,
+          "barrier_energy": 128.86378976675235,
+          "barrier_start_energy_with_endpoint_snapshot": 56.57678064851414,
+          "accumulated_parameter_energy_change_at_physical_starts": 3.490806418137079,
+          "accumulated_fixed_snapshot_motion_energy_change": 125.37298334861528,
+          "free_residual_post_update": 1.6932711374525207e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 7.105427357601002e-15
+        },
+        {
+          "step": 4,
+          "barrier_energy": 153.00760963107876,
+          "barrier_start_energy_with_endpoint_snapshot": 274.77492960004827,
+          "accumulated_parameter_energy_change_at_physical_starts": 149.401946251433,
+          "accumulated_fixed_snapshot_motion_energy_change": 3.605663379645776,
+          "free_residual_post_update": 1.2392957122155267e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -1.1368683772161603e-13
+        },
+        {
+          "step": 5,
+          "barrier_energy": 236.16038842892368,
+          "barrier_start_energy_with_endpoint_snapshot": 163.7317541099218,
+          "accumulated_parameter_energy_change_at_physical_starts": 160.12609073027605,
+          "accumulated_fixed_snapshot_motion_energy_change": 76.03429769864765,
+          "free_residual_post_update": 3.3541354736292314e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 6,
+          "barrier_energy": 335.3375339284061,
+          "barrier_start_energy_with_endpoint_snapshot": 253.49017069481567,
+          "accumulated_parameter_energy_change_at_physical_starts": 177.45587299616804,
+          "accumulated_fixed_snapshot_motion_energy_change": 157.8816609322381,
+          "free_residual_post_update": 4.779962710063429e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 7,
+          "barrier_energy": 299.5353076772841,
+          "barrier_start_energy_with_endpoint_snapshot": 722.441230028205,
+          "accumulated_parameter_energy_change_at_physical_starts": 564.5595690959669,
+          "accumulated_fixed_snapshot_motion_energy_change": -265.02426141868284,
+          "free_residual_post_update": 1.8786919163091668e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 1.1368683772161603e-13
+        },
+        {
+          "step": 8,
+          "barrier_energy": 387.0363056953512,
+          "barrier_start_energy_with_endpoint_snapshot": 323.9885114782841,
+          "accumulated_parameter_energy_change_at_physical_starts": 589.0127728969669,
+          "accumulated_fixed_snapshot_motion_energy_change": -201.97646720161578,
+          "free_residual_post_update": 1.058030074766314e-06,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -5.684341886080802e-14
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "lower-0.5-dt-0.0625",
+      "evidence_subpath": "transient-semi/lower-0.5-dt-0.0625",
+      "dt": 0.0625,
+      "quasistatic": false,
+      "friction_coefficient": 0.0,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 0.0,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 0.0,
+          "free_residual_post_update": 4.183674407773406e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 2,
+          "barrier_energy": 6.978949683107628,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.978949683107628,
+          "free_residual_post_update": 6.131634961631288e-06,
+          "free_residual_pre_update_friction": null
+        },
+        {
+          "step": 3,
+          "barrier_energy": 25.62851485306531,
+          "barrier_start_energy_with_endpoint_snapshot": 6.9937241168679405,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.014774433760312178,
+          "accumulated_fixed_snapshot_motion_energy_change": 25.613740419305,
+          "free_residual_post_update": 4.019299390869404e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -1.7763568394002505e-15
+        },
+        {
+          "step": 4,
+          "barrier_energy": 52.253207925985336,
+          "barrier_start_energy_with_endpoint_snapshot": 26.409086445868603,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.7953460265636032,
+          "accumulated_fixed_snapshot_motion_energy_change": 51.45786189942173,
+          "free_residual_post_update": 4.394870371936377e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 5,
+          "barrier_energy": 86.06881971557453,
+          "barrier_start_energy_with_endpoint_snapshot": 53.88865339761277,
+          "accumulated_parameter_energy_change_at_physical_starts": 2.430791498191038,
+          "accumulated_fixed_snapshot_motion_energy_change": 83.63802821738349,
+          "free_residual_post_update": 4.655892999084332e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 6,
+          "barrier_energy": 126.48961224070048,
+          "barrier_start_energy_with_endpoint_snapshot": 88.83424946158861,
+          "accumulated_parameter_energy_change_at_physical_starts": 5.196221244205116,
+          "accumulated_fixed_snapshot_motion_energy_change": 121.29339099649536,
+          "free_residual_post_update": 5.199519469911644e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 7,
+          "barrier_energy": 115.27929854081471,
+          "barrier_start_energy_with_endpoint_snapshot": 261.3153123443561,
+          "accumulated_parameter_energy_change_at_physical_starts": 140.0219213478607,
+          "accumulated_fixed_snapshot_motion_energy_change": -24.74262280704602,
+          "free_residual_post_update": 7.635169931180808e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 8,
+          "barrier_energy": 150.01986022971698,
+          "barrier_start_energy_with_endpoint_snapshot": 119.21696945951976,
+          "accumulated_parameter_energy_change_at_physical_starts": 143.95959226656578,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.060267963151205,
+          "free_residual_post_update": 8.197935396850742e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 1.4210854715202004e-14
+        },
+        {
+          "step": 9,
+          "barrier_energy": 188.72226647990257,
+          "barrier_start_energy_with_endpoint_snapshot": 155.2236229927376,
+          "accumulated_parameter_energy_change_at_physical_starts": 149.1633550295864,
+          "accumulated_fixed_snapshot_motion_energy_change": 39.558911450316174,
+          "free_residual_post_update": 7.534091533780972e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 10,
+          "barrier_energy": 231.3216115264081,
+          "barrier_start_energy_with_endpoint_snapshot": 195.43374715139998,
+          "accumulated_parameter_energy_change_at_physical_starts": 155.8748357010838,
+          "accumulated_fixed_snapshot_motion_energy_change": 75.4467758253243,
+          "free_residual_post_update": 1.0578756826321746e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 11,
+          "barrier_energy": 277.7987369728689,
+          "barrier_start_energy_with_endpoint_snapshot": 239.75439650900393,
+          "accumulated_parameter_energy_change_at_physical_starts": 164.30762068367963,
+          "accumulated_fixed_snapshot_motion_energy_change": 113.49111628918925,
+          "free_residual_post_update": 1.0958421822650798e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -2.842170943040401e-14
+        },
+        {
+          "step": 12,
+          "barrier_energy": 328.1431189683412,
+          "barrier_start_energy_with_endpoint_snapshot": 288.1790531736332,
+          "accumulated_parameter_energy_change_at_physical_starts": 174.68793688444393,
+          "accumulated_fixed_snapshot_motion_energy_change": 153.45518208389726,
+          "free_residual_post_update": 1.4509094071212635e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -5.684341886080802e-14
+        },
+        {
+          "step": 13,
+          "barrier_energy": 382.35301510058025,
+          "barrier_start_energy_with_endpoint_snapshot": 340.7097973337644,
+          "accumulated_parameter_energy_change_at_physical_starts": 187.25461524986716,
+          "accumulated_fixed_snapshot_motion_energy_change": 195.0983998507131,
+          "free_residual_post_update": 8.616007113290779e-09,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 14,
+          "barrier_energy": 292.8772349592845,
+          "barrier_start_energy_with_endpoint_snapshot": 794.7163162032202,
+          "accumulated_parameter_energy_change_at_physical_starts": 599.6179163525071,
+          "accumulated_fixed_snapshot_motion_energy_change": -306.74068139322264,
+          "free_residual_post_update": 1.922860612488113e-07,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 1.1368683772161603e-13
+        },
+        {
+          "step": 15,
+          "barrier_energy": 333.98354604968966,
+          "barrier_start_energy_with_endpoint_snapshot": 304.78432541134237,
+          "accumulated_parameter_energy_change_at_physical_starts": 611.525006804565,
+          "accumulated_fixed_snapshot_motion_energy_change": -277.54146075487535,
+          "free_residual_post_update": 1.1568403859821602e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": 0.0
+        },
+        {
+          "step": 16,
+          "barrier_energy": 377.94423223942164,
+          "barrier_start_energy_with_endpoint_snapshot": 347.75068333700256,
+          "accumulated_parameter_energy_change_at_physical_starts": 625.2921440918778,
+          "accumulated_fixed_snapshot_motion_energy_change": -247.34791185245626,
+          "free_residual_post_update": 1.0235279583051804e-08,
+          "free_residual_pre_update_friction": null,
+          "common_snapshot_reference_error": -5.684341886080802e-14
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "lower-0.5-dt-0.125",
+      "evidence_subpath": "quasistatic-semi-friction/lower-0.5-dt-0.125",
+      "dt": 0.125,
+      "quasistatic": true,
+      "friction_coefficient": 0.3,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 6.974995087083088,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.974995087083088,
+          "free_residual_post_update": 9685.307717457299,
+          "free_residual_pre_update_friction": 1.7579297533232034e-06,
+          "accumulated_friction_work_before_update": 0.0,
+          "accumulated_friction_work_after_update": 115.68890933617479,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 2,
+          "barrier_energy": 54.6305856109708,
+          "barrier_start_energy_with_endpoint_snapshot": 7.119933213678271,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.14493812659518301,
+          "accumulated_fixed_snapshot_motion_energy_change": 54.48564748437561,
+          "free_residual_post_update": 26326.56296753283,
+          "free_residual_pre_update_friction": 9.318952493681252e-08,
+          "common_snapshot_reference_error": 8.881784197001252e-16,
+          "accumulated_friction_work_before_update": 259.1482466153629,
+          "accumulated_friction_work_after_update": 1074.8349587759035,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 3,
+          "barrier_energy": 137.42237959632155,
+          "barrier_start_energy_with_endpoint_snapshot": 58.06498800063364,
+          "accumulated_parameter_energy_change_at_physical_starts": 3.579340516258026,
+          "accumulated_fixed_snapshot_motion_energy_change": 133.84303908006353,
+          "free_residual_post_update": 26433.67765166256,
+          "free_residual_pre_update_friction": 4.044831789385908e-08,
+          "common_snapshot_reference_error": -7.105427357601002e-15,
+          "accumulated_friction_work_before_update": 1006.8994112025882,
+          "accumulated_friction_work_after_update": 2369.8342311063543,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 4,
+          "barrier_energy": 166.5475905695584,
+          "barrier_start_energy_with_endpoint_snapshot": 292.7320002933171,
+          "accumulated_parameter_energy_change_at_physical_starts": 158.8889612132536,
+          "accumulated_fixed_snapshot_motion_energy_change": 7.6586293563048,
+          "free_residual_post_update": 26894.28592546681,
+          "free_residual_pre_update_friction": 1.0705124505250897e-07,
+          "common_snapshot_reference_error": 5.684341886080802e-14,
+          "accumulated_friction_work_before_update": 2375.9603413343084,
+          "accumulated_friction_work_after_update": 4298.576994313497,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 5,
+          "barrier_energy": 261.26741364331536,
+          "barrier_start_energy_with_endpoint_snapshot": 178.06887777015882,
+          "accumulated_parameter_energy_change_at_physical_starts": 170.41024841385402,
+          "accumulated_fixed_snapshot_motion_energy_change": 90.85716522946134,
+          "free_residual_post_update": 27041.637811716315,
+          "free_residual_pre_update_friction": 1.1074263538281126e-08,
+          "common_snapshot_reference_error": -2.842170943040401e-14,
+          "accumulated_friction_work_before_update": 4398.37582469763,
+          "accumulated_friction_work_after_update": 6876.987484869658,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 6,
+          "barrier_energy": 376.07741953705687,
+          "barrier_start_energy_with_endpoint_snapshot": 280.268543171894,
+          "accumulated_parameter_energy_change_at_physical_starts": 189.41137794243267,
+          "accumulated_fixed_snapshot_motion_energy_change": 186.6660415946242,
+          "free_residual_post_update": 27355.812799972446,
+          "free_residual_pre_update_friction": 1.7847403665325157e-08,
+          "common_snapshot_reference_error": -1.1368683772161603e-13,
+          "accumulated_friction_work_before_update": 7145.020791378705,
+          "accumulated_friction_work_after_update": 10185.47972885587,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 7,
+          "barrier_energy": 339.8083205156664,
+          "barrier_start_energy_with_endpoint_snapshot": 810.0255292700659,
+          "accumulated_parameter_energy_change_at_physical_starts": 623.3594876754418,
+          "accumulated_fixed_snapshot_motion_energy_change": -283.55116715977533,
+          "free_residual_post_update": 27816.19649529575,
+          "free_residual_pre_update_friction": 1.3380753327342367e-08,
+          "common_snapshot_reference_error": -1.1368683772161603e-13,
+          "accumulated_friction_work_before_update": 10672.070459105988,
+          "accumulated_friction_work_after_update": 14281.92453939484,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 8,
+          "barrier_energy": 444.8950062775623,
+          "barrier_start_energy_with_endpoint_snapshot": 367.65834437725573,
+          "accumulated_parameter_energy_change_at_physical_starts": 651.2095115370311,
+          "accumulated_fixed_snapshot_motion_energy_change": -206.31450525946877,
+          "free_residual_post_update": 27779.767900211005,
+          "free_residual_pre_update_friction": 1.2498555634166254e-08,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 14893.842755512018,
+          "accumulated_friction_work_after_update": 19050.13436446891,
+          "lagging_state": "not converged"
+        }
+      ],
+      "complete": true
+    },
+    {
+      "run": "lower-0.5-dt-0.0625",
+      "evidence_subpath": "quasistatic-semi-friction/lower-0.5-dt-0.0625",
+      "dt": 0.0625,
+      "quasistatic": true,
+      "friction_coefficient": 0.3,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [],
+      "failure": {
+        "step": 1,
+        "outcome": "failed_attempt",
+        "error": "Final reduced solve did not converge: {\"directional_derivative\":-3.051117156988214e-10,\"energy\":-6.246920414885263e-14,\"fDelta\":3.7865323450608567e-29,\"gradNorm\":0.00014996098337087305,\"internal_solver\":[{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"},{\"solver_info\":\"Success\"}],\"iterations\":10,\"line_search\":\"RobustArmijo\",\"line_search_iterations\":62,\"outcome\":\"interrupted\",\"restarts\":20,\"status\":8,\"termination_reason\":\"Objective function specified to stop\",\"time_assembly\":0.0003490044,\"time_broad_phase_ccd\":0.0015863584999999997,\"time_ccd\":0.0005532044000000001,\"time_checking_for_nan_inf\":0.0006327621999999999,\"time_classical_line_search\":0.022683736899999984,\"time_constraint_set_update\":3.76792e-05,\"time_grad\":0.0006157242999999998,\"time_inverting\":0.0011602712,\"time_line_search\":0.03632821640000001,\"time_line_search_constraint_set_update\":0.009648679400000016,\"time_obj_fun\":0.00027741620000000007,\"total_time\":0.405261041,\"xDelta\":2.104615135831377e-06}"
+      },
+      "complete": false
+    },
+    {
+      "run": "lower-0.5-dt-0.0625",
+      "evidence_subpath": "friction-fine-repeat/lower-0.5-dt-0.0625",
+      "dt": 0.0625,
+      "quasistatic": true,
+      "friction_coefficient": 0.3,
+      "binary_sha256": "d2ff044ef3f7500943130a069522b8127ad7827585b2bb33d9ee96e6e66137fe",
+      "frames": [
+        {
+          "step": 1,
+          "barrier_energy": 0.0,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 0.0,
+          "free_residual_post_update": 2.2643824864755233e-09,
+          "free_residual_pre_update_friction": 2.2643824864755233e-09,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 0.0,
+          "accumulated_friction_work_after_update": 0.0,
+          "lagging_state": "converged"
+        },
+        {
+          "step": 2,
+          "barrier_energy": 6.90794809918758,
+          "barrier_start_energy_with_endpoint_snapshot": 0.0,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.0,
+          "accumulated_fixed_snapshot_motion_energy_change": 6.90794809918758,
+          "free_residual_post_update": 9686.272143257715,
+          "free_residual_pre_update_friction": 6.818005986916337e-06,
+          "accumulated_friction_work_before_update": 0.0,
+          "accumulated_friction_work_after_update": 115.71114448767491,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 3,
+          "barrier_energy": 26.668573383028267,
+          "barrier_start_energy_with_endpoint_snapshot": 6.923206187449651,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.015258088262070757,
+          "accumulated_fixed_snapshot_motion_energy_change": 26.653315294766195,
+          "free_residual_post_update": 13068.630382383273,
+          "free_residual_pre_update_friction": 6.190568791599575e-06,
+          "common_snapshot_reference_error": -8.881784197001252e-16,
+          "accumulated_friction_work_before_update": 105.21586644800982,
+          "accumulated_friction_work_after_update": 368.2210538509284,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 4,
+          "barrier_energy": 55.85644142216862,
+          "barrier_start_energy_with_endpoint_snapshot": 27.474953687919715,
+          "accumulated_parameter_energy_change_at_physical_starts": 0.8216383931535187,
+          "accumulated_fixed_snapshot_motion_energy_change": 55.0348030290151,
+          "free_residual_post_update": 12841.604850589456,
+          "free_residual_pre_update_friction": 5.332069759781787e-09,
+          "common_snapshot_reference_error": -7.105427357601002e-15,
+          "accumulated_friction_work_before_update": 328.8561127119113,
+          "accumulated_friction_work_after_update": 720.804882042389,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 5,
+          "barrier_energy": 93.345117660999,
+          "barrier_start_energy_with_endpoint_snapshot": 57.576815366915795,
+          "accumulated_parameter_energy_change_at_physical_starts": 2.542012337900692,
+          "accumulated_fixed_snapshot_motion_energy_change": 90.8031053230983,
+          "free_residual_post_update": 12878.93937671178,
+          "free_residual_pre_update_friction": 5.480404739945975e-09,
+          "common_snapshot_reference_error": 7.105427357601002e-15,
+          "accumulated_friction_work_before_update": 692.4849311712182,
+          "accumulated_friction_work_after_update": 1214.706510463339,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 6,
+          "barrier_energy": 138.56494215025558,
+          "barrier_start_energy_with_endpoint_snapshot": 96.30033663243945,
+          "accumulated_parameter_energy_change_at_physical_starts": 5.497231309341151,
+          "accumulated_fixed_snapshot_motion_energy_change": 133.0677108409144,
+          "free_residual_post_update": 12934.707812148827,
+          "free_residual_pre_update_friction": 6.979067703226764e-09,
+          "common_snapshot_reference_error": -1.4210854715202004e-14,
+          "accumulated_friction_work_before_update": 1202.4110658590494,
+          "accumulated_friction_work_after_update": 1856.0753418995557,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 7,
+          "barrier_energy": 127.12505978420145,
+          "barrier_start_energy_with_endpoint_snapshot": 286.14257584812077,
+          "accumulated_parameter_energy_change_at_physical_starts": 153.07486500720634,
+          "accumulated_fixed_snapshot_motion_energy_change": -25.949805223004915,
+          "free_residual_post_update": 13142.407666618694,
+          "free_residual_pre_update_friction": 5.844190224376387e-09,
+          "common_snapshot_reference_error": 5.684341886080802e-14,
+          "accumulated_friction_work_before_update": 1875.6850107353398,
+          "accumulated_friction_work_after_update": 2665.5646539341933,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 8,
+          "barrier_energy": 166.63115424845725,
+          "barrier_start_energy_with_endpoint_snapshot": 131.41872042504087,
+          "accumulated_parameter_energy_change_at_physical_starts": 157.36852564804576,
+          "accumulated_fixed_snapshot_motion_energy_change": 9.26262860041146,
+          "free_residual_post_update": 13059.897043251498,
+          "free_residual_pre_update_friction": 6.8299713293977414e-09,
+          "common_snapshot_reference_error": -2.842170943040401e-14,
+          "accumulated_friction_work_before_update": 2693.900581503956,
+          "accumulated_friction_work_after_update": 3616.4851421717995,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 9,
+          "barrier_energy": 210.93346498789722,
+          "barrier_start_energy_with_endpoint_snapshot": 172.35505214448906,
+          "accumulated_parameter_energy_change_at_physical_starts": 163.09242354407758,
+          "accumulated_fixed_snapshot_motion_energy_change": 47.84104144381962,
+          "free_residual_post_update": 13134.959921006863,
+          "free_residual_pre_update_friction": 7.074263326097225e-09,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 3683.0732239215913,
+          "accumulated_friction_work_after_update": 4740.12503557058,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 10,
+          "barrier_energy": 260.066642478206,
+          "barrier_start_energy_with_endpoint_snapshot": 218.38036770043948,
+          "accumulated_parameter_energy_change_at_physical_starts": 170.53932625661983,
+          "accumulated_fixed_snapshot_motion_energy_change": 89.52731622158615,
+          "free_residual_post_update": 13189.514954313654,
+          "free_residual_pre_update_friction": 6.322095810401219e-05,
+          "common_snapshot_reference_error": 5.684341886080802e-14,
+          "accumulated_friction_work_before_update": 4841.662921921049,
+          "accumulated_friction_work_after_update": 6033.531223629813,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 11,
+          "barrier_energy": 314.07691663514356,
+          "barrier_start_energy_with_endpoint_snapshot": 269.5015292257792,
+          "accumulated_parameter_energy_change_at_physical_starts": 179.97421300419305,
+          "accumulated_fixed_snapshot_motion_energy_change": 134.1027036309505,
+          "free_residual_post_update": 13240.630376512334,
+          "free_residual_pre_update_friction": 8.123988200693722e-09,
+          "common_snapshot_reference_error": 5.684341886080802e-14,
+          "accumulated_friction_work_before_update": 6174.892543216428,
+          "accumulated_friction_work_after_update": 7501.70925264429,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 12,
+          "barrier_energy": 373.02469434501,
+          "barrier_start_energy_with_endpoint_snapshot": 325.7893629790601,
+          "accumulated_parameter_energy_change_at_physical_starts": 191.6866593481096,
+          "accumulated_fixed_snapshot_motion_energy_change": 181.33803499690038,
+          "free_residual_post_update": 13284.854887555983,
+          "free_residual_pre_update_friction": 3.47236486511257e-05,
+          "common_snapshot_reference_error": -5.684341886080802e-14,
+          "accumulated_friction_work_before_update": 7686.502841607415,
+          "accumulated_friction_work_after_update": 9148.058936158408,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 13,
+          "barrier_energy": 290.3026470133124,
+          "barrier_start_energy_with_endpoint_snapshot": 774.6560504625625,
+          "accumulated_parameter_energy_change_at_physical_starts": 593.318015465662,
+          "accumulated_fixed_snapshot_motion_energy_change": -303.01536845234966,
+          "free_residual_post_update": 13504.813536310907,
+          "free_residual_pre_update_friction": 4.346276555987465e-05,
+          "common_snapshot_reference_error": 1.1368683772161603e-13,
+          "accumulated_friction_work_before_update": 9410.885086465263,
+          "accumulated_friction_work_after_update": 11010.948174634057,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 14,
+          "barrier_energy": 345.32619091762825,
+          "barrier_start_energy_with_endpoint_snapshot": 301.8731967525629,
+          "accumulated_parameter_energy_change_at_physical_starts": 604.8885652049125,
+          "accumulated_fixed_snapshot_motion_energy_change": -259.5623742872843,
+          "free_residual_post_update": 13960.981397030086,
+          "free_residual_pre_update_friction": 5.033168046914656e-08,
+          "common_snapshot_reference_error": -5.684341886080802e-14,
+          "accumulated_friction_work_before_update": 11337.396872787844,
+          "accumulated_friction_work_after_update": 13078.883470740368,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 15,
+          "barrier_energy": 399.65445989289907,
+          "barrier_start_energy_with_endpoint_snapshot": 359.24139792639835,
+          "accumulated_parameter_energy_change_at_physical_starts": 618.8037722136826,
+          "accumulated_fixed_snapshot_motion_energy_change": -219.14931232078357,
+          "free_residual_post_update": 13383.691031536184,
+          "free_residual_pre_update_friction": 2.3592119627325914e-08,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 13331.237122999726,
+          "accumulated_friction_work_after_update": 15201.606339297383,
+          "lagging_state": "not converged"
+        },
+        {
+          "step": 16,
+          "barrier_energy": 456.1885875858596,
+          "barrier_start_energy_with_endpoint_snapshot": 416.35698119048243,
+          "accumulated_parameter_energy_change_at_physical_starts": 635.506293511266,
+          "accumulated_fixed_snapshot_motion_energy_change": -179.31770592540641,
+          "free_residual_post_update": 13348.597672062639,
+          "free_residual_pre_update_friction": 2.2603647994349246e-06,
+          "common_snapshot_reference_error": 0.0,
+          "accumulated_friction_work_before_update": 15558.075206189054,
+          "accumulated_friction_work_after_update": 17557.237387646834,
+          "lagging_state": "not converged"
+        }
+      ],
+      "complete": true
+    }
+  ]
+}

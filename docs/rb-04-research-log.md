@@ -275,3 +275,78 @@ snapshot at the prior physical coordinates. These are observations, not changes
 to model or lag policy. Validate against unobserved controls, then reuse the
 three-increment default-band comparison for work reconstruction. The mid-band
 remains a useful comparison baseline, not a selected universal sweet spot.
+
+## Physical-state pair instrumentation in progress — 2026-09-09
+
+Refinement/tools/work-convention stage committed as `798cd4bd6` and pushed to
+origin/main before further source edits. New evidence directory:
+parent `outputs/rb-04/20260909-physical-state-pairs/`.
+
+Observational source change in `NonlinearElasticVarForm.cpp`: retain friction
+gradients immediately before and after the final lag update; reconstruct the
+endpoint residual with pre-update friction and all other endpoint forms fixed.
+Also evaluate barrier energy at solve-start coordinates using a private copy of
+the endpoint coefficient snapshot. These implement the two minimal measurements
+specified in the work-convention document, without changing forces used in any
+minimization, the coefficient controller, or lag/termination policy.
+
+The build completed. Running affected suite, standard on/off/failure endpoint
+checks, smokes and HDA E2E against the updated binary. An initial runner command
+misspelled the home-directory path; directory creation failed before any solver
+launched. Corrected to an absolute path generated from cwd; no output was moved.
+`tools/rb04/analyze_state_pairs.py` independently checks the common-snapshot
+start energy against solve-start event energy times the changed global trim
+when refresh ID is unchanged, and checks post-update friction against the
+endpoint's separately recorded friction gradient. It reports the declared
+physical-coordinate coefficient decomposition and paired friction work estimates.
+Next run the remaining default-band .125/.0625 increments after on/off checks
+pass; reuse the three default .25 on-runs rather than rerunning them.
+
+## Physical-state pair results — 2026-09-09
+
+All required build/affected tests (2178 assertions/31 cases), default on/off
+measurements (max displacement difference 2.004e-14), failure pair, five smokes
+and HDA E2E pass. The default .125/.0625 extension completed five of six first
+attempts. Fine friction failed before contact with 20 restarts; one identical
+repeat completed. Retain both. This extends the evidence that observed startup
+failures cannot be called a causal trim-band sweet spot. New compact data:
+`tools/rb04/physical-state-pairs-results-20260909.json` (10 trajectories including
+failure, 9 complete, 84 accepted endpoints). Raw coarse runs are `endpoints/`,
+fine runs are the three scene folders, and repeat is `friction-fine-repeat/`.
+
+Common start energy agrees with the independent event/trim-ratio route in 75
+applicable frames (max error 1.137e-13). Paired updated friction matches the
+endpoint's separately recorded friction component. Quasistatic parameter-energy
+terms remain finite as dt decreases: 544.163 -> 589.017 -> 625.316, under the
+explicit physical-start convention. This cannot be silently omitted from an
+energy account; a contact gradient line integral still needs feature/path checks.
+
+H6 (supported in measured fixtures): the large friction diagnostic residual is
+from using the post-update lag state, not nonstationarity of the prior frozen-lag
+endpoint. At dt=.25,.125,.0625, pre-update residuals are
+1.236e-8,1.250e-8,2.260e-6 versus post-update
+59485.575,27779.768,13348.598. Before-update right friction work is
+13640.494,14893.843,15558.075; after-update work is
+22930.380,19050.134,17557.237. The coarse difference 9289.886 accounts for the
+earlier virtual-work discrepancy. The finite-lag approximation still shows
+increment dependence; no physical acceptance or larger lag budget is selected.
+
+NEXT bounded candidate comparison: distinguish a coherent positive frozen scalar
+barrier coefficient from the existing per-feature curvature rule in RB-02's
+feature-switch fixture, with explicit coefficient units and geometry/mapping
+controls. A follow-up read-only Luna audit (same agent) is preparing the exact
+Fixed-vs-SemiImplicit setup and confounding mode switches. Do not claim that a
+uniform scalar is physically calibrated or generally mesh-independent; it is a
+coherent-objective comparison baseline. Then compare fixed-snapshot path work
+against energy changes and design an unloading/upper-band fixture. Keep H5
+(published-state coefficient identity) and H6 (lag-state identity) in the
+candidate's contract; neither alone fixes geometric feature discontinuity.
+
+The Luna follow-up audit has completed. Its reviewed equations, dt-weight
+qualification, mode-confounding limits and exact next probe protocol are saved in
+[candidate comparison](rb-04-candidate-comparison.md). The key first comparison
+is Fixed k=70 versus the existing 70/55 EV/VV snapshot fixture; require vanishing
+energy/gradient jump for the candidate where supported, not an unjustified
+continuous Hessian. No scene-scale coefficient has been selected or inferred
+from endpoint min/max ranges. Both Luna tasks were read-only, with no progress
+polling; their bounded outputs were reviewed against source/units.

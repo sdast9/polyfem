@@ -155,6 +155,9 @@ namespace polyfem::varform
 					const auto snapshot = barrier->diagnostic_snapshot(x);
 					snapshot.first_derivative(x, g);
 					e = snapshot.value(x);
+					const auto start_snapshot = snapshot.diagnostic_snapshot(start);
+					record["barrier_start_energy_with_endpoint_snapshot"] = scalar(start_snapshot.value(start) / scale);
+					record["barrier_start_energy_scope"] = "Solve-start coordinates evaluated with returned endpoint coefficient snapshot; not a sum of optimization-event work";
 					record["contact"] = snapshot.diagnostic_state();
 					const double d2 = snapshot.collision_set().compute_minimum_distance(collision_mesh_, snapshot.compute_displaced_surface(x));
 					record["contact"]["min_gap"] = std::isfinite(d2) ? scalar(std::sqrt(d2)) : missing("No active pair within dhat; global minimum not measured");
@@ -192,6 +195,23 @@ namespace polyfem::varform
 			record["residual_complete"] = complete;
 			record["full_residual"] = complete ? vector(residual) : missing("Unsupported active form; component sum is partial");
 			record["free_residual_norm"] = complete ? scalar(solve_data_.nl_problem->full_to_reduced_grad(residual).norm()) : missing("Unsupported active form");
+			record["full_residual_with_pre_update_friction"] = missing("No complete paired final friction-lag observation");
+			record["free_residual_norm_with_pre_update_friction"] = missing("No complete paired final friction-lag observation");
+			if (complete && lagging.contains("friction_before_update") && lagging.contains("friction_after_update")
+				&& lagging["friction_before_update"].contains("gradient_force_units")
+				&& lagging["friction_after_update"].contains("gradient_force_units"))
+			{
+				const auto before = lagging["friction_before_update"]["gradient_force_units"].get<std::vector<double>>();
+				const auto after = lagging["friction_after_update"]["gradient_force_units"].get<std::vector<double>>();
+				if (before.size() == size_t(residual.size()) && after.size() == before.size())
+				{
+					Eigen::VectorXd prior = residual;
+					for (size_t i = 0; i < before.size(); ++i)
+						prior[i] += before[i] - after[i];
+					record["full_residual_with_pre_update_friction"] = vector(prior);
+					record["free_residual_norm_with_pre_update_friction"] = scalar(solve_data_.nl_problem->full_to_reduced_grad(prior).norm());
+				}
+			}
 			record["reactions"] = json::array();
 			for (const auto &constraint : solve_data_.al_form)
 			{
@@ -1264,6 +1284,28 @@ namespace polyfem::varform
 		std::string diagnostic_phase = "initialization";
 		json diagnostic_termination = {{"unavailable_reason", "No completed subsolve"}};
 		json diagnostic_lagging = {{"state", "not reached"}};
+		const auto observe_friction = [&]() -> json {
+			try
+			{
+				const auto &friction = solve_data_.friction_form;
+				if (!friction || !friction->enabled())
+					return {{"unavailable_reason", "No enabled friction form"}};
+				const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+				if (!(scale > 0) || !std::isfinite(scale))
+					return {{"unavailable_reason", "Invalid acceleration scaling"}};
+				Eigen::VectorXd g;
+				friction->first_derivative(sol, g);
+				g /= scale;
+				if (!g.allFinite())
+					return {{"unavailable_reason", "Nonfinite friction gradient"}};
+				return {{"gradient_force_units", std::vector<double>(g.data(), g.data() + g.size())},
+						{"scope", "Frozen friction gradient at the returned full coordinates on the indicated side of the final lag update"}};
+			}
+			catch (const std::exception &e)
+			{
+				return {{"unavailable_reason", e.what()}};
+			}
+		};
 		const auto emit_diagnostics = [&](const std::string &outcome, const std::string &error = "") {
 			try
 			{
@@ -1409,11 +1451,17 @@ namespace polyfem::varform
 
 				diagnostic_phase = "lagging";
 				configure_coefficient_diagnostics(step, diagnostic_phase);
+				const json friction_before = diagnostics_enabled ? observe_friction() : json();
 				nl_problem.update_lagging(tmp_sol, lag_i);
 
 				Eigen::VectorXd grad;
 				nl_problem.gradient(tmp_sol, grad);
 				diagnostic_lagging = {{"iteration", lag_i}, {"updated_lag_residual_norm_objective", grad.norm()}, {"tolerance", lagging_tol}, {"state", "not converged"}};
+				if (diagnostics_enabled)
+				{
+					diagnostic_lagging["friction_before_update"] = friction_before;
+					diagnostic_lagging["friction_after_update"] = observe_friction();
+				}
 				const double delta_x_norm = (prev_sol - sol).lpNorm<Eigen::Infinity>();
 				logger().debug("Lagging convergence grad_norm={:g} tol={:g} (||Δx||={:g})", grad.norm(), lagging_tol, delta_x_norm);
 				if (grad.norm() <= lagging_tol)
