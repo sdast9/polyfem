@@ -1,0 +1,129 @@
+# RB-04 candidate investigation log
+
+## Authorization and durable objective — 2026-09-09
+
+The user selected the coherent barrier-model direction and requested continued
+RB-04 testing to determine a candidate, with durable hypotheses/results/handoffs.
+The user observes a possible sweet spot in Trim Band Lower/Upper. This authorizes
+comparative testing and observational accounting, not an untested production law.
+Preserve CCD, retired constraint floor, separate trial cap, and finite friction
+policy. Public fixtures only; no Teseo or private scenes.
+
+Starting clean PolyFEM main: 2c45411a2; effective IPC local af317a65;
+PolySolve local 4d372fa8. No pre-existing solver/build process found.
+Prior endpoint results and unresolved scope: [validation](rb-04-validation.md).
+
+## Hypotheses and decision criteria
+
+H1: A trim band avoids both near-singular contact and excessive barrier stiffness,
+reducing solver difficulty. Test separately from changes in mechanical response.
+H2: A useful band has a region of stable reactions/displacements under band and
+load-step refinement, rather than only one fastest parameter pair.
+H3: Fixed-coordinate coefficient changes explain part of apparent energy-budget
+defects. Record every event before interpreting trajectory work differences.
+H4: Friction residual sensitivity can be amplified by changes in normal-force
+scale; this is not established causality and must be separated from finite lag.
+
+Band parameters compare squared gaps with dhat squared. Default lower=.5 and
+upper=.9 correspond to sqrt(.5) and sqrt(.9) in gap/dhat. The lower trigger also
+uses min-gap slack; calibration can supersede the upper fallback. These are not
+hard constraints or a guaranteed endpoint gap interval.
+
+## Predeclared first comparison
+
+Use unchanged public quasistatic, transient and friction cube/slab fixtures,
+dt=.25, dhat=.001, material/mesh/tolerances unchanged. Five pairs:
+(.1,.9), (.5,.9) default, (.8,.9), (.5,.6), (.5,.99).
+This varies one threshold at a time; it is a pilot, not a search for an optimum.
+Record all outcomes, endpoint forces/energies/gaps/trim/refresh IDs, independent
+elastic reaction reconstruction, BC/det(F), and observed retune log counts.
+Timeout 120 seconds per process is an experimental observation budget, not a
+production stopping rule. Retain failed/partial runs. No accuracy threshold is
+selected. Timing is descriptive until repeated controlled measurements exist.
+
+## Required continuation (do not substitute pilot completion for goal)
+
+1. Analyze pilot and choose informative comparisons, retaining negative results.
+2. Instrument fixed-coordinate coefficient events with read-only before/after
+   snapshots, explicit event/step identity and objective-to-physical unit scaling.
+   Avoid double-counting nested refresh/calibration/bump events. Validate on/off
+   equivalence and independent small-model energy differences.
+3. Record initial state and integrate prescribed/body work and friction slip work;
+   distinguish coefficient events, feature jumps and discretization error.
+4. Refine load/time integration with at least three increments on selected bands;
+   retain failures. Evaluate response sensitivity, not merely process completion.
+5. Make a concrete candidate determination, including interpolation scope and
+   lifecycle, using the complete evidence. A favorable band alone cannot repair
+   zero-median, feature-continuity or interpolation counterexamples from RB-02/03.
+
+Results, exact evidence paths and next actions will be appended below. Production
+changes require rebuild, affected tests/smokes and publication per AGENTS.md.
+
+## Pilot results — 2026-09-09
+
+Evidence: parent `outputs/rb-04/20260909-trim-band-pilot/`; 15 serial runs,
+all complete four steps, no timeout. Exact commands/input/binary hashes and all
+logs/endpoints/VTUs retained. Published compact data:
+[trim-band-results-20260909.json](../tools/rb04/trim-band-results-20260909.json).
+Runner and independent summarizer are in `tools/rb04/`. Production unchanged.
+
+Final frictionless quasistatic measurements:
+
+| lower, upper | min gap/dhat | trim | support reaction z | free residual |
+| --- | ---: | ---: | ---: | ---: |
+| .1, .9 | .0581763 | .729692 | -3629169.13 | 1.12e-7 |
+| .5, .9 | .576232 | 8 | -3640034.65 | 1.06e-7 |
+| .8, .9 | .863655 | 64 | -3644527.55 | 3.74e-7 |
+| .5, .6 | .576232 | 8 | -3640034.65 | 1.09e-7 |
+| .5, .99 | .576232 | 8 | -3640034.65 | 1.04e-7 |
+
+Reactions are independently assembled elastic top reactions, equal to support
+reactions in these quasistatic fixtures. The transient table uses elastic-only
+top reactions and must not be advertised as total transient reactions.
+Reaction range across lower values is approximately .42% of default magnitude.
+Largest full-DOF endpoint displacement difference from default is .000616274
+over four steps for lower=.1, and .000367171 for lower=.8. Upper-only changes
+remain below 2e-14 across all three fixture types. This pilot did not sufficiently
+excite the upper-band distinction; it cannot establish that upper is irrelevant.
+
+Friction final updated-lag free residuals for lower=.1,.5,.8 are
+59488.55, 59485.57, 59620.34. All retain the unconverged lag state.
+Band tuning does not resolve the measured friction discrepancy here; causality
+or acceptability is not established. Transient frictionless residuals remain
+approximately 1e-7 to 4e-7. Independent energy/det(F)/BC reconstructions use the
+existing RB-04 tolerances, checked by the summarizer.
+
+Partial trapezoidal top work minus elastic energy change is about 8060.53,
+7894.61, 7889.60 for the three quasistatic lower values. Final barrier energies
+are 684.91, 405.40, 127.68 respectively. DO NOT interpret their difference as a
+balance defect: initial barrier energy, coefficient events, feature jumps and
+quadrature error are missing. This is a concrete reason to complete event
+accounting before declaring an energetically preferable band.
+
+H1 is plausible but not established: all runs succeed, so these fixtures do not
+locate a robustness failure boundary. H2 remains pending refinement; response
+changes are measured, no engineering tolerance is selected. H3 remains pending
+event instrumentation. H4 is not supported as an explanation of the large lag
+residual by this parameter pilot alone. No optimal band or new default selected.
+
+## Exact next implementation entry points
+
+`BarrierContactForm` mutates semi-implicit coefficients in refresh, calibration,
+bump and post-step (including first-contact conditioning). `retune_on_stall`
+nests refresh plus bump/calibration; refresh also nests bump/calibration. Observe
+outer events once to avoid double-counting, or record primitive mutations with
+explicit parent IDs. A direct bump has no x argument: establish its evaluation
+coordinate from the calling operation, not an assumed previous endpoint.
+`diagnostic_snapshot(x)` already copies the coefficient cache and builds a fresh
+broad phase; it is the read-only before/after reference. An initialization with
+no prior snapshot needs an explicit unavailable or initial-model convention.
+`ContactForm::set_barrier_stiffness` initializes trim through SolveData; include
+this in the event scope inventory rather than promising all mutations blindly.
+
+Attach event collection before solve-start updates and tag step/subsolve/restart
+context in `NonlinearElasticVarForm::solve_tensor_nonlinear`. Preserve partial
+events on exceptions. Test retune/no-op/new-feature and nested updates, on/off
+trajectory equivalence and weights. Do not silently include changes in time
+integrator weights as physical work. Keep disabled diagnostics allocation-free
+where practical. Only after this validated instrumentation, run selected lower
+bands (.1,.5,.8) at three load increments with complete work conventions.

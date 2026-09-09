@@ -36,3 +36,18 @@ subsequent production continuation and empty-contact unavailable fields.
 
 No Teseo/private scene or full PF-08 sweep is run. No integrated physical work
 balance, friction dissipation or accuracy threshold is certified by these checks.
+# Trim-band candidate pilot
+
+The ongoing [research log](../../docs/rb-04-research-log.md) preserves hypotheses,
+authorization, measurements and next steps. Run the five-band/three-fixture pilot
+with a NumPy-enabled Python interpreter and an already verified solver build:
+
+```sh
+python3 tools/rb04/run_trim_bands.py --output /absolute/fresh/evidence
+python3 tools/rb04/summarize_trim_bands.py /absolute/fresh/evidence --output /absolute/new-summary.json
+```
+
+Each process has a 120-second experimental timeout; partial results remain.
+Summary reconstruction checks reuse the endpoint stage tolerances. Its partial
+work quantities are explicitly not a complete energy balance. This tests the
+existing controller, not an implemented replacement contact model.

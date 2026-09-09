@@ -2,6 +2,9 @@
 
 Dates: 2026-09-08–2026-09-09
 Status: **in progress — endpoint instrumentation validated; trajectory accounting pending**
+Continuation: [candidate research log](rb-04-research-log.md) records the user's
+coherent-model direction, trim-band hypothesis, 15-run pilot, and exact remaining
+event/work-accounting tasks. The pilot does not close trajectory accounting.
 Selected stage: inventory and opt-in version 1 returned/failed endpoint records,
 with independent public-fixture measurements. This does not close all RB-04
 acceptance stages.
