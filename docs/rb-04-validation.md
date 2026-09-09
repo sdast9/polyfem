@@ -235,3 +235,30 @@ returned equilibrium with the coefficient state under which it was solved;
 any changed coefficient state must be explicitly labeled and, if used as the
 claimed equilibrium model, solved/assessed accordingly. It does not preselect
 the new coefficient scale, interpolation law or numerical stopping policy.
+
+## Load/time refinement continuation — 2026-09-09
+
+At unchanged production `9e7c3b59f`, the three-band/three-increment/three-fixture
+matrix completed 23/27 runs; two additional repeats preserved the quasistatic
+failures. All six failures occur before contact activation at step 1 after
+20 restarts, with observed trim=1. No timeout, tolerance change or failed-run
+replacement. This does not establish a causal trim-band failure boundary.
+
+The default band's frictionless quasistatic final reaction varies ~.012% across
+dt=.25,.125,.0625, while the friction reaction varies ~1.93% and updated-lag
+residuals remain nonzero. Independent P1 energy/det(F)/BC reconstruction passes
+at 188 accepted endpoints; transient inertia-work/kinetic/implicit-Euler
+dissipation reconstruction passes at 84 endpoints with max absolute inertia
+work discrepancy 7.82e-14. These are targeted comparisons, not an accuracy
+envelope, converged mesh study or complete contact/friction work budget.
+
+See the [research log](rb-04-research-log.md) for full numerical findings and
+retained postprocessor correction, [work convention](rb-04-work-convention.md)
+for signs/force-state limitations, and
+[compact data](../tools/rb04/refinement-results-20260909.json). Exact runner
+sources/input hashes/commands/exits and raw outputs remain in the four dated
+refinement evidence folders. Only standalone analysis tools/docs changed;
+the real solver was exercised without rebuilding unchanged production sources.
+The next measurements are pre/post lag force pairs and a common-coefficient
+energy decomposition at physical endpoints. RB-04 and candidate selection remain
+in progress; no new production coefficient or friction policy is selected.

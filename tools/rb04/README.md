@@ -65,3 +65,18 @@ Each process has a 120-second experimental timeout; partial results remain.
 Summary reconstruction checks reuse the endpoint stage tolerances. Its partial
 work quantities are explicitly not a complete energy balance. This tests the
 existing controller, not an implemented replacement contact model.
+
+# Load/time refinement and work estimates
+
+```sh
+python3 tools/rb04/run_refinement.py --scene quasistatic-semi --output /absolute/fresh/study
+python3 tools/rb04/summarize_refinement.py /absolute/fresh/study --output /absolute/new-summary.json
+```
+
+Run the corresponding transient/friction scene names separately. Optional
+`--lower .1 .8 --dt .0625` selects an explicit subset for a retained repeat.
+The default is nine runs per fixture, each with a 120-second observation budget.
+The summarizer reprocesses saved outputs without rerunning or replacing solver
+failures; `work_reference.py` independently integrates transient P1 mass work.
+See [work conventions](../../docs/rb-04-work-convention.md) before interpreting
+right/trapezoidal component costs, friction state, or incomplete energy budgets.

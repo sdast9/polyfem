@@ -195,3 +195,83 @@ load increments and compare observed quadrature convergence, force response,
 band dependence, and failure behavior. No numerical/engineering tolerance or
 new default is implicitly selected. Upper-band effect still needs an informative
 loading/unloading fixture; the first pilot did not excite it.
+
+## Refinement stage started — 2026-09-09
+
+Clean baseline `9e7c3b59f`. User authorized tightly scoped Luna assistance with
+minimal monitoring. One read-only Luna agent is auditing the friction/discrete
+work convention; it makes no source edits or simulations. Main task owns the
+runner and serial scene execution. No production source changes at this stage.
+
+`tools/rb04/run_refinement.py` records the predeclared lower=.1,.5,.8,
+upper=.9 and dt=.25,.125,.0625 matrix in a fresh manifest before execution.
+First evidence: parent `outputs/rb-04/20260909-refinement-quasistatic/`.
+Each solver gets a 120-second experimental observation budget; failures and
+partial outputs are retained and do not abort the remaining matrix. Work and
+response analyses use saved accepted states, not restart trial coordinates.
+
+Current discrete conventions: prescribed work uses right endpoint and trapezoid
+reaction dot full nodal displacement increment. Component resistance costs use
+positive physical gradient dot increment. Initial undeformed, at-rest and unloaded
+state is checked through initial VTU and the first coefficient snapshot (zero
+energy/force), not assumed for arbitrary fixtures. Friction endpoint gradients
+are the updated-lag state and may differ from the solved law. No event-energy
+sum is subtracted from physical work. Elastic stress-work minus elastic energy
+is explicitly a quadrature remainder. Combined residual virtual work is an
+algebraic diagnostic, not physical certification. Missing early active gaps are
+unavailable rather than zero. Runner analyzes each completed/failed process and
+persists results immediately; corrected postprocessing can reuse saved runs.
+
+## Refinement results — 2026-09-09
+
+Published compact data: `tools/rb04/refinement-results-20260909.json`.
+Evidence folders in parent outputs/rb-04: `20260909-refinement-quasistatic`,
+`20260909-refinement-transient`, `20260909-refinement-friction`, and
+`20260909-refinement-quasistatic-repeat`. Primary 27-run matrix: quasistatic
+7/9, transient 9/9, friction 7/9 complete; 188 accepted endpoints total.
+One exact repeat of each failed quasistatic configuration also fails (0/2).
+No process hit the 120-second experimental timeout.
+
+All six failures are at step 1, dt=.0625, lower=.1 or .8, after 20 restarts.
+Every observed coefficient event has zero active contacts and trim=1. This
+does not establish band-trigger causality. The default-band step succeeds with
+the same lack of active contacts. Preserve the unexplained pre-contact failure
+as a robustness limitation; do not call .5 an optimum based on this contrast.
+No retries, tolerances, stop rules or production defaults changed.
+
+At lower=.5, upper=.9, quasistatic final reaction magnitudes for dt=.25,.125,
+.0625 are 3640034.645, 3640327.728, 3640473.181 (range ~.012% of coarse).
+Final gaps/dhat are .57623,.59842,.60952: a stable reaction does not imply
+gap independence. Trapezoidal support work minus elastic energy decreases
+7894.607 -> 2083.172 -> 392.000; this is incomplete contact accounting, not a
+closed energy balance. Transient reaction trends are similarly small at the
+default band, but lower=.1/.8 show different fine-step coefficient histories.
+
+Default-band friction final reaction magnitudes are 3923675.572,
+3975714.330,3999292.641 (~1.93% coarse-to-fine change). Updated-lag residuals
+are 59485.575,27779.768,13356.634. Updated-lag right resistance-work estimates
+are 22930.380,19050.134,17557.050. Prescribed right work minus all component
+costs is -9289.886,-4156.292,-1997.122, consistent with a nonzero free-residual
+work contribution, not extra physical dissipation. Thus H4 requires direct
+pre/post lag force measurement; band tuning alone did not remove the discrepancy.
+
+Independent tetrahedral mass integration verifies inertia-work/kinetic/IE
+dissipation identity at 84 transient endpoints (maximum absolute inertia-work
+error 7.82e-14). Its accumulated IE dissipation increases with refinement in
+these runs; do not claim monotonic convergence of physical dissipation.
+
+Development evidence: the first running quasistatic runner version could not
+divide an unavailable early active gap by dhat. The default fine run's solver
+exit was 0 and all 16 endpoints exist. Fixed only postprocessing and reanalyzed
+saved data; original parser error remains in raw results and compact data.
+Both initially executed runner versions were recovered and matched to their
+startup SHA-256, then saved as runner-at-start.py. Later runs save this source
+automatically. No numerical threshold changed and no failed solver run was erased.
+
+The [work convention](rb-04-work-convention.md) records the reviewed Luna audit,
+the quasistatic-integrator correction, equations and the next minimal observations.
+NEXT: capture pre/post lag friction gradients and evaluate the endpoint coefficient
+snapshot at the prior physical coordinates. These are observations, not changes
+to model or lag policy. Validate against unobserved controls, then reuse the
+three-increment default-band comparison for work reconstruction. The mid-band
+remains a useful comparison baseline, not a selected universal sweet spot.
