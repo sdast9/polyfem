@@ -1,7 +1,7 @@
 # RB-04 — Accepted-step physical accounting and diagnostics
 
 Dates: 2026-09-08–2026-09-09
-Status: **in progress — endpoint instrumentation validated; trajectory accounting pending**
+Status: **in progress — endpoint and scoped coefficient-event instrumentation validated; trajectory accounting pending**
 Continuation: [candidate research log](rb-04-research-log.md) records the user's
 coherent-model direction, trim-band hypothesis, 15-run pilot, and exact remaining
 event/work-accounting tasks. The pilot does not close trajectory accounting.
@@ -164,3 +164,74 @@ stage** from the checked-in endpoint contract. It must not infer a new coefficie
 law, friction budget, interpolation curvature or physical acceptance threshold.
 This endpoint stage alone does not satisfy the complete RB-04 prerequisite for
 physical-balance/recovery certification in later RB items.
+
+## Coefficient-event continuation — 2026-09-09
+
+The user chose the coherent barrier-model direction and requested continued
+RB-04 testing plus durable hypotheses/results. The
+[research log](rb-04-research-log.md) contains the prior 15-run trim-band pilot
+and exact interpretation/continuation. No new coefficient law or production
+default has been selected. This stage instruments existing behavior only.
+
+Started clean at `06545b81a`; effective IPC local `af317a65`, PolySolve local
+`4d372fa8`, same compiler/build settings. No incoming solver/build process.
+Evidence: parent `outputs/rb-04/20260909-coefficient-events/`. Final runs are
+`force-endpoints/`, `affected-force-tests.log`, `force-smokes/`, and `force-hda.log`.
+Final manifest/patch are `tested-force-manifest.json` and `tested-force.patch`.
+Earlier energy-only development runs remain separate. First build failed only
+because a new Catch matcher header was missing; final build completed both targets.
+
+The opt-in event stream measures before/after objective energy and gradient at
+identical coordinates with private snapshots, physical-unit energy change and
+free contact-force change. It observes outer refresh/calibration/stall/post-step
+operations once, including refreshes after endpoint publication. Initial prior
+snapshot, direct external setters, embedding, time-weight changes and
+coordinate-only feature transitions remain explicitly outside the stated scope.
+The [contract](rb-04-contract.md) specifies those limits and phase semantics.
+
+| Final validation | Result |
+| --- | --- |
+| Build PolyFEM_bin/unit_tests | Exit 0 |
+| New real-form event checks within affected selection | 171 assertions across weights .25, 1, 4 |
+| Full affected contact/cache/mapping/AL/BC/diagnostic selection | 2178 assertions / 31 cases, exit 0 |
+| Three public off/on pairs | All six runs complete four steps; maximum displacement difference 1.565e-14 |
+| Independent endpoint energy/det(F)/BC/reaction/kinetic reference checks | Original thresholds pass |
+| Deliberate failure off/on | Both exits -6; interrupted reduced solve, one restart, no accepted step 1 |
+| Event stream checker | Contiguous IDs, arithmetic/scaling, phase coverage, endpoint contact energy/force agreement and failure retune pass |
+| Five standard smokes | All exit 0, zero error lines, four steps through t=1 |
+| HDA end-to-end, Houdini 22.0.429 | Pass against final solver binary |
+
+The new test checks linear energy scaling under doubled driving H against an
+independent unobserved control, no-op refresh, nested retune counted once, changed
+closest feature, provider-call counts, observation failure isolation, operation
+exception retention, and identical subsequent energy/gradient/Hessian. No
+production tolerance was relaxed. Observation jobs overlapped; wall times are
+not controlled overhead comparisons. No assets/dependencies were modified.
+
+Compact [event results](../tools/rb04/coefficient-events-results-20260909.json):
+30 events in each frictionless run, 35 in friction, 4 in the deliberate failure.
+Each has one unavailable initial before-state. The earlier friction development
+run had 36 events; endpoint equivalence does not imply identical iteration count.
+Tiny raw no-op energy differences are screened for reporting at
+1e-10*(1+abs(before)+abs(after)) in objective units, not counted as model changes.
+
+At the final frictionless quasistatic saved coordinates, the subsequent refresh
+changes barrier energy by +70.8181 and free contact force by norm 145746.710 in
+internal energy/force units. Earlier steps have force changes 10042.349,
+44707.295 and 86186.957. Before-refresh contact energy/forces agree with the saved
+endpoint diagnostics, whose free residual is approximately 1e-7. This establishes
+a difference between saved and post-refresh contact models; it does not quantify
+engineering displacement error or prove a cause for a historical scene failure.
+Transient/friction counterparts are recorded separately; contact-force change
+is not the total residual after an integrator or friction-state update.
+
+RB-04 remains in progress. Optimization-event energy sums are not a physical
+work budget. Continue with an explicit physical-path/contact-state convention,
+initial-state accounting, external and friction work, and load/time refinement
+of the selected bands. Per-trial proposals, every internal subsolve identity,
+feature-switch accounting and the existing VTU velocity mismatch also remain
+open. The new evidence supports a candidate lifecycle requirement: report a
+returned equilibrium with the coefficient state under which it was solved;
+any changed coefficient state must be explicitly labeled and, if used as the
+claimed equilibrium model, solved/assessed accordingly. It does not preselect
+the new coefficient scale, interpolation law or numerical stopping policy.

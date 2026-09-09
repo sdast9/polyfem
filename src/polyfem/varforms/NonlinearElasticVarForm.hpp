@@ -97,6 +97,7 @@ namespace polyfem::varform
 		solver::SolveData solve_data_;
 		std::vector<std::shared_ptr<solver::Form>> forms;
 		std::string diagnostic_run_id_;
+		void configure_coefficient_diagnostics(int step, const std::string &phase);
 		bool contact_dhat_was_explicit_ = false;
 
 		int n_obstacle_vertices() const override { return obstacle.n_vertices(); }

@@ -52,6 +52,59 @@ namespace polyfem::varform
 	using namespace solver;
 	using namespace time_integrator;
 
+	void NonlinearElasticVarForm::configure_coefficient_diagnostics(int step, const std::string &phase)
+	{
+		auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form);
+		if (!barrier)
+			return;
+		if (!args["output"].value("physical_diagnostics", false))
+		{
+			barrier->set_coefficient_observer(nullptr);
+			return;
+		}
+		if (diagnostic_run_id_.empty())
+			diagnostic_run_id_ = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+		barrier->set_coefficient_observer([this, step, phase](const json &event) {
+			json record = event;
+			record["schema"] = "polyfem.coefficient-event";
+			record["version"] = 1;
+			record["run_id"] = diagnostic_run_id_;
+			record["step"] = step;
+			record["phase"] = phase;
+			record["scope"] = "Outer coefficient operations at identical full coordinates; excludes coordinate-only feature switches and time-weight changes";
+			const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+			record["acceleration_scaling"] = std::isfinite(scale) ? json(scale) : json(nullptr);
+			const auto &delta = event.at("objective_change_at_fixed_coordinates");
+			if (scale > 0 && std::isfinite(scale) && delta.is_number())
+			{
+				const double physical = delta.get<double>() / scale;
+				record["energy_change_at_fixed_coordinates"] = std::isfinite(physical) ? json(physical) : json(nullptr);
+			}
+			else
+				record["energy_change_at_fixed_coordinates"] = nullptr;
+			record["free_contact_force_change_norm"] = nullptr;
+			if (scale > 0 && std::isfinite(scale) && solve_data_.nl_problem
+				&& event["before"]["gradient_objective"].is_array() && event["after"]["gradient_objective"].is_array())
+			{
+				const auto before = event["before"]["gradient_objective"].get<std::vector<double>>();
+				const auto after = event["after"]["gradient_objective"].get<std::vector<double>>();
+				if (before.size() == after.size())
+				{
+					Eigen::VectorXd change(before.size());
+					for (size_t i = 0; i < before.size(); ++i)
+						change[i] = (after[i] - before[i]) / scale;
+					const double norm = solve_data_.nl_problem->full_to_reduced_grad(change).norm();
+					if (std::isfinite(norm))
+						record["free_contact_force_change_norm"] = norm;
+				}
+			}
+			std::ofstream file(resolve_output_path("coefficient-events.jsonl"), std::ios::app);
+			file << record.dump() << std::endl;
+			if (!file)
+				throw std::runtime_error("Could not write coefficient event");
+		});
+	}
+
 	void NonlinearElasticVarForm::write_physical_diagnostics(
 		int step, const Eigen::VectorXd &x, const Eigen::VectorXd &start,
 		const std::string &outcome, const std::string &phase, const json &termination,
@@ -872,6 +925,7 @@ namespace polyfem::varform
 				sol.conservativeResize(Eigen::NoChange, 1);
 		}
 		init_solve(sol, t0 + dt, initial_condition_override);
+		configure_coefficient_diagnostics(0, "initial_state_after_setup");
 		if (post_step)
 			post_step(0, sol);
 
@@ -919,6 +973,7 @@ namespace polyfem::varform
 
 			{
 				POLYFEM_SCOPED_TIMER("Update quantities");
+				configure_coefficient_diagnostics(t, "between_steps_after_endpoint");
 
 				if (solve_data_.time_integrator)
 					solve_data_.time_integrator->update_quantities(sol);
@@ -1202,6 +1257,7 @@ namespace polyfem::varform
 	{
 		const auto diagnostic_start_time = std::chrono::steady_clock::now();
 		const bool diagnostics_enabled = args["output"].value("physical_diagnostics", false);
+		configure_coefficient_diagnostics(step, "initialization");
 		if (diagnostics_enabled && diagnostic_run_id_.empty())
 			diagnostic_run_id_ = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
 		const Eigen::VectorXd diagnostic_start = diagnostics_enabled ? Eigen::VectorXd(sol) : Eigen::VectorXd();
@@ -1312,6 +1368,7 @@ namespace polyfem::varform
 
 			Eigen::MatrixXd prev_sol = sol;
 			diagnostic_phase = "augmented_lagrangian";
+			configure_coefficient_diagnostics(step, diagnostic_phase);
 			try
 			{
 				al_solver.solve_al(nl_problem, sol,
@@ -1324,6 +1381,7 @@ namespace polyfem::varform
 			}
 
 			diagnostic_phase = "reduced";
+			configure_coefficient_diagnostics(step, diagnostic_phase);
 			try
 			{
 				al_solver.solve_reduced(nl_problem, sol,
@@ -1350,6 +1408,7 @@ namespace polyfem::varform
 				Eigen::VectorXd tmp_sol = nl_problem.full_to_reduced(sol);
 
 				diagnostic_phase = "lagging";
+				configure_coefficient_diagnostics(step, diagnostic_phase);
 				nl_problem.update_lagging(tmp_sol, lag_i);
 
 				Eigen::VectorXd grad;

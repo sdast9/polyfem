@@ -99,7 +99,48 @@ work. Large full-DOF records are opt-in.
 
 ## Accounting still pending
 
-This is the **endpoint instrumentation stage**, not full completion of RB-04.
+### Coefficient-event extension (2026-09-09)
+
+With the same opt-in flag, the active VarForm now also appends
+`coefficient-events.jsonl`, schema `polyfem.coefficient-event`, version 1.
+Each outer refresh, calibration, stall retune or noninitial post-step operation
+records a per-form event ID, run ID, physical step, solver phase, identical full
+coordinates, before/after private snapshot energy and gradient in objective
+units, raw state and evaluated snapshot state, effective form weight, and whether
+the observed operation threw. Nested operations are counted only at their outer
+boundary. No-op operations remain recorded; tiny nonzero differences from
+independent broad-phase summation are roundoff, not evidence of an actual retune.
+
+The writer divides the objective change by the current acceleration scaling to
+report `energy_change_at_fixed_coordinates`. It also pulls the before/after
+contact-gradient difference into free coordinates and reports its norm in force
+units. This is a contact-force change, not a total residual under a new timestep's
+inertia/loading/BC state. Initial coefficient setup has no established prior
+snapshot; its before objective and change are unavailable, not presumed zero.
+
+The transient/quasistatic time loop observes its post-publication refresh as
+`between_steps_after_endpoint`, including the final scheduled step. These records
+must not be attributed to the earlier saved endpoint's coefficient state. The
+phase labels distinguish initialization, AL, reduced, lagging and between steps;
+they do not yet enumerate every internal AL/reduced subsolve/restart. A stall
+retune event is explicitly named and survives the tested failed attempt.
+
+Observation copies and rebuilds the contact state privately and does not call
+providers or retune. Observer errors are warned and cannot alter the solve's
+exception/success behavior. Disabled observation avoids snapshot allocation.
+This stream covers the active VarForm's listed coefficient operations. Manual
+initialization setters, direct external bump calls without coordinates, embedding
+entry points, changes in form/time weights and coordinate-only feature switches
+are outside this stage. The public fixed-dt fixtures have constant time weights.
+
+An optimization iterate is not a physical trajectory point. The sum of event
+energy changes cannot be subtracted blindly from physical external work minus
+endpoint energy. A complete budget must specify its contact-work path, coefficient
+state along that path, and parameter-change term. Existing endpoint version 1
+therefore still reports its aggregate `retuning_energy_change` as unavailable.
+The new stream supplies evidence, not a completed trajectory balance.
+
+These are **endpoint and scoped coefficient-event instrumentation stages**, not full completion of RB-04.
 The following keys have explicit unavailable reasons in version 1:
 
 - `proposed_displacement`: all line-search proposals are not retained.

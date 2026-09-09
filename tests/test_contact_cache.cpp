@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 
 #include <algorithm>
@@ -281,4 +282,88 @@ TEST_CASE("Physical diagnostic snapshots preserve contact state and frozen deriv
 	CHECK(empty.diagnostic_state()["active_count"] == 0);
 	CHECK(empty.diagnostic_state()["coefficient_range"]["value"].is_null());
 	CHECK(empty.diagnostic_state()["candidate_count"]["value"].is_null());
+}
+
+TEST_CASE("Coefficient event accounting observes outer mutations without changing them", "[coefficient_events]")
+{
+	const double weight = GENERATE(.25, 1., 4.);
+	const auto mesh = make_mesh();
+	ReferenceForm observed(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	ReferenceForm control(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	double curvature = 100.;
+	int observed_calls = 0, control_calls = 0;
+	auto provider = [&](int &calls) {
+		return [&, count = &calls](const Eigen::VectorXd &, StiffnessMatrix &h) {
+			++*count;
+			h.resize(6, 6);
+			h.setIdentity();
+			h *= curvature;
+		};
+	};
+	observed.set_system_hessian_provider(provider(observed_calls));
+	control.set_system_hessian_provider(provider(control_calls));
+	observed.set_weight(weight);
+	control.set_weight(weight);
+	std::vector<json> events;
+	observed.set_coefficient_observer([&](const json &e) { events.push_back(e); });
+	for (auto *form : {&observed, &control})
+	{
+		form->init(zero);
+		form->refresh_semi_implicit_stiffness(zero, false);
+	}
+	REQUIRE(events.size() == 1);
+	CHECK(events.back()["before"]["objective"].is_null());
+	CHECK(events.back()["objective_change_at_fixed_coordinates"].is_null());
+	CHECK(events.back()["after"]["objective"].get<double>() > 0);
+	const double baseline = control.value(zero);
+	observed.refresh_semi_implicit_stiffness(zero, false);
+	control.refresh_semi_implicit_stiffness(zero, false);
+	REQUIRE(events.size() == 2);
+	CHECK(std::abs(events.back()["objective_change_at_fixed_coordinates"].get<double>()) < 1e-10);
+	curvature = 200.;
+	observed.refresh_semi_implicit_stiffness(zero, false);
+	control.refresh_semi_implicit_stiffness(zero, false);
+	REQUIRE(events.size() == 3);
+	CHECK(std::abs(events.back()["objective_change_at_fixed_coordinates"].get<double>() - baseline) < 1e-10 * (1 + baseline));
+	Eigen::VectorXd reference_gradient;
+	control.first_derivative(zero, reference_gradient);
+	const auto recorded_gradient = events.back()["after"]["gradient_objective"].get<std::vector<double>>();
+	REQUIRE(recorded_gradient.size() == size_t(reference_gradient.size()));
+	CHECK((Eigen::Map<const Eigen::VectorXd>(recorded_gradient.data(), recorded_gradient.size()) - reference_gradient).norm() < 1e-10 * (1 + reference_gradient.norm()));
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	const double before_stall = control.value(zero);
+	observed.retune_on_stall(zero, 2.);
+	control.retune_on_stall(zero, 2.);
+	REQUIRE(events.size() == 4); // Nested refresh and bump are counted once.
+	CHECK(events.back()["operation"] == "stall_retune");
+	CHECK(std::abs(events.back()["objective_change_at_fixed_coordinates"].get<double>() - (control.value(zero) - before_stall)) < 1e-9);
+	CHECK(observed_calls == control_calls);
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	// An observation at a new nearest feature may memoize only in its copy.
+	Eigen::VectorXd x = zero;
+	x[4] = 1.1;
+	for (auto *form : {&observed, &control})
+	{
+		form->solution_changed(x);
+		form->refresh_semi_implicit_stiffness(x, false);
+	}
+	CHECK(observed.diagnostic_state() == control.diagnostic_state());
+	check(sample(observed, mesh, x), sample(control, mesh, x));
+	CHECK(observed_calls == control_calls);
+	for (size_t i = 0; i < events.size(); ++i)
+	{
+		CHECK(events[i]["event_id"] == i + 1);
+		CHECK(events[i]["operation_threw"] == false);
+	}
+
+	observed.set_coefficient_observer([](const json &) { throw std::runtime_error("Injected observer failure"); });
+	CHECK_NOTHROW(observed.refresh_semi_implicit_stiffness(x, false));
+	control.refresh_semi_implicit_stiffness(x, false);
+	check(sample(observed, mesh, x), sample(control, mesh, x));
+	observed.set_coefficient_observer([&](const json &e) { events.push_back(e); });
+	observed.set_system_hessian_provider([](const Eigen::VectorXd &, StiffnessMatrix &) { throw std::runtime_error("Injected provider failure"); });
+	CHECK_THROWS_WITH(observed.refresh_semi_implicit_stiffness(x, false), "Injected provider failure");
+	CHECK(events.back()["operation_threw"] == true);
 }

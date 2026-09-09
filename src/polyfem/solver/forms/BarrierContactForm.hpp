@@ -62,6 +62,10 @@ namespace polyfem::solver
 		/// Independent endpoint reconstruction; never refreshes or mutates this form.
 		BarrierContactForm diagnostic_snapshot(const Eigen::VectorXd &x) const;
 		json diagnostic_state() const;
+		/// Observer for outer refresh/calibration/stall/post-step operations.
+		/// Callback failures cannot change solver behavior. Direct initialization
+		/// setters and coordinate-only feature transitions are outside this stream.
+		void set_coefficient_observer(std::function<void(const json &)> observer) { coefficient_observer_ = std::move(observer); }
 
 		const ipc::BarrierPotential &barrier_potential() const { return barrier_potential_; }
 
@@ -139,6 +143,10 @@ namespace polyfem::solver
 		void retune_on_stall(const Eigen::VectorXd &x, const double factor);
 
 	protected:
+		class CoefficientEventScope;
+		std::function<void(const json &)> coefficient_observer_;
+		int coefficient_event_depth_ = 0;
+		uint64_t coefficient_event_id_ = 0;
 		/// @brief Compute the contact barrier potential value
 		/// @param x Current solution
 		/// @return Value of the contact barrier potential

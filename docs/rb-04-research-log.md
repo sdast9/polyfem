@@ -127,3 +127,71 @@ trajectory equivalence and weights. Do not silently include changes in time
 integrator weights as physical work. Keep disabled diagnostics allocation-free
 where practical. Only after this validated instrumentation, run selected lower
 bands (.1,.5,.8) at three load increments with complete work conventions.
+
+## Event instrumentation in progress — 2026-09-09
+
+Current evidence folder: `outputs/rb-04/20260909-coefficient-events/`.
+The prior goal turn was progress: committed/published the measured pilot.
+This stage adds opt-in outer-operation observers for refresh/calibration/stall/
+post-step, with private same-coordinate snapshots and no nested double counting.
+The transient loop also refreshes after saving each accepted endpoint; it is
+now observed as `between_steps_after_endpoint`. Time-weight changes remain
+separate, and external embedding/manual setters are not advertised as covered.
+
+Accounting correction to H3: coefficient-event deltas occur at Newton iterates,
+which are not a physical trajectory. Their sum must NOT simply be subtracted
+from endpoint energy minus physical work. A valid budget needs an explicit path
+convention for contact work or a common coefficient state at physical endpoints,
+as well as the parameter-change term. Event coordinates/phase are retained so
+future reconstruction can distinguish these paths. This qualification is central
+to candidate assessment, not just a missing diagnostic field.
+
+Planned tests: isolated real-form no-op/doubled-H/retune/new-feature comparisons,
+weights .25/1/4, identical observer-on/off energy/gradient/Hessian and provider
+call counts, observer failure isolation, provider-failure event retention; public
+on/off fixtures and deliberate restart failure, stream arithmetic/phase checks.
+The first build compiled solver sources but failed the new test's missing Catch
+matcher header. Added the required header; original build log retained. This was
+a test compilation error, not a production finding.
+
+## Event-stage results and next handoff — 2026-09-09
+
+Final source includes force as well as energy snapshots. Both targets build;
+affected suite 2178 assertions/31 cases passes (171 new event assertions).
+Three off/on public pairs complete, max endpoint difference 1.565e-14; the
+deliberate failure remains -6 in both modes with its stall event retained.
+Five smokes and HDA end-to-end pass. Final artifacts use `force-endpoints/`,
+`affected-force-tests.log`, `force-smokes/`, `force-hda.log` within the event
+evidence folder; energy-only development runs remain preserved. Compact results
+are `tools/rb04/coefficient-events-results-20260909.json` and detailed scope is
+in the appended [validation stage](rb-04-validation.md).
+
+New finding: the post-publication refresh at final quasistatic coordinates
+changes contact energy by +70.8181 and the free contact-force vector by norm
+145746.710, despite the saved state's approximately 1e-7 free residual under
+its earlier coefficients. The force change is independently located at exactly
+the saved coordinates and before-refresh contact values match the endpoint.
+This is model-state drift after publication, not proof of displacement error.
+Transient/friction event changes cannot be called total post-update residuals.
+
+Candidate hypothesis H5: retain a fixed, explicit coefficient state through a
+complete minimization and associate published state/reactions with that model.
+Outer continuation is permitted only with a defined target and an equilibrium
+assessment under the claimed final coefficients. The current post-publication
+refresh evidence supports this requirement, not a particular coefficient law.
+
+NEXT: implement a bounded trajectory/refinement runner for lower=.1,.5,.8,
+upper=.9, with dt=.25,.125,.0625, first quasistatic then transient/friction.
+Use fresh directories and preserve timeout/failure outcomes; do not rerun the
+full pilot. Establish initial snapshot and energy/state conventions explicitly.
+For the fixed-obstacle public fixture, prescribed top work can be integrated
+from independently reconstructed elastic reactions in quasistatics; transient
+needs full reactions. Examine `FrictionForm` before using gradient dot slip:
+updated-lag endpoint forces and the forces actually used during the solve are
+different discrete choices. Record both if available; do not equate friction
+potential to dissipated work. Derive the physical contact-work convention before
+combining optimization-event energy sums with a physical-time budget. Run three
+load increments and compare observed quadrature convergence, force response,
+band dependence, and failure behavior. No numerical/engineering tolerance or
+new default is implicitly selected. Upper-band effect still needs an informative
+loading/unloading fixture; the first pilot did not excite it.

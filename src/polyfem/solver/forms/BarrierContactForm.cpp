@@ -15,9 +15,96 @@
 #include <vector>
 #include <cassert>
 #include <cmath>
+#include <exception>
 
 namespace polyfem::solver
 {
+	class BarrierContactForm::CoefficientEventScope
+	{
+	public:
+		CoefficientEventScope(BarrierContactForm &form, const Eigen::VectorXd &x, const char *operation)
+			: form_(form), x_(x), exceptions_(std::uncaught_exceptions())
+		{
+			if (!form_.coefficient_observer_ || !form_.uses_semi_implicit_stiffness())
+				return;
+			active_ = true;
+			outer_ = form_.coefficient_event_depth_++ == 0;
+			if (!outer_)
+				return;
+			try
+			{
+				event_ = {{"event_id", ++form_.coefficient_event_id_}, {"operation", operation}, {"coordinates", std::vector<double>(x.data(), x.data() + x.size())}, {"before", measurement()}};
+			}
+			catch (const std::exception &e)
+			{
+				logger().warn("Coefficient event preparation failed: {}", e.what());
+			}
+		}
+
+		~CoefficientEventScope() noexcept
+		{
+			if (!active_)
+				return;
+			--form_.coefficient_event_depth_;
+			if (!outer_)
+				return;
+			try
+			{
+				event_["operation_threw"] = std::uncaught_exceptions() > exceptions_;
+				event_["after"] = measurement();
+				const auto &before = event_["before"]["objective"];
+				const auto &after = event_["after"]["objective"];
+				if (before.is_number() && after.is_number())
+				{
+					const double delta = after.get<double>() - before.get<double>();
+					event_["objective_change_at_fixed_coordinates"] = std::isfinite(delta) ? json(delta) : json(nullptr);
+				}
+				else
+				{
+					event_["objective_change_at_fixed_coordinates"] = nullptr;
+					event_["unavailable_reason"] = "Before/after objective unavailable; initial snapshot is not an established prior model";
+				}
+				form_.coefficient_observer_(event_);
+			}
+			catch (const std::exception &e)
+			{
+				logger().warn("Coefficient event observation failed: {}", e.what());
+			}
+			catch (...)
+			{
+				logger().warn("Coefficient event observation failed with unknown exception");
+			}
+		}
+
+	private:
+		json measurement() const
+		{
+			json result = {{"state", form_.diagnostic_state()}, {"objective", nullptr}, {"gradient_objective", nullptr}, {"weight", form_.weight()}};
+			if (form_.kappa_surface_.size() == 0)
+			{
+				result["unavailable_reason"] = "No prior coefficient snapshot";
+				return result;
+			}
+			const auto snapshot = form_.diagnostic_snapshot(x_);
+			const double energy = snapshot.value(x_);
+			Eigen::VectorXd gradient;
+			snapshot.first_derivative(x_, gradient);
+			if (gradient.allFinite())
+				result["gradient_objective"] = std::vector<double>(gradient.data(), gradient.data() + gradient.size());
+			if (std::isfinite(energy))
+				result["objective"] = energy;
+			else
+				result["unavailable_reason"] = "Nonfinite objective";
+			result["evaluated_state"] = snapshot.diagnostic_state();
+			return result;
+		}
+		BarrierContactForm &form_;
+		const Eigen::VectorXd &x_;
+		int exceptions_;
+		bool active_ = false, outer_ = false;
+		json event_;
+	};
+
 	namespace
 	{
 		/// Clamped-log barrier with a C1 linear continuation below a
@@ -192,6 +279,7 @@ namespace polyfem::solver
 
 	void BarrierContactForm::retune_on_stall(const Eigen::VectorXd &x, const double factor)
 	{
+		CoefficientEventScope event(*this, x, "stall_retune");
 		// A stall with the gap below the band (average OR a single collapsed
 		// contact) means the barrier is too soft (the solver is crawling
 		// against CCD); otherwise the barrier is likely dominating the
@@ -224,6 +312,7 @@ namespace polyfem::solver
 	{
 		if (!uses_semi_implicit_stiffness())
 			return;
+		CoefficientEventScope event(*this, x, "refresh");
 		if (!system_hessian_provider_)
 			log_and_throw_error("Semi-implicit barrier stiffness requires a system Hessian provider!");
 
@@ -456,6 +545,7 @@ namespace polyfem::solver
 
 	bool BarrierContactForm::calibrate_trim(const Eigen::VectorXd &x)
 	{
+		CoefficientEventScope event(*this, x, "calibration");
 		if (!system_gradient_provider_ || collision_set_.empty())
 			return false;
 
@@ -735,6 +825,7 @@ namespace polyfem::solver
 
 		if (data.iter_num == 0)
 			return;
+		CoefficientEventScope event(*this, data.x, "post_step");
 
 		if (uses_semi_implicit_stiffness())
 		{

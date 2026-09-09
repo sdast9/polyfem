@@ -36,6 +36,20 @@ subsequent production continuation and empty-contact unavailable fields.
 
 No Teseo/private scene or full PF-08 sweep is run. No integrated physical work
 balance, friction dissipation or accuracy threshold is certified by these checks.
+
+The same opt-in now writes outer coefficient operations to
+`coefficient-events.jsonl`. After `run_endpoints.py`, validate arithmetic,
+contiguous identity, failure-event retention, phase coverage and same-coordinate
+agreement with saved endpoint contact energies/forces:
+
+```sh
+python3 tools/rb04/check_coefficient_events.py /absolute/fresh/evidence --output /absolute/new-event-summary.json
+```
+
+Focused real-form regression: `[coefficient_events]`. Event sums describe
+algorithmic changes at solver iterates, not physical trajectory work. See the
+contract for initial-state, external-setter, time-weight and feature-switch limits.
+
 # Trim-band candidate pilot
 
 The ongoing [research log](../../docs/rb-04-research-log.md) preserves hypotheses,

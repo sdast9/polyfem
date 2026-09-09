@@ -1,0 +1,278 @@
+{
+  "binary_sha256": "cd0e5ba18e9173dc724b03a189d29225b22a0309159d47b5c06e2fdf0c951d21",
+  "runs": [
+    {
+      "name": "quasistatic-semi-on",
+      "event_count": 30,
+      "unavailable_count": 1,
+      "operations": {
+        "refresh": 8,
+        "post_step": 22
+      },
+      "phases": [
+        {
+          "step": 1,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 4.474068176904396,
+          "absolute_energy_change": 4.474068176904396,
+          "max_free_contact_force_change_norm": 10042.349413474849
+        },
+        {
+          "step": 1,
+          "phase": "reduced",
+          "count": 8,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 239.68651920933075,
+          "absolute_energy_change": 239.68651920933075,
+          "max_free_contact_force_change_norm": 407350.3260661875
+        },
+        {
+          "step": 2,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 22.410195384714456,
+          "absolute_energy_change": 22.410195384714456,
+          "max_free_contact_force_change_norm": 44707.295482745045
+        },
+        {
+          "step": 2,
+          "phase": "reduced",
+          "count": 6,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 239.06110030568894,
+          "absolute_energy_change": 239.061100305689,
+          "max_free_contact_force_change_norm": 313903.1582353001
+        },
+        {
+          "step": 3,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 54.727371669221725,
+          "absolute_energy_change": 54.727371669221725,
+          "max_free_contact_force_change_norm": 86186.9565092458
+        },
+        {
+          "step": 3,
+          "phase": "reduced",
+          "count": 5,
+          "above_roundoff_screen_count": 0,
+          "signed_energy_change": -5.684341886080802e-14,
+          "absolute_energy_change": 1.7053025658242404e-13,
+          "max_free_contact_force_change_norm": 4.1159032037848677e-11
+        },
+        {
+          "step": 4,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 70.81808052340278,
+          "absolute_energy_change": 70.81808052340278,
+          "max_free_contact_force_change_norm": 145746.70986738132
+        },
+        {
+          "step": 4,
+          "phase": "reduced",
+          "count": 6,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 567.4222130747737,
+          "absolute_energy_change": 567.4222130747737,
+          "max_free_contact_force_change_norm": 777120.9758634907
+        }
+      ]
+    },
+    {
+      "name": "transient-semi-on",
+      "event_count": 30,
+      "unavailable_count": 1,
+      "operations": {
+        "refresh": 8,
+        "post_step": 22
+      },
+      "phases": [
+        {
+          "step": 1,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 4.467988314891592,
+          "absolute_energy_change": 4.467988314891592,
+          "max_free_contact_force_change_norm": 10031.547937403315
+        },
+        {
+          "step": 1,
+          "phase": "reduced",
+          "count": 8,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 241.1696019827274,
+          "absolute_energy_change": 241.16960198272744,
+          "max_free_contact_force_change_norm": 409648.7085419802
+        },
+        {
+          "step": 2,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 22.41832463517136,
+          "absolute_energy_change": 22.41832463517136,
+          "max_free_contact_force_change_norm": 44721.69464237786
+        },
+        {
+          "step": 2,
+          "phase": "reduced",
+          "count": 6,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 239.09632502398068,
+          "absolute_energy_change": 239.09632502398085,
+          "max_free_contact_force_change_norm": 313931.66899788135
+        },
+        {
+          "step": 3,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 54.72464293559392,
+          "absolute_energy_change": 54.72464293559392,
+          "max_free_contact_force_change_norm": 86183.01259914422
+        },
+        {
+          "step": 3,
+          "phase": "reduced",
+          "count": 5,
+          "above_roundoff_screen_count": 0,
+          "signed_energy_change": -5.684341886080802e-14,
+          "absolute_energy_change": 1.7053025658242404e-13,
+          "max_free_contact_force_change_norm": 5.2467676516868346e-11
+        },
+        {
+          "step": 4,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 70.81856921177194,
+          "absolute_energy_change": 70.81856921177194,
+          "max_free_contact_force_change_norm": 145747.94804021553
+        },
+        {
+          "step": 4,
+          "phase": "reduced",
+          "count": 6,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 567.4856739686351,
+          "absolute_energy_change": 567.4856739686352,
+          "max_free_contact_force_change_norm": 777181.4327464214
+        }
+      ]
+    },
+    {
+      "name": "quasistatic-semi-friction-on",
+      "event_count": 35,
+      "unavailable_count": 1,
+      "operations": {
+        "refresh": 8,
+        "post_step": 27
+      },
+      "phases": [
+        {
+          "step": 1,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 4.474068176900154,
+          "absolute_energy_change": 4.474068176900154,
+          "max_free_contact_force_change_norm": 10042.349413465654
+        },
+        {
+          "step": 1,
+          "phase": "reduced",
+          "count": 8,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 239.68651920885787,
+          "absolute_energy_change": 239.68651920885793,
+          "max_free_contact_force_change_norm": 407350.3260648767
+        },
+        {
+          "step": 2,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 23.32019980336733,
+          "absolute_energy_change": 23.32019980336733,
+          "max_free_contact_force_change_norm": 44389.17803441919
+        },
+        {
+          "step": 2,
+          "phase": "reduced",
+          "count": 7,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 267.40197427033627,
+          "absolute_energy_change": 267.4019742703364,
+          "max_free_contact_force_change_norm": 331320.9243167254
+        },
+        {
+          "step": 3,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 39.30130262855127,
+          "absolute_energy_change": 39.30130262855127,
+          "max_free_contact_force_change_norm": 84682.61565422425
+        },
+        {
+          "step": 3,
+          "phase": "reduced",
+          "count": 7,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 406.19714217005674,
+          "absolute_energy_change": 406.19714217005685,
+          "max_free_contact_force_change_norm": 569015.2553693688
+        },
+        {
+          "step": 4,
+          "phase": "between_steps_after_endpoint",
+          "count": 1,
+          "above_roundoff_screen_count": 1,
+          "signed_energy_change": 79.50977062796488,
+          "absolute_energy_change": 79.50977062796488,
+          "max_free_contact_force_change_norm": 143790.28447396614
+        },
+        {
+          "step": 4,
+          "phase": "reduced",
+          "count": 8,
+          "above_roundoff_screen_count": 0,
+          "signed_energy_change": -5.684341886080802e-14,
+          "absolute_energy_change": 2.8421709430404007e-13,
+          "max_free_contact_force_change_norm": 7.836446177200499e-11
+        }
+      ]
+    },
+    {
+      "name": "quasistatic-semi-failure-on",
+      "event_count": 4,
+      "unavailable_count": 1,
+      "operations": {
+        "refresh": 1,
+        "post_step": 2,
+        "stall_retune": 1
+      },
+      "phases": [
+        {
+          "step": 1,
+          "phase": "reduced",
+          "count": 3,
+          "above_roundoff_screen_count": 2,
+          "signed_energy_change": 717.5356853652812,
+          "absolute_energy_change": 717.5356853652812,
+          "max_free_contact_force_change_norm": 812424.469214363
+        }
+      ]
+    }
+  ],
+  "interpretation": "Coefficient objective changes along optimization iterates; not mechanical trajectory work",
+  "roundoff_screen": "1e-10*(1+abs(before objective)+abs(after objective))/acceleration_scaling; reporting only",
+  "passed": true
+}
