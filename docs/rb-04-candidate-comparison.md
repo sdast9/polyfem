@@ -4,6 +4,38 @@
 The user chose the coherent-model direction; RB-04 observations now distinguish
 coefficient-state and friction-lag bookkeeping from equilibrium under each state.
 
+
+## Current agreed direction (2026-09-09)
+
+Following discussion of the Fixed-mode comparison and AL contact, the user
+explicitly chose to improve the existing adaptive barrier. This supersedes the
+recommendation below to advance a trajectory-wide fixed coefficient as the main
+candidate; all measured comparison results remain valid and retained.
+
+Preserve Hessian-based scaling, gap-band adaptation, CCD and the separate trial
+cap. Fixed mode is a reference only; AL contact is deferred. No replacement of
+per-contact coefficients with one global coefficient has been selected.
+A changing numerical barrier parameter is not by itself proof of an invalid
+contact method. Evaluate mechanical accuracy, parameter sensitivity, consistent
+force evaluation and state accounting; do not require every intermediate
+adaptation to represent a single physical stored-energy law.
+
+Next bounded investigation: use the reproduced RB-02 EV/VV transition to examine
+whether local stiffness scaling can be retained without the measured coefficient
+jump. Compare candidate coefficient assignments and their actual energy/gradient
+contracts before production edits. Simply smoothing k(x) while omitting its
+energy derivative is not a demonstrated fix. A global adaptive coefficient may
+be used as a control to separate adaptation from feature-dependent assignment.
+
+Then investigate controller timing separately: keep coefficient state consistent
+within each Newton direction and line search, assess equilibrium under the final
+state, and test loading/unloading that exercises both gap bounds. Determine
+whether a useful band yields stable displacement/reaction predictions as well
+as completion. Do not silently add a new acceptance gate, change friction lag
+budgets, restore the retired floor, or run Teseo.
+
+No new experiment or production change is claimed by this strategy update.
+
 ## Candidate baseline and units
 
 Use existing Fixed barrier mode with one strictly positive constant coefficient
@@ -120,7 +152,7 @@ it is not a proof for all collision configurations. The inherited raw `trim`
 field is global barrier stiffness in this standalone helper: for Fixed it is
 k_fixed, not an active trim controller.
 
-**Candidate determination:** advance a strictly positive, fixed scalar coefficient
+**Historical candidate recommendation (superseded by the agreed direction above):** advance a strictly positive, fixed scalar coefficient
 multiplying the ordinary barrier potential as the coherent comparison model.
 Hold it fixed over a trajectory and retain exact collision/FEM pullback. Solver
 heuristics may assist minimization, but changes to physical coefficients must be
@@ -135,7 +167,7 @@ universal numerical coefficient. k=70 is only the predeclared EV-side fixture
 normalization. Keep .5/.9 as the current comparison band; available data do not
 establish an optimal lower/upper band.
 
-## Exact next experiment and unresolved decisions
+## Earlier fixed-mode follow-up proposal (superseded as primary direction)
 
 1. Select a public frictionless, uniformly scaled contact fixture and declare a
    coefficient reference rule before running. A directly measured reference

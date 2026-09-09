@@ -9,6 +9,11 @@ Selected stage: inventory and opt-in version 1 returned/failed endpoint records,
 with independent public-fixture measurements. This does not close all RB-04
 acceptance stages.
 
+Current user-selected direction: improve the existing adaptive barrier; Fixed
+mode remains a reference and AL is deferred. See the
+[current strategy](rb-04-candidate-comparison.md#current-agreed-direction-2026-09-09).
+No production model change follows from the comparison results alone.
+
 ## Contract and authorization
 
 The user selected RB-04 from [the robustness plan](robustness-plan.md), then

@@ -1,5 +1,10 @@
 # RB-04 candidate investigation log
 
+Current strategy: **improve the adaptive barrier**; see the final dated strategy
+entry and [current agreed direction](rb-04-candidate-comparison.md#current-agreed-direction-2026-09-09).
+Earlier fixed-model recommendations are historical, not the current handoff.
+
+
 ## Authorization and durable objective — 2026-09-09
 
 The user selected the coherent barrier-model direction and requested continued
@@ -371,3 +376,35 @@ including active upper trim control, and separate friction-lag refinement.
 Do not repeat these boundary probes unless relevant code changes or a new
 counterexample warrants it. Do not interpret pre-contact run failures as a
 causal trim-band result. All original failures and successful repeats remain.
+
+
+## Current agreed direction (2026-09-09)
+
+Following discussion of the Fixed-mode comparison and AL contact, the user
+explicitly chose to improve the existing adaptive barrier. This supersedes the
+recommendation below to advance a trajectory-wide fixed coefficient as the main
+candidate; all measured comparison results remain valid and retained.
+
+Preserve Hessian-based scaling, gap-band adaptation, CCD and the separate trial
+cap. Fixed mode is a reference only; AL contact is deferred. No replacement of
+per-contact coefficients with one global coefficient has been selected.
+A changing numerical barrier parameter is not by itself proof of an invalid
+contact method. Evaluate mechanical accuracy, parameter sensitivity, consistent
+force evaluation and state accounting; do not require every intermediate
+adaptation to represent a single physical stored-energy law.
+
+Next bounded investigation: use the reproduced RB-02 EV/VV transition to examine
+whether local stiffness scaling can be retained without the measured coefficient
+jump. Compare candidate coefficient assignments and their actual energy/gradient
+contracts before production edits. Simply smoothing k(x) while omitting its
+energy derivative is not a demonstrated fix. A global adaptive coefficient may
+be used as a control to separate adaptation from feature-dependent assignment.
+
+Then investigate controller timing separately: keep coefficient state consistent
+within each Newton direction and line search, assess equilibrium under the final
+state, and test loading/unloading that exercises both gap bounds. Determine
+whether a useful band yields stable displacement/reaction predictions as well
+as completion. Do not silently add a new acceptance gate, change friction lag
+budgets, restore the retired floor, or run Teseo.
+
+No new experiment or production change is claimed by this strategy update.
