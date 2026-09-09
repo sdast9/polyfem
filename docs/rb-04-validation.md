@@ -133,9 +133,12 @@ platform, mesh/time refinement or private-scene check is claimed.
 
 ## Publication and remaining work
 
-Publish only this endpoint implementation, new test, runner/compact results,
-contract and validation record, and the RB-04 status row to
-`https://github.com/sdast9/polyfem`, branch `main`. Companion source/pins and HDA
+The tested implementation/source is committed as `8f67bc191c5e3fa4861e32b6552e895611ecdb75`.
+It includes the endpoint implementation, new test, runner/compact results,
+contract and validation record, and the RB-04 status row, for publication to
+`https://github.com/sdast9/polyfem`, branch `main`. Final source and binary hashes
+were rechecked after committing; they match the tested manifest. A subsequent
+documentation-only commit records this implementation identity. Companion source/pins and HDA
 assets stay unchanged. Parent workspace README is updated locally. The completion
 message identifies the published implementation commit and synchronization state.
 
