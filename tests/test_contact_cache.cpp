@@ -244,3 +244,41 @@ TEST_CASE("Independent contact forms can rebuild concurrently", "[contact_cache]
 		check(samples_b[i], expected);
 	}
 }
+
+TEST_CASE("Physical diagnostic snapshots preserve contact state and frozen derivatives", "[physical_diagnostics]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	const auto before = sample(form, mesh, zero);
+	const auto state = form.diagnostic_state();
+	Eigen::VectorXd x = zero;
+	x[4] = 1.1; // Different closest stencil; only the snapshot may memoize it.
+	x[5] = .1;
+	const auto snapshot = form.diagnostic_snapshot(x);
+	CHECK(form.diagnostic_state() == state);
+	check(sample(form, mesh, zero), before);
+	check(sample(snapshot, mesh, x), reference(mesh, 1., BarrierStiffnessMode::SemiImplicit, x));
+	Eigen::VectorXd fd(6);
+	for (int j = 0; j < 6; ++j)
+	{
+		Eigen::VectorXd plus = x, minus = x;
+		plus[j] += 1e-6;
+		minus[j] -= 1e-6;
+		fd[j] = (form.diagnostic_snapshot(plus).value(plus) - form.diagnostic_snapshot(minus).value(minus)) / 2e-6;
+	}
+	Eigen::VectorXd g;
+	snapshot.first_derivative(x, g);
+	CHECK((g - fd).norm() / (1 + g.norm()) < 1e-6);
+	CHECK(form.diagnostic_state() == state);
+	// On/off continuation: a subsequent production rebuild has the same result.
+	form.solution_changed(x);
+	check(sample(form, mesh, x), sample(snapshot, mesh, x));
+	Eigen::VectorXd absent = zero;
+	absent[5] = 2;
+	const auto empty = form.diagnostic_snapshot(absent);
+	CHECK(empty.diagnostic_state()["active_count"] == 0);
+	CHECK(empty.diagnostic_state()["coefficient_range"]["value"].is_null());
+	CHECK(empty.diagnostic_state()["candidate_count"]["value"].is_null());
+}

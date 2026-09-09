@@ -2532,7 +2532,8 @@
             "data",
             "advanced",
             "reference",
-            "stats"
+            "stats",
+            "physical_diagnostics"
         ],
         "doc": "output settings"
     },
@@ -2541,6 +2542,12 @@
         "default": "",
         "type": "string",
         "doc": "Directory for output files."
+    },
+    {
+        "pointer": "/output/physical_diagnostics",
+        "type": "bool",
+        "default": false,
+        "doc": "Opt-in RB-04 version 1 endpoint records in physical-diagnostics.jsonl; observational, not an acceptance criterion."
     },
     {
         "pointer": "/output/stats",

@@ -9,6 +9,7 @@
 #include <ipc/potentials/barrier_potential.hpp>
 
 #include <array>
+#include <cstdint>
 #include <cmath>
 #include <limits>
 #include <functional>
@@ -58,6 +59,10 @@ namespace polyfem::solver
 		bool use_physical_barrier() const { return barrier_potential_.use_physical_barrier(); }
 
 		const ipc::NormalCollisions &collision_set() const { return collision_set_; }
+		/// Independent endpoint reconstruction; never refreshes or mutates this form.
+		BarrierContactForm diagnostic_snapshot(const Eigen::VectorXd &x) const;
+		json diagnostic_state() const;
+
 		const ipc::BarrierPotential &barrier_potential() const { return barrier_potential_; }
 
 		// -- Semi-implicit per-contact barrier stiffness [Ando 2024] ----------
@@ -193,6 +198,7 @@ namespace polyfem::solver
 		mutable std::map<std::array<long, 5>, double> kappa_cache_;
 		/// @brief Newton iterations since the last stiffness refresh
 		int iters_since_refresh_ = 0;
+		uint64_t diagnostic_refresh_id_ = 0; ///< Monotonic per-form completed snapshot identity.
 		/// @brief Newton iterations since the trim factor last changed
 		int iters_since_trim_ = 0;
 		/// @brief Frozen per-contact stiffness cap (kappa_spread * median of

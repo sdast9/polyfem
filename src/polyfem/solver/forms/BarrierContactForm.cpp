@@ -312,6 +312,8 @@ namespace polyfem::solver
 			}
 		}
 
+		++diagnostic_refresh_id_;
+
 		// Re-anchor the in-solve emergency climbing budget.
 		trim_solve_anchor_ = barrier_stiffness_;
 
@@ -598,6 +600,45 @@ namespace polyfem::solver
 		{
 			assign_collision_stiffness(collision_set_);
 		}
+	}
+
+	BarrierContactForm BarrierContactForm::diagnostic_snapshot(const Eigen::VectorXd &x) const
+	{
+		BarrierContactForm snapshot(*this);
+		// A fresh broad phase avoids touching the shared production broad phase.
+		auto broad_phase = ipc::create_broad_phase(broad_phase_method_);
+		snapshot.collision_set_.build(collision_mesh_, compute_displaced_surface(x), dhat_, dmin_, broad_phase.get());
+		if (uses_semi_implicit_stiffness())
+			snapshot.assign_collision_stiffness(snapshot.collision_set_);
+		return snapshot;
+	}
+
+	json BarrierContactForm::diagnostic_state() const
+	{
+		json result = {{"active_count", collision_set_.size()}, {"dhat", dhat_}, {"trim_or_global_stiffness", barrier_stiffness_}, {"semi_implicit", uses_semi_implicit_stiffness()}, {"refresh_id", diagnostic_refresh_id_}, {"iterations_since_refresh", iters_since_refresh_}, {"memoized_stencil_count", kappa_cache_.size()}};
+		int zeros = 0, nonfinite = 0;
+		double lo = std::numeric_limits<double>::infinity(), hi = -lo;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const double k = collision_set_[i].stiffness_scale;
+			if (!std::isfinite(k))
+				++nonfinite;
+			else
+			{
+				lo = std::min(lo, k);
+				hi = std::max(hi, k);
+				zeros += k == 0;
+			}
+		}
+		if (!std::isfinite(barrier_stiffness_))
+			result["trim_or_global_stiffness_unavailable_reason"] = "Nonfinite production stiffness";
+		result["coefficient_zero_count"] = zeros;
+		result["coefficient_nonfinite_count"] = nonfinite;
+		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
+														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
+		result["candidate_count"] = use_cached_candidates_ ? json{{"value", candidates_.size()}}
+														   : json{{"value", nullptr}, {"unavailable_reason", "Swept candidate cache is not active at this endpoint"}};
+		return result;
 	}
 
 	double BarrierContactForm::value_unweighted(const Eigen::VectorXd &x) const

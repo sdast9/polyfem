@@ -1,0 +1,312 @@
+{
+  "stage": "endpoint instrumentation; complete physical accounting pending",
+  "binary_sha256": "c509e1a3ad3662a61335923de2abd124f5e874ac7187c936c1d65a30e73fd4d8",
+  "runs": [
+    {
+      "name": "quasistatic-semi-off",
+      "exit": 0,
+      "wall_seconds": 4.7482086243107915
+    },
+    {
+      "name": "quasistatic-semi-on",
+      "exit": 0,
+      "wall_seconds": 4.215636334381998,
+      "checks": [
+        {
+          "step": 1,
+          "displacement_on_off_max": 3.5041414214731503e-16,
+          "elastic_energy_relative_error": 3.6488821327712856e-15,
+          "top_reaction_error_over_E": 2.3337924687014613e-16,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 3.818808142549983e-05,
+          "min_det_F": 0.9735930087358201,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Relative gradient vector too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        },
+        {
+          "step": 2,
+          "displacement_on_off_max": 1.682681771697503e-16,
+          "elastic_energy_relative_error": 1.4183219920294517e-15,
+          "top_reaction_error_over_E": 2.569227074034672e-16,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 2.1331053045735564e-07,
+          "min_det_F": 0.9351409646735029,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        },
+        {
+          "step": 3,
+          "displacement_on_off_max": 1.8041124150158794e-16,
+          "elastic_energy_relative_error": 1.5232759564276314e-16,
+          "top_reaction_error_over_E": 5.2082847594787837e-17,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 3.711555697643458e-08,
+          "min_det_F": 0.8963192392030347,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        },
+        {
+          "step": 4,
+          "displacement_on_off_max": 1.1449174941446927e-16,
+          "elastic_energy_relative_error": 1.5317052386203902e-15,
+          "top_reaction_error_over_E": 3.262388808907837e-16,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 1.0576090163725433e-07,
+          "min_det_F": 0.8571172721409703,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "transient-semi-off",
+      "exit": 0,
+      "wall_seconds": 4.507102875038981
+    },
+    {
+      "name": "transient-semi-on",
+      "exit": 0,
+      "wall_seconds": 4.354636957868934,
+      "checks": [
+        {
+          "step": 1,
+          "displacement_on_off_max": 2.5413698923060224e-16,
+          "elastic_energy_relative_error": 3.6488696643011526e-15,
+          "top_reaction_error_over_E": 1.2069316921789424e-05,
+          "kinetic_energy_relative_error": 3.995353459171366e-16,
+          "free_residual_norm": 3.7750111441634705e-05,
+          "min_det_F": 0.9735810220077346,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Relative gradient vector too small",
+          "kinetic_energy": {
+            "value": 16.78422717842506
+          }
+        },
+        {
+          "step": 2,
+          "displacement_on_off_max": 1.6653345369377348e-16,
+          "elastic_energy_relative_error": 8.104699766879513e-16,
+          "top_reaction_error_over_E": 2.1147854665367105e-07,
+          "kinetic_energy_relative_error": 2.4167983024521243e-16,
+          "free_residual_norm": 2.143009037104937e-07,
+          "min_det_F": 0.9351431162470858,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "value": 13.700083474884341
+          }
+        },
+        {
+          "step": 3,
+          "displacement_on_off_max": 1.0755285551056204e-16,
+          "elastic_energy_relative_error": 6.093103679579179e-16,
+          "top_reaction_error_over_E": 3.948696410619206e-08,
+          "kinetic_energy_relative_error": 1.0663526702721343e-15,
+          "free_residual_norm": 3.514170501502759e-08,
+          "min_det_F": 0.896319549029095,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "value": 13.992424176630312
+          }
+        },
+        {
+          "step": 4,
+          "displacement_on_off_max": 1.942890293094024e-16,
+          "elastic_energy_relative_error": 1.072193663923739e-15,
+          "top_reaction_error_over_E": 6.549679495265543e-08,
+          "kinetic_energy_relative_error": 3.4249743985927792e-16,
+          "free_residual_norm": 1.0636712649568137e-07,
+          "min_det_F": 0.857117650062169,
+          "bc_error": 0.0,
+          "lagging": {
+            "state": "not applicable"
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "value": 14.559446284884087
+          }
+        }
+      ]
+    },
+    {
+      "name": "quasistatic-semi-friction-off",
+      "exit": 0,
+      "wall_seconds": 4.315130042843521
+    },
+    {
+      "name": "quasistatic-semi-friction-on",
+      "exit": 0,
+      "wall_seconds": 4.406818416900933,
+      "checks": [
+        {
+          "step": 1,
+          "displacement_on_off_max": 2.8059152223924855e-16,
+          "elastic_energy_relative_error": 4.600764428276835e-15,
+          "top_reaction_error_over_E": 2.571235944194907e-16,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 35736.21270424032,
+          "min_det_F": 0.9735930087358201,
+          "bc_error": 0.0,
+          "lagging": {
+            "iteration": 1,
+            "state": "not converged",
+            "tolerance": 0.0025,
+            "updated_lag_residual_norm_objective": 2233.51329401502
+          },
+          "termination": "Relative gradient vector too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        },
+        {
+          "step": 2,
+          "displacement_on_off_max": 4.930084118726086e-15,
+          "elastic_energy_relative_error": 4.0311949414476934e-16,
+          "top_reaction_error_over_E": 4.8835715845197656e-17,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 57252.76170393738,
+          "min_det_F": 0.9320480978937927,
+          "bc_error": 0.0,
+          "lagging": {
+            "iteration": 1,
+            "state": "not converged",
+            "tolerance": 0.0025,
+            "updated_lag_residual_norm_objective": 3578.2976064960862
+          },
+          "termination": "Relative gradient vector too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        },
+        {
+          "step": 3,
+          "displacement_on_off_max": 1.111610803405938e-14,
+          "elastic_energy_relative_error": 5.987150484386974e-16,
+          "top_reaction_error_over_E": 9.609774558979003e-17,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 57544.95528231791,
+          "min_det_F": 0.8871518814038293,
+          "bc_error": 0.0,
+          "lagging": {
+            "iteration": 1,
+            "state": "not converged",
+            "tolerance": 0.0025,
+            "updated_lag_residual_norm_objective": 3596.55970514487
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        },
+        {
+          "step": 4,
+          "displacement_on_off_max": 2.1975476993674192e-14,
+          "elastic_energy_relative_error": 2.983046339730335e-16,
+          "top_reaction_error_over_E": 6.521466421107941e-16,
+          "kinetic_energy_relative_error": null,
+          "free_residual_norm": 59485.57475682111,
+          "min_det_F": 0.8405741419258371,
+          "bc_error": 0.0,
+          "lagging": {
+            "iteration": 1,
+            "state": "not converged",
+            "tolerance": 0.0025,
+            "updated_lag_residual_norm_objective": 3717.8484223013193
+          },
+          "termination": "Gradient vector norm too small",
+          "kinetic_energy": {
+            "unavailable_reason": "Quasistatic/static or incompatible mass dimensions",
+            "value": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "quasistatic-semi-failure-off",
+      "exit": -6,
+      "wall_seconds": 4.162414249964058
+    },
+    {
+      "name": "quasistatic-semi-failure-on",
+      "exit": -6,
+      "wall_seconds": 4.075952624902129,
+      "failure": {
+        "outcome": "failed_attempt",
+        "phase": "reduced",
+        "coordinate_state": "Retained caller coordinates with current attempt form state; failed internal trial is not exposed",
+        "accepted_displacement": {
+          "unavailable_reason": "Attempt did not return an accepted endpoint",
+          "value": null
+        },
+        "subsolve": {
+          "directional_derivative": -218.53751987843702,
+          "energy": 725.7259193285757,
+          "fDelta": 5392.954720012771,
+          "gradNorm": 871906.8988717268,
+          "internal_solver": [],
+          "iterations": 2,
+          "line_search": "RobustArmijo",
+          "line_search_iterations": 0,
+          "outcome": "interrupted",
+          "restarts": 1,
+          "status": 8,
+          "termination_reason": "Objective function specified to stop",
+          "time_assembly": 0.0,
+          "time_broad_phase_ccd": 0.0004538545,
+          "time_ccd": 9.5833e-05,
+          "time_checking_for_nan_inf": 0.00014639550000000002,
+          "time_classical_line_search": 0.00018172850000000004,
+          "time_constraint_set_update": 0.0002357915,
+          "time_grad": 0.0001580415,
+          "time_inverting": 0.0,
+          "time_line_search": 0.0012688125,
+          "time_line_search_constraint_set_update": 0.000120313,
+          "time_obj_fun": 5.39165e-05,
+          "total_time": 0.005864458,
+          "xDelta": 0.003391488170040902
+        }
+      }
+    }
+  ]
+}

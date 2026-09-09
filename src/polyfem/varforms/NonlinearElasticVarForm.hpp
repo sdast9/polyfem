@@ -75,6 +75,11 @@ namespace polyfem::varform
 		virtual void init_forms(const json &args, int dim, Eigen::MatrixXd &sol, double t);
 		virtual void solve_tensor_nonlinear(int step, Eigen::MatrixXd &sol, bool init_lagging = true);
 
+		void write_physical_diagnostics(int step, const Eigen::VectorXd &x,
+										const Eigen::VectorXd &start, const std::string &outcome,
+										const std::string &phase, const json &termination, const json &lagging,
+										double elapsed, const std::string &error = "") const;
+
 		std::shared_ptr<assembler::PressureAssembler> build_pressure_assembler() const;
 		void build_collision_mesh(const mesh::Mesh &mesh, const json &args);
 		void build_periodic_collision_mesh();
@@ -91,6 +96,7 @@ namespace polyfem::varform
 
 		solver::SolveData solve_data_;
 		std::vector<std::shared_ptr<solver::Form>> forms;
+		std::string diagnostic_run_id_;
 		bool contact_dhat_was_explicit_ = false;
 
 		int n_obstacle_vertices() const override { return obstacle.n_vertices(); }
