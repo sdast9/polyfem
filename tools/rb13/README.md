@@ -1,4 +1,6 @@
-# RB-13 stage 1 reference probe
+# RB-13 standalone reference probes
+
+## Stage 1
 
 Run from the PolyFEM repository with Python 3 and a C++17 compiler:
 
@@ -33,3 +35,34 @@ directory recorded in [validation](../../docs/rb-13-validation.md).
 Read the [contract](../../docs/rb-13-contract.md) for assumptions and units.
 Stage 1 does not implement conditional interval tests, stage 3's scope matrix,
 a production law, or a scene accuracy/robustness test.
+
+## Stage 2
+
+```bash
+python3 tools/rb13/band_probe.py --ipc-source ../ipc-toolkit-fork --output /absolute/fresh/evidence/stage2
+```
+
+The same source-override verification and fresh-directory rule apply. Read the
+[predeclared protocol](stage2-protocol.md) and section 7 of the
+[contract](../../docs/rb-13-contract.md). The runner compiles `band_bridge.cpp`
+against actual IPC barrier primitives, calculates interval endpoints with
+60-digit Decimal arithmetic and checks roots with compiled IPC forces.
+Selected roots are compared with an independent Decimal bisection.
+
+The [stage 2 result](results-20260910-stage2.json) has 23,396 passing checks,
+2,282 scalar equilibria and four expected rejections (two invalid inputs and
+two zero-coefficient cases without positive-gap equilibrium). It covers 81
+exact-input classifications, seven uncertainty boxes, endpoint tightness and
+the declared counterexamples. Counts include several assertions per root and
+adjacent-pair monotonicity checks; they are not counts of FEM scenes.
+
+The reference interval function reports `nonempty`, `zero_only`, `empty`,
+`inactive_band_demand` or `mixed_band_applicability`. Empty bounds retain their
+ordering; inactive/mixed inputs have no applicable all-box band interval.
+Raw bounds are retained only as diagnostics. Coefficient fractions used in the
+coverage grid are test samples, not controller choices or empty-interval fallbacks.
+
+Outputs include compile/provenance logs, raw root requests/responses, complete
+query metadata and summarized results. Only the small summary is checked in.
+No production behavior changes, application uncertainty enclosure, floating-point
+interval certificate, stage 3 completion or full-simulation guarantee is claimed.

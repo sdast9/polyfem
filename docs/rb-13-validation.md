@@ -1,8 +1,13 @@
 # RB-13 — Mechanical coefficient estimate and conditional bounds
 
-Date: 2026-09-09
-Status: **in progress — stage 1 characterized; stages 2–3 pending**
-Selected stage: reference derivation and standalone analytical fixture only.
+Updated: 2026-09-10
+Status: **in progress — stages 1–2 characterized; stage 3 pending**
+Current selected stage: conditional bands and enclosing-rectangle analysis.
+
+## Stage 1 record — 2026-09-09
+
+The following stage 1 evidence and handoff are retained as historical records.
+The stage 2 continuation and current handoff appear below.
 
 ## Contract and authorization
 
@@ -133,3 +138,155 @@ Rayleigh comparison, multi-contact coupling and invalid-tangent scope tests.
 The full RB-13 acceptance is not complete. RB-14/RB-15 now have stage 1's reference
 equations/units, but any dependent implementation must retain its own prerequisite
 and model-decision boundaries. RB-16's bounds prerequisite is still pending.
+
+## Stage 2 continuation — 2026-09-10
+
+### Authorization, baseline and invariant
+
+The user selected “continue to stage 2.” This authorizes the conditional-band
+derivation and standalone tests in RB-13, not stage 3 or production model changes.
+Stage 1 is published at `2103108f3579a40c5ff8a3e37cecd75689d87501` on `main`;
+the checkout was clean at that revision when this stage began. IPC remains
+`af317a65d69d0ac7c5efa4bf103bf75e280c323b` and PolySolve remains
+`4d372fa8a73f42bc224e31d464f1a308e1159ba8`, both clean and both matching their
+configured local source overrides and recipe pins. No solver/build was running.
+The stage 1 probe/result, production code, shared build and dependencies are
+unchanged. Its earlier tests were not rerun as if they were new measurements.
+
+Re-read the current RB-13 plan/contract/validation, workspace instructions and PF
+invariants; the prerequisite/source audit from stage 1 remains applicable at this
+unchanged production revision. Rechecked actual IPC barrier derivatives, recipe
+pins and effective overrides. The selected invariant is that a reported band
+interval covers the unique scalar force-balance root for its declared admissible
+inputs, with inactive/mixed/empty cases reported explicitly.
+
+The [extended contract](rb-13-contract.md#7-stage-2--conditional-bands-2026-09-10)
+proves positive decreasing ordinary-barrier force, uniqueness and monotonicity,
+the exact-input interval and the enclosing-rectangle theorem. This is the same
+isolated SPD, affine-gap, frictionless model as stage 1. K, p, h, weights and
+coefficient state stay fixed within each force evaluation/root solve; no lagged
+friction or optimization-event state is present. No production k or model repair
+is selected. Active-contact protection, CCD, the trial cap, stopping and all
+production defaults remain unchanged.
+
+### Evidence and protocol
+
+New local parent-workspace evidence:
+`outputs/rb-13/20260910-094044-stage2/`. It contains initial repository/process
+state, exact revisions, build/binary/recipe/stage-1-source hashes, copied
+predeclared protocol, runner command/cwd/exit/stdout/stderr, compiler provenance,
+raw requests/responses, complete query metadata and summarized results.
+`final-identity.json` verifies that every baseline-hashed file is unchanged.
+The parent README is updated locally; it is outside the Git repositories.
+
+The [protocol](../tools/rb13/stage2-protocol.md) and numerical tolerances were
+written before the first run. The new C++ bridge was formatted, then compiled
+with `/usr/bin/c++ -std=c++17 -O2` and effective IPC's actual `barrier.cpp`.
+This is a serial scalar executable, independent of the shared FEM build.
+Python uses standard-library Decimal at 60 digits for coefficient endpoints;
+the bridge uses double-precision IPC forces and up to 120 bisections. Fourteen
+selected roots have independent 120-step Decimal comparisons. Root gap/band
+tolerance is 2e-11*dhat; residual tolerance is 2e-10 after dividing by
+K*dhat+abs(k*f); normalized curvature identity tolerance is 1e-11.
+No tolerance, input fixture or protocol changed after seeing results.
+
+The finite numerical checks are not a formal floating-point certificate. The
+rigorous statement is the exact-arithmetic theorem conditional on the declared
+model and true input enclosure. These manufactured boxes define their entire
+admissible sets by construction; they are not measured estimator error bars.
+Printed Decimal endpoints approximate the exact logarithmic expressions.
+
+### Findings and measured results
+
+The new [probe/result](../tools/rb13/results-20260910-stage2.json) passed
+**23,396/23,396 checks**. Its 2,286 bridge queries comprise **2,282 scalar
+equilibria** and four expected rejections: k=0 with p=-.2 or p=0 has no
+positive-gap equilibrium; K=0 and k=-1 are invalid reference inputs.
+Six additional Python input checks reject invalid/reversed/nonfinite intervals.
+The check total includes several assertions per root and 4,968 adjacent-pair
+monotonicity comparisons; it is not a count of independent FEM tests or scenes.
+
+| Check | Measured result | Outcome |
+| --- | --- | --- |
+| Exact inputs, three physical bands and three K values | 81 classifications; 270 in-band root samples | Pass |
+| Three applicable nonempty/zero-only boxes | 11x11 K,p grid, five coefficient samples: 1,815 roots | Pass |
+| Known band endpoints/manufactured targets | 133 checks; max gap error 2.23e-16 | Pass |
+| Independent Decimal roots | 14 comparisons; max gap error 1.12e-16 | Pass |
+| Scalar force residual | Maximum normalized magnitude 1.38e-15 | Pass |
+| Compiled curvature versus Decimal expression | 2,228 checks; max normalized error 8.43e-16 | Pass |
+| Positive-curvature proof bound | 2,228 interior-root checks | Pass |
+| Monotonicity in k, p, K | 4,968 comparisons; expected directions retained | Pass |
+| Tightness beyond positive bounds / zero-only upper bound | Exact and rectangle worst-corner roots leave the band as predicted | Reproduced |
+| Fresh C++ build, Python syntax, C++ formatting, Markdown links, diff whitespace | Selected-artifact checks | Pass |
+
+All quantities below use dhat=1, band [.4,.7], K in force/length and k in
+force/length^3. Rounded bounds are displayed for readability; the result retains
+the 60-digit values.
+
+| K enclosure | p enclosure | Result |
+| --- | --- | --- |
+| [4,6] | [.1,.2] | Nonempty: [.3004512032,1.1351984474] |
+| [4,6] | [.45,.55] | Zero lower bound: [0,.3405595342] |
+| [4,6] | [.45,.7] | Formal zero-only interval [0,0]; not active-barrier deletion permission |
+| [1,100] | [-.2,.65] | Empty: lower 10.0150401077 > upper .0283799612; no fallback chosen |
+| [4,6] | [.8,.9] | Inactive band demand; no applicable interval |
+| [4,6] | [.5,.9] | Mixed band applicability; no all-box certificate |
+| [4,6] | [-.2,.9] | Mixed applicability with positive raw lower bound; no all-box certificate |
+
+The empty box's upper coefficient gives d=.0027992943 at its lower-gap worst
+corner; its lower coefficient gives d=.9634436237 at the upper-gap worst corner.
+Neither result satisfies [.4,.7]. Both are retained counterexamples, not failed
+production simulations or instructions to use those coefficients.
+
+The raw [0,0] interpretation fails explicitly: p=.9,k=0 gives d=.9, above the
+band. The code labels inactive/mixed applicability instead of certifying that
+raw pair. This reproduces a **misinterpretation of a proposed formula**, not a
+defect in the current production controller. No new production repair is claimed.
+
+Enclosure is essential: using the positive box's lower coefficient with actual
+K=100 outside [4,6] gives d=.1460237013, below .4. Empirical error bars cannot
+be advertised as guaranteed bounds without evidence that they enclose the inputs.
+
+Empty boxes also lose information about correlation. For the manufactured
+family K in [1,10], p(K)=.5-f(.5)/K, one fixed reference k=1 gives d=.5 for
+the entire family analytically; all 25 sampled members reproduce that root.
+Its Cartesian bounding box instead has lower 7.0596711122 > upper .3592586105.
+This establishes that an empty conservative rectangle does not prove the
+correlated physical family is infeasible. k=1 is manufactured before the run,
+not chosen as a fallback from the empty interval.
+
+Finally, the mathematical increasing-force counterexample f=d^2 with K=k=1,
+p=.1 has two roots, .1127016654 and .8872983346. It demonstrates the need for
+the decreasing-force/stability assumptions; that force is not installed anywhere.
+
+### Limits, publication and current handoff
+
+The initial compiled probe and final rebuild/run both passed with identical root
+outputs, counts and numerical metrics. The final result uses null for unmeasured
+error magnitudes in Boolean-only groups, replacing the initial default zero;
+no fixture, formula or tolerance changed. There were no failed runs, hidden
+partial runs, changed thresholds or reruns replacing failures. Expected invalid/domain cases
+are reported above. No production solver build, full unit suite, scene, private
+input, Teseo, HDA test or asset rebuild was run. They are not required for this
+isolated analytical/primitive stage; the shared solver and test binaries retain
+their baseline hashes. No stage 1 result or golden was regenerated.
+
+These are scalar equilibrium and conditional interval measurements. They do not
+measure full-system residuals/reactions, mesh det(F), energy/work trajectories,
+friction, nonlinear predictor accuracy, coupled contacts, timestep/mesh refinement,
+real estimator enclosure, arbitrary weighted/interpolated geometry or other
+platforms. Fixed k in each probe is a mathematical test state, not a replacement
+of the agreed adaptive-barrier direction with production Fixed mode.
+
+Publish the new bridge/probe/protocol/result, extended contract/record and roadmap
+to `sdast9/polyfem:main`; the task completion supplies the exact commit. No source
+under `src/`, dependency pin or HDA file changes. All local logs and executable
+stay in the new evidence directory. Final publication state is recorded there.
+
+**Next: RB-13 stage 3.** Verify spring series and rigid/deformable limits,
+implicit-Euler masses with differing speeds, mechanical unit conversion,
+nonlinear local-tangent error, compliance versus Rayleigh curvature, two-contact
+coupling and invalid-H behavior. The full RB-13 acceptance remains incomplete
+until that scope matrix is characterized. RB-14/RB-16 can use the conditional
+interval semantics, but no practical enclosing estimator or controller policy
+has been selected or validated by this stage.

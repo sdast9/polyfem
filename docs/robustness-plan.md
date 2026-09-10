@@ -106,11 +106,12 @@ spring stiffness. Derive its units and force/curvature interpretation before
 changing its formula. Gap bounds express a desired numerical contact range,
 not an assertion that every intermediate barrier energy is physical stored energy.
 
-**Next session: RB-13, stage 2.** Stage 1's isolated-contact compliance, predictor,
-integrator scaling and exact barrier-distance conversion are
-[characterized in the reference contract](rb-13-contract.md), with a
-[101-check standalone probe](rb-13-validation.md). Derive and test conditional
-intervals next; stage 3's scope matrix remains pending.
+**Next session: RB-13, stage 3.** Stages 1–2's isolated-contact compliance,
+predictor, integrator scaling, barrier-distance conversion and conditional
+intervals are [characterized in the reference contract](rb-13-contract.md).
+The [validation record](rb-13-validation.md) reports stage 1's 101 checks and
+stage 2's 23,396 checks across 2,282 scalar equilibria and four expected rejections.
+Complete the stage 3 scope matrix next; no production coefficient law is selected.
 Then RB-14 estimates its quantities cheaply, RB-15 resolves feature consistency,
 RB-16 compares controller timing/bounds, and RB-17 integrates the selected candidate.
 RB-14 and RB-15 are separate investigations and can be selected independently once
@@ -158,7 +159,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | not started |
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
-| RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [in progress—stage 1 characterized; stages 2–3 pending](rb-13-validation.md) |
+| RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [in progress—stages 1–2 characterized; stage 3 pending](rb-13-validation.md) |
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | not started |
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | not started |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | not started |

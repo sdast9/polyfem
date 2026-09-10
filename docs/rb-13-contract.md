@@ -1,9 +1,10 @@
-# RB-13 stage 1 — Mechanical coefficient reference
+# RB-13 stages 1–2 — Mechanical coefficient reference and conditional bounds
 
-2026-09-09. **Stage 1 characterized within the reference assumptions.**
+2026-09-09; extended 2026-09-10. **Stages 1–2 characterized within the reference assumptions.**
 This is a derivation and standalone analytical probe, not an installed coefficient
-law. Conditional intervals (stage 2) and the complete scope matrix (stage 3) are
-pending. See [validation](rb-13-validation.md) and [reproduction](../tools/rb13/README.md).
+law. Section 7 establishes the conditional intervals; the complete scope matrix
+(stage 3) is pending. See [validation](rb-13-validation.md) and
+[reproduction](../tools/rb13/README.md).
 
 ## 1. Coordinates, predictor and compliance
 
@@ -78,8 +79,8 @@ diagnostic**, not a replacement noncontact force law: below d_free, achieving
 the target would require attraction and k=0 cannot place the equilibrium there.
 If d_target=d_free, k=0 recovers the free equilibrium. If there is no predicted
 compression, a zero estimate does not authorize removing active-contact protection.
-An upper-gap requirement must not pull a separating body into contact. Stage 2
-will establish conditional root/band semantics and inactive/empty cases.
+An upper-gap requirement must not pull a separating body into contact. Section 7
+establishes conditional root/band semantics and inactive/empty cases.
 
 The three quantities have distinct dimensions:
 
@@ -269,9 +270,148 @@ Audited at PolyFEM `f9de2eb07`, IPC `af317a65`, PolySolve `4d372fa8`:
   `src/ipc/potentials/barrier_potential.cpp`, `normal_potential.cpp`,
   `src/ipc/collisions/normal/normal_collisions.cpp`. Local provenance hashes them.
 
-Next is RB-13 stage 2: monotonic force-balance roots and conditional intervals,
-including enclosing-input uncertainty, empty intervals and inactive demand.
+Stage 2's monotonic force-balance roots and conditional intervals are now
+derived below, including enclosing-input uncertainty, empty intervals and inactive demand.
 Stage 3 must still test spring series/rigid limits, differing speeds, full unit
 conversion, nonlinear prediction error, Rayleigh comparison and multi-contact
 coupling. No production k, global/local replacement, estimator approximation,
 uncertainty enclosure or controller timing policy has been selected.
+
+## 7. Stage 2 — conditional bands (2026-09-10)
+
+Retain the stage 1 model and units, and abbreviate K=K_eff, p=d_free, h=dhat.
+Let 0<L<U<h, K>0 and k>=0. The reference interval concerns a **single physical
+gap**, not the production controller's mean/minimum statistic. All coefficient
+weights are frozen and absorbed into k. No estimator, retune timing or fallback
+coefficient is selected here.
+
+### Positive decreasing force and the equilibrium root
+
+The ordinary squared-distance barrier has f(d)>0 for 0<d<h because B_s<0.
+Its physical curvature is strictly positive throughout that interval. To prove
+this without inferring physical convexity merely from B_ss>0, set q=(d/h)^2:
+
+```text
+b''/h^2 = 4(3q-1)(-log q) + 2(1-q)(7q+1)/q.
+```
+
+For 1/3<=q<1 both terms are nonnegative and the second is positive. For
+0<q<1/3, use -log q <= (1/q-q)/2. This inequality follows by differentiating
+(t-1/t)/2-log t for t=1/q>=1: its derivative is (t-1)^2/(2t^2)>=0,
+and its value at t=1 is zero. Multiplication by the negative 4(3q-1) reverses
+the inequality, yielding
+
+```text
+b''/h^2 >= 2(3q-1)(1/q-q) + 2(1-q)(7q+1)/q
+         = 6(1-q)(q+3) > 0.
+```
+
+Thus f'=-b''<0. Define the scalar force residual
+
+```text
+R(d;k,K,p) = K(d-p) - k f(d)
+R_d = K + k b''(d) > 0.
+```
+
+For k>0 and p<h, f(0+)=infinity and f(h-)=0, so R changes from negative
+infinity to K(h-p)>0. There is exactly one root, with max(p,0)<d<h.
+Implicit differentiation gives
+
+```text
+partial d / partial k = f / (K+k b'') > 0
+partial d / partial p = K / (K+k b'') > 0
+partial d / partial K = -(d-p) / (K+k b'') < 0.
+```
+
+At k=0 and p>0 the free equilibrium is d=p; the K dependence is zero.
+For p>=h the barrier is inactive at d=p for any k>=0, so increasing k does
+not move that equilibrium. For k=0,p<=0 there is **no positive-gap equilibrium**
+of this unconstrained quadratic reference. A zero coefficient cannot be used
+to infer feasibility or preserved active-contact protection.
+
+For a different positive decreasing force, R_d>0 still gives uniqueness,
+but existence additionally needs endpoint sign conditions. For comparison,
+positive **increasing** f(d)=d^2 with K=k=1,p=.1 has two interior roots
+(1 +/- sqrt(.6))/2. Positivity alone is not enough. This is a mathematical
+counterexample to dropping the hypothesis, not an alternative contact law.
+
+### Exact inputs: when the band formulas apply
+
+For p<=U, the unique root belongs to [L,U] exactly when R(L)<=0<=R(U).
+Together with k>=0 this is equivalent to
+
+```text
+k_L = K max(L-p,0) / f(L)
+k_U = K (U-p) / f(U) = K max(U-p,0) / f(U)
+k_L <= k <= k_U.
+```
+
+If p<L, both bounds are positive and their roots are L and U. If L<=p<U,
+k_L=0 and the lower endpoint's root is p, not necessarily L. If p=U,
+the formal interval is [0,0], with the free root exactly at U; every positive
+k moves it above U. This zero-only case is a reference-model result, not
+authorization to remove an existing barrier or override CCD.
+
+For p>U, every repulsive equilibrium is at least p>U. The raw positive-part
+formulas return [0,0] but do **not** define a band-valid interval. Classify this
+as `inactive_band_demand`: the predictor does not demand repulsion to reach
+the band, and no upper-gap requirement or attractive force is imposed. This
+label does not mean that the actual collision is outside barrier support; p may
+be between U and h. The probe returns no applicable interval for this case.
+
+For exact inputs p<=U the interval is never empty: when p<L the numerator
+increases and the positive denominator decreases between L and U, and otherwise
+the lower bound is zero. Empty intervals in the box construction below reflect
+simultaneous uncertain demands, not this single exact-input case.
+
+### Enclosing uncertainty: the rectangle theorem
+
+Suppose 0<K_-<=K<=K_+ and p_-<=p<=p_+ are true enclosures with **p_+<=U**,
+while h, L, U and f are fixed. Enforcing the two residual signs for every
+pair in this Cartesian box gives
+
+```text
+k_lower = K_+ max(L-p_-,0) / f(L)
+k_upper = K_- (U-p_+) / f(U).
+```
+
+The lower bound is the largest nonnegative lower requirement in the box,
+attained at (K_+,p_-) if positive. The upper is the smallest upper requirement,
+attained at (K_-,p_+). Thus a nonempty [k_lower,k_upper] is necessary and
+sufficient to cover the **entire Cartesian box** under this exact reference.
+The positive bounds are tight: slightly decreasing k_lower fails the lower
+corner and increasing k_upper fails the upper corner. If the lower bound is
+zero, negative k is excluded; if the upper is zero, any positive k fails its
+worst corner. Nonempty intervals with k_lower=0 imply p_->=L>0, so their k=0
+members do not suffer the p<=0 domain failure described above.
+
+This is a rigorous exact-arithmetic statement **conditional on the model and
+the enclosing inputs**. Here the boxes are manufactured admissible sets. A
+finite grid checks the implementation of the theorem but cannot prove that a
+real estimator's error bars enclose a mechanical system. Decimal endpoint
+calculations and double root checks are not outward-rounded interval arithmetic;
+their printed endpoints are numerical estimates of the theorem's exact bounds.
+No application-level enclosure or floating-point certificate is supplied.
+
+If p_->U, the whole box is `inactive_band_demand`. If p_-<=U<p_+, classify
+`mixed_band_applicability` and return no all-box band interval: the box contains
+free gaps that cannot satisfy an upper-band requirement through repulsion.
+The raw clipped pair may still be recorded diagnostically, but it is not a
+certificate. Separating demand regimes or narrowing the enclosure needs a later
+estimator/controller contract; this probe does neither automatically.
+
+For p_+<=U but k_lower>k_upper, report `empty` and preserve that ordering.
+Do not sort or clamp the endpoints, choose their midpoint, increase stiffness,
+retry the step or label the physical problem infeasible. Each particular member
+can have its own valid interval while their common intersection is empty.
+A rectangular enclosure can also lose correlations: the manufactured family
+K in [1,10], p(K)=.5-f(.5)/K has equilibrium d=.5 at k=1 for **every** K,
+yet its enclosing Cartesian rectangle has an empty common interval for [.4,.7].
+This demonstrates why an empty conservative box does not prove failure of the
+correlated physical family.
+
+The [stage 2 protocol](../tools/rb13/stage2-protocol.md) and standalone
+`band_probe.py` test these cases with compiled IPC forces and independent
+Decimal reference roots. Results and publication are recorded in
+[validation](rb-13-validation.md). Stage 3's mechanical applicability matrix,
+RB-14 estimator enclosures and RB-16 controller policy remain separate work.
