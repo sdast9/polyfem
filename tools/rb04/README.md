@@ -118,3 +118,17 @@ must be new. No solver runs. Failed zero-endpoint runs have unavailable totals.
 See [work convention](../../docs/rb-04-work-convention.md) for fixture restrictions
 and the unresolved contact path contribution. Compact results are in
 `trajectory-budget-results-20260909.json`.
+
+
+### Actual frozen contact paths
+
+Add `--contact-path` to `run_endpoints.py` to exercise the separately opt-in
+path observer in each diagnostic-on run. It performs up to 1025+24*1024 private
+snapshot evaluations per accepted endpoint; use bounded fixtures. Analyze with
+`analyze_contact_path.py /run1 /run2 --output /summary.json`. It independently
+reconstructs trapezoids and adds Simpson estimates; full raw signatures stay in
+solver outputs. `run_candidate_probe.py --source tools/rb04/contact_path_probe.cpp
+--build build --output /new/evidence` checks the known jump and Fixed control.
+That source includes `candidate_probe.cpp`; retain both when copying the probe.
+Compact results: `contact-path-results-20260909.json`. See the validation record
+for the first-contact .00131 quadrature discrepancy and non-exhaustive event limits.

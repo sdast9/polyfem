@@ -218,3 +218,15 @@ No coefficient/controller redesign is authorized here; that belongs to RB-13–R
 Friction's broader reversal/stick-slip accuracy remains RB-10. RB-04 remains in
 progress until its required work-accounting limits are resolved or explicitly
 characterized; this algebraic closure does not mark physical balance passed.
+
+
+## Actual contact-path accounting now measured (2026-09-09)
+
+The completed public-path measurement, quadrature discrepancies and event-detection
+limits are in [RB-04 disposition](rb-04-validation.md#actual-contact-path-measurements-and-rb-04-disposition-2026-09-09).
+At 1024 panels, Simpson work matches contact-energy changes in steps 2–4 to
+4e-13 or better; first activation retains a measured .00131 mismatch. The large
+coarse right-endpoint contact remainder is predominantly quadrature error on
+these fixtures. Synthetic feature discontinuity remains reproduced and unresolved
+as a model issue. Do not extrapolate the small public net discrepancy to every
+contact path. RB-04 is characterized with these limits, not physically certified.

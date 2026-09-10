@@ -703,6 +703,79 @@ namespace polyfem::solver
 		return snapshot;
 	}
 
+	json BarrierContactForm::diagnostic_path(const Eigen::VectorXd &start, const Eigen::VectorXd &end) const
+	{
+		const Eigen::VectorXd dx = end - start;
+		json signatures = json::array();
+		std::vector<std::string> identities;
+		auto evaluate = [&](double t) {
+			const Eigen::VectorXd x = start + t * dx;
+			const auto snapshot = diagnostic_snapshot(x);
+			Eigen::VectorXd g;
+			snapshot.first_derivative(x, g);
+			const double energy = snapshot.value(x), derivative = g.dot(dx);
+			if (!std::isfinite(energy) || !std::isfinite(derivative))
+				throw std::runtime_error("Nonfinite contact path sample");
+			std::vector<std::array<long, 5>> keys;
+			const auto &collisions = snapshot.collision_set();
+			for (size_t i = 0; i < collisions.size(); ++i)
+			{
+				const auto ids = collisions[i].vertex_ids(collision_mesh_.edges(), collision_mesh_.faces());
+				const long tag = collisions.is_vertex_vertex(i) ? 0 : collisions.is_edge_vertex(i) ? 1
+																  : collisions.is_edge_edge(i)     ? 2
+																								   : 3;
+				keys.push_back({{tag, long(ids[0]), long(ids[1]), long(ids[2]), long(ids[3])}});
+			}
+			std::sort(keys.begin(), keys.end());
+			const json key_json = keys;
+			const std::string identity = key_json.dump();
+			auto found = std::find(identities.begin(), identities.end(), identity);
+			const size_t index = found - identities.begin();
+			if (found == identities.end())
+			{
+				identities.push_back(identity);
+				signatures.push_back(key_json);
+			}
+			return json{{"t", t}, {"energy_objective", energy}, {"directional_derivative_objective", derivative}, {"signature", index}};
+		};
+		json samples = json::array(), quadrature = json::array(), transitions = json::array();
+		constexpr int panels = 1024;
+		for (int i = 0; i <= panels; ++i)
+			samples.push_back(evaluate(double(i) / panels));
+		const double change = double(samples.back()["energy_objective"]) - double(samples.front()["energy_objective"]);
+		for (int n : {16, 64, 256, 1024})
+		{
+			double integral = 0;
+			for (int i = 0; i <= n; ++i)
+				integral += (i == 0 || i == n ? .5 : 1.) * double(samples[i * (panels / n)]["directional_derivative_objective"]) / n;
+			quadrature.push_back({{"panels", n}, {"gradient_integral_objective", integral}, {"energy_minus_integral_objective", change - integral}});
+		}
+		for (int i = 1; i <= panels; ++i)
+		{
+			if (samples[i - 1]["signature"] == samples[i]["signature"])
+				continue;
+			json left = samples[i - 1], right = samples[i];
+			bool multiple = false;
+			for (int j = 0; j < 24; ++j)
+			{
+				const auto mid = evaluate(.5 * (double(left["t"]) + double(right["t"])));
+				if (mid["signature"] == left["signature"])
+					left = mid;
+				else
+				{
+					multiple = multiple || mid["signature"] != right["signature"];
+					right = mid;
+				}
+			}
+			transitions.push_back({{"left", left}, {"right", right}, {"multiple_signatures_in_bracket", multiple}, {"energy_jump_estimate_objective", double(right["energy_objective"]) - double(left["energy_objective"])}});
+		}
+		return {{"scope", "Straight physical-coordinate segment with this frozen coefficient snapshot; fixed-grid quadrature and detected feature transitions only, not exhaustive event isolation or a collision certificate"},
+				{"samples", samples},
+				{"quadrature", quadrature},
+				{"transitions", transitions},
+				{"signatures", signatures}};
+	}
+
 	json BarrierContactForm::diagnostic_state() const
 	{
 		json result = {{"active_count", collision_set_.size()}, {"dhat", dhat_}, {"trim_or_global_stiffness", barrier_stiffness_}, {"semi_implicit", uses_semi_implicit_stiffness()}, {"refresh_id", diagnostic_refresh_id_}, {"iterations_since_refresh", iters_since_refresh_}, {"memoized_stencil_count", kappa_cache_.size()}};

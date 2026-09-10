@@ -61,6 +61,8 @@ namespace polyfem::solver
 		const ipc::NormalCollisions &collision_set() const { return collision_set_; }
 		/// Independent endpoint reconstruction; never refreshes or mutates this form.
 		BarrierContactForm diagnostic_snapshot(const Eigen::VectorXd &x) const;
+		/// Bounded observational path quadrature; never refreshes production coefficients.
+		json diagnostic_path(const Eigen::VectorXd &start, const Eigen::VectorXd &end) const;
 		json diagnostic_state() const;
 		/// Observer for outer refresh/calibration/stall/post-step operations.
 		/// Callback failures cannot change solver behavior. Direct initialization

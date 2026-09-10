@@ -1,13 +1,13 @@
 # RB-04 — Accepted-step physical accounting and diagnostics
 
 Dates: 2026-09-08–2026-09-09
-Status: **in progress — endpoint and scoped coefficient-event instrumentation validated; trajectory accounting pending**
+Status: **characterized—limits documented; opt-in endpoint and path instrumentation validated**
 Continuation: [candidate research log](rb-04-research-log.md) records the user's
 coherent-model direction, trim-band hypothesis, 15-run pilot, and exact remaining
 event/work-accounting tasks. The pilot does not close trajectory accounting.
-Selected stage: inventory and opt-in version 1 returned/failed endpoint records,
-with independent public-fixture measurements. This does not close all RB-04
-acceptance stages.
+Historical initial stage: inventory and opt-in version 1 returned/failed endpoint records,
+with independent public-fixture measurements. See the final dated disposition for the completed bounded accounting scope
+and remaining accuracy limitations.
 
 Current user-selected direction: improve the existing adaptive barrier; Fixed
 mode remains a reference and AL is deferred. See the
@@ -363,3 +363,95 @@ See [work convention and exact next stage](rb-04-work-convention.md#discrete-tra
 for equations, inputs, commands, detailed results and restrictions. The contact
 remainder still needs actual scene-path gradient quadrature to distinguish
 integration error from frozen-coefficient feature jumps. RB-04 stays in progress.
+
+
+## Actual contact-path measurements and RB-04 disposition (2026-09-09)
+
+**Status: characterized—limits documented; opt-in instrumentation validated.**
+This closes the current bounded RB-04 accounting investigation, not physical
+certification of the contact model. Later model comparisons may require tighter
+quadrature or more fixtures; the limitations below must travel with the data.
+
+The new `output.physical_diagnostics_contact_path` option defaults false and only
+acts with `physical_diagnostics=true` at returned accepted endpoints. It evaluates
+1025 private snapshots on x(t)=x_start+t*(x_end-x_start), retaining endpoint
+coefficient/trim state. New stencil coefficients use the same frozen snapshot
+rule; no stiffness refresh or production cache update occurs. Energies and
+path-directional gradients are recorded in objective units; divide by the saved
+acceleration scaling for the physical-energy convention. Failures are explicitly
+unavailable and do not invalidate the rest of the endpoint record.
+
+Nested trapezoids use 16/64/256/1024 panels. The postprocessor also applies
+composite Simpson integration to the same samples. Sorted collision-key signatures
+identify changed grid intervals, then 24 bisections narrow a detected transition.
+Store both sides, energy difference, and whether multiple signatures appeared.
+A bracket is no wider than 2^-34 in normalized path coordinate. This is bounded
+sampling, not an exhaustive event detector, collision-path certificate or proof
+of continuous energy for arbitrary contacts. The straight segment is an accounting
+path between time endpoints, not the solver's Newton path or a resolved physical
+trajectory within the timestep.
+
+**Validation:** final formatted build passed; affected suite 2191 assertions /
+31 cases passed. All three public off/on pairs completed four steps with maximum
+displacement difference 1.424e-14, within the unchanged 1e-10 screen. Paired
+intentional failures both returned -6 without an accepted step 1. All five public
+smokes had exit 0, zero error lines and PVD times 0,.25,.5,.75,1. Real Houdini
+PolyFEM HDA E2E passed. No dependency, coefficient, friction-lag, stopping rule,
+CCD, trial-cap or default behavior changed. No private scene ran. Diagnostics are
+expensive when enabled; overlapping validation jobs are not timing benchmarks.
+
+The separate detector control reuses the exact RB-02/04 transition geometry:
+4 assertions passed, recovering the Semi energy jump -44.497739402978 and zero
+for Fixed k=70, with unchanged production snapshot state. This tests sensitivity
+to the known jump, not reliability for every degenerate multi-feature event.
+
+| Public path | Step-1 energy minus Simpson work, 1024 panels | Maximum absolute same error, steps 2–4 |
+| --- | ---: | ---: |
+| Quasistatic frictionless | .001310237 | 3.980e-13 |
+| Transient frictionless | .001308053 | 5.685e-14 |
+| Quasistatic friction | .001310237 | 3.837e-13 |
+
+First-contact activation occupies a short part of the coarse displacement
+segment. In quasistatics its trapezoidal mismatch decreases from -270.916 at
+16 panels to -.119055 at 1024. Simpson mismatch at 16/64/256/1024 panels is
+-162.694 / -2.48885 / -.0105961 / +.00131024; its sign change means no monotonic
+error/extrapolation guarantee is claimed. The last value is about 2.44e-5 of that
+segment's contact-energy change (~53.75). These are measured discrepancies from
+the actual energy difference, not a preselected engineering acceptance tolerance.
+Do not claim the earlier 1e-9 energy screen is met by first-contact quadrature.
+
+Detected feature-bracket energy differences after subtracting the tiny smooth
+bracket work have maximum magnitude below 5.0e-12 on these 12 segments. Many
+intervals contain multiple signatures (including nearly all later-segment
+brackets), so the detector cannot isolate every geometric tie/switch. Agreement
+of integrated work and endpoint energy supports a small net discrepancy on the
+sampled later segments; it does not rule out unobserved cancelling jumps. These
+public trajectories do not exhibit the large net jump in the synthetic RB-02
+counterexample. Keep that counterexample open for RB-15.
+
+**Accounting conclusion:** the large right-endpoint normal-contact remainder in
+these coarse public trajectories is predominantly integration error. Independent
+elastic path work and implicit-Euler mass work were verified in the preceding
+stage; parameter-state changes and solved-/updated-lag friction work remain
+separate. Actual contact-path integration now quantifies its residual error and
+detected jump limits. No universal energy conservation, converged friction law,
+mesh accuracy or optimal trim band is established.
+
+Evidence: parent `outputs/rb-04/20260909-contact-path/`, with build/test logs,
+input/binary/source hashes in `tested-manifest.json`, raw on/off/failure runs,
+full path samples and signature brackets, `path-summary.json`, and
+`detector-control/` source/executable/commands/results. The copied helper
+`candidate_probe.cpp` is required to reproduce the detector probe. Small portable
+results are [contact-path-results-20260909.json](../tools/rb04/contact-path-results-20260909.json);
+full signature data stay in the local evidence. Sources:
+[analyzer](../tools/rb04/analyze_contact_path.py) and
+[detector control](../tools/rb04/contact_path_probe.cpp).
+
+**Handoff:** no more RB-04 work is required before RB-05 or RB-13. Start RB-13
+stage 1 for the agreed mechanically informed adaptation research. Tighten actual
+path quadrature near activation if a later RB-09/17 comparison needs error below
+.00131 on these coarse segments; use exhaustive event isolation if making stronger
+continuity claims. Friction reversal/stick-slip and coupled-lag accuracy remain
+RB-10, and unsupported maps remain subject to RB-03. Existing missing diagnostic
+fields retain unavailable reasons; a populated arithmetic budget is not an
+automatic `physical_balance_pass`.

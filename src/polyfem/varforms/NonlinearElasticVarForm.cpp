@@ -158,6 +158,17 @@ namespace polyfem::varform
 					const auto start_snapshot = snapshot.diagnostic_snapshot(start);
 					record["barrier_start_energy_with_endpoint_snapshot"] = scalar(start_snapshot.value(start) / scale);
 					record["barrier_start_energy_scope"] = "Solve-start coordinates evaluated with returned endpoint coefficient snapshot; not a sum of optimization-event work";
+					if (outcome == "accepted" && args["output"].value("physical_diagnostics_contact_path", false))
+					{
+						try
+						{
+							record["contact_path"] = snapshot.diagnostic_path(start, x);
+						}
+						catch (const std::exception &error)
+						{
+							record["contact_path"] = missing(error.what());
+						}
+					}
 					record["contact"] = snapshot.diagnostic_state();
 					const double d2 = snapshot.collision_set().compute_minimum_distance(collision_mesh_, snapshot.compute_displaced_surface(x));
 					record["contact"]["min_gap"] = std::isfinite(d2) ? scalar(std::sqrt(d2)) : missing("No active pair within dhat; global minimum not measured");

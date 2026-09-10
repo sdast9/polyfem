@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
@@ -273,6 +274,14 @@ TEST_CASE("Physical diagnostic snapshots preserve contact state and frozen deriv
 	snapshot.first_derivative(x, g);
 	CHECK((g - fd).norm() / (1 + g.norm()) < 1e-6);
 	CHECK(form.diagnostic_state() == state);
+	const auto path = form.diagnostic_path(zero, x);
+	CHECK(path["samples"].size() == 1025);
+	CHECK(path["quadrature"].size() == 4);
+	CHECK_FALSE(path["transitions"].empty());
+	CHECK(double(path["samples"].front()["energy_objective"]) == Catch::Approx(before.energy));
+	CHECK(double(path["samples"].back()["energy_objective"]) == Catch::Approx(snapshot.value(x)));
+	CHECK(form.diagnostic_state() == state);
+	check(sample(form, mesh, zero), before);
 	// On/off continuation: a subsequent production rebuild has the same result.
 	form.solution_changed(x);
 	check(sample(form, mesh, x), sample(snapshot, mesh, x));

@@ -184,3 +184,18 @@ account for the RB-02 stencil-transition jumps. No coefficient/interpolation
 model, global convergence gate, CCD policy, trial cap or friction budget changes
 are part of this implementation. See the validation record for measured results
 and the exact remaining acceptance work.
+
+
+## Optional contact-path observations
+
+`output.physical_diagnostics_contact_path=false` by default. With ordinary physical
+diagnostics enabled, accepted endpoints may include `contact_path`: 1025 private
+frozen-snapshot samples (`t`, objective energy, objective directional derivative,
+contact-key signature), nested trapezoidal estimates and 24-bisection transition
+brackets with multi-signature warnings. No production snapshot is advanced.
+Postprocessing divides energy/work by the endpoint acceleration scaling. The
+scope is the straight start/end displacement segment with frozen endpoint
+coefficients; it is neither a Newton-history trace nor a collision certificate.
+Errors remain unavailable with a reason. Up to 1024 changed grid intervals can
+trigger 24 extra evaluations each; this is an expensive research option.
+See [validation and scope](rb-04-validation.md#actual-contact-path-measurements-and-rb-04-disposition-2026-09-09).

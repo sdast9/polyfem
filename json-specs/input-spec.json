@@ -2533,7 +2533,8 @@
             "advanced",
             "reference",
             "stats",
-            "physical_diagnostics"
+            "physical_diagnostics",
+            "physical_diagnostics_contact_path"
         ],
         "doc": "output settings"
     },
@@ -2548,6 +2549,12 @@
         "type": "bool",
         "default": false,
         "doc": "Opt-in RB-04 version 1 endpoint records in physical-diagnostics.jsonl; observational, not an acceptance criterion."
+    },
+    {
+        "pointer": "/output/physical_diagnostics_contact_path",
+        "type": "bool",
+        "default": false,
+        "doc": "With physical_diagnostics, sample frozen contact paths at 1025 points and refine detected feature transitions. Expensive observational research output only."
     },
     {
         "pointer": "/output/stats",

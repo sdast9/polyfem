@@ -13,6 +13,7 @@ import subprocess
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--source', type=Path, help='Alternate standalone probe source')
 args = parser.parse_args()
 build = args.build.resolve() / 'tests'
 out = args.output.resolve()
@@ -23,7 +24,7 @@ for line in (build / 'CMakeFiles/unit_tests.dir/flags.make').read_text().splitli
         key, value = line.split(' = ', 1)
         flags[key] = shlex.split(value)
 link = shlex.split((build / 'CMakeFiles/unit_tests.dir/link.txt').read_text())
-source = Path(__file__).with_name('candidate_probe.cpp').resolve()
+source = (args.source or Path(__file__).with_name('candidate_probe.cpp')).resolve()
 (out / source.name).write_bytes(source.read_bytes())
 obj, binary = out / 'candidate_probe.o', out / 'candidate_probe'
 compile_cmd = [link[0]] + flags['CXX_DEFINES'] + flags['CXX_INCLUDES'] + flags['CXX_FLAGS'] + ['-c', str(source), '-o', str(obj)]

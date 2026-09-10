@@ -114,11 +114,11 @@ RB-14 and RB-15 are separate investigations and can be selected independently on
 their stated prerequisites exist. Finish missing RB-04 measurements as needed;
 do not rerun its completed probes without a relevant code change or new question.
 RB-04 is not a blocker for RB-05 resource containment or RB-13 analytical work.
-Its remaining trajectory work includes stating and validating the full discrete
-work convention/error limits on the required fixtures and retaining consistent
-coefficient/lag endpoint identities. Supply those measurements before claiming
-an integrated candidate's physical accuracy; normal-law theory need not wait for
-full friction certification. RB-04 remains in progress, not silently closed.
+Its discrete work convention, actual contact-path errors and coefficient/lag
+endpoint identities are now characterized on the bounded fixtures. Use those
+limits to decide whether an integrated candidate comparison needs additional
+measurements; normal-law theory need not wait for full friction certification. RB-04 is now characterized with endpoint/path accounting limits documented;
+see its final disposition before asking for tighter measurements.
 
 Retain the existing RB-05–RB-12 IDs because records already refer to them. Resource
 containment, rollback and validation remain necessary; numbering is not execution
@@ -146,7 +146,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [characterized—decision pending](rb-02-validation.md) |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [characterized—decision pending; exact indexing validated](rb-03-validation.md) |
-| RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [in progress—physical state pairs validated; adaptive-barrier consistency and controller investigation selected](rb-04-validation.md) |
+| RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [characterized—limits documented; endpoint/path diagnostics validated](rb-04-validation.md) |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |

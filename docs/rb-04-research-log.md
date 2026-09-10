@@ -455,3 +455,35 @@ Resume with an actual scene contact-path private-snapshot quadrature measurement
 Do not rerun completed elastic/mass/paired-state checks absent changed inputs or
 source. Do not declare RB-04 physically complete because its algebraic budget
 closes. Adaptive model/estimator/controller research remains in RB-13–RB-17.
+
+
+## Actual contact-path stage — predeclared protocol (2026-09-09)
+
+Add separately opt-in `physical_diagnostics_contact_path`, requiring ordinary
+physical diagnostics, with 1025 private frozen-snapshot samples on the returned
+physical displacement segment. Compare nested composite trapezoids at
+16/64/256/1024 panels and refine changed contact-key signatures by 24 bisections.
+Record multi-signature brackets and do not claim exhaustive transition isolation;
+events leaving/reentering one grid interval can be missed. Save objective units
+and divide by endpoint acceleration scaling for physical accounting. No law,
+coefficients, lag policy, solver gradient or acceptance changes. Test private-state
+preservation and full public on/off/failure equivalence before interpreting data.
+
+
+## Actual path stage completed; bounded RB-04 accounting characterized (2026-09-09)
+
+Read [the final disposition](rb-04-validation.md#actual-contact-path-measurements-and-rb-04-disposition-2026-09-09)
+for all exact results and limitations. New path instrumentation defaults off;
+2191 assertions/31 cases, public on/off/failure checks, all five smokes and HDA E2E
+pass. Max displacement on/off difference 1.424e-14. Detector control recovers
+-44.4977394 and zero for the known Semi/Fixed cases. Later public-segment Simpson
+energy/work errors are below 4e-13; first-contact error remains .00131. Multiple
+signature brackets prevent exhaustive event claims. No physical threshold or
+coefficient law changed. The bounded accounting investigation is now
+characterized—limits documented, with instrumented behavior validated.
+
+Next research is RB-13 stage 1; RB-05 resource work is independently eligible.
+Do not keep extending RB-04 merely to claim zero error everywhere. Reopen a
+specific measurement only if the future candidate/accuracy protocol needs a
+tighter onset quadrature tolerance or stronger event isolation. RB-15 owns the
+reproduced coefficient jump; RB-10 owns broader friction validation.

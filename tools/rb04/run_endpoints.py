@@ -22,6 +22,7 @@ from measure_fem import arrays, measure
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--contact-path', action='store_true', help='Enable expensive path observations in diagnostic-on runs')
     args = p.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -35,6 +36,8 @@ def main():
             shutil.copy2(ROOT / 'scenes/semi-implicit' / asset, directory / asset)
         config['output']['paraview']['options'] = {'velocity': True}
         config['output'].update(directory=str(directory / 'output'), stats=True, physical_diagnostics=enabled)
+        if args.contact_path:
+            config['output']['physical_diagnostics_contact_path'] = enabled
         if failure:
             # Existing opt-in test budget, not a production default change.
             config['solver']['contact']['semi_implicit'] = {'restart': {
