@@ -62,7 +62,7 @@ Relevant implementation: `FrictionForm.cpp` compute_surface_velocities,
 first_derivative_unweighted and update_lagging; `ImplicitEuler.cpp`;
 `NonlinearElasticVarForm.cpp` final lag loop and diagnostic writer.
 
-Next observation: capture friction gradient immediately before and immediately
+Historical next observation (implemented in the paired-state extension below): capture friction gradient immediately before and immediately
 after each lag update at the same x. Report both discrete work estimates and
 the residual reconstructed with pre-update friction while holding other forms
 fixed. Do not silently increase the user's lag budget or change acceptance.
@@ -82,8 +82,8 @@ This changes coefficients at the previous physical coordinates, then moves at
 fixed endpoint coefficients. The second term can be called a parameter-state
 energy change **under this declared convention**. The first equals the contact
 gradient line integral only when the potential is continuous along the chosen
-path; RB-02's feature jumps prevent assuming that. Current outputs lack
-B(x_(n-1);theta_n). A private endpoint-coefficient snapshot evaluated at the
+path; RB-02's feature jumps prevent assuming that. The initial outputs lacked
+B(x_(n-1);theta_n); the paired-state extension below now supplies it. A private endpoint-coefficient snapshot evaluated at the
 step's starting coordinates is the minimal extra observation. Subsequent path
 quadrature/feature-boundary checks must distinguish quadrature error from jumps.
 
@@ -131,3 +131,90 @@ For frictionless quasistatics, physical-start parameter energy is
 it must remain explicit in a numerical barrier-energy account. The refresh after
 the final published endpoint is outside this final endpoint's coefficient state;
 it is not silently added to its physical-time budget.
+
+
+## Discrete trajectory budget and elastic path reference (2026-09-09)
+
+This completed stage uses the preserved physical-state-pair outputs from the
+`e652fae53` production build; no new solver run or production source change.
+Tool: [trajectory_budget.py](../tools/rb04/trajectory_budget.py).
+Data: [trajectory-budget-results-20260909.json](../tools/rb04/trajectory-budget-results-20260909.json).
+Fresh local evidence: parent `outputs/rb-04/20260909-trajectory-budget/` (first
+analysis) and `outputs/rb-04/20260909-trajectory-budget-final/` (final analysis,
+including explicit unavailable totals for the zero-endpoint failed run). Neither
+analysis overwrites earlier solver outputs. Exact analyzer copies, input hashes,
+reference hash and results are retained. Command from PolyFEM:
+
+```bash
+/opt/homebrew/bin/python3 tools/rb04/trajectory_budget.py --evidence ../outputs/rb-04/20260909-physical-state-pairs --output ../outputs/rb-04/20260909-trajectory-budget-final
+/opt/homebrew/bin/python3 tools/rb04/test_trajectory_budget.py
+```
+
+Let Ce and Cb be right-endpoint elastic and normal-contact gradient work;
+Cf uses the friction gradient immediately BEFORE the final lag update. Let
+P=B(x_previous;theta_endpoint)-B_previous and M_B=B_endpoint-B_common_start.
+Define R_elastic=Ce-Delta E and R_contact=Cb-M_B. Summed over physical steps:
+
+```text
+W_support,right = Delta E_elastic + Delta B + Delta K + D_IE + Cf
+                + R_elastic + R_contact - P + epsilon_equilibrium
+```
+
+Here epsilon_equilibrium=W_support,right-(Ce+Cb+Ci+Cf).
+This equality closes a discrete algebraic budget, not a physical energy proof.
+R_contact combines right-endpoint quadrature error and any frozen-snapshot
+feature-jump contribution; this stage does not separate them or call either
+physical dissipation. R_elastic is independently identified as endpoint work
+approximation error through integration of the constitutive stress along each
+straight displacement segment. D_IE is the independently reconstructed
+implicit-Euler mass identity; it is absent in quasistatics. Cf is a numerical
+resistance-work estimate under the solved lag, not a continuum dissipation proof.
+
+The support forces are those recorded by the existing writer. For these fixtures,
+the before/after lag difference contributes zero work on reaction-carrying DOFs
+(checked at 1e-9 absolute tolerance); do not reuse this support-state shortcut
+for arbitrary moving/frictional boundaries. The initial undeformed/noncontact
+state, fixed mesh, Neo-Hookean material, rho=1000, no distributed work and existing
+integrator interpretation are fixture restrictions, not inferred general defaults.
+
+All 9 complete trajectories / 84 accepted endpoints pass the retained 1e-9
+relative-plus-absolute reference screen. The tenth trajectory is the preserved
+fine-friction failure before step 1; its totals are unavailable, not zero.
+Independent P1 stress-path integration with 2/4/8-point Gauss rules gives maximum
+absolute work-minus-energy errors 0.8932054 / 4.248e-7 / 1.783e-10 across the
+84 segments. Quadrature-sampled minimum det(F) is .836284, not a proof of
+positivity everywhere on every segment. Endpoint stress work also agrees with
+the saved full nodal elastic gradient dotted with displacement increment.
+
+The maximum per-step algebraic closure error is 2.911e-11; maximum absolute
+solved-state equilibrium-work defect is 7.305e-7. These have different meanings:
+closure is an arithmetic consistency check; the latter reflects approximate
+endpoint equilibrium along the actual increment. All measured solved-lag friction
+step costs are nonnegative (minimum zero) on the monotone fixtures only.
+Independent uniaxial-stretch energy/work, rigid-translation zero-work and inverted-
+endpoint rejection controls pass (3 tests). Existing independent mass/kinetic
+checks pass at every transient endpoint in this dataset.
+
+| Quasistatic frictionless dt | Elastic right-work remainder | Contact right-work remainder | Parameter-state energy P |
+| --- | ---: | ---: | ---: |
+| .25 | 111325.1021 | 10459.3500 | 544.1632 |
+| .125 | 56175.5549 | 2989.7173 | 589.0173 |
+| .0625 | 28354.8107 | 725.7493 | 625.3159 |
+
+The elastic endpoint remainder approximately halves as the increment halves;
+independent quadrature identifies it as work-approximation error on these
+segments. The contact remainder decreases but is not yet attributed to a unique
+cause. Parameter-state energy persists; keep it explicit. These quantities must
+not be relabeled physical loss to make a balance appear complete.
+
+**Next exact RB-04 stage:** obtain/reconstruct a private endpoint-coefficient
+snapshot for quadrature along one saved frictionless physical displacement
+segment, including its collision map and coefficient identity. Compare gradient
+integrals at increasing orders/subdivisions with common-snapshot energy changes;
+record feature identities and isolate discontinuities. Start with one segment
+having nonzero contact remainder, then expand only as needed. Reuse the completed
+RB-02 boundary probe as evidence, not as a substitute for the actual scene path.
+No coefficient/controller redesign is authorized here; that belongs to RB-13–RB-17.
+Friction's broader reversal/stick-slip accuracy remains RB-10. RB-04 remains in
+progress until its required work-accounting limits are resolved or explicitly
+characterized; this algebraic closure does not mark physical balance passed.

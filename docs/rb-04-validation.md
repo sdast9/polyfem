@@ -343,3 +343,23 @@ integration-error limits for the required fixtures, retaining coefficient and
 friction-lag state identity. Supply the relevant measurements for RB-17/RB-09
 physical conclusions. Do not claim full friction certification or rerun completed
 endpoint/transition probes merely because the plan was revised.
+
+
+## Discrete trajectory budget — completed postprocessing stage (2026-09-09)
+
+Existing `e652fae53` binary evidence only, 9 full trajectories / 84 endpoints,
+plus the retained failed fine-friction attempt with unavailable totals. No new
+solver run, source/default change, or tolerance relaxation. The new analyzer
+checks the complete right-endpoint algebraic budget including elastic/contact
+remainders, parameter-state changes, solved-lag friction and independent inertia.
+Independent elastic stress-path integration errors fall from .8932054 (2-point)
+to 4.248e-7 (4-point) to 1.783e-10 (8-point); all endpoint comparisons pass.
+Three analytical/negative controls pass. Maximum budget arithmetic error is
+2.911e-11; maximum step equilibrium-work defect 7.305e-7. These are targeted
+checks, not complete physical energy certification. No C++ rebuild/smokes needed
+for standalone postprocessing of unchanged solver artifacts.
+
+See [work convention and exact next stage](rb-04-work-convention.md#discrete-trajectory-budget-and-elastic-path-reference-2026-09-09)
+for equations, inputs, commands, detailed results and restrictions. The contact
+remainder still needs actual scene-path gradient quadrature to distinguish
+integration error from frozen-coefficient feature jumps. RB-04 stays in progress.

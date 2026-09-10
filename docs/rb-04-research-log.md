@@ -421,3 +421,37 @@ now include estimator/controller resource, rollback and validation requirements.
 These items supersede the earlier immediate-next-experiment ordering, preserving
 all earlier results. RB-04 accounting remains in progress; no new measurement,
 model implementation or production default is claimed by this planning update.
+
+
+## Resumed trajectory budget stage — predeclared protocol (2026-09-09)
+
+Postprocess the ten preserved physical-state-pair trajectories (nine complete,
+one failed) without rerunning the solver. Construct the discrete right-endpoint
+budget with solved-lag friction, independently integrated inertia, elastic and
+contact remainders, and physical-start parameter-state energy changes. A budget
+closed by explicit remainders is an algebraic audit, not physical certification.
+Independently integrate P1 Neo-Hookean P:dF on straight displacement segments
+using 2/4/8-point Gauss quadrature; compare 8-point work with endpoint energy
+change using the existing 1e-9 relative+absolute screen. Check sampled positive
+det(F), endpoint elastic work against recorded nodal work and exact P1 mass work.
+Keep contact right-work minus fixed-snapshot energy change explicitly unresolved
+between path quadrature and feature discontinuities. Preserve every failed run
+and analysis error. No change to coefficient laws, lag policy or acceptance.
+
+
+## Trajectory budget stage completed (2026-09-09)
+
+Saved-output analysis completed for 9 full trajectories / 84 endpoints; the
+original zero-endpoint failure is retained with unavailable work totals. See
+[work convention](rb-04-work-convention.md#discrete-trajectory-budget-and-elastic-path-reference-2026-09-09)
+for exact terms, 2/4/8-point independent elastic integration and next stage.
+The maximum 8-point elastic work/energy discrepancy is 1.783e-10. The large
+elastic endpoint-work remainder is quadrature error, not unexplained material
+loss. The right-work budget now closes algebraically with explicit contact
+remainder and coefficient-state terms, not by labeling them dissipation.
+All three independent analytical/negative controls pass; no solver ran.
+
+Resume with an actual scene contact-path private-snapshot quadrature measurement.
+Do not rerun completed elastic/mass/paired-state checks absent changed inputs or
+source. Do not declare RB-04 physically complete because its algebraic budget
+closes. Adaptive model/estimator/controller research remains in RB-13–RB-17.

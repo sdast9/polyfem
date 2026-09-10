@@ -104,3 +104,17 @@ and units, and integrates the gradient across the boundary. See
 [candidate comparison](../../docs/rb-04-candidate-comparison.md) for normalization,
 results, interpretation and remaining scene work. Committed compact data are
 `candidate-results-20260909.json`; raw outputs retain both successful probe runs.
+
+
+### Discrete trajectory budget
+
+`trajectory_budget.py --evidence /physical-state-pairs --output /new/evidence`
+reads the committed paired-result index and saved solver artifacts. It separately
+reports solved-lag friction, elastic/contact right-work remainders, parameter
+energy and implicit-Euler terms. An independent P1 stress-path quadrature checks
+elastic energy changes. `python3 tools/rb04/test_trajectory_budget.py` runs three
+analytical/negative controls. Use Homebrew Python with NumPy. The output directory
+must be new. No solver runs. Failed zero-endpoint runs have unavailable totals.
+See [work convention](../../docs/rb-04-work-convention.md) for fixture restrictions
+and the unresolved contact path contribution. Compact results are in
+`trajectory-budget-results-20260909.json`.
