@@ -1,9 +1,9 @@
-# RB-13 stages 1–2 — Mechanical coefficient reference and conditional bounds
+# RB-13 — Mechanical coefficient reference, bounds and scope
 
-2026-09-09; extended 2026-09-10. **Stages 1–2 characterized within the reference assumptions.**
+2026-09-09; extended 2026-09-10. **Stages 1–3 characterized; production decisions pending.**
 This is a derivation and standalone analytical probe, not an installed coefficient
-law. Section 7 establishes the conditional intervals; the complete scope matrix
-(stage 3) is pending. See [validation](rb-13-validation.md) and
+law. Section 7 establishes the conditional intervals; section 8 characterizes
+their mechanical scope and counterexamples. See [validation](rb-13-validation.md) and
 [reproduction](../tools/rb13/README.md).
 
 ## 1. Coordinates, predictor and compliance
@@ -54,8 +54,8 @@ This proves K_eff = 1/(J H^{-1} J^T); the notation denotes a solve, not an
 instruction to form an inverse. All admissible displacement components relax
 in that solve. Using a principal stencil block, prescribing a contact direction,
 or allowing constrained DOFs to move generally defines a different mechanical
-problem. The current Rayleigh-quotient law is not this condensation. A quantitative
-comparison, supported springs, rigid limits and coupled contacts belong to stage 3.
+problem. The current Rayleigh-quotient law is not this condensation. Section 8
+compares supported springs, rigid limits, directional curvature and coupled contacts.
 
 If H is singular/indefinite, or J is zero on the free space, this contract cannot
 supply a finite positive compliance. The probe rejects nonpositive pivots; it
@@ -173,8 +173,8 @@ Under numerical conversion length'=lambda length and force'=mu force:
 H'=mu/lambda H, b'=lambda^4 b, f'=lambda^3 f,
 k'=mu/lambda^3 k, and (k b'')'=mu/lambda (k b''). Here primes on whole
 quantities denote unit conversion, not differentiation. The barrier probe checks
-dimensional normalization over dhat=.01, 1, 100; a full equivalent-unit mechanical
-scope test remains stage 3.
+dimensional normalization over dhat=.01, 1, 100; section 8 adds equivalent-unit
+mechanical checks, without claiming production controller covariance.
 
 ## 5. Integrator scaling and predictor history
 
@@ -272,9 +272,9 @@ Audited at PolyFEM `f9de2eb07`, IPC `af317a65`, PolySolve `4d372fa8`:
 
 Stage 2's monotonic force-balance roots and conditional intervals are now
 derived below, including enclosing-input uncertainty, empty intervals and inactive demand.
-Stage 3 must still test spring series/rigid limits, differing speeds, full unit
-conversion, nonlinear prediction error, Rayleigh comparison and multi-contact
-coupling. No production k, global/local replacement, estimator approximation,
+Stage 3's spring series/rigid limits, differing speeds, unit conversion,
+nonlinear prediction error, Rayleigh comparison and multi-contact coupling are
+characterized in section 8. No production k, global/local replacement, estimator approximation,
 uncertainty enclosure or controller timing policy has been selected.
 
 ## 7. Stage 2 — conditional bands (2026-09-10)
@@ -413,5 +413,197 @@ correlated physical family.
 The [stage 2 protocol](../tools/rb13/stage2-protocol.md) and standalone
 `band_probe.py` test these cases with compiled IPC forces and independent
 Decimal reference roots. Results and publication are recorded in
-[validation](rb-13-validation.md). Stage 3's mechanical applicability matrix,
+[validation](rb-13-validation.md). Section 8 characterizes mechanical applicability;
 RB-14 estimator enclosures and RB-16 controller policy remain separate work.
+
+## 8. Stage 3 — mechanical scope and counterexamples (2026-09-10)
+
+The [stage 3 protocol](../tools/rb13/stage3-protocol.md) declares the fixtures
+and tolerances. `scope_probe.py` uses the compiled effective IPC barrier primitive
+for force, curvature and energy evaluations. Small spring systems are assembled
+analytically; no FEM mesh, production coefficient controller, C++ integrator class
+or collision builder is executed. The Rayleigh comparisons below evaluate the
+source-traced quadratic expression, not the full assignment/trim pipeline.
+
+### Supported springs and the rigid endpoint limit
+
+Let two endpoints have displacement u=[u_A,u_B], support energy
+1/2 A u_A^2 + 1/2 B u_B^2 and gap d=p+u_B-u_A. For repulsive force F,
+
+```text
+H = diag(A,B), J=[-1,1]
+u_A = -F/A, u_B = F/B
+d-p = F(1/A+1/B)
+K_eff = AB/(A+B).
+```
+
+This is two supported compliances in series, not the sum of the support
+stiffnesses. Contact forces [-F,F] and support forces [F,-F] balance. As B tends
+to infinity, K_eff tends to A with relative error A/(A+B). Ratios B/A from 1 to
+1e6 reproduce that expression. An explicitly prescribed u_B=0 gives K_eff=A
+exactly in the reduced space. The finite B/A=1e6 case is close to rigid, not
+identical to a prescribed boundary condition.
+
+### Why the current Rayleigh value is different
+
+At nondegenerate frozen geometry the current IPC routine normalizes the vector
+formed from stencil coefficients times the contact normal. For this scalar
+two-endpoint stencil that direction is w=J^T/||J||. With physical H (the form
+acceleration weight removed), its raw curvature is
+
+```text
+r = w^T H w = (J H J^T)/||J||^2 = (A+B)/2.
+```
+
+PolyFEM passes zero local mass to this routine and subsequently divides the
+weighted curvature by dhat^2 and its form weight, then applies the documented
+caps/trim. This comparison concerns the raw curvature, not those later policies.
+
+If displacement is restricted to the direction J^T while achieving gap change
+delta, u=J^T delta/||J||^2. Its **gap** spring stiffness is therefore
+
+```text
+K_direction = (J H J^T)/||J||^4 = r/||J||^2 = (A+B)/4.
+```
+
+The r-to-K_direction factor cannot be omitted when comparing a normalized
+coordinate direction to a physical gap. Cauchy-Schwarz gives
+(J H J^T)(J H^-1 J^T)>=(J J^T)^2 for SPD H, so K_direction>=K_eff.
+Allowing all displacements to relax can only lower the minimum energy for a
+fixed gap change. Equality holds for this example when A=B; even then r is
+twice K_eff because ||J||^2=2.
+
+For A=1,B=100 the measured values are r=50.5, K_direction=25.25 and
+K_eff=.9900990099. This mismatch is a difference in displacement restrictions
+and normalization, not evidence that the two formulas were intended to be equal.
+It does not choose a replacement for the current stiffness estimator.
+
+For a fixed obstacle the current zero-padded two-endpoint stencil with A=2
+has r=1, while the truly reduced prescribed-obstacle problem has K_eff=2.
+An obstacle placeholder is not a freely relaxing zero-stiffness DOF. The
+comparison must state which coordinates are admissible; inversion of that
+singular padded matrix is not a substitute for reducing the prescribed DOF.
+General interpolated geometry remains subject to RB-03/RB-15's open contract.
+
+### Inertia, history and unit conversion
+
+For the supported endpoints with stiffnesses 4,12 and masses 1,3, implicit
+Euler's physical incremental objective is
+
+```text
+Psi_nc(u) = sum_i [1/2 A_i u_i^2 + m_i/(2 dt^2)(u_i-dt v_i)^2]
+H_i = A_i + m_i/dt^2
+u_free,i = (m_i v_i/dt)/H_i
+p = .6 + u_free,B - u_free,A.
+```
+
+With v_A=s/2, v_B=-s/2, p=.6-s dt/(1+4 dt^2). The initial displacements
+are zero; velocity history changes p without changing H at fixed dt. Both mass
+terms enter once through H and the predictor. At dt=.2, K_eff=21.75 for every
+tested speed; s=1,2,4 gives target-.5 demands 1.575,5.325,12.825 and coefficients
+.3637882588,1.2299507797,2.9622758216. All eight compressed cases across the
+three timesteps recover .5, including negative extrapolated p. No barrier is
+evaluated at that negative predictor. Four cases have zero target demand and
+make no active-protection decision.
+
+Holding the speed-2 coefficient for the dt=.2 comparison gives gaps .6997678892
+at speed 0 and .3299897579 at speed 4. Thus H alone cannot describe the predicted
+compression. This is a one-step incremental reference, not a transient trajectory,
+impact restitution result or an implementation of a history-aware controller.
+
+For numerical conversion x'=lambda x, force'=mu force, time'=tau time, use
+
+```text
+dt'=tau dt, v'=lambda/tau v, m'=mu tau^2/lambda m
+A'=mu/lambda A, H'=mu/lambda H, p'=lambda p, dhat'=lambda dhat
+k'=mu/lambda^3 k
+Psi'=mu lambda Psi, Phi'=mu lambda tau^2 Phi  (Phi=dt^2 Psi).
+```
+
+All 27 length/force/time combinations in the protocol reproduce converted roots,
+forces, displacements and physical/incremental objective values. Psi includes
+the inertial algorithmic potential; it is not stored mechanical energy. This
+does not overturn RB-02's production-controller unit-dependence evidence or test
+new unit conversions for absolute safeguards, scene inputs or friction.
+
+### Stable nonlinear response can invalidate a local band
+
+Use g(d)=6(d-.1)+alpha(d-.1)^3 with potential
+3(d-.1)^2+alpha/4(d-.1)^4. For alpha>=0 its tangent is strictly positive.
+At anchor a, the linear reference is H_a=g'(a), p_a=a-g(a)/H_a, and its
+target coefficient uses H_a(.5-p_a)/f(.5). This freezes a local Taylor model.
+
+At alpha=100,a=.1 it predicts .5 using k=.5543440134, but the actual nonlinear
+equilibrium is .3713309397. Its force residual at the predicted target is 6.4;
+the actual nonlinear root itself has a small residual. Using the exact target
+demand g(.5) instead gives k=2.0325947158 and recovers .5. Anchors approaching
+.5 reduce error in this convex quartic fixture; this trend is not a theorem for
+arbitrary materials or a selected refresh policy.
+
+More decisively, the **upper** coefficient .7491934949 of the local model's
+[.45,.55] band gives actual nonlinear gap .3997523752, outside the band.
+The global spring remains stable: the failure is extrapolation of a local linear
+model, not negative curvature or numerical nonconvergence. Stage 2's theorem
+still applies to its declared quadratic reference. Application-level bounds
+need justified control of the actual force/compliance over the relevant range;
+uncertainty around one tangent alone does not provide that control.
+
+### Coupled contacts require the full compliance matrix
+
+For several affine gaps with rows J_i, minimizing the noncontact quadratic gives
+
+```text
+H (u-u_free) = J^T F
+W = J H^-1 J^T                (one solve per required column)
+d-p = W F.
+```
+
+W is SPD when H is SPD and J has independent rows. If the rows are dependent,
+W can be singular even though H is SPD; no inverse or independent coefficient
+interval follows without further compatibility analysis. For a target d_star,
+solve W F_star=d_star-p. Only nonnegative force components can be supplied by
+nonnegative coefficients k_i=F_star,i/f_i(d_star,i) in this repulsive model.
+
+The measured fixture has H=diag(2,3,5), J=[[1,-1,0],[0,1,-1]], giving
+
+```text
+W = [[5/6, -1/3], [-1/3, 8/15]]
+p=[.2,.25], d_star=[.5,.55]
+F_star=[.78,1.05], k=[.1801618044,.2913530258].
+```
+
+A full three-displacement Newton solve with compiled IPC forces returns both
+target gaps, with normalized residual 8.76e-17 and contact action-reaction balance.
+Using only W's diagonal yields k=[.0831516020,.1560819781] and actual gaps
+[.3859795050,.4724886438], despite converging with residual 3.45e-12. Numerical
+convergence does not validate the independent-contact estimate.
+
+For W=[[2,1],[1,2]] and desired gap increment [.1,.5], the required forces
+are [-.1,.3]. W is SPD and each desired gap increases, yet one force would need
+attraction because of cross-contact response. The fixture records that incompatibility
+with the chosen joint target; it neither installs a negative k nor clamps F to
+zero. It is not proof that the underlying physical problem lacks an equilibrium.
+
+### Unsupported tangents and remaining decisions
+
+The standalone reference rejects singular/indefinite/nonsymmetric/nonfinite H
+and zero J. In particular, a positive curvature in one selected direction does
+not make an indefinite full problem a stable energy minimum. For the singular
+spring H=[[1,-1],[-1,1]], the relative J=[-1,1] annihilates the rigid mode:
+relative compliance can be defined after a suitable explicit quotient/support
+and load-compatibility choice. The strict-SPD helper rejects it rather than making
+that choice silently. A separately declared fixed endpoint gives K_eff=1.
+A rigid-mode-sensitive J=[1,1] instead changes gap at no elastic cost; it cannot
+use the finite-positive-compliance contract. These two reasons are distinct.
+
+H=diag(1e-10,1), J=[1,0] retains K_eff=1e-10, tested as a ratio. No arbitrary
+positive floor, pseudoinverse or PSD projection is introduced. The diagonal
+fixture's conditioning is not evidence of general near-singular solver robustness.
+
+RB-13's three planned analytical stages are now characterized. **Production
+choices remain pending:** RB-14 must compare practical compliance/demand estimates
+and establish their approximation/enclosure limits; RB-15 must address feature
+and mapping consistency; RB-16 must choose controller/update-state handling; RB-17
+must compare the integrated candidate before any default promotion. No global
+versus local replacement, recovery policy, friction update or new force floor
+is implied by the reference calculations.

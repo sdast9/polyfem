@@ -66,3 +66,30 @@ Outputs include compile/provenance logs, raw root requests/responses, complete
 query metadata and summarized results. Only the small summary is checked in.
 No production behavior changes, application uncertainty enclosure, floating-point
 interval certificate, stage 3 completion or full-simulation guarantee is claimed.
+
+## Stage 3
+
+```bash
+python3 tools/rb13/scope_probe.py --ipc-source ../ipc-toolkit-fork --output /absolute/fresh/evidence/stage3
+```
+
+Read the [predeclared protocol](stage3-protocol.md). The runner compiles
+`scope_bridge.cpp` and effective IPC's `barrier.cpp` into a local shared library,
+called through Python's standard-library ctypes. It imports stage 1's unchanged
+small Cholesky solver and does not write bytecode into the repository.
+No full PolyFEM or IPC library rebuild is needed. The tested platform is macOS
+arm64; the filename uses `.dylib` and other platforms are not validated.
+
+The [result](results-20260910-stage3.json) reports 654 checks, 78 scalar roots,
+two full three-displacement/two-contact solves, 27 unit-conversion configurations,
+12 nonlinear tangent cases and six explicitly rejected H/J cases.
+Rayleigh values are evaluated from the source-traced quadratic expression;
+the production stiffness assignment/controller is not executed.
+
+All root histories/results, nonlinear prediction errors and unsupported-input
+outcomes are retained. A successful test of a counterexample means it reproduced
+the limitation, not that the corresponding approximation is accurate. Shared
+production binaries, stage 1/2 results and production defaults stay unchanged.
+See [contract section 8](../../docs/rb-13-contract.md) and the
+[stage 3 validation record](../../docs/rb-13-validation.md) for the measured limits
+and downstream decisions. Completing RB-13 does not select a production model.

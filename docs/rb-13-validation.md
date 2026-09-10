@@ -1,13 +1,13 @@
 # RB-13 — Mechanical coefficient estimate and conditional bounds
 
 Updated: 2026-09-10
-Status: **in progress — stages 1–2 characterized; stage 3 pending**
-Current selected stage: conditional bands and enclosing-rectangle analysis.
+Status: **characterized — decision pending; stages 1–3 completed**
+Current selected stage: stage 3 mechanical scope tests; analytical investigation complete.
 
 ## Stage 1 record — 2026-09-09
 
 The following stage 1 evidence and handoff are retained as historical records.
-The stage 2 continuation and current handoff appear below.
+The stage 2 and stage 3 continuations and current handoff appear below.
 
 ## Contract and authorization
 
@@ -290,3 +290,166 @@ coupling and invalid-H behavior. The full RB-13 acceptance remains incomplete
 until that scope matrix is characterized. RB-14/RB-16 can use the conditional
 interval semantics, but no practical enclosing estimator or controller policy
 has been selected or validated by this stage.
+
+## Stage 3 continuation — 2026-09-10
+
+### Authorization, baseline and invariant
+
+The user selected “continue to stage 3.” This stage completes RB-13's requested
+mechanical scope matrix, not a production coefficient/default implementation.
+Started clean on `main` at `052b0acb609d4222d7b879441b18100dff414a59`; effective
+IPC and PolySolve remain the clean local overrides `af317a65` and `4d372fa8`,
+matching the unchanged recipe pins. No running solver/build was found. The
+workspace instructions, PF invariants, stage 3 requirements and existing record
+were read; current IPC stiffness/derivative code, PolyFEM's provider/assignment
+and implicit-Euler history/scaling were inspected. Earlier source/record context
+continues to apply because no production source changed after stage 1.
+
+The invariant is to establish the declared reference's behavior on supported
+springs, dynamics, unit conversions and coupled contacts, while explicitly
+reproducing nonlinear/local-model and invalid-tangent limits. The
+[contract's section 8](rb-13-contract.md#8-stage-3--mechanical-scope-and-counterexamples-2026-09-10)
+gives the derivations and distinguishes source-traced formulas from executed code.
+
+No production model, provider, mapping, coefficient timing, friction, stopping,
+resource/retry policy, CCD, trial cap or asset changes. The constraint floor
+remains retired. No negative force is clamped into a proposed coefficient and
+no pseudoinverse, PSD projection or positive stiffness minimum is selected.
+
+### Protocol and reproducibility
+
+New parent-workspace evidence:
+`outputs/rb-13/20260910-104453-stage3/`. `baseline.json` records repository/process
+state, revisions/remotes and hashes of the shared binaries/cache, audited source,
+recipes and stage 1/2 probes/results. `run.json` and `final-run.json` record exact
+commands, cwd, exits and output. `probe/` and `final-probe/` retain compiler command/log, library, source/protocol hashes
+and the full result. `final-identity.json` verifies all baseline-hashed files
+remain unchanged. The parent workspace README is updated locally outside Git.
+
+The [protocol](../tools/rb13/stage3-protocol.md) was written before execution.
+The bridge was formatted and compiled as a C++17/O2 shared library with
+`/usr/bin/c++ -shared -fPIC`, using the effective IPC barrier primitive directly.
+Python ctypes calls its energy/force/curvature functions. No shared PolyFEM/IPC
+library or binary is rebuilt. Stage 1's unchanged tiny Cholesky solver is reused;
+the earlier complete probes are not rerun as new evidence.
+
+Direct identities use abs(actual-reference)/(1+abs(reference)) <=1e-10.
+Scalar target checks use absolute gap error <=2e-11*dhat, normalizing converted
+gaps by dhat before comparison.
+All 78 scalar roots have normalized residual <=2e-10 and brackets of width
+<=2e-11*dhat. Scalar residual normalization is
+abs(g(d)-k*f(d))/(abs(g(dhat))+abs(k*f(d))); the unit-conversion check additionally
+uses K*dhat+abs(k*f). Coupled Newton uses the predeclared 80-iteration limit,
+60 backtracking halvings, positive-gap domain, Armijo 1e-4 and normalized residual
+<=1e-10. Its target errors also satisfy the absolute 2e-9 gap screen. These are
+standalone test controls, not changes to production stopping/CCD behavior.
+
+The initial and final compiled runs passed, with no failed/partial runs. Final
+review tightened the target-gap check implementation to use the protocol's
+absolute error, rather than the generic relative-plus-absolute identity helper;
+all original roots already satisfy it. No model input or declared tolerance
+changed. An editorial repeated sentence in the protocol was removed; the
+original pre-run copy remains in the evidence directory.
+The checked-in [result](../tools/rb13/results-20260910-stage3.json) preserves the
+manufactured inputs, all scalar roots, both coupled histories, errors and rejected
+cases. Boolean checks report null for an unmeasured error magnitude. No fitted
+estimator or held-out application validation is claimed.
+
+### Results: 654 checks passed
+
+| Scope | Measurement | Outcome |
+| --- | --- | --- |
+| Two supported springs | Six A,B pairs; K_eff=AB/(A+B), target roots, displacements and support/contact balance | Verified within fixture |
+| Rigid/deformable limit | Four stiffness ratios; relative error 1/(1+B/A), reaching about 1e-6; explicit prescribed endpoint control | Verified within fixture |
+| Rayleigh versus compliance | A=1,B=100: raw r=50.5, restricted gap stiffness=25.25, relaxed K_eff=.9900990099 | Difference characterized, not a production defect/fix |
+| Inertia and approach speed | 12 dt/speed cases; eight positive-demand target roots, four zero-demand classifications | Verified reference; C++ integrator class not executed |
+| Equivalent units | 27 length/force/time conversions; root, stiffness, force, displacement and objective checks | Pass; production controller not tested |
+| Nonlinear prediction | 12 alpha/anchor cases; exact-demand controls recover .5; local predictions have measured errors | Approximation limits reproduced |
+| Nonlinear band | Local upper k=.7491934949 predicts .55, actual stable nonlinear root=.3997523752 outside [.45,.55] | Counterexample reproduced |
+| Two-contact coupling | Full W yields [.5,.55]; diagonal-only estimate yields [.3859795050,.4724886438] | Counterexample reproduced despite convergence of both solves |
+| Joint target compatibility | SPD W=[[2,1],[1,2]], delta=[.1,.5] needs F=[-.1,.3] | Repulsive-target incompatibility recorded; no clamp |
+| Unsupported H/J | Six singular/indefinite/zero-J/nonsymmetric/nonfinite cases rejected; explicit support control passes | Reference domain handled explicitly |
+| Small positive stiffness | H=diag(1e-10,1) gives K_eff=1.0000000000000002e-10, ratio check passes | Preserved, no floor |
+
+All **654/654 assertions** pass; these are multiple checks of manufactured
+systems, not independent FEM scene counts. There are **78 scalar root solves**
+and **two full three-displacement/two-contact reference solves**. The latter
+converge in five and four Newton updates with normalized residuals 8.76e-17 and
+3.45e-12 respectively. The diagonal-only result therefore demonstrates model
+error even when the reference nonlinear solver has converged.
+
+Across scalar roots the maximum normalized residual is 2.46e-16 and maximum
+normalized bracket width is 1.12e-16. Maximum normalized unit-conversion errors
+are 1.12e-16 in gap/dhat, 1.41e-16 in force and 3.08e-16 in physical incremental
+energy. Both coupled target gaps are reproduced to the displayed precision.
+Direct spring support balance has absolute error <=4.45e-16; the implicit-Euler
+full free-coordinate residual controls have absolute error <=3.56e-15.
+Python syntax, C++ formatting, local links/anchors, result consistency and
+staged diff whitespace checks pass. The actual scalar roots/target errors are
+recorded, not inferred from successful process exit alone.
+
+### Interpretation and limits
+
+The source-traced raw Rayleigh value represents a normalized prescribed
+displacement direction. Even converting it to gap stiffness leaves different
+relaxation constraints from compliance. This is a mathematical contrast, not a
+claim that the existing coefficient code promised equivalence or that a local
+compliance estimate is ready to replace it.
+
+At dt=.2 the same K_eff=21.75 accompanies speeds 1,2,4 with demands
+1.575,5.325,12.825. At speed 4, reusing the speed-2 coefficient produces gap
+.3299897579 rather than .5. History/prediction matters even when H is unchanged.
+Negative free-gap predictions are extrapolations only; no invalid geometry is
+passed to the barrier. Zero target demand does not remove active protection.
+
+For the stable quartic with alpha=100, linearizing at .1 predicts target .5
+but reaches .3713309397 (gap error -.1286690603). Its target-force mismatch is
+6.4. Moving the anchor to .45 reduces the gap error to -.0032954536; using the
+target tangent/demand is exact here. This is an observed local-model error trend,
+not a production refresh rule or a general guarantee of improvement.
+The band counterexample establishes why RB-14 needs approximation/enclosure
+limits beyond a single tangent value. Stage 2's theorem is not contradicted:
+the nonlinear spring is outside its fixed-quadratic model.
+
+Rigid modes deserve a distinction: relative J can annihilate a null mode and
+admit a quotient-based compliance, while a gap sensitive to that mode has zero
+elastic resistance along it. The strict-SPD helper rejects both unsupported
+full matrices. Its separately prescribed support fixture is explicit and not an
+automatic pseudoinverse/gauge selection. Positive selected curvature alone does
+not make an indefinite full energy stable. The tiny diagonal SPD case validates
+its own arithmetic, not general ill-conditioned solve robustness.
+
+Units are physical force/length for K, force/length^3 for k, and force for k*f.
+Weights are fixed and unit unless converted in the stated dimensional control.
+Reported physical incremental energy includes the implicit-Euler inertial
+potential; it is not stored energy or a trajectory work budget. Each root holds
+its coefficient fixed; no retuning event or friction-lag state is present.
+
+No production solver, full unit suite, public/private scene, Teseo, HDA test or
+asset rebuild was run: no production/workflow change requires them in this
+standalone stage. There is no measured continuum accuracy, mesh det(F), contact
+feature transition, remeshed/interpolated coefficient support, friction
+dissipation, trajectory/work balance, mesh/time convergence, real estimator
+enclosure, resource containment or other-platform verification. The converted
+unit fixtures do not erase the earlier controller unit-dependence evidence.
+
+### Publication and final RB-13 handoff
+
+Publish the new probe/bridge/protocol/result, extended contract, validation
+record and roadmap to `sdast9/polyfem:main`; the completion message identifies
+the exact commit. Shared production binaries and all earlier probe/result hashes
+remain unchanged. No dependency pin or HDA publication is needed. The compiled
+library and full local provenance remain in the isolated evidence directory.
+
+All three planned RB-13 analytical stages are characterized within their stated
+scopes. The item's status is **characterized—decision pending**, because this
+investigation has not selected a production estimator, coefficient assignment,
+controller or default. The stage 1/2 results and historical handoffs above remain
+intact; this section supersedes their outstanding stage-3 instructions.
+
+**Recommended next: RB-14**, practical compliance and force-demand estimates
+against these references. RB-15 is independently eligible for feature-consistent
+assignment. RB-16 still needs estimator/assignment decisions before integrated
+controller work, and RB-17 must evaluate the selected candidate before default
+promotion. No additional user model decision is necessary to finish this
+characterization; downstream model changes retain their own decision boundaries.
