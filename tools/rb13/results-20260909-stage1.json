@@ -1,0 +1,965 @@
+{
+  "schema": "polyfem.rb13.stage1",
+  "production_law_changed": false,
+  "scope": "isolated affine-gap SPD quadratic; ordinary unweighted barrier; no trajectory",
+  "checks_passed": 101,
+  "checks_total": 101,
+  "barriers": [
+    {
+      "dhat": 0.01,
+      "d": 0.001,
+      "b": 4.513527299286929e-08,
+      "unit_force": 2.142564739365129e-05,
+      "unit_tangent": 0.019399193967836625
+    },
+    {
+      "dhat": 0.01,
+      "d": 0.0025,
+      "b": 2.436845556656058e-08,
+      "unit_force": 9.630551927099795e-06,
+      "unit_tangent": 0.0034114086652720717
+    },
+    {
+      "dhat": 0.01,
+      "d": 0.005,
+      "b": 7.797905781299385e-09,
+      "unit_force": 4.3294415416798365e-06,
+      "unit_tangent": 0.0015113705638880107
+    },
+    {
+      "dhat": 0.01,
+      "d": 0.008,
+      "b": 5.783880850064321e-10,
+      "unit_force": 8.381227422279399e-07,
+      "unit_tangent": 0.0007807336537672585
+    },
+    {
+      "dhat": 0.01,
+      "d": 0.0095,
+      "b": 9.752137595433061e-12,
+      "unit_force": 5.802148903591184e-08,
+      "unit_tangent": 0.00022817328833284021
+    },
+    {
+      "dhat": 1.0,
+      "d": 0.1,
+      "b": 4.5135272992869275,
+      "unit_force": 21.425647393651285,
+      "unit_tangent": 193.9919396783662
+    },
+    {
+      "dhat": 1.0,
+      "d": 0.25,
+      "b": 2.4368455566560576,
+      "unit_force": 9.630551927099795,
+      "unit_tangent": 34.114086652720715
+    },
+    {
+      "dhat": 1.0,
+      "d": 0.5,
+      "b": 0.7797905781299385,
+      "unit_force": 4.329441541679836,
+      "unit_tangent": 15.11370563888011
+    },
+    {
+      "dhat": 1.0,
+      "d": 0.8,
+      "b": 0.0578388085006431,
+      "unit_force": 0.8381227422279386,
+      "unit_tangent": 7.807336537672584
+    },
+    {
+      "dhat": 1.0,
+      "d": 0.95,
+      "b": 0.0009752137595433055,
+      "unit_force": 0.05802148903591182,
+      "unit_tangent": 2.281732883328402
+    },
+    {
+      "dhat": 100.0,
+      "d": 10.0,
+      "b": 451352729.9286928,
+      "unit_force": 21425647.393651284,
+      "unit_tangent": 1939919.396783662
+    },
+    {
+      "dhat": 100.0,
+      "d": 25.0,
+      "b": 243684555.66560575,
+      "unit_force": 9630551.927099794,
+      "unit_tangent": 341140.86652720714
+    },
+    {
+      "dhat": 100.0,
+      "d": 50.0,
+      "b": 77979057.81299384,
+      "unit_force": 4329441.541679837,
+      "unit_tangent": 151137.05638880108
+    },
+    {
+      "dhat": 100.0,
+      "d": 80.0,
+      "b": 5783880.850064317,
+      "unit_force": 838122.7422279392,
+      "unit_tangent": 78073.36537672584
+    },
+    {
+      "dhat": 100.0,
+      "d": 95.0,
+      "b": 97521.37595433048,
+      "unit_force": 58021.48903591181,
+      "unit_tangent": 22817.32883328402
+    }
+  ],
+  "spring": {
+    "d_free": 0.30000000000000004,
+    "target": 0.5,
+    "K_eff": 5.999999999999998,
+    "force_needed": 1.1999999999999993,
+    "k": 0.2771720067005214,
+    "root": 0.4999999999999999,
+    "barrier_tangent": 4.189096120609386
+  },
+  "integrator_algebra": [
+    {
+      "name": "implicit_euler_second_order",
+      "a": 0.04000000000000001,
+      "predictor": 0.45999999999999996,
+      "H_objective": 2.2800000000000002,
+      "H_physical": 56.99999999999999,
+      "free": 0.3999999999999999
+    },
+    {
+      "name": "newmark_beta_0.25",
+      "a": 0.010000000000000002,
+      "predictor": 0.46799999999999997,
+      "H_objective": 2.07,
+      "H_physical": 206.99999999999994,
+      "free": 0.45120772946859905
+    },
+    {
+      "name": "bdf2_second_order",
+      "a": 0.017777777777777778,
+      "predictor": 0.48111111111111104,
+      "H_objective": 2.1244444444444444,
+      "H_physical": 119.5,
+      "free": 0.451255230125523
+    }
+  ],
+  "counterexamples": {
+    "tangent_omitting_2Bs": 23.77258872223978,
+    "correct_unit_tangent": 15.11370563888011,
+    "mean_squared_gap": 0.32005000000000006,
+    "severity": 0.01
+  },
+  "checks": [
+    {
+      "name": "h=0.01,r=0.1/value",
+      "actual": 4.513527299286929,
+      "expected": 4.5135272992869275,
+      "scaled_error": 3.2218156236026784e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.1/force-chain",
+      "actual": 21.425647393651285,
+      "expected": 21.425647393651282,
+      "scaled_error": 1.5842190044450073e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.1/tangent-chain",
+      "actual": 193.99193967836624,
+      "expected": 193.99193967836618,
+      "scaled_error": 2.9151676194703054e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.1/energy-FD-force",
+      "actual": 21.425647393651285,
+      "expected": 21.425647458887074,
+      "scaled_error": 2.9089812655996577e-09,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.1/energy-FD-tangent",
+      "actual": 193.99193967836624,
+      "expected": 193.99194067178726,
+      "scaled_error": 5.094677359581538e-09,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.25/value",
+      "actual": 2.4368455566560576,
+      "expected": 2.4368455566560576,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.25/force-chain",
+      "actual": 9.630551927099793,
+      "expected": 9.630551927099795,
+      "scaled_error": 1.6709921098940275e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.25/tangent-chain",
+      "actual": 34.114086652720715,
+      "expected": 34.114086652720715,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.25/energy-FD-force",
+      "actual": 9.630551927099793,
+      "expected": 9.630551930772533,
+      "scaled_error": 3.4548914844678575e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.25/energy-FD-tangent",
+      "actual": 34.114086652720715,
+      "expected": 34.11408667697523,
+      "scaled_error": 6.907345052546908e-10,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.5/value",
+      "actual": 0.7797905781299385,
+      "expected": 0.7797905781299385,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.5/force-chain",
+      "actual": 4.329441541679836,
+      "expected": 4.329441541679836,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.5/tangent-chain",
+      "actual": 15.113705638880106,
+      "expected": 15.113705638880111,
+      "scaled_error": 3.3071663574035083e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.5/energy-FD-force",
+      "actual": 4.329441541679836,
+      "expected": 4.329441542102576,
+      "scaled_error": 7.932164408523579e-11,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.5/energy-FD-tangent",
+      "actual": 15.113705638880106,
+      "expected": 15.113705639657368,
+      "scaled_error": 4.823612370918927e-11,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.8/value",
+      "actual": 0.05783880850064321,
+      "expected": 0.057838808500643116,
+      "scaled_error": 9.183300317029552e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.8/force-chain",
+      "actual": 0.8381227422279398,
+      "expected": 0.8381227422279388,
+      "scaled_error": 5.435984764279325e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.8/tangent-chain",
+      "actual": 7.807336537672584,
+      "expected": 7.807336537672583,
+      "scaled_error": 1.0084529141142984e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.8/energy-FD-force",
+      "actual": 0.8381227422279398,
+      "expected": 0.8381227427420023,
+      "scaled_error": 2.7966710128407815e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.8/energy-FD-tangent",
+      "actual": 7.807336537672584,
+      "expected": 7.807336537068482,
+      "scaled_error": 6.859073172051997e-11,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.95/value",
+      "actual": 0.0009752137595433061,
+      "expected": 0.0009752137595433059,
+      "scaled_error": 2.1662917474517088e-19,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.95/force-chain",
+      "actual": 0.05802148903591183,
+      "expected": 0.05802148903591184,
+      "scaled_error": 6.5583676473623165e-18,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.95/tangent-chain",
+      "actual": 2.281732883328402,
+      "expected": 2.2817328833284023,
+      "scaled_error": 1.3532155895627252e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.95/energy-FD-force",
+      "actual": 0.05802148903591183,
+      "expected": 0.05802148975766805,
+      "scaled_error": 6.821753851688078e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=0.01,r=0.95/energy-FD-tangent",
+      "actual": 2.281732883328402,
+      "expected": 2.281732882564489,
+      "scaled_error": 2.3277730401802723e-10,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.1/value",
+      "actual": 4.5135272992869275,
+      "expected": 4.5135272992869275,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.1/force-chain",
+      "actual": 21.425647393651285,
+      "expected": 21.425647393651282,
+      "scaled_error": 1.5842190044450073e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.1/tangent-chain",
+      "actual": 193.9919396783662,
+      "expected": 193.99193967836618,
+      "scaled_error": 1.4575838097351527e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.1/energy-FD-force",
+      "actual": 21.425647393651285,
+      "expected": 21.425647458887077,
+      "scaled_error": 2.908981424021557e-09,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.1/energy-FD-tangent",
+      "actual": 193.9919396783662,
+      "expected": 193.99194067178723,
+      "scaled_error": 5.094677359581539e-09,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.25/value",
+      "actual": 2.4368455566560576,
+      "expected": 2.4368455566560576,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.25/force-chain",
+      "actual": 9.630551927099795,
+      "expected": 9.630551927099795,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.25/tangent-chain",
+      "actual": 34.114086652720715,
+      "expected": 34.114086652720715,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.25/energy-FD-force",
+      "actual": 9.630551927099795,
+      "expected": 9.630551930772537,
+      "scaled_error": 3.4548931554599655e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.25/energy-FD-tangent",
+      "actual": 34.114086652720715,
+      "expected": 34.11408667697523,
+      "scaled_error": 6.907345052546908e-10,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.5/value",
+      "actual": 0.7797905781299385,
+      "expected": 0.7797905781299385,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.5/force-chain",
+      "actual": 4.329441541679836,
+      "expected": 4.329441541679836,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.5/tangent-chain",
+      "actual": 15.11370563888011,
+      "expected": 15.11370563888011,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.5/energy-FD-force",
+      "actual": 4.329441541679836,
+      "expected": 4.329441542102577,
+      "scaled_error": 7.932181074029948e-11,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.5/energy-FD-tangent",
+      "actual": 15.11370563888011,
+      "expected": 15.113705639657368,
+      "scaled_error": 4.823590323143212e-11,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.8/value",
+      "actual": 0.0578388085006431,
+      "expected": 0.057838808500643116,
+      "scaled_error": 1.311900045289936e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.8/force-chain",
+      "actual": 0.8381227422279386,
+      "expected": 0.8381227422279388,
+      "scaled_error": 1.2079966142842944e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.8/tangent-chain",
+      "actual": 7.807336537672584,
+      "expected": 7.807336537672583,
+      "scaled_error": 1.0084529141142984e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.8/energy-FD-force",
+      "actual": 0.8381227422279386,
+      "expected": 0.8381227427420024,
+      "scaled_error": 2.7966782608204655e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.8/energy-FD-tangent",
+      "actual": 7.807336537672584,
+      "expected": 7.8073365370684815,
+      "scaled_error": 6.859083256581141e-11,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.95/value",
+      "actual": 0.0009752137595433055,
+      "expected": 0.000975213759543306,
+      "scaled_error": 5.415729368629272e-19,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.95/force-chain",
+      "actual": 0.05802148903591182,
+      "expected": 0.05802148903591184,
+      "scaled_error": 1.967510294208695e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.95/tangent-chain",
+      "actual": 2.281732883328402,
+      "expected": 2.2817328833284023,
+      "scaled_error": 1.3532155895627252e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.95/energy-FD-force",
+      "actual": 0.05802148903591182,
+      "expected": 0.058021489757668056,
+      "scaled_error": 6.821754048439107e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=1.0,r=0.95/energy-FD-tangent",
+      "actual": 2.281732883328402,
+      "expected": 2.281732882564489,
+      "scaled_error": 2.3277730401802723e-10,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.1/value",
+      "actual": 4.513527299286928,
+      "expected": 4.513527299286928,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.1/force-chain",
+      "actual": 21.425647393651285,
+      "expected": 21.425647393651282,
+      "scaled_error": 1.5842190044450073e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.1/tangent-chain",
+      "actual": 193.9919396783662,
+      "expected": 193.99193967836618,
+      "scaled_error": 1.4575838097351527e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.1/energy-FD-force",
+      "actual": 21.425647393651285,
+      "expected": 21.425647458887077,
+      "scaled_error": 2.908981424021557e-09,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.1/energy-FD-tangent",
+      "actual": 193.9919396783662,
+      "expected": 193.99194067178726,
+      "scaled_error": 5.094677505339918e-09,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.25/value",
+      "actual": 2.4368455566560576,
+      "expected": 2.4368455566560576,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.25/force-chain",
+      "actual": 9.630551927099795,
+      "expected": 9.630551927099795,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.25/tangent-chain",
+      "actual": 34.114086652720715,
+      "expected": 34.114086652720715,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.25/energy-FD-force",
+      "actual": 9.630551927099795,
+      "expected": 9.630551930772535,
+      "scaled_error": 3.454891484467857e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.25/energy-FD-tangent",
+      "actual": 34.114086652720715,
+      "expected": 34.11408667697523,
+      "scaled_error": 6.907345052546908e-10,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.5/value",
+      "actual": 0.7797905781299383,
+      "expected": 0.7797905781299383,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.5/force-chain",
+      "actual": 4.329441541679837,
+      "expected": 4.329441541679836,
+      "scaled_error": 1.666550637161454e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.5/tangent-chain",
+      "actual": 15.113705638880107,
+      "expected": 15.113705638880107,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.5/energy-FD-force",
+      "actual": 4.329441541679837,
+      "expected": 4.329441542102577,
+      "scaled_error": 7.932164408523578e-11,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.5/energy-FD-tangent",
+      "actual": 15.113705638880107,
+      "expected": 15.11370563965737,
+      "scaled_error": 4.823612370918927e-11,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.8/value",
+      "actual": 0.057838808500643164,
+      "expected": 0.05783880850064311,
+      "scaled_error": 5.247600181159744e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.8/force-chain",
+      "actual": 0.8381227422279391,
+      "expected": 0.8381227422279388,
+      "scaled_error": 1.8119949214264417e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.8/tangent-chain",
+      "actual": 7.807336537672584,
+      "expected": 7.807336537672584,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.8/energy-FD-force",
+      "actual": 0.8381227422279391,
+      "expected": 0.8381227427420024,
+      "scaled_error": 2.7966752408289303e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.8/energy-FD-tangent",
+      "actual": 7.807336537672584,
+      "expected": 7.8073365370684815,
+      "scaled_error": 6.859083256581141e-11,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.95/value",
+      "actual": 0.0009752137595433047,
+      "expected": 0.0009752137595433059,
+      "scaled_error": 1.1914604610984398e-18,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.95/force-chain",
+      "actual": 0.058021489035911804,
+      "expected": 0.05802148903591184,
+      "scaled_error": 3.2791838236811586e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.95/tangent-chain",
+      "actual": 2.281732883328402,
+      "expected": 2.2817328833284023,
+      "scaled_error": 1.3532155895627252e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.95/energy-FD-force",
+      "actual": 0.058021489035911804,
+      "expected": 0.05802148975766806,
+      "scaled_error": 6.821754245190137e-10,
+      "tolerance": 2e-07,
+      "pass": true
+    },
+    {
+      "name": "h=100.0,r=0.95/energy-FD-tangent",
+      "actual": 2.281732883328402,
+      "expected": 2.281732882564489,
+      "scaled_error": 2.3277730401802723e-10,
+      "tolerance": 2e-06,
+      "pass": true
+    },
+    {
+      "name": "prescribed predictor",
+      "actual": 0.30000000000000004,
+      "expected": 0.3,
+      "scaled_error": 4.270088556250602e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "free compliance",
+      "actual": 5.999999999999998,
+      "expected": 6.0,
+      "scaled_error": 2.5376526277146434e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "required repulsion",
+      "actual": 1.1999999999999993,
+      "expected": 1.2,
+      "scaled_error": 3.0278809762504267e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "full free force balance",
+      "actual": 1.1102230246251565e-15,
+      "expected": 0.0,
+      "scaled_error": 1.1102230246251565e-15,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "independent equilibrium root",
+      "actual": 0.4999999999999999,
+      "expected": 0.5,
+      "scaled_error": 7.401486830834377e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "gap-constrained displacement",
+      "actual": 0.20000000000000004,
+      "expected": 0.2,
+      "scaled_error": 2.312964634635743e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "condensed quadratic energy",
+      "actual": 0.061176470588235304,
+      "expected": 0.061176470588235284,
+      "scaled_error": 1.9616606934549257e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "invalid tangent rejected 0",
+      "actual": 1.0,
+      "expected": 1.0,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "invalid tangent rejected 1",
+      "actual": 1.0,
+      "expected": 1.0,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "implicit_euler_second_order/physical tangent",
+      "actual": 56.99999999999999,
+      "expected": 56.99999999999999,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "implicit_euler_second_order/physical residual",
+      "actual": -3.1086244689504383e-15,
+      "expected": 0.0,
+      "scaled_error": 3.1086244689504383e-15,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "implicit_euler_second_order/scaled compliance",
+      "actual": 56.99999999999999,
+      "expected": 56.99999999999999,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "newmark_beta_0.25/physical tangent",
+      "actual": 206.99999999999994,
+      "expected": 206.99999999999997,
+      "scaled_error": 1.3664283380001927e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "newmark_beta_0.25/physical residual",
+      "actual": 9.325873406851315e-15,
+      "expected": 0.0,
+      "scaled_error": 9.325873406851315e-15,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "newmark_beta_0.25/scaled compliance",
+      "actual": 206.99999999999994,
+      "expected": 206.99999999999994,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "bdf2_second_order/physical tangent",
+      "actual": 119.5,
+      "expected": 119.5,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "bdf2_second_order/physical residual",
+      "actual": 4.440892098500626e-15,
+      "expected": 0.0,
+      "scaled_error": 4.440892098500626e-15,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "bdf2_second_order/scaled compliance",
+      "actual": 119.49999999999999,
+      "expected": 119.5,
+      "scaled_error": 1.179324042755353e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "objective to physical energy",
+      "actual": 23.39371734389815,
+      "expected": 23.393717343898153,
+      "scaled_error": 1.4564052000418776e-16,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "objective to physical force",
+      "actual": 129.88324625039508,
+      "expected": 129.88324625039508,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "objective to physical tangent",
+      "actual": 453.4111691664033,
+      "expected": 453.4111691664033,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "missing chain term is detectably wrong",
+      "actual": 1.0,
+      "expected": 1.0,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "single contact lower squared threshold",
+      "actual": 0.5000000000000001,
+      "expected": 0.5,
+      "scaled_error": 7.401486830834377e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "single contact upper squared threshold",
+      "actual": 0.8999999999999999,
+      "expected": 0.9,
+      "scaled_error": 5.843279076974508e-17,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "controller severity example",
+      "actual": 0.01,
+      "expected": 0.01,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    },
+    {
+      "name": "RMS differs from mean gap",
+      "actual": 1.0,
+      "expected": 1.0,
+      "scaled_error": 0.0,
+      "tolerance": 1e-11,
+      "pass": true
+    }
+  ]
+}
