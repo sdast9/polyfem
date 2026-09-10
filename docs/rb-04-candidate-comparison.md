@@ -7,6 +7,11 @@ coefficient-state and friction-lag bookkeeping from equilibrium under each state
 
 ## Current agreed direction (2026-09-09)
 
+The later mechanical-bound discussion is operationalized in
+[RB-13–RB-17](robustness-plan.md#rb-13--mechanical-coefficient-estimate-and-conditional-bounds).
+Start with RB-13's derivation; the stages below remain rationale, with execution
+order and acceptance now owned by the numbered roadmap.
+
 Following discussion of the Fixed-mode comparison and AL contact, the user
 explicitly chose to improve the existing adaptive barrier. This supersedes the
 recommendation below to advance a trajectory-wide fixed coefficient as the main

@@ -1,6 +1,8 @@
 # Fork robustness: session-ready work plan
 
 Created 2026-09-08 after PF-01–PF-08 and constraint-floor retirement.
+Revised 2026-09-09: mechanically informed adaptive-barrier research, RB-13–RB-17,
+and corresponding changes to RB-05–RB-12. Existing IDs retain their meanings.
 **Current implementation status is recorded below; no new physical certification is claimed.**
 Use the `RB-` identifiers below; do not renumber or reuse the historical PF items.
 
@@ -88,6 +90,50 @@ A user instruction in the current session can explicitly change scope; record it
   stalls must remain in the result matrix. Do not count a successful rerun as
   erasing the initial failure or attribute it to threads/sleep without evidence.
 
+## Agreed adaptive-barrier direction and next session
+
+The user chose to improve the existing adaptive barrier, retaining Hessian-based
+scaling and gap-band feedback. Fixed mode is a comparison baseline; replacing the
+method with a trajectory-wide fixed coefficient or AL contact is not selected.
+The AL work in RB-07 remains boundary-condition feasibility preparation, not a
+new contact formulation. No global-versus-local coefficient replacement has been
+chosen. This revision authorizes a research plan, not untested production defaults.
+
+The working hypothesis is that contact strength can be estimated from the
+materials' effective compliance, inertia and predicted compressive demand. The
+barrier coefficient is not itself a material modulus or the barrier's tangent
+spring stiffness. Derive its units and force/curvature interpretation before
+changing its formula. Gap bounds express a desired numerical contact range,
+not an assertion that every intermediate barrier energy is physical stored energy.
+
+**Next session: RB-13, stage 1.** Derive the isolated-contact spring/compliance
+reference and exact barrier-distance conversion in a small analytical fixture.
+Then RB-14 estimates its quantities cheaply, RB-15 resolves feature consistency,
+RB-16 compares controller timing/bounds, and RB-17 integrates the selected candidate.
+RB-14 and RB-15 are separate investigations and can be selected independently once
+their stated prerequisites exist. Finish missing RB-04 measurements as needed;
+do not rerun its completed probes without a relevant code change or new question.
+RB-04 is not a blocker for RB-05 resource containment or RB-13 analytical work.
+Its remaining trajectory work includes stating and validating the full discrete
+work convention/error limits on the required fixtures and retaining consistent
+coefficient/lag endpoint identities. Supply those measurements before claiming
+an integrated candidate's physical accuracy; normal-law theory need not wait for
+full friction certification. RB-04 remains in progress, not silently closed.
+
+Retain the existing RB-05–RB-12 IDs because records already refer to them. Resource
+containment, rollback and validation remain necessary; numbering is not execution
+order. RB-05–RB-08 implementation is required only when a selected experiment or
+recovery feature depends on it. Small read-only probes do not need automatic retry.
+
+Evidence carried forward: RB-02/04 reproduce the frozen EV/VV coefficient jump;
+Fixed mode removes that specific jump but does not solve coefficient selection.
+RB-03 exact indexing is repaired while interpolation curvature remains open.
+RB-04 separates coefficient-event energy from displacement work and pre-/post-lag
+friction states. The .5/.9 trim band is a working baseline, not an established
+optimum; before-contact failures and successful repeats remain in the evidence.
+See the [research log](rb-04-research-log.md) and
+[candidate comparison](rb-04-candidate-comparison.md) for measured limits.
+
 ## Status and order
 
 Rows began **not started** at plan creation; the table tracks current status.
@@ -109,10 +155,16 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | not started |
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
+| RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | not started |
+| RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | not started |
+| RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | not started |
+| RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | not started |
+| RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | not started |
 
-Recommended sequence is RB-01 → RB-02 → RB-03 → RB-04, then resource/recovery
-work and physical-validation studies. RB-11 input auditing and RB-12 provenance
-can be selected earlier. A dependency does not authorize completing two items
+Recommended research sequence after existing RB-01–RB-04 evidence is
+RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08
+remain the resource/recovery track; select them when needed. RB-11 input auditing
+and RB-12 provenance can be selected earlier. A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
 
 Status vocabulary: `not started`, `in progress`, `characterized—decision pending`, `characterized—limits documented`,
@@ -128,9 +180,9 @@ work. It does **not** preselect any of these remaining decisions:
 
 | Decision | Prepare evidence in | Required before proceeding |
 | --- | --- | --- |
-| New coefficient positivity/cap/retuning law | RB-02 | Compare alternatives with units, derivatives and force/work effects; obtain the user's model choice |
-| Local stiffness definition for a nonidentity map | RB-03 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient |
-| New acceptance criterion based on physical diagnostics | RB-04 / RB-09 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping |
+| New coefficient positivity/cap/retuning law | RB-02 evidence; RB-13–RB-17 | Compare alternatives with units, derivatives and force/work effects; obtain the user's model choice |
+| Local stiffness definition for a nonidentity map | RB-03 / RB-13–RB-15 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient |
+| New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping |
 | Enabled production resource or AL budgets | RB-05 / RB-07 | Measure overhead/failure behavior and state proposed limits; user selects defaults; opt-in disabled-by-default mechanisms may be tested first |
 | Automatic timestep/load retry policy | RB-08 | User approves the concrete policy or specified opt-in prototype before implementation |
 | Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair |
@@ -287,6 +339,13 @@ are separate. No new global convergence gate is authorized here.
 
 ## RB-05 — Candidate generation and resource failure containment
 
+**Revised integration scope:** retain collision-candidate protection and account
+separately for RB-14 compliance solves, estimator neighborhoods and retained
+contact histories. A cheap estimator exhausting its budget must report that
+condition; a fallback coefficient needs its own declared policy. Never confuse
+an estimator approximation with permission to omit collision candidates. Keep
+first probes small enough that this implementation is not a prerequisite.
+
 **Invariant:** resource protection must never silently omit potentially colliding
 pairs or accept an unchecked step. Current displacement capping is not a memory
 budget; candidate-count logging happens after construction.
@@ -318,6 +377,13 @@ user choice based on target machines and measured workloads.
 
 ## RB-06 — Failed-attempt state isolation and rollback
 
+**Revised integration scope:** extend the inventory to RB-14 estimator caches,
+reference states, gap/demand uncertainty, RB-15 coefficient identity and RB-16
+controller history. Distinguish a warm-started coefficient correction at the same
+load/time from failure rollback to the prior accepted simulation step. Inject
+failure between a coefficient update and the corresponding equilibrium solve;
+never publish the old endpoint as solved under the new coefficient state.
+
 **Invariant:** a failed attempt must not contaminate the last accepted state or
 a subsequent attempt. This is in-memory transaction work, not automatic retry.
 
@@ -345,6 +411,11 @@ No smaller timestep, retry count, or new acceptance tolerance in this item.
 
 ## RB-07 — Bounded AL stagnation handling
 
+**Revised integration scope:** this remains the existing prescribed-BC AL stage.
+Separate its progress and budgets from contact-coefficient corrections (RB-16)
+and friction lagging (RB-10). Do not escalate all weights when only one stage
+stagnates. AL contact and multiplier-based normal-force replacement are deferred.
+
 **Invariant:** geometrically stagnant continuation must have an explicit exit,
 while useful interrupted AL iterates remain allowed under PF-01.
 
@@ -370,6 +441,13 @@ load/timestep subdivision; that is RB-08.
 
 ## RB-08 — Optional timestep/load-increment retry
 
+**Revised integration scope:** a missing/empty estimated k interval is diagnostic,
+not automatically permission to subdivide time. Distinguish uncertain prediction,
+coupled-contact incompatibility and actual solver failure. In a transient retry,
+recompute the integrator-dependent inertia contribution and motion predictor at
+the actual substep; do not reuse a dt-dependent k estimate blindly. Retune-at-same-
+time and advance-at-smaller-dt remain separately logged operations.
+
 **This is a policy decision, not yet approved production behavior.** Selecting
 RB-08 first authorizes a concrete design/comparison. Implementation may begin
 only after the user chooses the retry policy, or explicitly authorizes the
@@ -392,6 +470,15 @@ solution or proof of timestep independence. No retries for Teseo without its
 explicit authorization.
 
 ## RB-09 — Reference benchmarks and refinement envelope
+
+**Revised integration scope:** benchmark the RB-17 candidate only after its
+contract is selected; existing modes can be measured earlier. Compare current
+per-contact adaptation, the selected candidate and declared Fixed/global-adaptive
+controls. Sweep material contrast, density and approach speed independently, plus
+loading/unloading that activates both band limits. Include one coupled-contact
+case and distinguish unit conversion from a change of physical size. Measure gap
+prediction error, coefficient interval coverage, forces, work, Newton/retune counts
+and total runtime. No claim of a 'vast majority' envelope without coverage data.
 
 **Deliverable:** a reproducible accuracy matrix tied to quantities of interest,
 not a universal “physically accurate” label. Begin by defining benchmark contracts
@@ -426,6 +513,13 @@ Bounds on supported accuracy must state tested parameter ranges and uncertainty.
 
 ## RB-10 — Friction coupling and dissipation
 
+**Revised integration scope:** use RB-04 pre-/post-lag pairs to identify the force
+state actually solved. Cross normal-coefficient updates with slip reversal and
+separation/recontact; verify normal-force transfer after retuning. A large residual
+under a newly updated friction lag is not evidence that the preceding frozen-lag
+solve failed. Assess coupled lag error separately. Frictional work must use a
+declared lag convention; coefficient-event energy is not frictional dissipation.
+
 **Invariant:** preserve the user's finite lagging policy while measuring its
 accuracy and dissipation. More lagging iterations are a comparison, not an
 automatically better or mandatory production policy.
@@ -449,6 +543,14 @@ them; a change of friction law, default smoothing or lag budget needs explicit
 agreement. Do not certify impacts/stick–slip from steady sliding alone.
 
 ## RB-11 — Geometry, material and input validation
+
+**Revised integration scope:** record the applicability of RB-13 assumptions:
+positive/stable tangent, prescribed/free modes, anisotropy, near-incompressibility,
+material softening, multiple coupled contacts and collision/FEM mapping. Distinguish
+invalid inputs from valid physics that makes a local estimator unreliable.
+Do not reject buckling, free-body quasistatics or heterogeneous materials merely
+because H is singular/indefinite; report an unsupported estimator condition and
+its selected handling. No silent identity-map or rigid-obstacle assumption.
 
 **Scope:** inventory and strengthen input checks that prevent invalid or wrongly
 mapped simulations; characterize the supported physical envelope separately.
@@ -476,6 +578,13 @@ unmeasured constitutive/element regimes explicitly. HDA changes require all HDA
 tests, rebuilt assets and publication under HDA instructions.
 
 ## RB-12 — Repeatability, provenance and release discipline
+
+**Revised integration scope:** manifests must include estimator/controller version,
+reference state and coefficient-update sequence, gap convention, uncertainty method,
+model-selection status, and any approximation/fallback used. Preserve evaluation-
+order comparisons, failed runs and successful repeats. Publish a defaults table
+that distinguishes historical behavior, opt-in candidate and explicitly selected
+production behavior. A successful microfixture does not authorize promotion.
 
 **Stages:** first run identity, then controlled repeatability, then CI/release
 integration. This item can start before other RB work; do not claim a validated
@@ -509,6 +618,202 @@ README claims match the most recent measured scope. No automatic dependency
 upgrade, upstream merge, release tag or feature promotion is authorized here.
 Source fixes discovered by the study should become a bounded reproduction/fix
 stage, not unrelated sweeping edits.
+
+## RB-13 — Mechanical coefficient estimate and conditional bounds
+
+**Question:** can we derive a mechanically interpretable estimate and a conditional
+interval for k from material response, inertia and predicted compressive demand?
+This is analytical characterization and a standalone probe, not a production law.
+
+**Read:** RB-02 units/provider contract, RB-03 full/reduced/collision maps, RB-04
+work convention and candidate probe; effective integrator and barrier derivatives.
+Create `docs/rb-13-contract.md` and `docs/rb-13-validation.md` when executing.
+
+**Stage 1 — reference derivation:** use physical separation d and an isolated,
+locally linear, stable frictionless contact. Let J map free displacement to gap,
+H be the noncontact tangent in physical-energy units with prescribed motion in
+the predictor, and f(d)=-db/dd. State the assumptions needed for
+
+```text
+K_eff = 1 / (J H^{-1} J^T)
+H = K_tangent + M/dt^2                 [implicit Euler example only]
+F_needed(d) = K_eff * max(d - d_free, 0)
+k_estimate = F_needed(d_target) / f(d_target)
+```
+
+Apply H^{-1} by a solve; do not form an inverse in production. Derive other
+integrators from their actual objective scaling. Do not double count mass: the
+current provider already includes enabled inertia. Velocity/load history enters
+the residual/predictor even when it does not change H. A load-dependent tangent
+may require terms absent from the current provider; name every approximation.
+
+Distinguish k (force/length^3 for the ordinary unweighted physical barrier),
+barrier force k*f(d), and tangent spring stiffness k*b''(d) (force/length).
+For the code's squared-distance potential B(s), s=d^2, explicitly derive
+f=-2d*B_s and b''=2*B_s+4d^2*B_ss, with all weights and normalizations.
+Do not transfer a physical-distance band directly into squared-distance settings:
+audit the actual controller's statistic (minimum/mean squared gap, etc.).
+
+**Stage 2 — conditional band:** for 0<d_L<d_U<dhat and positive decreasing f,
+derive the isolated-contact interval k_L=F_needed(d_L)/f(d_L),
+k_U=F_needed(d_U)/f(d_U). Establish when the force-balance root is monotone and
+lies in the band. Restrict it to compressed contacts: free separation above d_U
+must not trigger attractive force or an upper-gap requirement. A zero estimate
+means no predicted compression, not permission to delete active-contact protection.
+
+For genuinely enclosing estimates K_-<=K_eff<=K_+ and
+p_-<=d_free<=p_+, test the conservative rectangle construction
+
+```text
+k_lower = K_+ * max(d_L - p_-, 0) / f(d_L)
+k_upper = K_- * max(d_U - p_+, 0) / f(d_U)
+```
+
+Call this a rigorous bound only within the declared reference model and proven
+input enclosure. Empirical error bars are estimates, not certified bounds. An
+empty interval signals incompatible requirements/uncertainty under this model;
+it is not proof that the physical problem is infeasible. No silent clamp, midpoint
+selection, stiffness escalation or retry is authorized by an empty interval.
+
+**Stage 3 — scope tests:** verify two supported springs in series, rigid/deformable
+limit, implicit-Euler masses with differing approach speeds, unit conversion and
+nonlinear local-tangent prediction error. Contrast compliance with the current
+Rayleigh quotient: they represent different displacement restrictions, not equal
+formulas. Derive multi-contact W=J H^{-1} J^T and demonstrate off-diagonal coupling
+in a tiny two-contact fixture. Handle rigid modes/indefinite H explicitly; do not
+silently select a pseudoinverse, PSD projection or arbitrary positive floor.
+
+**Acceptance:** reproducible derivations, dimensional/chain-rule checks, analytical
+force-balance roots and interval coverage including empty/inactive cases; listed
+assumptions and counterexamples. Predeclare numerical tolerances from fixture
+conditioning. No broad-simulation guarantee, selected production k or new safety
+floor. Finish as characterized with remaining modeling choices stated.
+
+## RB-14 — Practical compliance and force-demand estimators
+
+**Prerequisite:** RB-13 reference equations and supported-map contract. Full RB-04
+closure is not required for small estimator probes. Read current Hessian extraction,
+provider scaling and RB-03 interpolation limits before any new local extraction.
+
+Compare the current local Rayleigh scale with a declared small-neighborhood
+compliance estimate and selected full-system solve references. Declare neighborhood
+boundary conditions: fixed surrounding DOFs can overestimate stiffness relative
+to relaxation. Diagonal/lumped approximations are candidates, not proven bounds.
+Use normal gap derivatives with correct full/reduced pullback, not collision IDs
+as FEM indices. Evaluate action/reaction and rigid/moving obstacle limits.
+
+Predict the unconstrained gap from the local force residual and motion predictor;
+avoid launching a colliding full 'contact-free simulation'. Reuse valid current
+linearizations. Measure stiffness error and demand/gap prediction separately:
+a good curvature estimate alone does not predict impact force. Vary material
+contrast, anisotropy, supports, mesh scale, density, dt and approach speed in
+bounded separate sweeps. Use a held-out fixture/parameter range after tuning.
+
+Record compute/memory cost, locality sensitivity and uncertainty calibration.
+Classify unavailable/unstable/stale estimates. Define a concrete fallback proposal
+and measure it before selecting it; do not default to zero/infinity or reuse stale
+k after dt/map changes. Determine whether one global adaptive coefficient suffices
+as a control; preserving local adaptation remains the main research direction.
+
+**Acceptance:** checked-in estimator comparisons with exact-reference errors,
+predicted-versus-realized gaps, uncertainty coverage and cost. Demonstrate failure
+of the assumptions as well as successful cases. No unexplained 'safety factor'
+or coverage claim from training fixtures alone. Production estimator selection
+requires the comparative evidence; output `docs/rb-14-validation.md` and contract.
+
+## RB-15 — Feature-consistent local coefficient assignment
+
+**Question:** can local mechanical scaling survive changes of nearest feature
+without the reproduced frozen-snapshot energy/force jump? Reuse RB-02/04's
+70/55 EV/VV counterexample; preserve its original data and Fixed control.
+
+Compare a small, explicitly derived set of assignments: the current feature-key
+rule, a shared coefficient over a declared contact neighborhood, and (only with
+complete derivatives) a smooth geometry-dependent coefficient field. A global
+adaptive coefficient is a control, not a selected replacement. For every candidate
+state whether it defines an energy derivative at frozen state, a deliberately
+lagged approximation, or an explicit outer model update. Merely smoothing k(x)
+while omitting b*grad(k) does not prove an energy-consistent force. A shared region
+can create jumps at its own boundary; test neighborhood changes and multiplicity.
+
+Freeze all unrelated policies. Check decreasing left/right separations, trial
+order independence, newly appearing contacts, separation/recontact, coefficient
+refreshes at identical x, mapping and unit conversion. Retain fixed-region finite
+differences and split gradient-path quadrature. Extend to at least one supported
+3D feature transition before claiming general transition handling. Continuous
+Hessians are not required merely because a C1 potential is desired; distinguish
+permitted curvature jumps from finite energy/gradient jumps.
+
+**Acceptance:** candidate contracts and measured continuity/work/derivative errors,
+normal-force positivity where required, computational cost and material-contrast
+limits. No arbitrary k floor/cap, contact deletion, interpolation redesign or
+production mode switch bundled into the fixture. Propose the best assignment for
+RB-16/17; retain a decision-pending status until its implementation choice is made.
+
+## RB-16 — Mechanically informed gap controller and update timing
+
+**Prerequisites:** RB-13 interval semantics, RB-14 estimator and reference baseline;
+RB-15 candidate required for integrated comparisons. Start with simple springs
+before public FEM compression/unloading. This item tests controller designs;
+no new endpoint gate or default policy is preselected.
+
+Use estimated force-demand intervals to inform, rather than blindly replace, the
+existing lower/upper feedback. Compare current trim timing with bounded corrections
+at fixed load/time, warm-starting from the latest feasible iterate. Hold coefficient
+state fixed for each Newton direction and its line search; identify refresh and
+search-history invalidation explicitly. Reassess the final endpoint under its actual
+coefficient state. A post-publication refresh can prepare the next solve but must
+not relabel the old endpoint. Early interruption requires a declared diagnostic
+criterion, not an assumption that every intermediate iterate is equilibrated.
+
+Predeclare small comparisons for update factor, hysteresis/window and interval
+uncertainty. Test lower-bound compression, upper-bound unloading, free separation,
+recontact, simultaneous heterogeneous contacts, initially missing contact and an
+empty/unavailable interval. An average gap band does not bound every contact:
+report minimum, distribution and the controller statistic. A desired gap is not
+a hard minimum-distance guarantee; CCD remains separately responsible for the
+geometric checks it implements. Keep the separate trial cap and retired floor
+behavior unchanged.
+
+**Acceptance:** stable mechanical predictions, band occupancy, prediction errors,
+oscillation/retune counts, Newton iterations and total cost; energy changes due to
+updates separate from displacement work. Include a deliberately misleading
+predictor and record proposed handling without silent retry. Compare load-increment
+refinement and a cycle exercising both bounds; do not tune using only successful
+runs. Distinguish numerical solve termination from any proposed engineering/contact
+acceptance criterion. Record concrete policy alternatives and remaining choices.
+
+## RB-17 — Integrated adaptive-barrier candidate and decision
+
+**Prerequisites:** selected estimator, assignment and controller contracts from
+RB-14–RB-16; required RB-04 physical-state diagnostics. RB-06 is needed if the
+experiment restores failed attempts; RB-05/07/08 only for the features it exercises.
+Do not make automatic retry a hidden prerequisite of every contact improvement.
+
+Integrate a candidate behind an explicit experimental mode after the concrete
+choice is authorized. Preserve existing defaults and identity of all comparison
+modes. Run an ablation matrix that isolates estimator, assignment and controller
+changes before their combination; label any unavoidable mode differences such as
+Fixed-mode trial-cap behavior. Start frictionless, including heterogeneous bodies
+and transient approach; friction coupling remains RB-10's separate axis.
+
+Use RB-09-style references on a bounded subset: spring/contact, public compression
+and loading/unloading, plus a coupled-contact fixture. Keep physical inputs fixed
+within each declared sweep. Report successful, failed and partial trajectories,
+reactions/displacements, gap distributions, det(F), endpoint residual state,
+coefficient-event energy, work integration limits and total resource cost.
+Require selected unit-conversion and evaluation-order controls. A raw energy jump
+at an explicit parameter update is not automatically physical dissipation or a
+failure; an undeclared frozen-state derivative inconsistency remains a separate
+issue. Apply full affected build/tests/smokes and HDA E2E for production C++ edits.
+
+**Deliverable/acceptance:** one decision report comparing accuracy, robustness and
+cost against the current adaptive baseline, with tested applicability ranges,
+remaining failures, proposed user-facing parameters and an explicit default
+recommendation. RB-09 broad refinement, RB-10 friction and RB-12 promotion remain
+separate. No claim of a universal optimal k or coverage of most simulations from
+a small matrix. Production default promotion requires a concrete user decision;
+retain the tested opt-in implementation and evidence if the decision is deferred.
 
 ## Common execution and validation recipes
 

@@ -408,3 +408,16 @@ as completion. Do not silently add a new acceptance gate, change friction lag
 budgets, restore the retired floor, or run Teseo.
 
 No new experiment or production change is claimed by this strategy update.
+
+
+## Roadmap revision after mechanical-bound discussion (2026-09-09)
+
+The agreed direction is now expanded in [RB-13–RB-17](robustness-plan.md#rb-13--mechanical-coefficient-estimate-and-conditional-bounds).
+Start RB-13 stage 1 next: derive effective compliance, predicted compression and
+the exact barrier coefficient units/conditional interval. RB-14 evaluates cheap
+estimators; RB-15 addresses feature consistency; RB-16 evaluates band/timing;
+RB-17 integrates the selected adaptive candidate. RB-05–RB-12 keep their IDs and
+now include estimator/controller resource, rollback and validation requirements.
+These items supersede the earlier immediate-next-experiment ordering, preserving
+all earlier results. RB-04 accounting remains in progress; no new measurement,
+model implementation or production default is claimed by this planning update.

@@ -35,6 +35,11 @@ Explain why the change restores the stated contract. For numerical/model changes
 record dimensions, the mathematical definition, alternatives considered and the
 user's choice. List changed settings explicitly; “same settings” requires checks.
 Document cache/state/reset behavior and compatibility effects where relevant.
+For RB-13–RB-17 also record: physical versus weighted units; exact distance/band
+statistic; tangent and predictor assumptions; rigorous bound versus empirical
+estimate; uncertainty/empty-interval handling; held-out comparison; and the
+coefficient/lag state associated with each measured endpoint. Distinguish k from
+barrier force and tangent stiffness. Separate model changes from solver controls.
 
 ## Validation
 

@@ -331,3 +331,15 @@ the Fixed k=70 mismatch decreases to 7.98e-7 with quadrature refinement.
 See [candidate comparison](rb-04-candidate-comparison.md) and its linked data for
 all measurements and limitations. No scene coefficient or default was changed;
 full trajectory/model validation remains pending.
+
+
+## Sequencing after roadmap revision (2026-09-09)
+
+RB-04 remains in progress. RB-05 resource containment can proceed using available
+diagnostics; completing RB-04 is not its prerequisite. The next mechanical-scaling
+research item is RB-13 stage 1, which can also start with current evidence.
+Remaining trajectory work must define/validate discrete work accounting and its
+integration-error limits for the required fixtures, retaining coefficient and
+friction-lag state identity. Supply the relevant measurements for RB-17/RB-09
+physical conclusions. Do not claim full friction certification or rerun completed
+endpoint/transition probes merely because the plan was revised.
