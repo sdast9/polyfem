@@ -113,6 +113,14 @@ diagonal one, preserving relative weights without physical mass units.
   it with this mode remains outside the documented validation.
 - The earlier extreme thin-geometry/floating-point-floor experiments remain
   historical evidence, not a guarantee that every such scene converges.
+- Steps with no active contact and a near-rigid displacement can drive the
+  objective to its roundoff floor while ‖∇f‖ is still above tolerance; with
+  TBB the summation-order noise then decides whether the line search stalls.
+  Since RB-19 the `Armijo`/`RobustArmijo` line searches fall back to the
+  gradient norm there (`solver.nonlinear.line_search.use_grad_norm_tol`, and
+  the new `solver.nonlinear.line_search.Armijo.roundoff_tolerance`, default
+  machine epsilon; set both to `0` for the previous behavior). Runs with
+  `--max_threads 1` are bit-reproducible; threaded runs are not.
 
 ## Smoke scenes and tests
 
@@ -143,6 +151,7 @@ smoke scene.
 
 ## Companion revisions
 
-CMake pins `sdast9/ipc-toolkit@9da3094` and `sdast9/polysolve@012658e`. The latter
-has the same source tree as `713220f`, the upstream merge of the iteration-callback
-work. Dependency feature branches and `main` branches are not interchangeable.
+CMake pins `sdast9/ipc-toolkit@af317a65` and `sdast9/polysolve@5afe3b5d`. The latter
+carries the PF-06 derivative correction and the RB-19 line-search fallback on
+top of `713220f`, the upstream merge of the iteration-callback work. Dependency
+feature branches and `main` branches are not interchangeable.

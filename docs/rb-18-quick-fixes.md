@@ -433,11 +433,13 @@ what was measured, what is next.
   (force-continuation κ, proposed as the next implementation item); EV/VV
   coefficient jump (parent-keyed κ in the toolkit builder); mid-solve κ_i
   refresh vs. lagged friction (only the trim is followed); line-search
-  roundoff near convergence (PolySolve); root cause of the no-contact step-1
-  failures (F5 makes them fail fast; a single-threaded rerun is the next
-  experiment).
+  roundoff near convergence (PolySolve) and the root cause of the no-contact
+  step-1 failures — **both addressed by [RB-19](rb-19-line-search-roundoff.md)
+  (2026-09-11)**: the step-1 stall is thread-order energy noise at the roundoff
+  floor, and the line search now falls back to the gradient norm there.
 - **Incoming RB-17 working-tree changes** (`docs/rb-17-validation.md`, the
   RB-17 status row in `robustness-plan.md`, `tools/rb17/*`) were left
-  uncommitted and untouched; they belong to the RB-17 coupled-gate session.
+  uncommitted and untouched by RB-18; they were committed with the RB-17
+  retirement in the RB-19 session (per-contact band targeting withdrawn).
 - Eligible next items: force-continuation κ (new RB item, to be written),
-  RB-05, RB-17 continuation under its recorded limitation.
+  parent-keyed κ, RB-05.

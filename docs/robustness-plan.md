@@ -181,6 +181,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [retired—per-contact band targeting withdrawn after the coupled gate; evidence retained; not integrated](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11) |
 | RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature with |wᵀHw| → max|H|/d̂² fallback, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [done — `e3fa362e0`, F7 `4a0df80a1`](rb-18-quick-fixes.md) |
+| RB-19 | Line-search gradient-norm fallback at energy roundoff (PolySolve), step-1 no-contact stall diagnosis, cube-on-floor NaN | RB-18 handoff; RB-04 refinement failures; RB-16 roundoff evidence | [done — PolySolve `5afe3b5d4`, pin bump on main](rb-19-line-search-roundoff.md) |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is
 RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08
@@ -936,3 +937,19 @@ RB-04/RB-16 observed in trajectories; no model change. The plan, per-fix status
 and progress log live in [rb-18-quick-fixes.md](rb-18-quick-fixes.md), which is
 also that item's validation record. Force-continuation κ, parent-keyed κ and
 per-contact band retirement are explicitly outside RB-18 and need their own items.
+
+## RB-19 — Line-search roundoff fallback and step-1 stall diagnosis
+
+**Authorized 2026-09-11** from the RB-18 handoff's three follow-ups. The
+step-1 no-contact stall was reproduced as TBB summation-order noise at the
+energy's roundoff floor (single-threaded runs are deterministic and pass), and
+traced to `Armijo`/`RobustArmijo` ignoring PolySolve's own `use_grad_norm`
+switch. The repair is in shared PolySolve: after the energy criteria reject a
+step, accept it iff the gradient norm decreases, but only when the energy is at
+roundoff (`use_grad_norm`, or `|ΔE| ≤ ε(1+|E|)` with the new
+`line_search/Armijo/roundoff_tolerance`). It applies to every solve using those
+line searches; the public smokes never engage it. The cube-on-floor
+`1/2Δx^THΔx=nan` is the disabled Newton-decrement criterion, not a NaN. Record,
+per-check evidence and the `contact_2d` observation:
+[rb-19-line-search-roundoff.md](rb-19-line-search-roundoff.md). Per-contact
+band targeting was retired from RB-17 in the same session.

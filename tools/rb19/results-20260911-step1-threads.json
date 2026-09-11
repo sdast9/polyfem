@@ -1,0 +1,209 @@
+{
+  "item": "RB-19",
+  "date": "2026-09-11",
+  "scene": "scenes/semi-implicit/quasistatic-semi.json with time.dt=.0625 and solver.contact.semi_implicit.trim_lower=.1, trim_upper=.9 (RB-04 refinement case lower-0.1-dt-0.0625)",
+  "pre_fix": {
+    "polyfem_source": "116f21a8bca7f67999667b18b67eb03fc4986456",
+    "polysolve_source": "4d372fa8a73f42bc224e31d464f1a308e1159ba8",
+    "binary_sha256": "684bd92c6f78e1439582cd0e2c37491e2b1aa90173fe7a2dfbe087d5c52f6dfd",
+    "runs": [
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 0,
+        "iteration_log_sha256_12": "1d635d935362"
+      },
+      {
+        "threads": "default",
+        "exit": -6,
+        "restarts": 2,
+        "unchanged_restart_terminations": 2,
+        "saved_steps": 1,
+        "fallback_accepts": 0,
+        "iteration_log_sha256_12": "505ab7a02616"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 0,
+        "iteration_log_sha256_12": "a9dd840ae37c"
+      },
+      {
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 0,
+        "iteration_log_sha256_12": "f7d03fa34adc"
+      },
+      {
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 0,
+        "iteration_log_sha256_12": "f7d03fa34adc"
+      },
+      {
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 0,
+        "iteration_log_sha256_12": "f7d03fa34adc"
+      }
+    ]
+  },
+  "post_fix": {
+    "polyfem_source": "116f21a8bca7f67999667b18b67eb03fc4986456",
+    "polysolve_source": "5afe3b5d45c7f73a399e12ec9d4c2c359886e4a2",
+    "binary_sha256": "3b05266b5454f9b36eea6e21268e13879adb83262d5ae5574db3a5962f09482a",
+    "runs": [
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "8159501420a2"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "4dafe45834b5"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 11,
+        "iteration_log_sha256_12": "120f27ac8b89"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 13,
+        "iteration_log_sha256_12": "423a4ac24b04"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 7,
+        "iteration_log_sha256_12": "b7b71a9d8504"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 7,
+        "iteration_log_sha256_12": "72427332a0c8"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "a81ae2fe371f"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "157b7870eb04"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 6,
+        "iteration_log_sha256_12": "a309a02e2334"
+      },
+      {
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 10,
+        "iteration_log_sha256_12": "f16041b39a33"
+      },
+      {
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "6ae0c8860325"
+      },
+      {
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "6ae0c8860325"
+      },
+      {
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "unchanged_restart_terminations": 0,
+        "saved_steps": 17,
+        "fallback_accepts": 9,
+        "iteration_log_sha256_12": "6ae0c8860325"
+      }
+    ]
+  },
+  "energy_noise": {
+    "f0_threaded_runs": [
+      "-76.02495315492408",
+      "-76.02495315492415",
+      "-76.02495315492409"
+    ],
+    "f0_single_thread": "-76.02495315492402",
+    "note": "first trial-step energy difference (ls it: 0) at step 1; threaded runs differ in the 13th digit (~1.3e-13), single-threaded runs are identical"
+  },
+  "stalled_subsolve": {
+    "grad_norm": 8.59437e-05,
+    "grad_norm_tol_rescaled": 2.27951e-06,
+    "use_grad_norm_switch": 0.000227951,
+    "dx_dot_grad": -3.41429e-15,
+    "dx_norm": 1.01327e-10,
+    "energy": 1.68046e-14
+  },
+  "limits": "One public scene, one dt/band; thread-count comparison is on a single macOS arm64 machine; completion of 16 steps is numerical termination, not a physical acceptance criterion.",
+  "iteration_log_sha256_12_note": "SHA-256 prefix of the per-iteration and Finished lines with timestamps and wall times removed"
+}
