@@ -1,7 +1,7 @@
 # RB-18 — Quick-block robustness fixes (coefficient law, stall loop, friction lag)
 
 Date: 2026-09-11
-Status: **implemented and validated on the public fixtures; publication in progress** — see the [progress log](#progress-log) at the bottom.
+Status: **done — implemented, validated on the public fixtures, published** (`e3fa362e0` on `sdast9/polyfem:main`). See the [progress log](#progress-log) at the bottom.
 Selected stage: all six fixes below, as one bounded implementation item.
 
 This file is both the plan and the running record. Each fix has a status line
@@ -57,7 +57,7 @@ Status vocabulary: `pending` → `in progress` → `implemented` (code written) 
 
 ### F1 — Positive-only median and relative κ floor
 
-**Status:** done (validated; committed in the RB-18 implementation commit — hash in the progress log).
+**Status:** done (validated; committed in `e3fa362e0`).
 
 **Defect (RB-02):** `refresh_semi_implicit_stiffness` takes the median over *all*
 per-contact κ including zeros; with a zero median the cap
@@ -86,7 +86,7 @@ probe's expected value updates accordingly). Also a Catch case in
 
 ### F2 — Nonpositive curvature → previous κ, else batch floor; never zero
 
-**Status:** done (validated; committed in the RB-18 implementation commit — hash in the progress log).
+**Status:** done (validated; committed in `e3fa362e0`).
 
 **Defect (RB-02):** `ipc::semi_implicit_stiffness` returns `wᵀHw` (mass term is
 zero here); for indefinite or singular local curvature it is ≤ 0 and
@@ -114,7 +114,7 @@ its first-refresh κ.
 
 ### F3 — Normalize `conditioning_cap` by d̂²
 
-**Status:** done (validated; committed in the RB-18 implementation commit — hash in the progress log).
+**Status:** done (validated; committed in `e3fa362e0`).
 
 **Defect (RB-02):** first-contact conditioning uses
 `cap = conditioning_cap * max|H| / (weight * kappa_median)`. κ carries
@@ -139,7 +139,7 @@ across L=.001/1/1000. Smoke endpoint comparison before/after recorded.
 
 ### F4 — Non-finite curvature: NaN is an error, overflow uses the cap; check after all arithmetic
 
-**Status:** done (validated; committed in the RB-18 implementation commit — hash in the progress log).
+**Status:** done (validated; committed in `e3fa362e0`).
 
 **Defect (RB-02):** `if (!isfinite(kappa)) kappa = 1e30;` silently accepts NaN
 and inf; the check precedes `kappa /= weight_`, so `weight_` = 0 or subnormal
@@ -168,7 +168,7 @@ retain a finite κ and report no-cap.
 
 ### F5 — Do not repeat identical stall restarts
 
-**Status:** done (validated; committed in the RB-18 implementation commit — hash in the progress log).
+**Status:** done (validated; committed in `e3fa362e0`).
 
 **Defect (RB-04 refinement, RB-16):** `ALSolver::minimize_with_stall_restarts`
 calls `on_stall` and restarts up to `max_restarts` (20) times. When
@@ -205,7 +205,7 @@ budget 20 must stop after 2 restarts with the new reason; existing cases with
 
 ### F6 — Lagged friction follows the trim
 
-**Status:** done (validated; committed in the RB-18 implementation commit — hash in the progress log).
+**Status:** done (validated; committed in `e3fa362e0`).
 
 **Defect (RB-02, RB-04 H6):** `FrictionForm::update_lagging` bakes
 `barrier_stiffness()` (the trim) and per-contact `stiffness_scale` into the
@@ -348,6 +348,12 @@ what was measured, what is next.
   and after); the plan's prediction was wrong because the cap is only reached
   when gradient-balance calibration fails, and these scenes contact under
   load. HDA E2E passes. Formatting and diff clean. Next: commit and push.
+
+- **2026-09-11 20:05Z** — Implementation committed as **`e3fa362e0`** and
+  pushed to `sdast9/polyfem:main`. Note: the push also carried the previously
+  unpushed RB-17 commit `8f954f27d` (remote was at `29a18c3f1`). The RB-17
+  session's *uncommitted* files were not touched. This documentation update
+  follows as a separate commit.
 
 ## Next session handoff
 
