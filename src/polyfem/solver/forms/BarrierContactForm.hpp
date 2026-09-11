@@ -14,6 +14,7 @@
 #include <limits>
 #include <functional>
 #include <map>
+#include <set>
 
 namespace polyfem::solver
 {
@@ -119,7 +120,12 @@ namespace polyfem::solver
 		///        assign stiffness scales to the current collision set.
 		///        Optionally runs one step of the gap-band trim controller.
 		/// @param x Current solution (full size)
-		void refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller = true);
+		/// @param published_endpoint True only for the between-steps refresh
+		///        at a published endpoint: RB-20 force continuation captures
+		///        the coefficients that acted there. Mid-solve refreshes
+		///        (birth, stall retune, interval) keep the captured values and
+		///        re-estimate everything else from the fresh Hessian.
+		void refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller = true, const bool published_endpoint = false);
 
 		/// @brief Assign per-collision stiffness scales computed from the
 		///        frozen snapshot to the given collision set. Deterministic
@@ -127,8 +133,13 @@ namespace polyfem::solver
 		void assign_collision_stiffness(ipc::NormalCollisions &collision_set) const;
 		/// @brief Map a memoized per-stencil value (possibly a 0 / +inf
 		///        sentinel for invalid curvature) onto the frozen batch floor,
-		///        cap and user minimum (RB-18 F1/F2/F4).
-		double resolve_stiffness(const double kappa) const;
+		///        cap and user minimum (RB-18 F1/F2/F4). A continued value
+		///        (RB-20) skips the batch floor/cap: it already acted at the
+		///        endpoint, and clamping it to a fresh batch would be drift.
+		double resolve_stiffness(const double kappa, const bool continued = false) const;
+		/// @brief Whether a stencil's coefficient was carried over from the
+		///        state that acted at the last refresh point (RB-20).
+		bool is_continued(const std::array<long, 5> &key) const { return continued_keys_.count(key) > 0; }
 		/// @brief Memoization key of a collision stencil: (type tag, vertex ids)
 		std::array<long, 5> stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const;
 
@@ -219,6 +230,20 @@ namespace polyfem::solver
 		///        a stencil whose fresh curvature is nonpositive or overflows
 		///        keeps the value it had rather than losing its barrier
 		mutable std::map<std::array<long, 5>, double> prev_kappa_cache_;
+		/// @brief Stencils whose coefficient in kappa_cache_ was carried over
+		///        from the value that acted at the refresh point instead of
+		///        re-estimated from the Hessian (RB-20 force continuation).
+		///        Continued values are the resolved effective coefficient and
+		///        bypass the batch floor/cap of the new snapshot.
+		std::set<std::array<long, 5>> continued_keys_;
+		/// @brief The resolved coefficients active at the last published
+		///        endpoint (RB-20); re-seeded into kappa_cache_ at every
+		///        refresh until the next endpoint replaces them.
+		mutable std::map<std::array<long, 5>, double> endpoint_kappa_;
+		/// @brief Continued / freshly estimated stencils in the last refresh
+		///        batch (diagnostic)
+		int kappa_continued_count_ = 0;
+		mutable int kappa_fresh_count_ = 0;
 		/// @brief Newton iterations since the last stiffness refresh
 		int iters_since_refresh_ = 0;
 		uint64_t diagnostic_refresh_id_ = 0; ///< Monotonic per-form completed snapshot identity.
@@ -245,6 +270,9 @@ namespace polyfem::solver
 		///        refresh, when the batch cap/floor are not yet known and
 		///        invalid-curvature sentinels must pass through unresolved
 		mutable bool batch_first_pass_ = false;
+		/// @brief True during the first pass of a published-endpoint refresh
+		///        with continuation_max_ratio > 1 (RB-20 D3)
+		mutable bool pull_toward_fresh_ = false;
 		/// @brief Whether the collision set was non-empty at the last refresh
 		///        (detects contact born mid-solve in post_step)
 		bool kappa_snapshot_had_contacts_ = false;
@@ -278,5 +306,17 @@ namespace polyfem::solver
 		/// @brief Trial-step displacement cap, in barrier supports. Only
 		///        applied while the semi-implicit stiffness mode is active.
 		double trial_displacement_cap_ = 50.0;
+		/// @brief RB-20: a stencil active at a refresh point keeps the
+		///        coefficient that acted there; the Hessian estimate is used
+		///        only for stencils without one. Removes the post-publication
+		///        force drift RB-04 measured. The global trim still acts.
+		///        Opt-in (default off) until RB-21's parent identity lands:
+		///        with stencil identity a closest-feature switch mixes a
+		///        continued and a fresh value and slows Newton badly.
+		bool force_continuation_ = false;
+		/// @brief RB-20 D3: 0 = pure continuation; r > 1 lets the fresh
+		///        Hessian estimate move a continued coefficient within
+		///        [kappa/r, kappa*r] per refresh.
+		double continuation_max_ratio_ = 0.0;
 	};
 } // namespace polyfem::solver

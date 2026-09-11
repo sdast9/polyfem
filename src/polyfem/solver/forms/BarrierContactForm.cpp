@@ -235,7 +235,11 @@ namespace polyfem::solver
 				if (semi_implicit_opts.value("constraint_floor", 0.0) != 0.0)
 					logger().warn("solver.contact.semi_implicit.constraint_floor has been retired and is ignored; barrier deletion and floor projection are no longer supported.");
 				trial_displacement_cap_ = semi_implicit_opts.value("trial_displacement_cap", trial_displacement_cap_);
+				force_continuation_ = semi_implicit_opts.value("force_continuation", force_continuation_);
+				continuation_max_ratio_ = semi_implicit_opts.value("continuation_max_ratio", continuation_max_ratio_);
 			}
+			if (continuation_max_ratio_ != 0.0 && !(continuation_max_ratio_ > 1.0))
+				log_and_throw_error("Semi-implicit barrier stiffness: continuation_max_ratio must be 0 (pure continuation) or > 1!");
 
 			refresh_interval_ = std::max(refresh_interval_, 0);
 			kappa_min_ = std::max(kappa_min_, 0.0);
@@ -315,7 +319,7 @@ namespace polyfem::solver
 		return barrier_stiffness_ != trim_before || kappa_cache_ != prev_kappa_cache_;
 	}
 
-	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller)
+	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller, const bool published_endpoint)
 	{
 		if (!uses_semi_implicit_stiffness())
 			return;
@@ -329,12 +333,45 @@ namespace polyfem::solver
 		for (int k = 0; k < kappa_hessian_.outerSize(); k++)
 			for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
 				kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+		// RB-20 force continuation: at a PUBLISHED endpoint every active
+		// stencil that has a coefficient keeps the value that ACTED there (the
+		// resolved effective scale, floor/cap/kappa_min included), so the
+		// barrier force at these coordinates is unchanged by the refresh for
+		// every persisting contact. Those values are re-seeded at every
+		// following refresh until the next endpoint; everything else (stencils
+		// born during a solve, trial-state memo entries) is estimated from
+		// the fresh Hessian as before -- a mid-solve birth/stall refresh
+		// therefore still re-estimates contacts that no endpoint has vetted.
+		if (force_continuation_ && published_endpoint)
+		{
+			endpoint_kappa_.clear();
+			for (size_t i = 0; i < collision_set_.size(); i++)
+			{
+				if (collision_set_.is_plane_vertex(i))
+					continue;
+				const std::array<long, 5> key = stencil_key(collision_set_, i);
+				const double k = collision_set_[i].stiffness_scale;
+				if (kappa_cache_.count(key) > 0 && k > 0 && std::isfinite(k))
+					endpoint_kappa_.emplace(key, k);
+			}
+		}
+		else if (!force_continuation_)
+			endpoint_kappa_.clear();
 		// The previous snapshot's values back stencils whose fresh curvature
 		// is invalid (RB-18 F2); only a non-empty snapshot is worth keeping.
 		if (!kappa_cache_.empty())
 			prev_kappa_cache_.swap(kappa_cache_);
 		kappa_cache_.clear();
+		continued_keys_.clear();
+		for (const auto &[key, k] : endpoint_kappa_)
+		{
+			kappa_cache_.emplace(key, k);
+			continued_keys_.insert(key);
+		}
+		kappa_continued_count_ = 0;
+		kappa_fresh_count_ = 0;
 		iters_since_refresh_ = 0;
+		const bool pull_toward_fresh = published_endpoint && continuation_max_ratio_ > 1.0;
 
 		// First pass uncapped to freeze the cap at kappa_spread * median of
 		// the batch (guards against exploded Hessian blocks of crushed
@@ -353,6 +390,7 @@ namespace polyfem::solver
 		const bool first_contact = !kappa_snapshot_had_contacts_ && !collision_set_.empty();
 		kappa_snapshot_had_contacts_ = !collision_set_.empty();
 		batch_first_pass_ = true;
+		pull_toward_fresh_ = pull_toward_fresh;
 		try
 		{
 			assign_collision_stiffness(collision_set_);
@@ -360,19 +398,34 @@ namespace polyfem::solver
 		catch (...)
 		{
 			batch_first_pass_ = false;
+			pull_toward_fresh_ = false;
 			throw;
 		}
 		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+		for (size_t i = 0; i < collision_set_.size(); i++)
+			if (!collision_set_.is_plane_vertex(i) && is_continued(stencil_key(collision_set_, i)))
+				++kappa_continued_count_;
 		if (!collision_set_.empty())
 		{
-			std::vector<double> kappas;
+			// RB-20 D4: the batch statistics (median, floor, cap) describe
+			// the FRESH estimates; continued values already acted and are
+			// neither clamped by them nor allowed to distort them. When the
+			// batch has no fresh value the continued ones stand in, so an F2/F7
+			// sentinel of a new stencil still has a reference.
+			std::vector<double> kappas, continued_kappas;
 			kappas.reserve(collision_set_.size());
 			for (size_t i = 0; i < collision_set_.size(); i++)
 			{
+				if (collision_set_.is_plane_vertex(i))
+					continue;
 				const double k = collision_set_[i].stiffness_scale;
-				if (k > 0 && std::isfinite(k))
-					kappas.push_back(k);
+				if (!(k > 0 && std::isfinite(k)))
+					continue;
+				(is_continued(stencil_key(collision_set_, i)) ? continued_kappas : kappas).push_back(k);
 			}
+			if (kappas.empty())
+				kappas.swap(continued_kappas);
 			if (!kappas.empty())
 			{
 				std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
@@ -400,10 +453,15 @@ namespace polyfem::solver
 			// statistics (this also replaces the invalid-curvature sentinels).
 			for (size_t i = 0; i < collision_set_.size(); i++)
 			{
-				const auto cached = kappa_cache_.find(stencil_key(collision_set_, i));
+				const std::array<long, 5> key = stencil_key(collision_set_, i);
+				const auto cached = kappa_cache_.find(key);
 				if (cached != kappa_cache_.end())
-					collision_set_[i].stiffness_scale = resolve_stiffness(cached->second);
+					collision_set_[i].stiffness_scale = resolve_stiffness(cached->second, is_continued(key));
 			}
+			if (kappa_continued_count_ > 0)
+				logger().debug(
+					"Semi-implicit barrier stiffness: {} of {} contacts continued from the refresh point, {} estimated fresh (continuation_max_ratio={:g})",
+					kappa_continued_count_, collision_set_.size(), kappa_fresh_count_, continuation_max_ratio_);
 			if (kappa_fallback_count_ + kappa_abs_fallback_count_ + kappa_global_fallback_count_ > 0)
 				logger().debug(
 					"Semi-implicit barrier stiffness: {} of {} contacts had invalid curvature and no previous value: {} used |w^T H w|, {} used max|H|/dhat^2, {} resolved to floor={:g} / cap={:g}",
@@ -528,12 +586,20 @@ namespace polyfem::solver
 
 			double kappa;
 			const auto cached = kappa_cache_.find(key);
-			if (cached != kappa_cache_.end())
+			const bool continued = cached != kappa_cache_.end() && is_continued(key);
+			// RB-20 D3: with a max ratio, a continued coefficient is pulled
+			// toward the fresh estimate but by at most that factor per
+			// refresh. Done once, during the refresh's first pass; the memo
+			// then holds the clamped value for the rest of the snapshot.
+			const bool pull = continued && batch_first_pass_ && pull_toward_fresh_;
+			if (cached != kappa_cache_.end() && !pull)
 			{
 				kappa = cached->second;
 			}
 			else
 			{
+				if (!continued)
+					++kappa_fresh_count_;
 				// Local positions, masses, and Hessian block come from the
 				// FROZEN snapshot, so the value is a deterministic function
 				// of the stencil between refreshes (well-defined objective
@@ -660,14 +726,30 @@ namespace polyfem::solver
 					}
 				}
 
-				kappa_cache_.emplace(key, kappa);
+				if (!batch_first_pass_)
+					logger().trace(
+						"Semi-implicit barrier stiffness: fresh stencil mid-solve (type {}, vertices {}, {}, {}, {}) kappa={:g} (batch median {:g})",
+						type_tag, vids[0], vids[1], vids[2], vids[3], kappa, kappa_median_);
+				if (pull)
+				{
+					// An invalid fresh estimate (F2/F7 sentinel) cannot pull;
+					// the continued value stands.
+					const double base = cached->second;
+					kappa = (kappa > 0 && std::isfinite(kappa))
+								? std::clamp(kappa, base / continuation_max_ratio_, base * continuation_max_ratio_)
+								: base;
+					kappa_cache_[key] = kappa;
+					endpoint_kappa_[key] = kappa;
+				}
+				else
+					kappa_cache_.emplace(key, kappa);
 			}
 
-			collision.stiffness_scale = resolve_stiffness(kappa);
+			collision.stiffness_scale = resolve_stiffness(kappa, continued);
 		}
 	}
 
-	double BarrierContactForm::resolve_stiffness(const double kappa) const
+	double BarrierContactForm::resolve_stiffness(const double kappa, const bool continued) const
 	{
 		// Sentinels from assign_collision_stiffness: 0 = nonpositive curvature
 		// with no previous value, +inf = overflow with no previous value.
@@ -675,14 +757,17 @@ namespace polyfem::solver
 		// not yet known (floor 0, cap inf) and the sentinel passes through;
 		// the refresh re-resolves every stencil once they are.
 		double k = kappa;
-		if (k == 0.0)
-			k = kappa_floor_; // 0 when no floor is available
-		else if (!std::isfinite(k))
-			k = kappa_cap_; // still inf when no cap is available
-		if (std::isfinite(kappa_cap_))
-			k = std::min(k, kappa_cap_);
-		if (kappa_floor_ > 0)
-			k = std::max(k, kappa_floor_);
+		if (!continued)
+		{
+			if (k == 0.0)
+				k = kappa_floor_; // 0 when no floor is available
+			else if (!std::isfinite(k))
+				k = kappa_cap_; // still inf when no cap is available
+			if (std::isfinite(kappa_cap_))
+				k = std::min(k, kappa_cap_);
+			if (kappa_floor_ > 0)
+				k = std::max(k, kappa_floor_);
+		}
 		// kappa_min is the user's absolute floor (system units, so divided
 		// by the form weight like every other coefficient); applied last.
 		if (kappa_min_ > 0)
@@ -761,7 +846,7 @@ namespace polyfem::solver
 			// The refresh recalibrates it by gradient balance (via the
 			// injected gradient provider), so the grad_energy argument is
 			// unused here.
-			refresh_semi_implicit_stiffness(x);
+			refresh_semi_implicit_stiffness(x, true, /*published_endpoint=*/true);
 			return;
 		}
 
@@ -956,6 +1041,10 @@ namespace polyfem::solver
 		result["curvature_fallback_count"] = kappa_fallback_count_;
 		result["curvature_abs_fallback_count"] = kappa_abs_fallback_count_;
 		result["curvature_global_fallback_count"] = kappa_global_fallback_count_;
+		result["force_continuation"] = force_continuation_;
+		result["continuation_max_ratio"] = continuation_max_ratio_;
+		result["continued_count"] = kappa_continued_count_;
+		result["fresh_count"] = kappa_fresh_count_;
 		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
 														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
 		result["candidate_count"] = use_cached_candidates_ ? json{{"value", candidates_.size()}}

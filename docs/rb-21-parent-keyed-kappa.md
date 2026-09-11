@@ -1,7 +1,7 @@
 # RB-21 — Parent-keyed κ (coefficient identity carried through the toolkit builder)
 
 Date: 2026-09-11
-Status: **planned — starts after RB-20 Stage 1 is done**. See the [progress log](#progress-log).
+Status: **in progress — started 2026-09-11 after RB-20's stencil-key implementation showed the switch jump blocks default-on continuation**. See the [progress log](#progress-log).
 
 Companion of [RB-20 force-continuation κ](rb-20-force-continuation.md), which
 holds the shared authorization and the sequencing decision (D8: RB-20 first).

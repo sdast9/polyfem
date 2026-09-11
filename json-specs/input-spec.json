@@ -1520,6 +1520,8 @@
             "gap_floor",
             "constraint_floor",
             "trial_displacement_cap",
+            "force_continuation",
+            "continuation_max_ratio",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1589,6 +1591,19 @@
         "default": 50.0,
         "type": "float",
         "doc": "Cap on trial-step surface displacement handed to CCD, in barrier supports. Semi-implicit Newton trial steps in distorted states can move vertices by hundreds of supports; pricing that sweep is wasted CCD work and, in the broad phase, a candidate/memory explosion on thin geometry. The returned step fraction is rescaled to the original interval, so the cap also bounds the step when CCD reports no collision -- which is why it applies only in semi-implicit mode. Infinity disables the clamp."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_continuation",
+        "default": false,
+        "type": "bool",
+        "doc": "RB-20: at the between-steps refresh of a published endpoint, every active contact keeps the per-contact coefficient that acted there (the realized force at the realized gap is continued); the Hessian estimate is used only for contacts without one. Mid-solve refreshes keep those values and re-estimate everything else. Removes the post-publication force drift of re-estimation; the global trim still acts. Opt-in until the parent-keyed identity (RB-21) is in place: with stencil identity a closest-feature switch mixes continued and fresh values and slows Newton."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/continuation_max_ratio",
+        "default": 0,
+        "type": "float",
+        "min": 0,
+        "doc": "RB-20: 0 = pure continuation. r > 1 lets the fresh Hessian estimate move a continued coefficient within [kappa/r, kappa*r] at each published-endpoint refresh."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",

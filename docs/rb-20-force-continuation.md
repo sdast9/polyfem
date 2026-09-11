@@ -1,7 +1,7 @@
 # RB-20 — Force-continuation κ (per-contact coefficient carried from the published endpoint)
 
 Date: 2026-09-11
-Status: **planned — implementation not started**. See the [progress log](#progress-log); resume from the first stage not marked `done`.
+Status: **implemented, opt-in (`force_continuation: false` by default) — drift removed on the public matrix; default-on blocked on RB-21**. See the [progress log](#progress-log); resume from its last entry.
 
 This file is both the plan and the running record, like [RB-18](rb-18-quick-fixes.md).
 It is written so that a session that loses its context can resume from the log
@@ -115,12 +115,21 @@ user prefers otherwise.
   active at x are fresh next time; a contact that separates and re-contacts
   gets a fresh estimate. Recorded as a limitation (RB-21's parent registry is
   the place to extend memory if wanted).
-- **D7 — Applies at every refresh, not only between steps.** Birth refresh,
-  stall retune and `refresh_interval` refreshes continue active contacts too;
-  a refresh then changes only the trim and new contacts. Consequence for F5: a
-  stall retune with nothing new and an unmoved trim is correctly "unchanged"
-  and the second one interrupts. The `[al_solver]`/stall tests must still pass.
-- **D8 — Sequencing: RB-20 first, RB-21 second.** RB-20 is fork-local PolyFEM
+- **D7 (revised 2026-09-11) — Memory is captured at the published endpoint
+  only.** The first version continued at *every* refresh, which at step 1
+  "continued" values the birth refresh had estimated from the pre-contact
+  snapshot — never realized anywhere — and produced 12 stall restarts on a run
+  that has none. Now: the between-steps refresh (`update_barrier_stiffness`,
+  `published_endpoint=true`) captures the resolved coefficients of every active
+  stencil into `endpoint_kappa_`; every following refresh (birth, stall retune,
+  interval) re-seeds exactly those and re-estimates everything else fresh, as
+  today. A mid-solve refresh therefore still re-estimates contacts no endpoint
+  has vetted, and F5's "unchanged" detection keeps its meaning.
+- **D8 (amended 2026-09-11) — RB-20 code first, but RB-21 before RB-20 can be
+  default-on.** See the 19:30Z log entry: with stencil identity, continuation
+  makes the closest-feature-switch jump larger (a continued value from the old
+  snapshot meets a fresh value from the new one) and Newton cost rises 7–20×.
+  Original text: RB-20 first, RB-21 second.** RB-20 is fork-local PolyFEM
   and gives the drift removal immediately; RB-21 touches collision construction
   in the toolkit and is validated on its own (bit-identical `adaptive` smoke as
   the safety net). Doing RB-21 first would delay the largest payoff behind the
@@ -207,3 +216,37 @@ what was measured, what is next.
   the evidence directory, capture a baseline of the drift metric on the
   quasistatic refinement matrix (continuation off = current binary), then
   implement steps 1–6.
+
+- **2026-09-11 18:50Z** — Evidence directory `outputs/rb-20/20260911T182152Z` (baseline binary
+  `3b05266b…`, source `ffc83ac0d`). New runner `tools/rb20/run_drift_matrix.py`
+  extracts the drift metric per between-steps refresh event. **Baseline
+  (continuation absent), quasistatic 3 dt × 3 bands: 9/9 complete** (RB-19
+  removed the step-1 stalls), every refresh event has unchanged trim and active
+  count, and the relative contact-force change at the unchanged endpoint is
+  **17.4% (dt .25), 8.5% (dt .125), 4.2% (dt .0625)** for all three bands —
+  proportional to the load increment, the κ re-estimation signature
+  (`baseline-quasistatic/results.json`). Next: implement code-plan steps 1–6.
+
+- **2026-09-11 19:30Z** — Implemented (steps 1–6 of the code plan; `published_endpoint`
+  flag on `refresh_semi_implicit_stiffness`, `endpoint_kappa_`/`continued_keys_`,
+  `resolve_stiffness(kappa, continued)`, D4 fresh-only batch statistics, D3 pull
+  at endpoint refreshes only, spec entries, diagnostics). **Two findings:**
+  1. D7 as first written was wrong (birth refresh continued unrealized values →
+     12 stall restarts on `lower-0.5-dt-0.25`); revised to endpoint capture,
+     after which step 1 is identical to the baseline (9 iterations, 0 restarts).
+  2. **Drift is removed: max relative contact-force change at unchanged trim is
+     1e-16 on all nine quasistatic runs** (`matrix-on-stencil/`; baseline
+     17.4/8.5/4.2%). But total Newton iterations rise from 26–76 to 174–1412,
+     restarts appear (0 → up to 9) and `lower-0.8-dt-0.0625` fails after 20
+     restarts. Trace (`trace-on/`): the slow solves cycle (‖∇f‖ 1 → 1000 → 1
+     every few iterations) with **no** fresh stencil being created — a vertex
+     toggles between two memoized face-vertex/edge-vertex stencils whose
+     coefficients now differ by continued-vs-fresh snapshot, i.e. the RB-15
+     subfeature-switch jump, amplified. This is the "the two go together"
+     coupling the user anticipated. Decision: keep RB-20 **opt-in** (default
+     `false`) so `main` is unaffected, do RB-21 now, then validate both
+     together and flip the default. Control run (`matrix-off/`) reproduces the
+     baseline (Newton counts within thread noise, identical drift).
+  Evidence: `outputs/rb-20/20260911T182152Z/` (`baseline-quasistatic`, `probe-on-first`, `probe-on-second`,
+  `matrix-on-stencil`, `matrix-off`, `trace-on`). Regression tests not yet
+  written (they belong with the parent-keyed identity). Next: RB-21.
