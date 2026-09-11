@@ -179,7 +179,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [characterized—stages 1–3 complete; decision pending](rb-14-validation.md) |
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
-| RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | not started |
+| RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [in progress—candidate selection prepared; integration pending](rb-17-validation.md) |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is
 RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08
