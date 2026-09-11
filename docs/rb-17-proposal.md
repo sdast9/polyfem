@@ -1,9 +1,12 @@
 # RB-17 — Candidate selection and integration protocol
 
-2026-09-11. **Proposal awaiting model selection; not implemented or validated.**
+2026-09-11. **Experimental package approved; implementation/validation pending.**
 The user requested completion of RB-17. The item's explicit prerequisite is a
 selected estimator, assignment and controller contract. RB-14–RB-16 characterize
 alternatives but do not select them. This document makes that choice reviewable.
+The user subsequently instructed: "Please proceed with this proposal."
+That authorizes the five-point experimental package below, including its
+bounded unresolved-attempt policy. Production default promotion remains separate.
 See [status and provenance](rb-17-validation.md).
 
 ## Recommended bounded experimental candidate
@@ -46,7 +49,7 @@ See [status and provenance](rb-17-validation.md).
    budget end the experimental attempt with an explicit unresolved result. Do
    not invent a positive floor, restore failed attempts or retry automatically.
 
-All five points are a proposed package requiring selection, including its bounded
+All five points are the selected experimental package, including its bounded
 stop/report behavior. Current production defaults, CCD, trial-displacement cap,
 AL feasibility role and configured numerical convergence remain as specified in
 the robustness plan. The proposed mode is frictionless and opt-in. Its unsupported

@@ -1,0 +1,210 @@
+{
+  "scope": "two affine gaps; full quadratic reference; no FEM or production solver",
+  "dhat": 1.0,
+  "initial_gap": [
+    0.8,
+    0.8
+  ],
+  "band_squared": [
+    0.5,
+    0.9
+  ],
+  "factors": [
+    2,
+    4
+  ],
+  "max_corrections": 12,
+  "residual_tolerance": 1e-10,
+  "newton_limit": 100,
+  "backtrack_limit": 60,
+  "armijo": 0.0001,
+  "length_scales": [
+    0.001,
+    1.0,
+    1000.0
+  ],
+  "energy_scale": 1.0,
+  "arithmetic": [
+    "direct",
+    "stable_quadratic_control"
+  ],
+  "parent_orders": [
+    "forward",
+    "reverse"
+  ],
+  "initialization": "raw mapped Rayleigh J_i H J_i^T / ||J_i||^2 / dhat^2; no trim/cap; scalar parent registry",
+  "cases": [
+    {
+      "id": "independent_heterogeneous",
+      "H": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          100
+        ]
+      ],
+      "J": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "p": [
+        0.2,
+        0.25
+      ]
+    },
+    {
+      "id": "rb13_negative_coupling",
+      "H": [
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          3,
+          0
+        ],
+        [
+          0,
+          0,
+          5
+        ]
+      ],
+      "J": [
+        [
+          1,
+          -1,
+          0
+        ],
+        [
+          0,
+          1,
+          -1
+        ]
+      ],
+      "p": [
+        0.2,
+        0.25
+      ]
+    },
+    {
+      "id": "positive_symmetric",
+      "H": [
+        [
+          0.6666666666666666,
+          -0.3333333333333333
+        ],
+        [
+          -0.3333333333333333,
+          0.6666666666666666
+        ]
+      ],
+      "J": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "p": [
+        0.1,
+        0.1
+      ]
+    },
+    {
+      "id": "positive_asymmetric",
+      "H": [
+        [
+          0.6666666666666666,
+          -0.3333333333333333
+        ],
+        [
+          -0.3333333333333333,
+          0.6666666666666666
+        ]
+      ],
+      "J": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "p": [
+        0.4,
+        0.1
+      ]
+    },
+    {
+      "id": "positive_incompatible",
+      "H": [
+        [
+          0.6666666666666666,
+          -0.3333333333333333
+        ],
+        [
+          -0.3333333333333333,
+          0.6666666666666666
+        ]
+      ],
+      "J": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "p": [
+        0.7,
+        0.1
+      ]
+    },
+    {
+      "id": "heldout_strong_coupling",
+      "H": [
+        [
+          2.7777777777777777,
+          -2.2222222222222223
+        ],
+        [
+          -2.2222222222222223,
+          2.7777777777777777
+        ]
+      ],
+      "J": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "p": [
+        0.3,
+        0.1
+      ],
+      "holdout": true
+    }
+  ]
+}
