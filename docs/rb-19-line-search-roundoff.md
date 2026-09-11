@@ -209,9 +209,10 @@ open and was not investigated further in this item.
 ## Publication
 
 - PolySolve: `5afe3b5d4` on `sdast9/polysolve:iteration-callback` (pushed).
-- PolyFEM: pin bump in `cmake/recipes/polysolve.cmake` to `5afe3b5d4`, this
-  record, `tools/rb19/`, plan/README updates, and the RB-17 retirement, on
-  `sdast9/polyfem:main`. The configured build uses the local `polysolve-merged`
+- PolyFEM: `0fde16cf0` (RB-17 retirement and the coupled-gate files) and
+  `a1725ca9e` (pin bump in `cmake/recipes/polysolve.cmake` to `5afe3b5d4`,
+  this record, `tools/rb19/`, plan/README updates) on `sdast9/polyfem:main`,
+  pushed. The configured build uses the local `polysolve-merged`
   override, which is at the pinned commit.
 - Parent README updated.
 
