@@ -348,6 +348,8 @@ namespace polyfem::solver
 		kappa_floor_ = 0.0;
 		kappa_median_ = 0.0;
 		kappa_fallback_count_ = 0;
+		kappa_abs_fallback_count_ = 0;
+		kappa_global_fallback_count_ = 0;
 		const bool first_contact = !kappa_snapshot_had_contacts_ && !collision_set_.empty();
 		kappa_snapshot_had_contacts_ = !collision_set_.empty();
 		batch_first_pass_ = true;
@@ -402,10 +404,12 @@ namespace polyfem::solver
 				if (cached != kappa_cache_.end())
 					collision_set_[i].stiffness_scale = resolve_stiffness(cached->second);
 			}
-			if (kappa_fallback_count_ > 0)
+			if (kappa_fallback_count_ + kappa_abs_fallback_count_ + kappa_global_fallback_count_ > 0)
 				logger().debug(
-					"Semi-implicit barrier stiffness: {} of {} contacts had nonpositive/overflowing curvature and no previous value; resolved to floor={:g} / cap={:g}",
-					kappa_fallback_count_, collision_set_.size(), kappa_floor_, kappa_cap_);
+					"Semi-implicit barrier stiffness: {} of {} contacts had invalid curvature and no previous value: {} used |w^T H w|, {} used max|H|/dhat^2, {} resolved to floor={:g} / cap={:g}",
+					kappa_fallback_count_ + kappa_abs_fallback_count_ + kappa_global_fallback_count_,
+					collision_set_.size(), kappa_abs_fallback_count_, kappa_global_fallback_count_,
+					kappa_fallback_count_, kappa_floor_, kappa_cap_);
 		}
 
 		// Trim controller, one step per refresh: below the gap band the
@@ -626,9 +630,32 @@ namespace polyfem::solver
 					{
 						kappa = prev->second;
 					}
+					else if (kappa < 0 && std::isfinite(kappa))
+					{
+						// RB-18 F7 (user choice B): an indefinite local block
+						// still has a curvature MAGNITUDE along the normal; the
+						// barrier borrows it. Heuristic, not a derivation.
+						kappa = -kappa;
+						++kappa_abs_fallback_count_;
+					}
+					else if (kappa == 0)
+					{
+						// RB-18 F7 (fallback E): singular along the normal, so
+						// use the global Hessian scale max|H| / dhat^2 (same
+						// normalization as the conditioning cap). Zero only
+						// when the system Hessian is identically zero.
+						kappa = kappa_hessian_max_ / (dhat_ * dhat_ * weight_);
+						if (kappa > 0 && std::isfinite(kappa))
+							++kappa_global_fallback_count_;
+						else
+						{
+							kappa = 0.0;
+							++kappa_fallback_count_;
+						}
+					}
 					else
 					{
-						kappa = (kappa > 0) ? std::numeric_limits<double>::infinity() : 0.0;
+						kappa = std::numeric_limits<double>::infinity();
 						++kappa_fallback_count_;
 					}
 				}
@@ -927,6 +954,8 @@ namespace polyfem::solver
 		result["batch_floor"] = kappa_floor_;
 		result["batch_cap"] = std::isfinite(kappa_cap_) ? json(kappa_cap_) : json(nullptr);
 		result["curvature_fallback_count"] = kappa_fallback_count_;
+		result["curvature_abs_fallback_count"] = kappa_abs_fallback_count_;
+		result["curvature_global_fallback_count"] = kappa_global_fallback_count_;
 		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
 														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
 		result["candidate_count"] = use_cached_candidates_ ? json{{"value", candidates_.size()}}

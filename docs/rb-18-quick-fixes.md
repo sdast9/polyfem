@@ -1,7 +1,7 @@
 # RB-18 — Quick-block robustness fixes (coefficient law, stall loop, friction lag)
 
 Date: 2026-09-11
-Status: **done — implemented, validated on the public fixtures, published** (`e3fa362e0` on `sdast9/polyfem:main`). See the [progress log](#progress-log) at the bottom.
+Status: **done — implemented, validated on the public fixtures, published** (`e3fa362e0` + F7 follow-up on `sdast9/polyfem:main`; hashes in the progress log). See the [progress log](#progress-log) at the bottom.
 Selected stage: all six fixes below, as one bounded implementation item.
 
 This file is both the plan and the running record. Each fix has a status line
@@ -237,6 +237,38 @@ immediately after the trim doubling. Existing friction-coupled-to-frozen-κ FD
 derivative tests must still pass (they exercise the scaled derivatives when
 run with a bumped trim — add one such section).
 
+### F7 — Nonpositive curvature with no history: |wᵀHw|, then max|H|/d̂²
+
+**Status:** done (validated; committed in the F7 follow-up commit — hash in the progress log).
+
+**Decision (user, 2026-09-11):** option B with E as fallback, chosen from the
+five alternatives presented (A keep zero, B |wᵀHw|, C PSD-projected block,
+D `kappa_min`, E global Hessian scale). This closes the one path to κ=0 that
+F2 left open.
+
+**Change** (`assign_collision_stiffness`, after the previous-value lookup):
+- `q < 0` finite → κ = |q| (B). The magnitude of the local curvature is used
+  as the barrier scale even though the elasticity is not providing it along
+  the normal; heuristic, not a derivation, counted in
+  `diagnostic_state()["curvature_abs_fallback_count"]`.
+- `q == 0` → κ = `max|H| / (d̂² · weight)` (E). Same normalization as the
+  conditioning cap; counted in `curvature_global_fallback_count`. Zero only if
+  the system Hessian is identically zero (then `curvature_fallback_count`).
+- Precedence: valid positive q → previous value → B → E → batch floor/cap →
+  `kappa_min`. Previous value wins over B for continuity between refreshes.
+- Overflow with no reference still throws (F4); E is not applied there
+  because max|H| is then itself overflowing.
+
+**Consequence for the fixtures:** the historical `{0,0,100}` batch is now
+resolved by E to `{100,100,100}`, so it no longer exercises the F1 floor; the
+F1 fixtures were changed to a tiny positive outlier `{100,100,1e-12}` →
+`{.01,100,100}`. The RB-02 probe's `negative` and `singular_zero_normal`
+curvature cases now expect 100; `zero` still expects 0; `floor_control` uses a
+zero block. Both fixture changes are recorded in the probe comments.
+
+**Tests:** three new sections in `[semi_implicit_coefficients]` (B, E with
+d̂²/weight normalization, identically-zero, B over floor, previous over B).
+
 ## Validation plan
 
 | Check | Input/configuration | Expected criterion | Status |
@@ -355,6 +387,19 @@ what was measured, what is next.
   session's *uncommitted* files were not touched. This documentation update
   follows as a separate commit.
 
+- **2026-09-11 20:40Z** — **F7 added** after the user chose option B (|wᵀHw|)
+  with E (max|H|/d̂²) as fallback for nonpositive curvature with no history.
+  Implemented with two new diagnostic counters. `[semi_implicit_coefficients]`
+  5 cases / 65 assertions across seeds 1–3; RB-02 probe **243/243**
+  (`final-probe-f7/`; count changed with the fixture rework). Affected suite
+  52 cases / 3,349 assertions (`affected-tests-f7.log`). Five smokes: all
+  exit 0; endpoints within run-to-run noise of the pre-F7 fixed binary
+  (≤3e-14; `final-smokes-f7/`, `final-endpoints-f7.json`); neither B nor E
+  fired in any smoke (no fallback log lines), as expected — no public scene
+  has a nonpositive local block at first contact. README doc string updated.
+  The "one remaining path to κ=0" in the handoff is now only an identically
+  zero system Hessian.
+
 ## Next session handoff
 
 - All six fixes are implemented, regression-tested, validated on the public
@@ -374,11 +419,13 @@ what was measured, what is next.
   - F5 makes a stall with nothing to retune fail after two restarts instead
     of `max_restarts`; `solve_info["unchanged_restarts"]` and the termination
     reason `stall persisted with no retunable contact state` identify it.
-- **One remaining path to κ=0** (deliberate): a refresh batch in which no
-  contact has positive curvature and no previous value exists. It warns and
-  is counted in `diagnostic_state()["curvature_fallback_count"]`. Using
-  |wᵀHw| there is a driving-curvature model choice (RB-02 contract) that was
-  not taken.
+- **κ=0 is now only possible for an identically zero system Hessian** (F7,
+  user choice B+E). `diagnostic_state()` reports how many stencils used
+  |wᵀHw| (`curvature_abs_fallback_count`), max|H|/d̂²
+  (`curvature_global_fallback_count`) or the batch floor/cap
+  (`curvature_fallback_count`) at the last refresh; a debug log line lists
+  the same. B is a heuristic borrowing of curvature magnitude, not a derived
+  compliance — if a scene relies on it heavily, that is worth knowing.
 - **Known limitations not in scope here:** post-publication force drift
   (force-continuation κ, proposed as the next implementation item); EV/VV
   coefficient jump (parent-keyed κ in the toolkit builder); mid-solve κ_i

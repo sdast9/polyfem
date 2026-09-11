@@ -169,8 +169,10 @@ int main()
 				f.driving *= 1e-14;
 			f.start(z);
 			auto r = sample(f, z);
-			double expected = (name == "negative" || name == "zero" || name == "singular_zero_normal") ? 0 : name == "near_singular" ? 1e-12
-																																	 : 100;
+			// RB-18 F7: negative uses |w^T H w| (B), singular-along-normal uses
+			// max|H| / dhat^2 (E); only an identically zero Hessian stays zero.
+			double expected = name == "zero" ? 0 : name == "near_singular" ? 1e-12
+																		   : 100;
 			check(f.collision_set().size() == 1, "single stencil");
 			check(close(f.collision_set()[0].stiffness_scale, expected), name + " coefficient");
 			if (expected == 0)
@@ -189,11 +191,14 @@ int main()
 			}
 			out["curvature"][name] = r;
 		}
-		// Three disjoint edge-point pairs expose upper-median batch capping.
-		for (const auto &values : {std::vector<double>{0, 0, 100}, std::vector<double>{1, 10, 1000}})
+		// Three disjoint edge-point pairs expose upper-median batch capping
+		// and (RB-18 F1) the relative floor. The historical {0,0,100} batch is
+		// now resolved by F7 (zero curvature -> max|H|/dhat^2), see below; a
+		// tiny positive outlier is what exercises the floor.
+		for (const auto &values : {std::vector<double>{100, 100, 1e-12}, std::vector<double>{1, 10, 1000}})
 		{
 			auto m = mesh(1, .2, 3);
-			Probe f(m, 1, {{"kappa_spread", values[1] == 0 ? 1e4 : 2}});
+			Probe f(m, 1, {{"kappa_spread", values[2] < 1 ? 1e4 : 2}});
 			for (int i = 0; i < 3; ++i)
 				f.driving.block(6 * i, 6 * i, 6, 6) = values[i] * M::Identity(6, 6);
 			V x = V::Zero(18);
@@ -201,8 +206,8 @@ int main()
 			auto r = sample(f, x);
 			// RB-18 F1: the median is over the positive values only, the cap
 			// is spread * median and a relative floor median / spread applies.
-			const double spread = values[1] == 0 ? 1e4 : 2;
-			const double median = values[1] == 0 ? 100 : 10;
+			const double spread = values[2] < 1 ? 1e4 : 2;
+			const double median = values[2] < 1 ? 100 : 10;
 			const double cap = spread * median, floor = median / spread;
 			check(f.collision_set().size() == 3, "three independent contacts");
 			// The parallel broad phase does not order the set: compare sorted.
@@ -218,8 +223,23 @@ int main()
 			std::sort(expected.begin(), expected.end());
 			for (size_t i = 0; i < assigned.size(); ++i)
 				check(close(assigned[i], expected[i]), "batch resolved coefficient");
-			if (values[1] == 0)
-				check(r["energy"] > 0 && r["gradient_norm"] > 0, "zero median no longer suppresses positive contact");
+			if (values[2] < 1)
+				check(r["energy"] > 0 && r["gradient_norm"] > 0, "tiny outlier does not suppress the batch");
+			out["batches"].push_back(r);
+		}
+		// The historical zero-median batch {0,0,100}: F7/E resolves the two
+		// singular blocks from max|H| / dhat^2 = 100.
+		{
+			auto m = mesh(1, .2, 3);
+			Probe f(m, 1, {{"kappa_spread", 1e4}});
+			f.driving.setZero();
+			f.driving.block(12, 12, 6, 6) = 100 * M::Identity(6, 6);
+			V x = V::Zero(18);
+			f.start(x);
+			auto r = sample(f, x);
+			for (size_t i = 0; i < f.collision_set().size(); ++i)
+				check(close(f.collision_set()[i].stiffness_scale, 100), "zero batch resolved by global scale");
+			r["case"] = "historical_zero_median";
 			out["batches"].push_back(r);
 		}
 		// Existing options, unchanged production defaults; contrast zero median.
@@ -236,7 +256,7 @@ int main()
 		{
 			auto m = mesh();
 			Probe f(m, 1, {{"kappa_min", floor}});
-			f.driving *= -1;
+			f.driving.setZero(); // RB-18 F7: a negative block would now give |q|
 			f.start(z);
 			auto r = sample(f, z);
 			check(close(f.collision_set()[0].stiffness_scale, floor), "configured floor");

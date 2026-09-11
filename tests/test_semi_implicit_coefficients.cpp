@@ -4,7 +4,8 @@
 //      batch reference exists,
 //   F3 dhat^2-normalized first-contact conditioning cap (length-unit independent),
 //   F4 NaN curvature / overflow without reference / invalid weight are errors,
-//   F6 lagged friction follows the contact trim between lag updates.
+//   F6 lagged friction follows the contact trim between lag updates,
+//   F7 nonpositive curvature with no history uses |w^T H w|, then max|H|/dhat^2.
 // Real BarrierContactForm with a synthetic frozen Hessian and identity mapping,
 // mirroring tools/rb02/coefficient_probe.cpp. Not a physical-accuracy test.
 #include <catch2/catch_test_macros.hpp>
@@ -83,18 +84,20 @@ TEST_CASE("Semi-implicit batch median ignores zeros and applies a relative floor
 {
 	const Eigen::VectorXd x = Eigen::VectorXd::Zero(18);
 
-	SECTION("zero median batch keeps its positive contact")
+	SECTION("tiny outlier is raised to the relative floor")
 	{
+		// Two healthy blocks and one nearly singular one (1e-12). The median
+		// of the positive values is 100, so the floor 100 / 1e4 raises the
+		// outlier; a zero block would instead be handled by F7.
 		auto mesh = make_mesh(1, .2, 3);
 		Probe f(mesh, 1, {{"kappa_spread", 1e4}});
-		f.driving.setZero();
-		f.driving.block(12, 12, 6, 6) = 100 * Eigen::MatrixXd::Identity(6, 6);
+		f.driving.block(12, 12, 6, 6) *= 1e-14;
 		f.start(x);
 		const auto k = f.scales();
 		REQUIRE(k.size() == 3);
-		CHECK(k[0] == Approx(100. / 1e4)); // relative floor, not zero
-		CHECK(k[1] == Approx(100. / 1e4));
-		CHECK(k[2] == Approx(100.)); // not zeroed by a zero median
+		CHECK(k[0] == Approx(100. / 1e4)); // relative floor, not 1e-12
+		CHECK(k[1] == Approx(100.));
+		CHECK(k[2] == Approx(100.));
 		f.solution_changed(x);
 		CHECK(f.value(x) > 0);
 		CHECK(f.diagnostic_state()["batch_median"] == 100.);
@@ -119,11 +122,10 @@ TEST_CASE("Semi-implicit batch median ignores zeros and applies a relative floor
 	{
 		auto mesh = make_mesh(1, .2, 3);
 		Probe f(mesh, 1, {{"kappa_spread", 0}});
-		f.driving.setZero();
-		f.driving.block(12, 12, 6, 6) = 100 * Eigen::MatrixXd::Identity(6, 6);
+		f.driving.block(12, 12, 6, 6) *= 1e-14;
 		f.start(x);
 		const auto k = f.scales();
-		CHECK(k[0] == 0.);
+		CHECK(k[0] == Approx(1e-12));
 		CHECK(k[2] == Approx(100.));
 	}
 
@@ -167,32 +169,72 @@ TEST_CASE("Semi-implicit nonpositive curvature keeps the previous coefficient", 
 		CHECK(f.scales()[0] == Approx(100.));
 	}
 
-	SECTION("first snapshot with no reference stays zero and is counted")
+	SECTION("F7/B: negative curvature with no history borrows its magnitude")
 	{
 		Probe g(mesh);
 		g.driving *= -1;
+		g.start(x);
+		CHECK(g.scales()[0] == Approx(100.));
+		CHECK(g.diagnostic_state()["curvature_abs_fallback_count"] == 1);
+		CHECK(g.diagnostic_state()["curvature_fallback_count"] == 0);
+	}
+
+	SECTION("F7/E: singular along the normal uses the global Hessian scale")
+	{
+		// Curvature only on the x DOFs: w^T H w = 0 for a horizontal edge
+		// (w has only y components), while max|H| = 100.
+		Probe g(mesh, 1);
+		g.driving.setZero();
+		for (int i = 0; i < 6; i += 2)
+			g.driving(i, i) = 100;
+		g.start(x);
+		CHECK(g.scales()[0] == Approx(100.)); // 100 / (dhat^2 = 1) / (weight = 1)
+		CHECK(g.diagnostic_state()["curvature_global_fallback_count"] == 1);
+	}
+
+	SECTION("F7/E carries the dhat^2 and weight normalization")
+	{
+		Probe g(mesh, .5, json::object(), 4.);
+		g.driving.setZero();
+		for (int i = 0; i < 6; i += 2)
+			g.driving(i, i) = 100;
+		g.start(x);
+		CHECK(g.scales()[0] == Approx(100. / (.25 * 4.)));
+	}
+
+	SECTION("identically zero Hessian is the only remaining zero, and is counted")
+	{
+		Probe g(mesh);
+		g.driving.setZero();
 		g.start(x);
 		CHECK(g.scales()[0] == 0.);
 		CHECK(g.diagnostic_state()["curvature_fallback_count"] == 1);
 	}
 
-	SECTION("first snapshot with a batch reference resolves to the floor")
+	SECTION("B takes precedence over the batch floor")
 	{
 		auto mesh3 = make_mesh(1, .2, 3);
 		Probe g(mesh3, 1, {{"kappa_spread", 2}});
 		g.driving.block(12, 12, 6, 6) *= -1;
 		g.start(Eigen::VectorXd::Zero(18));
 		const auto k = g.scales();
-		CHECK(k[0] == Approx(50.)); // median 100 / spread 2
+		CHECK(k[0] == Approx(100.));
 		CHECK(k[1] == Approx(100.));
 		CHECK(k[2] == Approx(100.));
-		CHECK(g.diagnostic_state()["curvature_fallback_count"] == 1);
+		CHECK(g.diagnostic_state()["curvature_abs_fallback_count"] == 1);
+	}
+
+	SECTION("previous value takes precedence over B")
+	{
+		f.driving *= -3; // |q| would be 300; the previous 100 wins
+		f.refresh_semi_implicit_stiffness(x, false);
+		CHECK(f.scales()[0] == Approx(100.));
 	}
 
 	SECTION("kappa_min is an absolute floor applied last")
 	{
 		Probe g(mesh, 1, {{"kappa_min", 1}});
-		g.driving *= -1;
+		g.driving.setZero();
 		g.start(x);
 		CHECK(g.scales()[0] == Approx(1.));
 	}

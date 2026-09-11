@@ -87,7 +87,10 @@ Coefficient law safeguards (RB-18, 2026-09-11; see
 [docs/rb-18-quick-fixes.md](../../docs/rb-18-quick-fixes.md)): the batch
 median is taken over positive values only, `kappa_spread` also sets a relative
 floor `median / kappa_spread`, a stencil whose local curvature is nonpositive
-or overflows keeps its previous coefficient (else the batch floor/cap), a NaN
+or overflows keeps its previous coefficient — with no previous value a
+negative curvature uses its magnitude |wᵀHw| and a zero one uses the global
+scale max|H|/d̂² (user choice 2026-09-11; only an identically zero system
+Hessian still yields κ=0) — overflow with no reference is an error, a NaN
 curvature or an overflow with no reference is an error rather than a literal
 1e30, and `conditioning_cap` is dimensionless (normalized by d̂²) so it binds
 at the same trim regardless of length units. At d̂ ≪ 1 the cap now binds at

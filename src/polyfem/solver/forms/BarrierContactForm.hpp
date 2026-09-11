@@ -234,8 +234,13 @@ namespace polyfem::solver
 		///        last refresh batch (RB-18 F1); 0 when none is positive
 		double kappa_median_ = 0.0;
 		/// @brief Stencils in the last refresh batch whose curvature was
-		///        nonpositive / overflowed and had no previous value (diagnostic)
+		///        invalid, had no previous value, and could only be resolved by
+		///        the batch floor/cap (diagnostic)
 		mutable int kappa_fallback_count_ = 0;
+		/// @brief ... resolved with |w^T H w| (RB-18 F7 choice B)
+		mutable int kappa_abs_fallback_count_ = 0;
+		/// @brief ... resolved with max|H| / dhat^2 (RB-18 F7 fallback E)
+		mutable int kappa_global_fallback_count_ = 0;
 		/// @brief True only during the uncapped first assignment pass of a
 		///        refresh, when the batch cap/floor are not yet known and
 		///        invalid-curvature sentinels must pass through unresolved
