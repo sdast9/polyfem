@@ -55,6 +55,9 @@ All semi-implicit options are optional. Defaults from
                 "kappa_spread": 10000.0,
                 "gap_floor": 0,
                 "trial_displacement_cap": 50.0,
+                "force_continuation": true,
+                "continuation_max_ratio": 0,
+                "coefficient_identity": "parent",
                 "conditioning_cap": 1000.0,
                 "controller_interval": 30,
                 "restart": {
@@ -101,6 +104,30 @@ The independent `solver.augmented_lagrangian.initial_weight = "hessian_scaled"`
 option initializes the BC penalty from elastic Hessian magnitude, scaled by
 `initial_weight_multiplier`. The fork normalizes the lumped BC metric to mean
 diagonal one, preserving relative weights without physical mass units.
+
+### Coefficient continuity (RB-20 / RB-21)
+
+Each per-contact coefficient is keyed on the **parent candidate** that built
+the collision (`coefficient_identity: "parent"`): the point/edge pair in 2D,
+the point/triangle or edge/edge pair in 3D, estimated on the parent's stencil
+with the closest point on the whole primitive. A built collision's
+`stiffness_scale` is the contribution-weighted mean of its parents, so the
+potential is continuous when the closest subfeature switches (EV↔VV, FV↔EV) and
+the historical stencil jump is gone (`"stencil"` restores the old keying).
+
+`force_continuation` (default on) keeps, at every between-steps refresh, the
+coefficient that acted at the published endpoint for every active contact: the
+contact force at the endpoint is unchanged by the refresh, so the published
+state is an equilibrium of the state the next step starts from. A contact born
+during a step is priced by that step's frozen snapshot and continued from its
+publication on; only the global trim (band step, collapse bump, calibration)
+still moves the forces between steps, and that is logged as a coefficient
+event. `continuation_max_ratio: r > 1` lets a fresh Hessian estimate move a
+continued coefficient within a factor `r` per endpoint (0 = pure
+continuation). Continuation changes semi-implicit endpoints relative to the
+re-estimating behavior (measured on the public smokes: ~1e-4 frictionless,
+~1.6e-2 with friction, on a .25 displacement); `force_continuation: false`
+restores it.
 
 ## Scope and limitations
 
@@ -151,7 +178,9 @@ smoke scene.
 
 ## Companion revisions
 
-CMake pins `sdast9/ipc-toolkit@af317a65` and `sdast9/polysolve@5afe3b5d`. The latter
-carries the PF-06 derivative correction and the RB-19 line-search fallback on
-top of `713220f`, the upstream merge of the iteration-callback work. Dependency
+CMake pins `sdast9/ipc-toolkit@e3c8d3fe` (per-collision `stiffness_scale`,
+`compute_avg_distance`, and the RB-21 parent contributions on built
+collisions) and `sdast9/polysolve@5afe3b5d`. The latter carries the PF-06
+derivative correction and the RB-19 line-search fallback on top of `713220f`,
+the upstream merge of the iteration-callback work. Dependency
 feature branches and `main` branches are not interchangeable.

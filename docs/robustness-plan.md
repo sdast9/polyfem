@@ -182,8 +182,8 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [retired—per-contact band targeting withdrawn after the coupled gate; evidence retained; not integrated](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11) |
 | RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature with |wᵀHw| → max|H|/d̂² fallback, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [done — `e3fa362e0`, F7 `4a0df80a1`](rb-18-quick-fixes.md) |
 | RB-19 | Line-search gradient-norm fallback at energy roundoff (PolySolve), step-1 no-contact stall diagnosis, cube-on-floor NaN | RB-18 handoff; RB-04 refinement failures; RB-16 roundoff evidence | [done — PolySolve `5afe3b5d4`, pin bump on main](rb-19-line-search-roundoff.md) |
-| RB-20 | Force-continuation κ: persisting contacts keep their realized coefficient across refreshes; Hessian estimate only for new contacts | RB-04 H5 drift evidence; RB-15 frozen-coefficient recommendation; RB-18 law for new contacts | [planned — plan and running record](rb-20-force-continuation.md) |
-| RB-21 | Parent-keyed κ: candidate identity carried through the toolkit builder; coefficient keyed on the parent, weighted over contributions | RB-15 parent invariant; RB-20 continuation; toolkit fork | [planned — starts after RB-20](rb-21-parent-keyed-kappa.md) |
+| RB-20 | Force-continuation κ: persisting contacts keep their realized coefficient across refreshes; Hessian estimate only for new contacts | RB-04 H5 drift evidence; RB-15 frozen-coefficient recommendation; RB-18 law for new contacts | [done — default on; drift 17–53% → 1e-16 at equal cost with RB-21](rb-20-force-continuation.md) |
+| RB-21 | Parent-keyed κ: candidate identity carried through the toolkit builder; coefficient keyed on the parent, weighted over contributions | RB-15 parent invariant; RB-20 continuation; toolkit fork | [done — toolkit `e3c8d3fe`; seams exact in the default formulation](rb-21-parent-keyed-kappa.md) |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is
 RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08
@@ -965,7 +965,11 @@ keeps acting; new contacts get the RB-18 Hessian estimate); RB-21 carries the
 candidate identity through the toolkit builder so a coefficient survives
 EV↔VV/FV↔EV subfeature switches and the built collision's scale is the
 weight-mean of its parents. RB-20 runs first (fork-local, largest payoff);
-RB-21 second (toolkit change, `adaptive` smoke bit-identical as the net). Both
-files are living plan+record documents with progress logs for recovery:
+RB-21 second (toolkit change, `adaptive` smoke bit-identical as the net). In
+practice RB-21 had to land before RB-20 could be default-on: with stencil
+identity, continuation mixed continued and fresh values at closest-feature
+switches (Newton cost ×7–20); with parent identity both items together cost
+nothing over the baseline and remove the drift. Both files are living
+plan+record documents with progress logs:
 [rb-20-force-continuation.md](rb-20-force-continuation.md),
 [rb-21-parent-keyed-kappa.md](rb-21-parent-keyed-kappa.md).

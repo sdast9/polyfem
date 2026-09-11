@@ -1,7 +1,7 @@
 # RB-20 — Force-continuation κ (per-contact coefficient carried from the published endpoint)
 
 Date: 2026-09-11
-Status: **implemented, opt-in (`force_continuation: false` by default) — drift removed on the public matrix; default-on blocked on RB-21**. See the [progress log](#progress-log); resume from its last entry.
+Status: **done — implemented, default on, validated with RB-21 on the public fixtures and ball-on-plate, published**. Companion: [RB-21](rb-21-parent-keyed-kappa.md). See the [progress log](#progress-log).
 
 This file is both the plan and the running record, like [RB-18](rb-18-quick-fixes.md).
 It is written so that a session that loses its context can resume from the log
@@ -178,19 +178,28 @@ user prefers otherwise.
   keeps 1e-9 (today's F1 floor would raise it to 100/spread).
 - (f) new contact at the second refresh gets the fresh estimate.
 
-### Validation plan
+### Validation (final, with RB-21's parent identity; evidence `outputs/rb-20/20260911T182152Z/`)
 
-| Check | Input/configuration | Expected criterion | Status |
+All runs use the final binaries (`tested-binaries.sha256`) unless marked
+"stencil-key build". "Drift" is the maximum relative change of the contact
+force vector at the unchanged published endpoint over the run's
+between-steps refresh events with the trim unchanged.
+
+| Check | Input/configuration | Expected criterion | Result |
 | --- | --- | --- | --- |
-| New regression | `[continuation]` sections above, seeds 1–3 | pass | pending |
-| Affected suite | RB-18/19 tag list, seed 1 | no assertion failure; F5 stall cases still pass under D7 | pending |
-| Drift metric, public fixture | RB-04 refinement runner (`tools/rb04/run_refinement.py`), quasistatic × dt .25/.125/.0625 × band .1/.5/.8, continuation **on** vs **off** (off = today's 8–17%) | `free_contact_force_change_norm` at every `between_steps_after_endpoint` refresh event is 0 when the trim is unchanged, and equals `(trim_new/trim_old − 1)·‖f‖` when the band moved it; completion 9/9 both ways (RB-19 removed the step-1 stalls) | pending |
-| Drift metric, transient and friction | same runner, `transient-semi` and `quasistatic-semi-friction`, dt .25/.0625, band .5 | same criterion; friction: lagged forces re-based at solve start as today (F6 covers the trim only) | pending |
-| Optional pull | quasistatic, band .5, dt .125, `continuation_max_ratio` ∈ {0, 2} | measured: drift, final reaction, Newton steps, min gap; no promotion claim | pending |
-| Five public smokes | on (default) and off | four steps to t=1, zero error lines both ways; `adaptive` bit-identical; semi-implicit endpoints **differ by design** — magnitude reported with the trim histories | pending |
-| Ball-on-plate | `test_cases/input/params.json` (user scene, E=1e6 plate / 1e11 ball, d̂=1e-5), bounded to 8 steps as in the writeup, semi-implicit, on vs off | both complete; per-step Newton iterations, restarts, min gap/d̂, and the between-steps drift metric reported; wall time | pending |
-| HDA E2E | `hython tests/test_polyfem_hda.py` | pass | pending |
-| Formatting / diff / links | changed files | clean | pending |
+| New regression | `tests/test_kappa_continuity.cpp` `[kappa_continuity]`, seeds 1–3 | pass | **3 cases / 66 assertions**, all three seeds |
+| Affected suite | RB-18/19 tag list + `[kappa_continuity]`, seed 1, default-on build | no assertion failure | **55 cases / 3,415 assertions**, exit 0 (`tests-final/affected-tests.log`; also 55/3,415 on the default-off build, `tests/`) |
+| Drift, quasistatic matrix | `tools/rb20/run_drift_matrix.py`, dt .25/.125/.0625 × band .1/.5/.8 | drift → 0; completion and Newton cost not worse than the re-estimating control | **on: 9/9 complete, drift ≤2.9e-16, 433 total Newton iterations, 0 restarts**; off (parent identity): 9/9, drift 17.4/8.5/4.2%, 431 iterations (`matrix-parent-on`, `matrix-parent-off`; baseline binary `baseline-quasistatic` 434) |
+| Drift, stencil-key build (historical identity) | same matrix, `matrix-on-stencil` (opt-in build `0324ce096`) | measured | 8/9, drift ≤2.9e-16 but **5,274 Newton iterations, 45 restarts, 1 failure** — the RB-21 motivation |
+| Drift, transient | `transient-semi`, band .5, dt .25/.0625 | same | on: drift 2.9e-16/3.3e-16, Newton 26/74; off: 17.4/4.2%, 26/73 |
+| Drift, friction | `quasistatic-semi-friction`, band .5, dt .25/.0625 | same; F6 lag re-based at solve start as today | on: drift 1.9e-16/2.7e-16, Newton 49/152; off: 18.2/4.2%, 37/134 (+12/+18 iterations with continuation) |
+| Optional pull | quasistatic, band .5, dt .125, `continuation_max_ratio=2` | measured | drift 8.53e-2 = the off value: every per-step estimate change on this fixture is < 2×, so the pull takes the fresh value; the ratio only bites on larger jumps (`matrix-ratio2`) |
+| Five public smokes, new defaults | `run-smoke.sh`, default (parent + continuation) | four steps, zero error lines; `adaptive` bit-identical; semi-implicit endpoints differ by design | all exit 0, 5 saved steps; **`adaptive` 2.2e-16 vs RB-19** (Linf identical); `quasistatic-semi`/`-alhess`/`transient-semi` max endpoint diff **1.1e-4** (mostly normal, 32 of 1,540 nodes > 1e-4); `quasistatic-semi-friction` **1.57e-2** tangential on a .25 displacement (1,308 nodes > 1e-3; trim history 2,2,2,4,4,8,8,**16** vs …,8): a different stick/slip endpoint once coefficients stop growing with load (`final-smokes/`, `final-endpoints.json`) |
+| Smokes, decomposition | same scenes with `coefficient_identity=stencil, force_continuation=false` and with `force_continuation=false` only | historical settings reproduce RB-19; identity-only effect isolated | historical: ≤1.2e-14 vs RB-19 (bit-level); parent identity alone: frictionless ≤2e-16, transient 7e-15, friction 4.0e-7 — the endpoint change is entirely continuation (`smokes-stencil-off`, `smokes-parent-off`) |
+| Ball-on-plate | `tools/rb20/run_ball_on_plate.py`: user scene `test_cases/input/params.json` (E 1e6 plate / 1e11 ball, d̂ 1e-5, transient) bounded to 8 steps at its own dt .3 | both complete; drift and cost reported | **on: 8/8 steps, drift ≤6.5e-4 (only where the trim calibration moved; 2e-17 otherwise), 656 Newton iterations, 7 restarts, 40 s, min gap .31 d̂; off: 8/8, drift 13–53% per step, 628 iterations, 5 restarts, 38 s, min gap .35 d̂** (`ball-on-plate-on`, `-off`) |
+| HDA E2E | `hython tests/test_polyfem_hda.py` | pass | `PASS: end-to-end PolyFEM 2.0 HDA test`, exit 0 (`hda-e2e.log`) |
+| Toolkit tests | standalone fork build, `[parents]` | pass | 27 assertions (see RB-21) |
+| Formatting / diff / links | changed files | clean | clang-format clean (PolyFEM and toolkit styles), `git diff --check` clean, links checked |
 
 Physical accuracy, the full suite, Teseo and other private scenes are out of
 scope. A completed scene is numerical termination, not an equilibrium
@@ -199,9 +208,33 @@ physical balance.
 
 ## Publication
 
-One implementation commit on `sdast9/polyfem:main` (code, spec, README, tests,
-`tools/rb20/` runner/compact results, this file), then a hash-recording
-documentation commit. Parent README and plan row updated. No companion change.
+- `0324ce096` — RB-20 opt-in implementation (stencil identity; the cost
+  finding), `21f9fd592` — RB-21 PolyFEM side, then the final commit (default
+  on, pin bump to toolkit `e3c8d3fe`, records) on `sdast9/polyfem:main`; hashes
+  in the log.
+- Toolkit `e3c8d3fe` on `sdast9/ipc-toolkit:semi-implicit-stiffness`.
+- Parent README, plan rows, semi-implicit README updated.
+
+## Next session handoff
+
+- **Behavior changes to be aware of (both default on):** every semi-implicit
+  run now keeps each contact's coefficient from its first pricing on; the
+  global trim is the only between-step change. Endpoints differ from RB-19's
+  (1.1e-4 frictionless, 1.6e-2 friction on the public smokes). Any
+  semi-implicit golden recorded before RB-20 will differ;
+  `force_continuation: false` (and `coefficient_identity: "stencil"`) restore
+  the previous behavior bit-for-bit.
+- **Friction:** the friction smoke's stick/slip endpoint moved by 6% of the
+  prescribed displacement and its trim ended at 16 instead of 8. Neither
+  endpoint is certified; RB-10 (friction coupling) is where that comparison
+  belongs.
+- **Limits:** separation forgets (re-contact is priced fresh); a contact born
+  mid-step is priced by that step's start snapshot; `continuation_max_ratio`
+  is unexercised below 2× on the public fixture; the improved-max
+  (convergent) formulation's seam half-jump is analyzed but not measured;
+  physical accuracy is not claimed anywhere here.
+- Eligible next items: RB-05 (candidate/resource failure containment), RB-10
+  (friction), RB-09 references.
 
 ## Progress log
 
@@ -261,3 +294,13 @@ what was measured, what is next.
   contact already has a value, so a fresh estimate at an endpoint refresh only
   occurs when continuation is off. Default flip to `force_continuation: true`
   is pending the remaining validation (RB-21 log lists the steps).
+
+- **2026-09-11 22:10Z** — **Default flipped to on** after the full validation
+  (table above): affected suite 55/3,415 on both defaults; smokes exit 0 with
+  `adaptive` bit-identical and the semi-implicit endpoints moved by
+  continuation alone (1.1e-4 frictionless, 1.57e-2 friction — decomposed
+  against the historical settings, which reproduce RB-19 to 1e-14); transient
+  and friction drift 1e-16; ball-on-plate drift 13–53% → ≤6.5e-4 at equal
+  cost; HDA E2E pass. `continuation_max_ratio` measured (no effect below 2×).
+  Toolkit `e3c8d3fe` pushed; PolyFEM pin bumped. Committed and pushed as the
+  final RB-20/RB-21 commit (hash recorded below).

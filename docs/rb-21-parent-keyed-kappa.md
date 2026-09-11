@@ -1,7 +1,7 @@
 # RB-21 — Parent-keyed κ (coefficient identity carried through the toolkit builder)
 
 Date: 2026-09-11
-Status: **implemented (toolkit + PolyFEM), regression-tested; validation matrix in progress**. See the [progress log](#progress-log). See the [progress log](#progress-log).
+Status: **done — toolkit `e3c8d3fe` and PolyFEM parent-keyed assignment implemented, regression-tested, validated with RB-20, published**. See the [progress log](#progress-log). See the [progress log](#progress-log).
 
 Companion of [RB-20 force-continuation κ](rb-20-force-continuation.md), which
 holds the shared authorization and the sequencing decision (D8: RB-20 first).
@@ -104,24 +104,27 @@ Change:
    no-op check that with all parent coefficients equal the potential equals the
    unkeyed one exactly.
 
-### Validation plan
+### Validation (final; evidence `outputs/rb-20/20260911T182152Z/`, shared with RB-20)
 
-| Check | Expected | Status |
+| Check | Expected | Result |
 | --- | --- | --- |
-| Toolkit unit tests (fork) incl. new parent test | pass | pending |
-| PolyFEM affected suite + new `[parent_keyed]` case | pass | pending |
-| Classic `adaptive` smoke | **bit-identical** Linf and endpoint (stiffness_scale ≡ 1) | pending |
-| RB-04 candidate probe EV/VV transition | energy jump 0 (was −44.4977394), gradient continuous | pending |
-| Five smokes (semi-implicit) | complete; endpoints reported vs RB-20 baseline | pending |
-| RB-04 refinement matrix | drift metric unchanged or better than RB-20; no new failures | pending |
-| Ball-on-plate (8 steps) | complete; metrics as RB-20 | pending |
-| HDA E2E | pass | pending |
+| Toolkit unit tests (standalone fork build, tests data downloaded) | new `[parents]` case passes | **27 assertions**, `test_parent_contributions.cpp` |
+| PolyFEM regression `[kappa_continuity][parent]` | builder parents recorded; seams exact under parent identity, historical jump under stencil identity; homogeneous equality; no-op outside semi-implicit; continuation survives the switch only under parent identity | pass (part of the 66 assertions, seeds 1–3) |
+| PolyFEM affected suite | pass | 55 cases / 3,415 assertions, exit 0 |
+| Classic `adaptive` smoke | **bit-identical** (stiffness_scale ≡ 1) | 2.2e-16 vs RB-19, Linf identical |
+| Parent identity alone on the semi-implicit smokes | measured | frictionless/transient ≤7e-15, friction 4.0e-7 vs RB-19 (`smokes-parent-off`) |
+| Quasistatic refinement matrix | cost-neutral alone; enables continuation | parent-off 431 Newton iterations (baseline 434); parent + continuation 433, 0 restarts, drift 1e-16 (stencil + continuation: 5,274 / 45 restarts / 1 failure) |
+| Ball-on-plate (8 steps) | complete | see RB-20 (656 iterations on, 628 off) |
+| HDA E2E | pass | pass |
+| RB-04 candidate probe (`tools/rb04/candidate_probe.cpp`) | — | **not converted**: the probe drives the toolkit's stencil potential directly with hand-set coefficients; the equivalent statement (single- and two-parent seam continuity on the real form, with the historical jump reproduced under stencil identity) is the `[kappa_continuity][parent]` regression instead |
 
 ## Publication
 
-Toolkit commit on `sdast9/ipc-toolkit:semi-implicit-stiffness`, pin bump +
-PolyFEM implementation commit on `sdast9/polyfem:main`, documentation commit
-with hashes. Parent README and plan row updated.
+- Toolkit `e3c8d3fe` on `sdast9/ipc-toolkit:semi-implicit-stiffness` (pushed).
+- PolyFEM: `21f9fd592` (parent-keyed assignment, WIP) and the final RB-20/21
+  commit (pin bump to `e3c8d3fe`, default flip, records) on
+  `sdast9/polyfem:main`; hash in the RB-20 log. Parent README and plan rows
+  updated.
 
 ## Progress log
 
@@ -161,3 +164,10 @@ with hashes. Parent README and plan row updated.
   tests, affected suite, smokes on/off, transient/friction/ratio matrices,
   ball-on-plate, HDA, then commit toolkit + pin + PolyFEM and flip the RB-20
   default.
+
+- **2026-09-11 22:10Z** — Toolkit tests built standalone (tests data
+  downloaded): `[parents]` 27 assertions pass. Validation table filled from
+  the shared RB-20 evidence. Toolkit committed as `e3c8d3fe` and pushed;
+  PolyFEM pin bumped in `cmake/recipes/ipc_toolkit.cmake`. The RB-04
+  candidate probe was not converted (see the table); the seam regression on
+  the real form replaces it. Done.

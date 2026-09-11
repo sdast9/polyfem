@@ -1595,9 +1595,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/force_continuation",
-        "default": false,
+        "default": true,
         "type": "bool",
-        "doc": "RB-20: at the between-steps refresh of a published endpoint, every active contact keeps the per-contact coefficient that acted there (the realized force at the realized gap is continued); the Hessian estimate is used only for contacts without one. Mid-solve refreshes keep those values and re-estimate everything else. Removes the post-publication force drift of re-estimation; the global trim still acts. Opt-in until the parent-keyed identity (RB-21) is in place: with stencil identity a closest-feature switch mixes continued and fresh values and slows Newton."
+        "doc": "RB-20: at the between-steps refresh of a published endpoint, every active contact keeps the per-contact coefficient that acted there (the realized force at the realized gap is continued); a contact born during a solve is priced by that solve's frozen snapshot and continued from its publication on. Mid-solve refreshes keep the published values and re-estimate everything else. Removes the post-publication force drift of re-estimation; the global trim still acts. Pair with coefficient_identity=parent (default): with the stencil identity a closest-feature switch mixes continued and fresh values and slows Newton."
     },
     {
         "pointer": "/solver/contact/semi_implicit/continuation_max_ratio",

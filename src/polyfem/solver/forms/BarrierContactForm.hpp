@@ -325,10 +325,10 @@ namespace polyfem::solver
 		///        coefficient that acted there; the Hessian estimate is used
 		///        only for stencils without one. Removes the post-publication
 		///        force drift RB-04 measured. The global trim still acts.
-		///        Opt-in (default off) until RB-21's parent identity lands:
-		///        with stencil identity a closest-feature switch mixes a
-		///        continued and a fresh value and slows Newton badly.
-		bool force_continuation_ = false;
+		///        Default on since RB-21's parent identity: with the
+		///        historical stencil identity a closest-feature switch mixes
+		///        a continued and a fresh value and slows Newton badly.
+		bool force_continuation_ = true;
 		/// @brief RB-20 D3: 0 = pure continuation; r > 1 lets the fresh
 		///        Hessian estimate move a continued coefficient within
 		///        [kappa/r, kappa*r] per refresh.
