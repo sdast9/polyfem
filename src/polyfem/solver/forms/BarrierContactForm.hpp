@@ -15,6 +15,8 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <utility>
+#include <vector>
 
 namespace polyfem::solver
 {
@@ -142,6 +144,19 @@ namespace polyfem::solver
 		bool is_continued(const std::array<long, 5> &key) const { return continued_keys_.count(key) > 0; }
 		/// @brief Memoization key of a collision stencil: (type tag, vertex ids)
 		std::array<long, 5> stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const;
+		/// @brief The coefficient keys of collision i with their positive
+		///        contribution weights: its parent candidates (RB-21,
+		///        tag 10 + candidate type, ids) when coefficient_identity is
+		///        "parent" and the builder recorded them, else the stencil key
+		///        with weight 1.
+		std::vector<std::pair<std::array<long, 5>, double>> coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const;
+		/// @brief Fresh Hessian estimate of a key's coefficient on the given
+		///        stencil at the frozen snapshot, after the RB-18 F2/F4/F7
+		///        resolution (may return a 0 / +inf sentinel).
+		double estimate_stiffness(const ipc::CollisionStencil &stencil, const std::array<long, 5> &key) const;
+		/// @brief Memo lookup (or fresh estimate + insert) of a key's
+		///        coefficient, resolved against the frozen batch statistics.
+		double memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const;
 
 		/// @brief Multiply the global trim factor (barrier_stiffness_) by the
 		///        given factor, clamped to [trim_min, trim_max].
@@ -318,5 +333,8 @@ namespace polyfem::solver
 		///        Hessian estimate move a continued coefficient within
 		///        [kappa/r, kappa*r] per refresh.
 		double continuation_max_ratio_ = 0.0;
+		/// @brief RB-21: key coefficients on the builder's parent candidates
+		///        (true, default) or on the built stencil (false, historical).
+		bool parent_keyed_ = true;
 	};
 } // namespace polyfem::solver

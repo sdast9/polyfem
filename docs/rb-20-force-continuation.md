@@ -250,3 +250,14 @@ what was measured, what is next.
   Evidence: `outputs/rb-20/20260911T182152Z/` (`baseline-quasistatic`, `probe-on-first`, `probe-on-second`,
   `matrix-on-stencil`, `matrix-off`, `trace-on`). Regression tests not yet
   written (they belong with the parent-keyed identity). Next: RB-21.
+
+- **2026-09-11 20:40Z** — With RB-21's parent identity (see its log) the
+  stencil-key cost problem is gone: parent identity + continuation gives
+  **433 total Newton iterations vs 434 baseline, 0 restarts, drift 1e-16 on
+  9/9** (`outputs/rb-20/20260911T182152Z/matrix-parent-on`). Semantics clarified by the regression
+  tests: a contact born during a solve is priced by that solve's snapshot
+  (birth refresh for a first contact, the step-start snapshot otherwise) and
+  is continued from its publication on — at a published endpoint every active
+  contact already has a value, so a fresh estimate at an endpoint refresh only
+  occurs when continuation is off. Default flip to `force_continuation: true`
+  is pending the remaining validation (RB-21 log lists the steps).

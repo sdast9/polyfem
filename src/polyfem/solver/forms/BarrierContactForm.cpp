@@ -6,6 +6,10 @@
 #include <polyfem/utils/Types.hpp>
 
 #include <ipc/barrier/adaptive_stiffness.hpp>
+#include <ipc/candidates/edge_edge.hpp>
+#include <ipc/candidates/edge_vertex.hpp>
+#include <ipc/candidates/face_vertex.hpp>
+#include <ipc/candidates/vertex_vertex.hpp>
 #include <ipc/barrier/barrier.hpp>
 #include <ipc/utils/world_bbox_diagonal_length.hpp>
 
@@ -237,6 +241,13 @@ namespace polyfem::solver
 				trial_displacement_cap_ = semi_implicit_opts.value("trial_displacement_cap", trial_displacement_cap_);
 				force_continuation_ = semi_implicit_opts.value("force_continuation", force_continuation_);
 				continuation_max_ratio_ = semi_implicit_opts.value("continuation_max_ratio", continuation_max_ratio_);
+				const std::string identity = semi_implicit_opts.value("coefficient_identity", std::string("parent"));
+				if (identity == "parent")
+					parent_keyed_ = true;
+				else if (identity == "stencil")
+					parent_keyed_ = false;
+				else
+					log_and_throw_error("Semi-implicit barrier stiffness: coefficient_identity must be \"parent\" or \"stencil\" (got \"{}\")", identity);
 			}
 			if (continuation_max_ratio_ != 0.0 && !(continuation_max_ratio_ > 1.0))
 				log_and_throw_error("Semi-implicit barrier stiffness: continuation_max_ratio must be 0 (pure continuation) or > 1!");
@@ -349,10 +360,15 @@ namespace polyfem::solver
 			{
 				if (collision_set_.is_plane_vertex(i))
 					continue;
-				const std::array<long, 5> key = stencil_key(collision_set_, i);
-				const double k = collision_set_[i].stiffness_scale;
-				if (kappa_cache_.count(key) > 0 && k > 0 && std::isfinite(k))
-					endpoint_kappa_.emplace(key, k);
+				for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+				{
+					const auto cached = kappa_cache_.find(key);
+					if (cached == kappa_cache_.end())
+						continue;
+					const double k = resolve_stiffness(cached->second, is_continued(key));
+					if (k > 0 && std::isfinite(k))
+						endpoint_kappa_.emplace(key, k);
+				}
 			}
 		}
 		else if (!force_continuation_)
@@ -404,25 +420,31 @@ namespace polyfem::solver
 		batch_first_pass_ = false;
 		pull_toward_fresh_ = false;
 		for (size_t i = 0; i < collision_set_.size(); i++)
-			if (!collision_set_.is_plane_vertex(i) && is_continued(stencil_key(collision_set_, i)))
+		{
+			if (collision_set_.is_plane_vertex(i))
+				continue;
+			bool all_continued = true;
+			for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+				all_continued = all_continued && is_continued(key);
+			if (all_continued)
 				++kappa_continued_count_;
+		}
 		if (!collision_set_.empty())
 		{
 			// RB-20 D4: the batch statistics (median, floor, cap) describe
 			// the FRESH estimates; continued values already acted and are
 			// neither clamped by them nor allowed to distort them. When the
 			// batch has no fresh value the continued ones stand in, so an F2/F7
-			// sentinel of a new stencil still has a reference.
+			// sentinel of a new stencil still has a reference. The batch is
+			// the memo after the first pass: exactly the continued seeds plus
+			// every coefficient key (parent or stencil) assigned at this x.
 			std::vector<double> kappas, continued_kappas;
-			kappas.reserve(collision_set_.size());
-			for (size_t i = 0; i < collision_set_.size(); i++)
+			kappas.reserve(kappa_cache_.size());
+			for (const auto &[key, k] : kappa_cache_)
 			{
-				if (collision_set_.is_plane_vertex(i))
-					continue;
-				const double k = collision_set_[i].stiffness_scale;
 				if (!(k > 0 && std::isfinite(k)))
 					continue;
-				(is_continued(stencil_key(collision_set_, i)) ? continued_kappas : kappas).push_back(k);
+				(is_continued(key) ? continued_kappas : kappas).push_back(k);
 			}
 			if (kappas.empty())
 				kappas.swap(continued_kappas);
@@ -450,14 +472,9 @@ namespace polyfem::solver
 				kappa_floor_ = kappa_median_ / kappa_spread_;
 			}
 			// Re-resolve the already-assigned scales with the frozen batch
-			// statistics (this also replaces the invalid-curvature sentinels).
-			for (size_t i = 0; i < collision_set_.size(); i++)
-			{
-				const std::array<long, 5> key = stencil_key(collision_set_, i);
-				const auto cached = kappa_cache_.find(key);
-				if (cached != kappa_cache_.end())
-					collision_set_[i].stiffness_scale = resolve_stiffness(cached->second, is_continued(key));
-			}
+			// statistics (this also replaces the invalid-curvature sentinels);
+			// every key is memoized now, so this is a pure lookup pass.
+			assign_collision_stiffness(collision_set_);
 			if (kappa_continued_count_ > 0)
 				logger().debug(
 					"Semi-implicit barrier stiffness: {} of {} contacts continued from the refresh point, {} estimated fresh (continuation_max_ratio={:g})",
@@ -564,188 +581,243 @@ namespace polyfem::solver
 		return {{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}};
 	}
 
+	std::vector<std::pair<std::array<long, 5>, double>> BarrierContactForm::coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const
+	{
+		std::vector<std::pair<std::array<long, 5>, double>> keys;
+		if (parent_keyed_)
+		{
+			// RB-21: one coefficient per candidate primitive pair that built
+			// this collision, weighted by its (positive) contribution. The
+			// key space is disjoint from stencil keys (tag offset 10).
+			// Duplicate-removal corrections carry negative weights and no
+			// coefficient of their own; they only adjust the total weight.
+			for (const auto &parent : collision_set[i].parents)
+				if (parent.weight > 0)
+					keys.push_back({{{10 + long(parent.type), long(parent.id0), long(parent.id1), -1, -1}}, parent.weight});
+		}
+		if (keys.empty())
+			keys.push_back({stencil_key(collision_set, i), 1.0});
+		return keys;
+	}
+
+	double BarrierContactForm::estimate_stiffness(const ipc::CollisionStencil &stencil, const std::array<long, 5> &key) const
+	{
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const int dim = collision_mesh_.dim();
+		const int n_verts = stencil.num_vertices();
+		const auto vids = stencil.vertex_ids(E, F);
+
+		// Local positions, masses, and Hessian block come from the FROZEN
+		// snapshot, so the value is a deterministic function of the key
+		// between refreshes (well-defined objective during the line search).
+		const ipc::VectorMax12d positions = stencil.dof(kappa_surface_, E, F);
+
+		// NOTE: Ando's m/d^2 feasibility term is intentionally NOT used: with
+		// a frozen snapshot, a collapsed snapshot distance bakes an unbounded
+		// stiffness into the objective, and the log barrier already
+		// guarantees non-penetration. Inertia enters through the system
+		// Hessian provider instead (elastic + inertia curvature of the
+		// incremental potential).
+		ipc::VectorMax4d local_mass = ipc::VectorMax4d::Zero(n_verts);
+		ipc::MatrixMax12d local_hess =
+			ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
+		// Exact selector/permutation stencils use system node IDs. Preserve
+		// the WHOLE legacy stencil if any row is interpolated, scaled, empty,
+		// or duplicates another selected node: choosing an energy lift for
+		// such a stencil is a separate RB-03 decision.
+		std::array<long, 4> node_ids;
+		bool exact_selection = true;
+		for (int a = 0; a < n_verts; ++a)
+		{
+			node_ids[a] = stiffness_node_ids_[vids[a]];
+			exact_selection = exact_selection && node_ids[a] >= 0;
+			for (int b = 0; b < a; ++b)
+				exact_selection = exact_selection && node_ids[a] != node_ids[b];
+		}
+		if (!exact_selection)
+			for (int a = 0; a < n_verts; ++a)
+				node_ids[a] = collision_mesh_.to_full_vertex_id(vids[a]);
+		for (int a = 0; a < n_verts; a++)
+		{
+			const long va = node_ids[a];
+			for (int b = 0; b < n_verts; b++)
+			{
+				const long vb = node_ids[b];
+				if (dim * va + dim > kappa_hessian_.rows()
+					|| dim * vb + dim > kappa_hessian_.cols())
+					continue; // e.g., obstacle DOF not in the Hessian
+				for (int k = 0; k < dim; k++)
+					for (int l = 0; l < dim; l++)
+						local_hess(dim * a + k, dim * b + l) =
+							kappa_hessian_.coeff(dim * va + k, dim * vb + l);
+			}
+		}
+
+		// kappa = avg_mass / d^2 + w^T H w [Ando 2024]; for a parent
+		// candidate the direction is the closest point on the WHOLE
+		// primitive (AUTO distance type), for a built stencil its subfeature.
+		double kappa = ipc::semi_implicit_stiffness(
+			stencil, positions, local_mass, local_hess, dmin_);
+
+		// Unit conversion: the Ando stiffness is an interface SPRING
+		// stiffness [force/length], while the clamped-log barrier acts on
+		// squared distances (units length^4), so its coefficient carries
+		// [force/length^3]. Dividing by dhat^2 makes the barrier's interface
+		// stiffness at gaps ~ dhat match the local elasticity, independent of
+		// the dhat scale (without this the trim controller must bridge a
+		// 1/dhat^2 factor and starves for small dhat).
+		kappa /= dhat_ * dhat_;
+
+		// RB-18 F4: a NaN Rayleigh quotient means the frozen Hessian block
+		// itself is NaN -- the Newton system is already invalid, so fail
+		// loudly instead of substituting a literal.
+		if (std::isnan(kappa))
+			log_and_throw_error(
+				"Semi-implicit barrier stiffness: NaN local curvature for contact key (tag {}, ids {}, {}, {}, {})",
+				key[0], key[1], key[2], key[3], key[4]);
+
+		// Remove the form weight (acceleration scaling); it is reapplied by
+		// ContactForm::weight(). The global barrier_stiffness_ acts as the
+		// trim multiplier, so the effective coefficient is trim * kappa. The
+		// weight is checked here because set_weight() can change it after
+		// construction.
+		if (!std::isfinite(weight_) || !(weight_ >= std::numeric_limits<double>::min()))
+			log_and_throw_error(
+				"Semi-implicit barrier stiffness requires a finite positive (normal) form weight (got {:g})",
+				weight_);
+		kappa /= weight_;
+
+		// RB-18 F2/F4: w^T H w is nonpositive for an unprojected indefinite
+		// or singular local Hessian, and can overflow to +inf for crushed
+		// elements. Neither may delete the barrier (kappa = 0 leaves CCD as
+		// the only protection) nor install an arbitrary literal. Keep the
+		// key's previous value when it has one; otherwise leave a sentinel
+		// (0 = needs the batch floor, +inf = needs the batch cap) that
+		// resolve_stiffness() maps onto the frozen batch statistics.
+		if (!(kappa > 0) || !std::isfinite(kappa))
+		{
+			const auto prev = prev_kappa_cache_.find(key);
+			if (prev != prev_kappa_cache_.end() && prev->second > 0
+				&& std::isfinite(prev->second))
+			{
+				kappa = prev->second;
+			}
+			else if (kappa < 0 && std::isfinite(kappa))
+			{
+				// RB-18 F7 (user choice B): an indefinite local block still
+				// has a curvature MAGNITUDE along the normal; the barrier
+				// borrows it. Heuristic, not a derivation.
+				kappa = -kappa;
+				++kappa_abs_fallback_count_;
+			}
+			else if (kappa == 0)
+			{
+				// RB-18 F7 (fallback E): singular along the normal, so use
+				// the global Hessian scale max|H| / dhat^2 (same
+				// normalization as the conditioning cap). Zero only when the
+				// system Hessian is identically zero.
+				kappa = kappa_hessian_max_ / (dhat_ * dhat_ * weight_);
+				if (kappa > 0 && std::isfinite(kappa))
+					++kappa_global_fallback_count_;
+				else
+				{
+					kappa = 0.0;
+					++kappa_fallback_count_;
+				}
+			}
+			else
+			{
+				kappa = std::numeric_limits<double>::infinity();
+				++kappa_fallback_count_;
+			}
+		}
+		return kappa;
+	}
+
+	double BarrierContactForm::memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const
+	{
+		const auto cached = kappa_cache_.find(key);
+		const bool continued = cached != kappa_cache_.end() && is_continued(key);
+		// RB-20 D3: with a max ratio, a continued coefficient is pulled
+		// toward the fresh estimate but by at most that factor per published
+		// endpoint. Done once, during the refresh's first pass; the memo then
+		// holds the clamped value for the rest of the snapshot.
+		const bool pull = continued && batch_first_pass_ && pull_toward_fresh_;
+		if (cached != kappa_cache_.end() && !pull)
+			return resolve_stiffness(cached->second, continued);
+
+		if (!continued)
+			++kappa_fresh_count_;
+
+		double kappa;
+		if (key[0] >= 10)
+		{
+			// RB-21 parent candidate: rebuild the candidate (AUTO distance
+			// type, closest point on the whole primitive).
+			const long id0 = key[1], id1 = key[2];
+			switch (ipc::ParentContribution::Type(key[0] - 10))
+			{
+			case ipc::ParentContribution::Type::VertexVertex:
+				kappa = estimate_stiffness(ipc::VertexVertexCandidate(id0, id1), key);
+				break;
+			case ipc::ParentContribution::Type::EdgeVertex:
+				kappa = estimate_stiffness(ipc::EdgeVertexCandidate(id0, id1), key);
+				break;
+			case ipc::ParentContribution::Type::EdgeEdge:
+				kappa = estimate_stiffness(ipc::EdgeEdgeCandidate(id0, id1), key);
+				break;
+			case ipc::ParentContribution::Type::FaceVertex:
+			default:
+				kappa = estimate_stiffness(ipc::FaceVertexCandidate(id0, id1), key);
+				break;
+			}
+		}
+		else
+			kappa = estimate_stiffness(collision_set[i], key);
+
+		if (!batch_first_pass_)
+			logger().trace(
+				"Semi-implicit barrier stiffness: fresh coefficient mid-solve (tag {}, ids {}, {}, {}, {}) kappa={:g} (batch median {:g})",
+				key[0], key[1], key[2], key[3], key[4], kappa, kappa_median_);
+		if (pull)
+		{
+			// An invalid fresh estimate (F2/F7 sentinel) cannot pull; the
+			// continued value stands.
+			const double base = cached->second;
+			kappa = (kappa > 0 && std::isfinite(kappa))
+						? std::clamp(kappa, base / continuation_max_ratio_, base * continuation_max_ratio_)
+						: base;
+			kappa_cache_[key] = kappa;
+			endpoint_kappa_[key] = kappa;
+		}
+		else
+			kappa_cache_.emplace(key, kappa);
+		return resolve_stiffness(kappa, continued);
+	}
+
 	void BarrierContactForm::assign_collision_stiffness(ipc::NormalCollisions &collision_set) const
 	{
 		if (!uses_semi_implicit_stiffness() || kappa_surface_.size() == 0)
 			return;
-
-		const Eigen::MatrixXi &E = collision_mesh_.edges();
-		const Eigen::MatrixXi &F = collision_mesh_.faces();
-		const int dim = collision_mesh_.dim();
 
 		for (size_t i = 0; i < collision_set.size(); i++)
 		{
 			if (collision_set.is_plane_vertex(i))
 				continue; // unused by polyfem; keep the default scale
 
-			ipc::NormalCollision &collision = collision_set[i];
-			const int n_verts = collision.num_vertices();
-			const auto vids = collision.vertex_ids(E, F);
-			const std::array<long, 5> key = stencil_key(collision_set, i);
-			const long type_tag = key[0];
-
-			double kappa;
-			const auto cached = kappa_cache_.find(key);
-			const bool continued = cached != kappa_cache_.end() && is_continued(key);
-			// RB-20 D3: with a max ratio, a continued coefficient is pulled
-			// toward the fresh estimate but by at most that factor per
-			// refresh. Done once, during the refresh's first pass; the memo
-			// then holds the clamped value for the rest of the snapshot.
-			const bool pull = continued && batch_first_pass_ && pull_toward_fresh_;
-			if (cached != kappa_cache_.end() && !pull)
+			// The collision's scale is the contribution-weighted mean of its
+			// coefficient keys (RB-21: its positive parents; otherwise the
+			// stencil itself), so that weight * scale * b(d) is the sum of
+			// each parent's own potential. With every coefficient equal to
+			// one this is exactly the unkeyed potential.
+			double numerator = 0.0, denominator = 0.0;
+			for (const auto &[key, w] : coefficient_keys(collision_set, i))
 			{
-				kappa = cached->second;
+				numerator += w * memoized_stiffness(collision_set, i, key);
+				denominator += w;
 			}
-			else
-			{
-				if (!continued)
-					++kappa_fresh_count_;
-				// Local positions, masses, and Hessian block come from the
-				// FROZEN snapshot, so the value is a deterministic function
-				// of the stencil between refreshes (well-defined objective
-				// during the line search).
-				const ipc::VectorMax12d positions = collision.dof(kappa_surface_, E, F);
-
-				// NOTE: Ando's m/d^2 feasibility term is intentionally NOT
-				// used: with a frozen snapshot, a collapsed snapshot distance
-				// bakes an unbounded stiffness into the objective, and the
-				// log barrier already guarantees non-penetration. Inertia
-				// enters through the system Hessian provider instead
-				// (elastic + inertia curvature of the incremental potential).
-				ipc::VectorMax4d local_mass = ipc::VectorMax4d::Zero(n_verts);
-				ipc::MatrixMax12d local_hess =
-					ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
-				// Exact selector/permutation stencils use system node IDs.
-				// Preserve the WHOLE legacy stencil if any row is interpolated,
-				// scaled, empty, or duplicates another selected node: choosing
-				// an energy lift for such a stencil is a separate RB-03 decision.
-				std::array<long, 4> node_ids;
-				bool exact_selection = true;
-				for (int a = 0; a < n_verts; ++a)
-				{
-					node_ids[a] = stiffness_node_ids_[vids[a]];
-					exact_selection = exact_selection && node_ids[a] >= 0;
-					for (int b = 0; b < a; ++b)
-						exact_selection = exact_selection && node_ids[a] != node_ids[b];
-				}
-				if (!exact_selection)
-					for (int a = 0; a < n_verts; ++a)
-						node_ids[a] = collision_mesh_.to_full_vertex_id(vids[a]);
-				for (int a = 0; a < n_verts; a++)
-				{
-					const long va = node_ids[a];
-					for (int b = 0; b < n_verts; b++)
-					{
-						const long vb = node_ids[b];
-						if (dim * va + dim > kappa_hessian_.rows()
-							|| dim * vb + dim > kappa_hessian_.cols())
-							continue; // e.g., obstacle DOF not in the Hessian
-						for (int k = 0; k < dim; k++)
-							for (int l = 0; l < dim; l++)
-								local_hess(dim * a + k, dim * b + l) =
-									kappa_hessian_.coeff(dim * va + k, dim * vb + l);
-					}
-				}
-
-				// kappa = avg_mass / d^2 + w^T H w [Ando 2024]
-				kappa = ipc::semi_implicit_stiffness(
-					collision, positions, local_mass, local_hess, dmin_);
-
-				// Unit conversion: the Ando stiffness is an interface SPRING
-				// stiffness [force/length], while the clamped-log barrier
-				// acts on squared distances (units length^4), so its
-				// coefficient carries [force/length^3]. Dividing by dhat^2
-				// makes the barrier's interface stiffness at gaps ~ dhat
-				// match the local elasticity, independent of the dhat scale
-				// (without this the trim controller must bridge a 1/dhat^2
-				// factor and starves for small dhat).
-				kappa /= dhat_ * dhat_;
-
-				// RB-18 F4: a NaN Rayleigh quotient means the frozen Hessian
-				// block itself is NaN -- the Newton system is already invalid,
-				// so fail loudly instead of substituting a literal.
-				if (std::isnan(kappa))
-					log_and_throw_error(
-						"Semi-implicit barrier stiffness: NaN local curvature for contact stencil (type {}, vertices {}, {}, {}, {})",
-						type_tag, vids[0], vids[1], vids[2], vids[3]);
-
-				// Remove the form weight (acceleration scaling); it is
-				// reapplied by ContactForm::weight(). The global
-				// barrier_stiffness_ acts as the trim multiplier, so the
-				// effective coefficient is trim * kappa. The weight is checked
-				// here because set_weight() can change it after construction.
-				if (!std::isfinite(weight_) || !(weight_ >= std::numeric_limits<double>::min()))
-					log_and_throw_error(
-						"Semi-implicit barrier stiffness requires a finite positive (normal) form weight (got {:g})",
-						weight_);
-				kappa /= weight_;
-
-				// RB-18 F2/F4: w^T H w is nonpositive for an unprojected
-				// indefinite or singular local Hessian, and can overflow to
-				// +inf for crushed elements. Neither may delete the barrier
-				// (kappa = 0 leaves CCD as the only protection) nor install an
-				// arbitrary literal. Keep the stencil's previous value when it
-				// has one; otherwise leave a sentinel (0 = needs the batch
-				// floor, +inf = needs the batch cap) that resolve_stiffness()
-				// maps onto the frozen batch statistics.
-				if (!(kappa > 0) || !std::isfinite(kappa))
-				{
-					const auto prev = prev_kappa_cache_.find(key);
-					if (prev != prev_kappa_cache_.end() && prev->second > 0
-						&& std::isfinite(prev->second))
-					{
-						kappa = prev->second;
-					}
-					else if (kappa < 0 && std::isfinite(kappa))
-					{
-						// RB-18 F7 (user choice B): an indefinite local block
-						// still has a curvature MAGNITUDE along the normal; the
-						// barrier borrows it. Heuristic, not a derivation.
-						kappa = -kappa;
-						++kappa_abs_fallback_count_;
-					}
-					else if (kappa == 0)
-					{
-						// RB-18 F7 (fallback E): singular along the normal, so
-						// use the global Hessian scale max|H| / dhat^2 (same
-						// normalization as the conditioning cap). Zero only
-						// when the system Hessian is identically zero.
-						kappa = kappa_hessian_max_ / (dhat_ * dhat_ * weight_);
-						if (kappa > 0 && std::isfinite(kappa))
-							++kappa_global_fallback_count_;
-						else
-						{
-							kappa = 0.0;
-							++kappa_fallback_count_;
-						}
-					}
-					else
-					{
-						kappa = std::numeric_limits<double>::infinity();
-						++kappa_fallback_count_;
-					}
-				}
-
-				if (!batch_first_pass_)
-					logger().trace(
-						"Semi-implicit barrier stiffness: fresh stencil mid-solve (type {}, vertices {}, {}, {}, {}) kappa={:g} (batch median {:g})",
-						type_tag, vids[0], vids[1], vids[2], vids[3], kappa, kappa_median_);
-				if (pull)
-				{
-					// An invalid fresh estimate (F2/F7 sentinel) cannot pull;
-					// the continued value stands.
-					const double base = cached->second;
-					kappa = (kappa > 0 && std::isfinite(kappa))
-								? std::clamp(kappa, base / continuation_max_ratio_, base * continuation_max_ratio_)
-								: base;
-					kappa_cache_[key] = kappa;
-					endpoint_kappa_[key] = kappa;
-				}
-				else
-					kappa_cache_.emplace(key, kappa);
-			}
-
-			collision.stiffness_scale = resolve_stiffness(kappa, continued);
+			collision_set[i].stiffness_scale = numerator / denominator;
 		}
 	}
 
@@ -1045,6 +1117,7 @@ namespace polyfem::solver
 		result["continuation_max_ratio"] = continuation_max_ratio_;
 		result["continued_count"] = kappa_continued_count_;
 		result["fresh_count"] = kappa_fresh_count_;
+		result["coefficient_identity"] = parent_keyed_ ? "parent" : "stencil";
 		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
 														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
 		result["candidate_count"] = use_cached_candidates_ ? json{{"value", candidates_.size()}}

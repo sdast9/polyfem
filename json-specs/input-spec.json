@@ -1522,6 +1522,7 @@
             "trial_displacement_cap",
             "force_continuation",
             "continuation_max_ratio",
+            "coefficient_identity",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1604,6 +1605,13 @@
         "type": "float",
         "min": 0,
         "doc": "RB-20: 0 = pure continuation. r > 1 lets the fresh Hessian estimate move a continued coefficient within [kappa/r, kappa*r] at each published-endpoint refresh."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/coefficient_identity",
+        "default": "parent",
+        "type": "string",
+        "options": ["parent", "stencil"],
+        "doc": "RB-21: what a per-contact coefficient is keyed on. \"parent\" (default): the candidate primitive pair that built the collision (point/edge in 2D, point/triangle or edge/edge in 3D), estimated on the parent's stencil with the closest point on the whole primitive; a built collision's scale is the contribution-weighted mean of its parents, so a coefficient survives closest-feature switches (EV<->VV, FV<->EV) and force continuation carries across them. \"stencil\": the historical key on the built subfeature stencil."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",

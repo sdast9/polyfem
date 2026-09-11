@@ -1,7 +1,7 @@
 # RB-21 — Parent-keyed κ (coefficient identity carried through the toolkit builder)
 
 Date: 2026-09-11
-Status: **in progress — started 2026-09-11 after RB-20's stencil-key implementation showed the switch jump blocks default-on continuation**. See the [progress log](#progress-log).
+Status: **implemented (toolkit + PolyFEM), regression-tested; validation matrix in progress**. See the [progress log](#progress-log). See the [progress log](#progress-log).
 
 Companion of [RB-20 force-continuation κ](rb-20-force-continuation.md), which
 holds the shared authorization and the sequencing decision (D8: RB-20 first).
@@ -54,11 +54,22 @@ Change:
    contributions), and `merge()` across TBB thread-local builders (concatenate
    parent lists on weight accumulation).
 3. `stiffness_scale` stays a single double set by the caller. The toolkit does
-   not compute it; PolyFEM sets `stiffness_scale = Σ_p w_p κ_p / Σ_p w_p` so
-   that `weight · stiffness_scale · b(d) = Σ_p w_p κ_p b(d)` — each parent's
-   contribution is continuous across its own subfeature switches, hence the sum
-   is. With all `κ_p = 1` this is exactly `weight`, so the no-op property holds
-   by construction.
+   not compute it; PolyFEM sets `stiffness_scale = Σ_p w_p κ_p / Σ_p w_p` over
+   the **positive** contributions so that `weight · stiffness_scale · b(d) =
+   Σ_p w_p κ_p b(d)` — each parent's contribution is continuous across its own
+   subfeature switches, hence the sum is. With all `κ_p = 1` this is exactly
+   `weight`, so the no-op property holds by construction.
+
+   **Seam analysis (2026-09-11).** In the default (non-convergent) formulation
+   the builder applies no duplicate-removal corrections, so a vertex crossing a
+   corner shared by two edges is simply two merged parent contributions
+   (weight 2, scale `(κ₁+κ₂)/2`): energy `κ₁ b(d₁) + κ₂ b(d₂)` on either side,
+   **exactly C⁰** for heterogeneous parents. Under `use_improved_max_operator`
+   (the convergent formulation, never used by the semi-implicit mode) the
+   corrections subtract one term in the corner region, and no constant
+   per-collision scale can then be C⁰ on both sides unless `κ₁ = κ₂`; the
+   residual jump is `|κ₁−κ₂|/2 · b(d)` between *neighboring* parents. Recorded
+   as the inherent limit of that formulation; not exercised by production.
 4. Toolkit test (`tests/`): a 2D vertex sliding past an edge endpoint into the
    neighbouring edge's region: the built collision changes EV→VV→EV while the
    parent lists show the two EV candidates with their weights; sum invariant;
@@ -116,3 +127,37 @@ with hashes. Parent README and plan row updated.
 
 - **2026-09-11 18:35Z** — Plan written (see RB-20 for the shared context and
   the reason RB-21 follows it). Not started.
+
+- **2026-09-11 20:40Z** — **Toolkit:** `ParentContribution {type, id0, id1,
+  weight}` and `NormalCollision::parents`; every builder path (four candidate
+  entry points, the EV/EE/FV subfeature routers, the four duplicate-removal
+  helpers, the three merge helpers used by `merge()`) records its candidate;
+  direct `emplace_back` paths set the single parent. Compiles inside the
+  PolyFEM build; standalone toolkit test build with
+  `tests/collisions/test_parent_contributions.cpp` (corner fixture: two edge
+  parents on one VV collision, single parents in the interior region, weight
+  sums, `stiffness_scale == 1`, area weighting) in progress.
+  **PolyFEM:** `assign_collision_stiffness` refactored into
+  `coefficient_keys()` (positive parents, tag `10 + type`, else the stencil key),
+  `estimate_stiffness(stencil, key)` (fresh RB-18 law on any `CollisionStencil`
+  — for a parent the rebuilt candidate with AUTO distance type) and
+  `memoized_stiffness()`; a collision's scale is the contribution-weighted mean.
+  Option `semi_implicit.coefficient_identity: "parent" | "stencil"` (default
+  parent). Batch statistics are now taken over the memo (continued seeds +
+  fresh keys) and the re-resolve pass is a second `assign` call.
+  **Result on the quasistatic matrix** (`outputs/rb-20/20260911T182152Z/matrix-parent-on`, `-parent-off`):
+  parent identity + continuation **9/9 complete, 433 total Newton iterations
+  (baseline 434), 0 restarts, drift 1e-16 on every run**; parent identity
+  alone 431 iterations with the baseline's drift — the identity change is
+  cost-neutral and continuation now costs nothing. New PolyFEM regression
+  `tests/test_kappa_continuity.cpp` `[kappa_continuity]`: 3 cases / 66
+  assertions across seeds 1–3 (continuation: kept vs re-estimated control,
+  bit-identical endpoint force and trim scaling, born-mid-solve pricing,
+  mid-solve refresh keeps only endpoint keys, floor/cap bypass, max-ratio pull,
+  invalid ratio rejected; parents: recorded by the builder, single-/two-parent
+  seams exact under parent identity with the historical jump reproduced under
+  stencil identity, homogeneous equality, no-op outside semi-implicit,
+  continuation survives the switch only under parent identity). Next: toolkit
+  tests, affected suite, smokes on/off, transient/friction/ratio matrices,
+  ball-on-plate, HDA, then commit toolkit + pin + PolyFEM and flip the RB-20
+  default.
