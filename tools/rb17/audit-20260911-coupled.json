@@ -1,0 +1,1168 @@
+{
+  "checks": 488,
+  "maximum_independent_coupling_defect": 3.500644218945581e-12,
+  "maximum_event_relative_error": 1.3004795423584382e-18,
+  "maximum_telescoping_error": 8.715914724550969e-17,
+  "heldout_decimal_check": {
+    "gap_above_upper": "0.008604821609234900400331936670184439884133458202434951942749",
+    "coupling_equation_error": "7.32965011027031925225067452045012131106120253953E-13",
+    "scalar_target_k": "1.60094231723779340079434512910663612848867760211812618924276",
+    "observed_k": "1.600942317237791",
+    "other_contact_gap_contribution": "0.589171239817880693968812641320161182942124731386761663612280"
+  },
+  "cases": [
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 3.2526065174565133e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.220446049250313e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.0231815394945442e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 3.500644218945581e-12
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.4424906541753444e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1579626146840383e-13
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3322676295501878e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.653397915419191e-13
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.5011104298755525e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.5011104298755527e-14
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 9.75781955236954e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 3.500644218945581e-12
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.4424906541753444e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1579626146840383e-13
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3322676295501878e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.653397915419191e-13
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.5011104298755525e-15
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.5011104298755527e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5211230592645535e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.5630166312093934e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.7066350816749034e-14
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.0842021724855044e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.0842021724855044e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1926223897340549e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.1926223897340549e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.547473508864641e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.547473508864641e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 9.731593308970332e-14
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.547473508864641e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.0842021724855044e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.0842021724855044e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1926223897340549e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.1926223897340549e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.1102230246251565e-15
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.547473508864641e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.547473508864641e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 9.731593308970332e-14
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 4.547473508864641e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.3368086899420177e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.7801654207959547e-12
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.3368086899420177e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3911398075161507e-12
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.2312284525251016e-13
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.3368086899420177e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.7801654207959547e-12
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.3368086899420177e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3911398075161507e-12
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 5.551115123125783e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.2312284525251016e-13
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 1.3642420526593924e-15
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.0592529337857286e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.3075226425523e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.2811613709095013e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.5175174445113413e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 8.140155216551648e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.331912854624534e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.708633234898116e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.531308496145357e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 7.115659172995948e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.312337402254343e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.984972186619416e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.530669007683173e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 4.0592529337857286e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.3075226425523e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 2.2811613709095013e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 0.001,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.5175174445113413e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 8.140155216551648e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.331912854624534e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.708633234898116e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.531308496145357e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 7.115659172995948e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "forward",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 7.312337402254343e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "direct",
+      "oracle_coupling_defect": 1.984972186619416e-13
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "order": "reverse",
+      "length_scale": 1000.0,
+      "arithmetic": "stable_quadratic_control",
+      "oracle_coupling_defect": 2.530669007683173e-13
+    }
+  ],
+  "limits": "Frozen spring equilibrium and conservative contact bookkeeping; no FEM, CCD, friction, external load work or production validation."
+}

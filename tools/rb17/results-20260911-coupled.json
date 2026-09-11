@@ -1,0 +1,6230 @@
+{
+  "scope": "two affine gaps; full quadratic reference; no FEM or production solver",
+  "checks": {
+    "spd": 144,
+    "descent": 784,
+    "frozen_search": 748,
+    "independent_equilibrium": 144,
+    "positive_feasible_reference": 120,
+    "feasible_reference_verified": 120,
+    "gradient_fd": 288,
+    "hessian_fd": 288,
+    "exact_shared_prediction": 174,
+    "full_equilibrium": 174,
+    "independent_gap_agreement": 108,
+    "event_energy": 66,
+    "bounded_update": 66,
+    "infeasible_expected": 24,
+    "analytic_infeasibility": 24,
+    "unit_order_covariance": 100
+  },
+  "check_count": 3372,
+  "failures": [],
+  "case_count": 144,
+  "cases": [
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356502933,
+        0.8349071273649276
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 1.5168288492252472e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002713584341108799
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 4.3167215104634405e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 0.0014049578458070755,
+      "wall_seconds": 0.0020983750000596046
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356502933,
+        0.8349071273649276
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 1.5168288492252472e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0008393749594688416
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 4.3167215104634405e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 2.4207867681980133e-05,
+      "wall_seconds": 0.0005514584481716156
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.6625039279460907e-05,
+      "wall_seconds": 0.0005407920107245445
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.7583370208740234e-05,
+      "wall_seconds": 0.0005553346127271652
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.762527972459793e-05,
+      "wall_seconds": 0.0005232496187090874
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.4999881386756897e-05,
+      "wall_seconds": 0.0005654590204358101
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 2.7567223748821745e-18,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 1.745857298374176e-05,
+      "wall_seconds": 0.0005425838753581047
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356552814,
+        0.8349071273940115
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.3273869082429027e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0008036671206355095
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 2.7567223748821745e-18,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 1.566670835018158e-05,
+      "wall_seconds": 0.0004967916756868362
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356552814,
+        0.8349071273940115
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.3273869082429027e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.000814332626760006
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356502933,
+        0.8349071273649276
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 1.5168288492252472e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.000727958045899868
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 4.3167215104634405e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.6500242054462433e-05,
+      "wall_seconds": 0.0005147093906998634
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356502933,
+        0.8349071273649276
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 1.5168288492252472e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0007327497005462646
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "initial_k_normalized": [
+        1.0000000000000002,
+        100.00000000000001
+      ],
+      "residual": 4.3167215104634405e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.941714435815811e-05,
+      "wall_seconds": 0.0005537504330277443
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.5165656805038452e-05,
+      "wall_seconds": 0.0005010422319173813
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.4416873455047607e-05,
+      "wall_seconds": 0.0006908746436238289
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.362524926662445e-05,
+      "wall_seconds": 0.000484333373606205
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.2045773999559044e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "estimation_seconds": 1.3916753232479095e-05,
+      "wall_seconds": 0.0004934575408697128
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 2.7567223748821745e-18,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 1.3499520719051361e-05,
+      "wall_seconds": 0.0004837503656744957
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356552814,
+        0.8349071273940115
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.3273869082429027e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0008154157549142838
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977973
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 2.7567223748821745e-18,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 1.4000572264194489e-05,
+      "wall_seconds": 0.0004904577508568764
+    },
+    {
+      "case": "independent_heterogeneous",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8284904356552814,
+        0.8349071273940115
+      ],
+      "k_normalized": [
+        1.0,
+        100.0
+      ],
+      "initial_k_normalized": [
+        1.0,
+        100.0
+      ],
+      "residual": 1.3273869082429027e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8284904356902307,
+        0.8349071275977972
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0008966671302914619
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.6155620492804583e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.6042031347751617e-05,
+      "wall_seconds": 0.0011745002120733261
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.6155620492804583e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.570768654346466e-05,
+      "wall_seconds": 0.0011882921680808067
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.4450026256239878e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.7082318663597107e-05,
+      "wall_seconds": 0.0012095412239432335
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.4450026256239878e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 2.3917295038700104e-05,
+      "wall_seconds": 0.0012242086231708527
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093478620327,
+        0.8436447002363727
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 9.96288494033544e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 3,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477488611,
+        0.8436447024752112
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0014474168419837952
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 3.5977034107663684e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.6333535313606262e-05,
+      "wall_seconds": 0.0011199582368135452
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093478620327,
+        0.8436447002363727
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 9.96288494033544e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 3,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486398,
+        0.8436447024752114
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.001475667580962181
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 3.5977034107663684e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752192
+      ],
+      "estimation_seconds": 1.674983650445938e-05,
+      "wall_seconds": 0.0011684168130159378
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 3.513382237076533e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486391,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.925043761730194e-05,
+      "wall_seconds": 0.0011534160003066063
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093477733957,
+        0.8436447019864279
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 2.1751246913203703e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 7,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486878,
+        0.8436447024752174
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0018088333308696747
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 2.7561237823943864e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 2.0790845155715942e-05,
+      "wall_seconds": 0.0010698745027184486
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093477733957,
+        0.8436447019864279
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 2.1751246914170396e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 7,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752174
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0019255829975008965
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.6155620492804583e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 2.604164183139801e-05,
+      "wall_seconds": 0.001283874735236168
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.6155620492804583e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.9458122551441193e-05,
+      "wall_seconds": 0.0011414159089326859
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.4450026256239878e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 2.0207837224006653e-05,
+      "wall_seconds": 0.001097375527024269
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5000000000000004,
+        4.000000000000001
+      ],
+      "residual": 1.4450026256239878e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486392,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.7667189240455627e-05,
+      "wall_seconds": 0.0011037075892090797
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093478620327,
+        0.8436447002363727
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 9.96288494033544e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 3,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477488611,
+        0.8436447024752112
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.001380416564643383
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 3.5977034107663684e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 1.9917264580726624e-05,
+      "wall_seconds": 0.0010960418730974197
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093478620327,
+        0.8436447002363727
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 9.96288494033544e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 3,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486398,
+        0.8436447024752114
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0013744579628109932
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.0
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.0
+      ],
+      "residual": 3.5977034107663684e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752192
+      ],
+      "estimation_seconds": 2.7582980692386627e-05,
+      "wall_seconds": 0.0012036673724651337
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 3.513382237076533e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486391,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 2.0833685994148254e-05,
+      "wall_seconds": 0.001074208877980709
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093477733957,
+        0.8436447019864279
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 2.1751246913203703e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 7,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486878,
+        0.8436447024752174
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0016228333115577698
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8270093477486392,
+        0.843644702475219
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 2.7561237823943864e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752189
+      ],
+      "estimation_seconds": 2.3749656975269318e-05,
+      "wall_seconds": 0.0010358327999711037
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.8270093477733957,
+        0.8436447019864279
+      ],
+      "k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "initial_k_normalized": [
+        2.5,
+        4.000000000000001
+      ],
+      "residual": 2.1751246914170396e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 7,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8270093477486393,
+        0.8436447024752174
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0016213338822126389
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851092
+      ],
+      "estimation_seconds": 1.8709339201450348e-05,
+      "wall_seconds": 0.0011066664010286331
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851092
+      ],
+      "estimation_seconds": 1.637544482946396e-05,
+      "wall_seconds": 0.001126665621995926
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851092,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.9249506294727325e-05,
+      "wall_seconds": 0.001165124587714672
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851092,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.654215157032013e-05,
+      "wall_seconds": 0.001149917021393776
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.6042031347751617e-05,
+      "wall_seconds": 0.0011090412735939026
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.6124919056892395e-05,
+      "wall_seconds": 0.0011322088539600372
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.600012183189392e-05,
+      "wall_seconds": 0.0011126669123768806
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.5917234122753143e-05,
+      "wall_seconds": 0.0011298330500721931
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.300598297665698e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851041,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.6958452761173248e-05,
+      "wall_seconds": 0.001115625724196434
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.300598297665698e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851041,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.5292316675186157e-05,
+      "wall_seconds": 0.001130540855228901
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.301043029600294e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851041
+      ],
+      "estimation_seconds": 1.658312976360321e-05,
+      "wall_seconds": 0.0010992921888828278
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.301043029600294e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851041
+      ],
+      "estimation_seconds": 1.49579718708992e-05,
+      "wall_seconds": 0.001055666245520115
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851092
+      ],
+      "estimation_seconds": 1.4457851648330688e-05,
+      "wall_seconds": 0.0010549575090408325
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851092
+      ],
+      "estimation_seconds": 1.49579718708992e-05,
+      "wall_seconds": 0.0010723751038312912
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851092,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.600012183189392e-05,
+      "wall_seconds": 0.0010716672986745834
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.3022970455730574e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851092,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.5207566320896149e-05,
+      "wall_seconds": 0.0010676654055714607
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.466553658246994e-05,
+      "wall_seconds": 0.001103959046304226
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851042,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 2.266746014356613e-05,
+      "wall_seconds": 0.0010573752224445343
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.3832934200763702e-05,
+      "wall_seconds": 0.0010764170438051224
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3007085911854775e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851042
+      ],
+      "estimation_seconds": 1.416727900505066e-05,
+      "wall_seconds": 0.0010704165324568748
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.300598297665698e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851041,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.4416873455047607e-05,
+      "wall_seconds": 0.0010533342137932777
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.300598297665698e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851041,
+        0.8677482830851091
+      ],
+      "estimation_seconds": 1.3666227459907532e-05,
+      "wall_seconds": 0.0010495837777853012
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.301043029600294e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851041
+      ],
+      "estimation_seconds": 1.3499520719051361e-05,
+      "wall_seconds": 0.0010289177298545837
+    },
+    {
+      "case": "positive_symmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.8677482830850398,
+        0.8677482830850398
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.301043029600294e-13,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 4,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.8677482830851091,
+        0.8677482830851041
+      ],
+      "estimation_seconds": 1.3500452041625977e-05,
+      "wall_seconds": 0.0010388754308223724
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.3290904462337494e-05,
+      "wall_seconds": 0.0011638347059488297
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.4040619134902954e-05,
+      "wall_seconds": 0.0011902917176485062
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825783
+      ],
+      "estimation_seconds": 1.3665296137332916e-05,
+      "wall_seconds": 0.0012837918475270271
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825783
+      ],
+      "estimation_seconds": 1.4374963939189911e-05,
+      "wall_seconds": 0.0013039587065577507
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.3832934200763702e-05,
+      "wall_seconds": 0.0011701667681336403
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.362524926662445e-05,
+      "wall_seconds": 0.0011980822309851646
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.3874843716621399e-05,
+      "wall_seconds": 0.0012725414708256721
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.3791956007480621e-05,
+      "wall_seconds": 0.001308542676270008
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3970618277432574e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.358427107334137e-05,
+      "wall_seconds": 0.0011889999732375145
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3970618277432574e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.362524926662445e-05,
+      "wall_seconds": 0.0011809999123215675
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.920089445012321,
+        0.8497086344009658
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 4.46291533865306e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129353,
+        0.8497086345825683
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0016567502170801163
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.1287067939349753e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.5041790902614594e-05,
+      "wall_seconds": 0.0012244582176208496
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.3125129044055939e-05,
+      "wall_seconds": 0.0011255834251642227
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.2999400496482849e-05,
+      "wall_seconds": 0.0011650417000055313
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825783
+      ],
+      "estimation_seconds": 1.7500482499599457e-05,
+      "wall_seconds": 0.0012981249019503593
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129363,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 2.9588371378929016e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825783
+      ],
+      "estimation_seconds": 1.5167519450187683e-05,
+      "wall_seconds": 0.0013038748875260353
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.5624798834323883e-05,
+      "wall_seconds": 0.0011718329042196274
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.5041790902614594e-05,
+      "wall_seconds": 0.001232832670211792
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.6208738088607788e-05,
+      "wall_seconds": 0.0012914175167679787
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.8407231553973437e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "estimation_seconds": 1.5375204384326935e-05,
+      "wall_seconds": 0.0013034595176577568
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3970618277432574e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.600012183189392e-05,
+      "wall_seconds": 0.0011999160051345825
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825784
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 2.3970618277432574e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.5375204384326935e-05,
+      "wall_seconds": 0.0011956673115491867
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.920089445012321,
+        0.8497086344009658
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 4.46291533865306e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129353,
+        0.8497086345825683
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.001678749918937683
+    },
+    {
+      "case": "positive_asymmetric",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "band_satisfied",
+      "gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.1287067939349753e-16,
+      "numerical_status": "converged",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 2,
+      "oracle_gap_normalized": [
+        0.9200894475129364,
+        0.8497086345825785
+      ],
+      "estimation_seconds": 1.933332532644272e-05,
+      "wall_seconds": 0.001271374523639679
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106028
+      ],
+      "k_normalized": [
+        0.06548396136077472,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 6.736783108983113e-17,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 7.225014269351959e-05,
+      "wall_seconds": 0.0006787087768316269
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        1.0697453082403496,
+        0.8394906164806997
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 3.624939569011567e-10,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 8,
+      "events": 0,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083031452,
+        0.8394906166104595
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0011666668578982353
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106028
+      ],
+      "k_normalized": [
+        0.06548396136077472,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 6.736783108983113e-17,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 6.566476076841354e-05,
+      "wall_seconds": 0.0006187092512845993
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        1.0697453082403496,
+        0.8394906164806997
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 3.624939569011567e-10,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 8,
+      "events": 0,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083052297,
+        0.8394906166104595
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0016695000231266022
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077346,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 6.84177502989769e-05,
+      "wall_seconds": 0.0006475001573562622
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077346,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 6.44586980342865e-05,
+      "wall_seconds": 0.0006432915106415749
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077293,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 6.416719406843185e-05,
+      "wall_seconds": 0.0006649158895015717
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077293,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 6.429292261600494e-05,
+      "wall_seconds": 0.0006423341110348701
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        1.0697453082183603,
+        0.8394906164367205
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 4.852173388543802e-10,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083052055,
+        0.8394906166105965
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0008748341351747513
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077417,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 4.407305799875472e-17,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.839490616610603
+      ],
+      "estimation_seconds": 6.474927067756653e-05,
+      "wall_seconds": 0.0006262501701712608
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077471,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 9.855035366150639e-17,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.839490616610603
+      ],
+      "estimation_seconds": 6.616674363613129e-05,
+      "wall_seconds": 0.0006172088906168938
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077471,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 9.855035366150639e-17,
+      "numerical_status": "converged",
+      "solves": 5,
+      "iterations": 6,
+      "events": 4,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.839490616610603
+      ],
+      "estimation_seconds": 6.65402039885521e-05,
+      "wall_seconds": 0.0006547924131155014
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106028
+      ],
+      "k_normalized": [
+        0.06548396136077472,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 6.736783108983113e-17,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 4.0833838284015656e-05,
+      "wall_seconds": 0.0005348753184080124
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        1.0697453082403496,
+        0.8394906164806997
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 3.624939569011567e-10,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 8,
+      "events": 0,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083031452,
+        0.8394906166104595
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0011871671304106712
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106028
+      ],
+      "k_normalized": [
+        0.06548396136077472,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 6.736783108983113e-17,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 4.00003045797348e-05,
+      "wall_seconds": 0.0005238326266407967
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        1.0697453082403496,
+        0.8394906164806997
+      ],
+      "k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "initial_k_normalized": [
+        0.6666666666666667,
+        0.6666666666666667
+      ],
+      "residual": 3.624939569011567e-10,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 8,
+      "events": 0,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083052297,
+        0.8394906166104595
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0012343749403953552
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077346,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 4.7001056373119354e-05,
+      "wall_seconds": 0.0005705002695322037
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077346,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 3.8582831621170044e-05,
+      "wall_seconds": 0.000538041815161705
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077293,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 3.9208680391311646e-05,
+      "wall_seconds": 0.0005279174074530602
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077293,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 1.3157779509732644e-16,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "estimation_seconds": 3.9876438677310944e-05,
+      "wall_seconds": 0.0005480824038386345
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        1.0697453082183603,
+        0.8394906164367205
+      ],
+      "k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 4.852173388543802e-10,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083052055,
+        0.8394906166105965
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0008811242878437042
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077417,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 4.407305799875472e-17,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.839490616610603
+      ],
+      "estimation_seconds": 4.137493669986725e-05,
+      "wall_seconds": 0.0005567921325564384
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077471,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 9.855035366150639e-17,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.839490616610603
+      ],
+      "estimation_seconds": 3.9876438677310944e-05,
+      "wall_seconds": 0.000523790717124939
+    },
+    {
+      "case": "positive_incompatible",
+      "holdout": false,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        1.0697453083053015,
+        0.8394906166106029
+      ],
+      "k_normalized": [
+        0.06548396136077471,
+        0.6666666666666666
+      ],
+      "initial_k_normalized": [
+        0.6666666666666666,
+        0.6666666666666666
+      ],
+      "residual": 9.855035366150639e-17,
+      "numerical_status": "converged",
+      "solves": 3,
+      "iterations": 6,
+      "events": 2,
+      "band_feasible": false,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        1.0697453083053015,
+        0.839490616610603
+      ],
+      "estimation_seconds": 0.000206666998565197,
+      "wall_seconds": 0.0011600004509091377
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560127587536,
+        0.8918993022642222
+      ],
+      "k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 2.0257856725946375e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134622064,
+        0.8918993023701506
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.00233458261936903
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576118,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.6009423172377975,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 5.1072597922857036e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196597488,
+        0.8909575536458448
+      ],
+      "estimation_seconds": 2.8541311621665955e-05,
+      "wall_seconds": 0.0019328324124217033
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560120552543,
+        0.8918993021582875
+      ],
+      "k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 4.051540521885886e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.963956013462259,
+        0.8918993023701435
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0024570003151893616
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576117,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.6009423172377975,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 5.107580586516671e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196598728,
+        0.8909575536458463
+      ],
+      "estimation_seconds": 2.7958303689956665e-05,
+      "wall_seconds": 0.0021018749102950096
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560120552437,
+        0.8918993021582858
+      ],
+      "k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 4.05157138638453e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.963956013462149,
+        0.8918993023701425
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002217542380094528
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576118,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.600942317237791,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 5.107249401413497e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196597487,
+        0.8909575536458447
+      ],
+      "estimation_seconds": 2.779252827167511e-05,
+      "wall_seconds": 0.0019305003806948662
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560124069986,
+        0.891899302211254
+      ],
+      "k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 3.0386787141769634e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134622602,
+        0.8918993023701474
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002307749353349209
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576117,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.6009423172377908,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 5.107472475221991e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196598728,
+        0.8909575536458463
+      ],
+      "estimation_seconds": 3.0251219868659973e-05,
+      "wall_seconds": 0.0021330006420612335
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560122311213,
+        0.89189930218477
+      ],
+      "k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 3.545124918014576e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134621633,
+        0.8918993023701446
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0022464999929070473
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576117,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.60094231723779,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 5.107403529772835e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196597489,
+        0.8909575536458448
+      ],
+      "estimation_seconds": 2.708379179239273e-05,
+      "wall_seconds": 0.0020141256973147392
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560122311216,
+        0.89189930218477
+      ],
+      "k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 3.5451239914483557e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 7,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134622598,
+        0.8918993023701455
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002514708787202835
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 2,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576118,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.600942317237789,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 5.107230097363127e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.957288119659873,
+        0.8909575536458463
+      ],
+      "estimation_seconds": 3.17087396979332e-05,
+      "wall_seconds": 0.0021039173007011414
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560127587536,
+        0.8918993022642222
+      ],
+      "k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 2.0257856725946375e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134622064,
+        0.8918993023701506
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0024789171293377876
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576118,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.6009423172377975,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 5.1072597922857036e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196597488,
+        0.8909575536458448
+      ],
+      "estimation_seconds": 3.1040050089359283e-05,
+      "wall_seconds": 0.0021232077851891518
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560120552543,
+        0.8918993021582875
+      ],
+      "k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 4.051540521885886e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.963956013462259,
+        0.8918993023701435
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0024625416845083237
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 0.001,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576117,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.6009423172377975,
+        2.777777777777779
+      ],
+      "initial_k_normalized": [
+        2.777777777777779,
+        2.777777777777779
+      ],
+      "residual": 5.107580586516671e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196598728,
+        0.8909575536458463
+      ],
+      "estimation_seconds": 3.416743129491806e-05,
+      "wall_seconds": 0.0023022498935461044
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560120552437,
+        0.8918993021582858
+      ],
+      "k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 4.05157138638453e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 5,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.963956013462149,
+        0.8918993023701425
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002441459335386753
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576118,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.600942317237791,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 5.107249401413497e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196597487,
+        0.8909575536458447
+      ],
+      "estimation_seconds": 3.2082200050354004e-05,
+      "wall_seconds": 0.0021100416779518127
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560124069986,
+        0.891899302211254
+      ],
+      "k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 3.0386787141769634e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134622602,
+        0.8918993023701474
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.0023965416476130486
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576117,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.6009423172377908,
+        2.7777777777777777
+      ],
+      "initial_k_normalized": [
+        2.7777777777777777,
+        2.7777777777777777
+      ],
+      "residual": 5.107472475221991e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196598728,
+        0.8909575536458463
+      ],
+      "estimation_seconds": 3.6207959055900574e-05,
+      "wall_seconds": 0.002085374668240547
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560122311213,
+        0.89189930218477
+      ],
+      "k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 3.545124918014576e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 6,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134621633,
+        0.8918993023701446
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002236957661807537
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "forward",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576117,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.60094231723779,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 5.107403529772835e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9572881196597489,
+        0.8909575536458448
+      ],
+      "estimation_seconds": 3.150012344121933e-05,
+      "wall_seconds": 0.0019576670601963997
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "direct",
+      "outcome": "numerical_failure",
+      "gap_normalized": [
+        0.9639560122311216,
+        0.89189930218477
+      ],
+      "k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 3.5451239914483557e-09,
+      "numerical_status": "line_search_limit",
+      "solves": 1,
+      "iterations": 7,
+      "events": 0,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.9639560134622598,
+        0.8918993023701455
+      ],
+      "estimation_seconds": 0.0,
+      "wall_seconds": 0.002466750331223011
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "holdout": true,
+      "factor": 4,
+      "length_scale": 1000.0,
+      "order": "reverse",
+      "arithmetic": "stable_quadratic_control",
+      "outcome": "unresolved_coefficient_fixed_point",
+      "gap_normalized": [
+        0.9572881196576118,
+        0.8909575536455158
+      ],
+      "k_normalized": [
+        1.600942317237789,
+        2.7777777777777772
+      ],
+      "initial_k_normalized": [
+        2.7777777777777772,
+        2.7777777777777772
+      ],
+      "residual": 5.107230097363127e-12,
+      "numerical_status": "converged",
+      "solves": 2,
+      "iterations": 9,
+      "events": 1,
+      "band_feasible": true,
+      "in_band": 1,
+      "oracle_gap_normalized": [
+        0.957288119659873,
+        0.8909575536458463
+      ],
+      "estimation_seconds": 3.2291747629642487e-05,
+      "wall_seconds": 0.0020752912387251854
+    }
+  ],
+  "covariance": [
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "independent_heterogeneous",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "rb13_negative_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_symmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_asymmetric",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "positive_incompatible",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 2,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "direct",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": false,
+      "gap_error": null
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 0.001,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 0.0
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "forward",
+      "available": true,
+      "gap_error": 1.1102230246251565e-16
+    },
+    {
+      "case": "heldout_strong_coupling",
+      "factor": 4,
+      "arithmetic": "stable_quadratic_control",
+      "scale": 1000.0,
+      "order": "reverse",
+      "available": true,
+      "gap_error": 0.0
+    }
+  ],
+  "peak_rss_native": 38420480,
+  "peak_rss_units": "bytes on macOS; kilobytes on Linux",
+  "source_hashes": {
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb13/scope_bridge.cpp": "940aca69a20e5176d95f085997b7f7ccabfeb63eb862327e2c8f898b641e898b",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.cpp": "9f555e32ed4a42444898a361de185969b8bf0e37e5a56edde9e8ec7878ac196e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb17/coupled_probe.py": "2fbbfdaf02c4cc18cb26fe531c583cdb4aa6ecddc9c9f00e1d309df770a61f96",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb17/coupled-cases.json": "6fd253d5f78db14bcadb12dd175f202a44bfd935ad6c55fe8a27764ecb2efe41",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb17/coupled-protocol.md": "51345dd8c02253dafb30ad91f5d6842b9f1e4f9f64c5b1d3d08a61a9e2640953",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.hpp": "b830b4e289ffe7a04a4f703669be1eb455b79e56432a744cca23baea44b2cc3b"
+  }
+}

@@ -179,7 +179,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [characterized—stages 1–3 complete; decision pending](rb-14-validation.md) |
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
-| RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [in progress—candidate selection prepared; integration pending](rb-17-validation.md) |
+| RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [retired—per-contact band targeting withdrawn after the coupled gate; evidence retained; not integrated](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11) |
 | RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature with |wᵀHw| → max|H|/d̂² fallback, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [done — `e3fa362e0`, F7 `4a0df80a1`](rb-18-quick-fixes.md) |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is
@@ -809,6 +809,15 @@ runs. Distinguish numerical solve termination from any proposed engineering/cont
 acceptance criterion. Record concrete policy alternatives and remaining choices.
 
 ## RB-17 — Integrated adaptive-barrier candidate and decision
+
+**Retired 2026-09-11.** The approved candidate's per-contact band targeting was
+withdrawn by the user after the [coupled gate](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11)
+showed that independent scalar corrections reach fixed points outside an
+attainable band under mechanical coupling. The global band stays the production
+controller. The item's goal — a mechanically informed adaptive barrier — is
+carried forward by the successors named in the RB-18 handoff (force-continuation
+κ, parent-keyed κ), which need their own items. The text below is retained as the
+protocol that was authorized and is not an active work order.
 
 **Prerequisites:** selected estimator, assignment and controller contracts from
 RB-14–RB-16; required RB-04 physical-state diagnostics. RB-06 is needed if the

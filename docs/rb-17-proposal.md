@@ -1,5 +1,11 @@
 # RB-17 — Candidate selection and integration protocol
 
+> **Retired 2026-09-11.** The per-contact band-targeting controller in this
+> package was withdrawn after the coupled gate reproduced a feasible-band fixed
+> point that independent scalar corrections cannot leave; see the
+> [retirement section](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11).
+> The text below is the approved proposal as it stood and is kept for provenance.
+
 2026-09-11. **Experimental package approved; implementation/validation pending.**
 The user requested completion of RB-17. The item's explicit prerequisite is a
 selected estimator, assignment and controller contract. RB-14–RB-16 characterize

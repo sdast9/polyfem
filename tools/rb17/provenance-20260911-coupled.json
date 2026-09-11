@@ -1,0 +1,244 @@
+{
+  "command": [
+    "/usr/bin/c++",
+    "-std=c++17",
+    "-O2",
+    "-shared",
+    "-fPIC",
+    "-I/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb13/scope_bridge.cpp",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.cpp",
+    "-o",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/rb-17/20260911T143421Z-coupled/probe-01/barrier.dylib"
+  ],
+  "argv": [
+    "polyfem/tools/rb17/coupled_probe.py",
+    "--ipc-source",
+    "ipc-toolkit-fork",
+    "--output",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/rb-17/20260911T143421Z-coupled/probe-01"
+  ],
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "numpy": "2.5.1",
+  "manifest": {
+    "scope": "two affine gaps; full quadratic reference; no FEM or production solver",
+    "dhat": 1.0,
+    "initial_gap": [
+      0.8,
+      0.8
+    ],
+    "band_squared": [
+      0.5,
+      0.9
+    ],
+    "factors": [
+      2,
+      4
+    ],
+    "max_corrections": 12,
+    "residual_tolerance": 1e-10,
+    "newton_limit": 100,
+    "backtrack_limit": 60,
+    "armijo": 0.0001,
+    "length_scales": [
+      0.001,
+      1.0,
+      1000.0
+    ],
+    "energy_scale": 1.0,
+    "arithmetic": [
+      "direct",
+      "stable_quadratic_control"
+    ],
+    "parent_orders": [
+      "forward",
+      "reverse"
+    ],
+    "initialization": "raw mapped Rayleigh J_i H J_i^T / ||J_i||^2 / dhat^2; no trim/cap; scalar parent registry",
+    "cases": [
+      {
+        "id": "independent_heterogeneous",
+        "H": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            100
+          ]
+        ],
+        "J": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "p": [
+          0.2,
+          0.25
+        ]
+      },
+      {
+        "id": "rb13_negative_coupling",
+        "H": [
+          [
+            2,
+            0,
+            0
+          ],
+          [
+            0,
+            3,
+            0
+          ],
+          [
+            0,
+            0,
+            5
+          ]
+        ],
+        "J": [
+          [
+            1,
+            -1,
+            0
+          ],
+          [
+            0,
+            1,
+            -1
+          ]
+        ],
+        "p": [
+          0.2,
+          0.25
+        ]
+      },
+      {
+        "id": "positive_symmetric",
+        "H": [
+          [
+            0.6666666666666666,
+            -0.3333333333333333
+          ],
+          [
+            -0.3333333333333333,
+            0.6666666666666666
+          ]
+        ],
+        "J": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "p": [
+          0.1,
+          0.1
+        ]
+      },
+      {
+        "id": "positive_asymmetric",
+        "H": [
+          [
+            0.6666666666666666,
+            -0.3333333333333333
+          ],
+          [
+            -0.3333333333333333,
+            0.6666666666666666
+          ]
+        ],
+        "J": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "p": [
+          0.4,
+          0.1
+        ]
+      },
+      {
+        "id": "positive_incompatible",
+        "H": [
+          [
+            0.6666666666666666,
+            -0.3333333333333333
+          ],
+          [
+            -0.3333333333333333,
+            0.6666666666666666
+          ]
+        ],
+        "J": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "p": [
+          0.7,
+          0.1
+        ]
+      },
+      {
+        "id": "heldout_strong_coupling",
+        "H": [
+          [
+            2.7777777777777777,
+            -2.2222222222222223
+          ],
+          [
+            -2.2222222222222223,
+            2.7777777777777777
+          ]
+        ],
+        "J": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "p": [
+          0.3,
+          0.1
+        ],
+        "holdout": true
+      }
+    ]
+  },
+  "ipc_head": "af317a65d69d0ac7c5efa4bf103bf75e280c323b",
+  "polyfem_head": "8f954f27df7238a5e1f7e59eed9824de68af5094",
+  "hashes": {
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb13/scope_bridge.cpp": "940aca69a20e5176d95f085997b7f7ccabfeb63eb862327e2c8f898b641e898b",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.cpp": "9f555e32ed4a42444898a361de185969b8bf0e37e5a56edde9e8ec7878ac196e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb17/coupled_probe.py": "2fbbfdaf02c4cc18cb26fe531c583cdb4aa6ecddc9c9f00e1d309df770a61f96",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb17/coupled-cases.json": "6fd253d5f78db14bcadb12dd175f202a44bfd935ad6c55fe8a27764ecb2efe41",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb17/coupled-protocol.md": "51345dd8c02253dafb30ad91f5d6842b9f1e4f9f64c5b1d3d08a61a9e2640953",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.hpp": "b830b4e289ffe7a04a4f703669be1eb455b79e56432a744cca23baea44b2cc3b"
+  }
+}
