@@ -122,8 +122,8 @@ Change:
 
 - Toolkit `e3c8d3fe` on `sdast9/ipc-toolkit:semi-implicit-stiffness` (pushed).
 - PolyFEM: `21f9fd592` (parent-keyed assignment, WIP) and the final RB-20/21
-  commit (pin bump to `e3c8d3fe`, default flip, records) on
-  `sdast9/polyfem:main`; hash in the RB-20 log. Parent README and plan rows
+  commit `beb6ef641` (pin bump to `e3c8d3fe`, default flip, records) on
+  `sdast9/polyfem:main`. Parent README and plan rows
   updated.
 
 ## Progress log

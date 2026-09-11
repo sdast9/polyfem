@@ -209,9 +209,8 @@ physical balance.
 ## Publication
 
 - `0324ce096` — RB-20 opt-in implementation (stencil identity; the cost
-  finding), `21f9fd592` — RB-21 PolyFEM side, then the final commit (default
-  on, pin bump to toolkit `e3c8d3fe`, records) on `sdast9/polyfem:main`; hashes
-  in the log.
+  finding), `21f9fd592` — RB-21 PolyFEM side, then `beb6ef641` (default on, pin bump to toolkit `e3c8d3fe`, records) on
+  `sdast9/polyfem:main`.
 - Toolkit `e3c8d3fe` on `sdast9/ipc-toolkit:semi-implicit-stiffness`.
 - Parent README, plan rows, semi-implicit README updated.
 
@@ -303,4 +302,4 @@ what was measured, what is next.
   and friction drift 1e-16; ball-on-plate drift 13–53% → ≤6.5e-4 at equal
   cost; HDA E2E pass. `continuation_max_ratio` measured (no effect below 2×).
   Toolkit `e3c8d3fe` pushed; PolyFEM pin bumped. Committed and pushed as the
-  final RB-20/RB-21 commit (hash recorded below).
+  final RB-20/RB-21 commit **`beb6ef641`**.
