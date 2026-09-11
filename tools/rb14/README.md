@@ -23,7 +23,7 @@ vary on rerun. Other platforms and assembled production FEM behavior are unteste
 Passing a counterexample check means its limitation was reproduced. Approximate
 estimates are not required to equal the exact reference; their errors and failed
 held-out coverage are retained. No candidate, fallback or empirical interval is
-a selected production model. RB-14 stage 2 remains pending.
+a selected production model. Stages 2 and 3 below extend the comparison.
 
 
 ## Stage 2: actual FEM assembly and mapped contact
@@ -48,3 +48,19 @@ from the checked-in case list. It retains nonlinear histories and errors. This
 is a single selected-vertex/segment contact proxy, not whole-surface contact.
 See the contract/validation for failed empirical coverage, the actual RHS sign,
 zero-demand handling and remaining production decisions.
+
+## Stage 3: physical neighborhoods and shared prediction
+
+```bash
+python3 tools/rb14/run_fem_probe.py --build build --source tools/rb14/influence_probe.cpp --config tools/rb14/stage3-cases.json --output /absolute/fresh/influence-evidence
+python3 tools/rb14/analyze_influence_probe.py --input /absolute/fresh/influence-evidence --output /absolute/fresh/influence-summary.json
+```
+
+Read the [predeclared protocol](stage3-protocol.md). The standalone source preserves
+stage 2's fixture and adds physical radii, residual-influence diagnostics, a shared
+full predictor, sparse batch costs and two protection proposals. The [published
+comparison](results-20260910-stage3.json) retains all 21 cases, failed coverage and
+one incomplete nonlinear solve. Prior challenges and three new holdouts remain
+separate. Structural checks passing do not mean all nonlinear solves converged.
+The full local records retain endpoint vectors and matrices omitted here.
+No production estimator or protection law is selected.

@@ -1,10 +1,10 @@
 # RB-14 — Practical compliance and force-demand estimators
 
 Date: 2026-09-10
-Status: **in progress — stages 1–2 complete; further estimator comparison pending**
-Current handoff: stage 2 assembled-FEM comparison complete; practical estimator
-and protection choices remain pending. Earlier stage-1 handoff is retained below
-as history and superseded by the stage-2 continuation.
+Status: **characterized—decision pending; stages 1–3 complete within bounded scope**
+Current handoff: stage 3 compares physical neighborhoods, shared prediction and
+protection proposals. No production model is selected. Earlier handoffs below
+are preserved as history and superseded by stage 3.
 
 ## Authorization and baseline
 
@@ -248,3 +248,97 @@ force-range enclosures and multi-contact resource behavior. Stage-1 network
 controls remain useful but do not fill those FEM gaps. RB-15 is independently
 eligible; RB-16/17 integration still requires explicit estimator/assignment
 choices and comparison.
+
+## Stage 3 — physical neighborhoods, influence and protection (2026-09-10)
+
+The user requested continuation of RB-14. Started clean on main at
+`d8bb9a53345dad83586322d73697dd712cb23758`; dependency commits/overrides and shared
+build inputs remain those of stage 2. No incoming solver/build process was found.
+Evidence: `outputs/rb-14/20260910-203129-stage3/` in the parent workspace.
+The predeclared protocol, cases, compile/link commands and exits, source/binary
+hashes, linked archive hashes, per-case inputs/results and all histories are saved.
+The standalone probe was rebuilt against unchanged shared libraries. No production
+source, dependency, HDA, scene or solver default changed. No Teseo was run.
+
+See [stage 3's contract](rb-14-contract.md#stage-3--physical-neighborhoods-and-shared-prediction-2026-09-10)
+and [published results](../tools/rb14/results-20260910-stage3.json).
+The earlier FEM probe, protocols, case lists and results remain unchanged. The
+runner's optional `--source` selects the new probe; its default remains stage 2.
+
+### Execution and outcomes
+
+All 21 declared fixtures completed their structural checks: **5,299 checks passed**,
+plus **251 comparisons** preserving stage-2 full/radius-1/current controls.
+There are 189 candidate rows: 124 converged, 64 zero-demand solves omitted, and
+one iteration-limit outcome. Including the extra stale-dt control, **125/126
+attempted nonlinear solves converged**. Structural pass/exit zero does not erase
+the incomplete outcome. The relevant existing mapping and Neo-Hookean suite
+passed **11 cases / 7,994 assertions**, with logs retained under `existing-tests/`.
+
+The E100 `full_fresh_tangent` proposal reached the unchanged 80-iteration limit
+at normalized residual approximately **1.262e-8**, above the **1e-8** criterion.
+Its gap .07930302, force .46902166 and minimum determinant .99690573 are
+unconverged endpoint values. No cause is inferred without additional diagnostics;
+no tolerance was relaxed or case dropped. Across all returned endpoints the
+minimum determinant is .47055497. Maximum reference condition number is 502.87.
+
+### Estimator comparison
+
+Physical radius alone still misses remote demand. Radius .5 omits the baseline,
+n4 and n8 target solves as zero demand, while its shared-predictor counterparts
+converge to .05004333, .05031870 and .05029032 for target .05. In the older speed
+challenge, exterior residual influence .05233817 and interior relaxation
+.04694513 sum to the local predictor error; neither term can be neglected.
+
+| New holdout | Full gap | Radius .5 local predictor | Radius .5 shared predictor |
+| --- | --- | --- | --- |
+| Mesh n10, mixed parameters | .04808753 | .01013509 | .05158835 |
+| Speed 1.2, n6 | .04820294 | .01922312 | .05141015 |
+| Compressive load, n4 | .04829805 | .02373422 | .05158315 |
+
+Shared prediction is exact to roundoff for the frozen quadratic; nonlinear target
+error remains. Apparent improvement over full-reference nonlinear gaps is not a
+general superiority result: local stiffness overestimation can offset other error.
+
+Both radius-.5 candidates calibrate K_true/K_local to [.80637935,.96508326].
+Local predictor error/dhat calibrates to [-.25522768,.54235882]; shared error is
+roundoff. Joint coverage is 15/15 calibration by construction. Local prediction
+covers 0/3 prior challenges and 0/3 new holdouts; shared prediction covers **2/3
+prior challenges and 3/3 new holdouts**. The older stiffness miss remains. These
+small empirical samples are not certified uncertainty enclosures.
+
+Local empirical rectangles yield 20 inactive/mixed cases and one empty interval;
+shared rectangles yield 14 active and seven inactive/mixed cases. No interval
+endpoint nonlinear solves or nonlinear band-coverage claim is made.
+
+### Protection and cost
+
+For zero-demand dt=.5, fresh current protection gives gap .08883080 and force
+.27924289; tangent matching gives .06786116 and .10808913. This measures different
+perturbations, not target accuracy for unloaded contact. At the baseline frozen
+state, the algebraic zero-demand branch coefficients are 1093.17766 and 74.24722,
+whereas the positive-demand branch tends to zero. Neither discontinuous proposal
+is installed; continuity, invalid-data fallback and lifecycle require decisions.
+
+At n10, full/free dimension is 220; radius .5 uses 92 and radius 1 uses 216 DOFs.
+Radius 1 is nearly global. Seven-repeat warm medians: sparse factor 61.834 us,
+shared residual solve 5.333 us, 11 normal RHS batch 44.25 us; dense full extraction
+and two solves 236.375 us; radius-.5 shared candidate local work 29.542 us **plus
+global factor/solve cost**. The local timer retains its diagnostic predictor RHS.
+Sparse matrix/factor payload is 33,884/40,976 bytes; batch RHS plus responses
+38,720 bytes. These small-fixture timings exclude total memory, cache lifecycle,
+production throughput and coupled-contact behavior.
+
+### Status and publication
+
+**Stage 3 is complete; RB-14 is characterized—decision pending within this bounded
+investigation.** The reproduced locality failure favors testing shared prediction
+further, but does not select a production estimator, calibrated guarantee or
+protection law. The contract lists remaining physical/scaling coverage. RB-15
+is independently eligible; RB-16/17 integration requires explicit choices.
+
+The tools, protocol, inputs, compact results and documentation are published to
+`sdast9/polyfem:main`; the final message and local `publication.json` identify the
+commit. `artifact-checks.json` records residual/BC, syntax, formatting, link and
+result checks; `final-identity.json` records preservation of shared artifacts.
+The workspace README is updated locally outside Git.

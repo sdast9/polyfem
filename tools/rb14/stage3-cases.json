@@ -1,0 +1,126 @@
+[
+  {
+    "name": "baseline",
+    "split": "calibration"
+  },
+  {
+    "name": "mesh4",
+    "split": "calibration",
+    "n": 4
+  },
+  {
+    "name": "mesh8",
+    "split": "calibration",
+    "n": 8
+  },
+  {
+    "name": "E1",
+    "split": "calibration",
+    "E": 1
+  },
+  {
+    "name": "E100",
+    "split": "calibration",
+    "E": 100
+  },
+  {
+    "name": "rho01",
+    "split": "calibration",
+    "rho": 0.1
+  },
+  {
+    "name": "rho10",
+    "split": "calibration",
+    "rho": 10
+  },
+  {
+    "name": "dt005",
+    "split": "calibration",
+    "dt": 0.05
+  },
+  {
+    "name": "dt05",
+    "split": "calibration",
+    "dt": 0.5
+  },
+  {
+    "name": "speed01",
+    "split": "calibration",
+    "speed": 0.1
+  },
+  {
+    "name": "speed08",
+    "split": "calibration",
+    "speed": 0.8
+  },
+  {
+    "name": "load1",
+    "split": "calibration",
+    "load": 1
+  },
+  {
+    "name": "load10",
+    "split": "calibration",
+    "load": 10
+  },
+  {
+    "name": "moving_top",
+    "split": "calibration",
+    "top": -0.02
+  },
+  {
+    "name": "moving_obstacle",
+    "split": "calibration",
+    "obstacle": 0.02
+  },
+  {
+    "name": "heldout_mesh6",
+    "split": "prior_challenge",
+    "n": 6,
+    "flip": true,
+    "E": 3,
+    "rho": 0.3,
+    "dt": 0.35,
+    "speed": 0.6,
+    "nu": 0.45
+  },
+  {
+    "name": "heldout_speed",
+    "split": "prior_challenge",
+    "n": 4,
+    "speed": 1.5
+  },
+  {
+    "name": "heldout_load",
+    "split": "prior_challenge",
+    "n": 4,
+    "E": 1,
+    "rho": 0.1,
+    "load": 20
+  },
+  {
+    "name": "new_holdout_mesh10",
+    "split": "holdout",
+    "n": 10,
+    "flip": true,
+    "E": 4,
+    "rho": 0.5,
+    "dt": 0.25,
+    "speed": 0.9,
+    "nu": 0.4
+  },
+  {
+    "name": "new_holdout_speed",
+    "split": "holdout",
+    "n": 6,
+    "speed": 1.2
+  },
+  {
+    "name": "new_holdout_compression",
+    "split": "holdout",
+    "n": 4,
+    "E": 2,
+    "rho": 0.2,
+    "load": -5
+  }
+]

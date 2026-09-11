@@ -5,8 +5,9 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--build',type=pathlib.Path,required=True)
 p.add_argument('--output',type=pathlib.Path,required=True)
 p.add_argument('--config',type=pathlib.Path,required=True)
+p.add_argument('--source',type=pathlib.Path,help='Alternate isolated probe; defaults to the unchanged stage-2 source')
 a=p.parse_args();out=a.output.resolve();out.mkdir(parents=True,exist_ok=False)
-build=a.build.resolve()/'tests';source=pathlib.Path(__file__).with_name('fem_probe.cpp').resolve()
+build=a.build.resolve()/'tests';source=(a.source or pathlib.Path(__file__).with_name('fem_probe.cpp')).resolve()
 flags={}
 for line in (build/'CMakeFiles/unit_tests.dir/flags.make').read_text().splitlines():
  if ' = ' in line:
@@ -15,7 +16,7 @@ link=shlex.split((build/'CMakeFiles/unit_tests.dir/link.txt').read_text());obj=o
 compile=[link[0]]+flags['CXX_DEFINES']+flags['CXX_INCLUDES']+flags['CXX_FLAGS']+['-c',str(source),'-o',str(obj)]
 link=[v for v in link if not v.endswith('.o')];link[link.index('-o')+1]=str(binary);link.insert(1,str(obj))
 (out/'commands.json').write_text(json.dumps([compile,link],indent=2)+'\n')
-(out/'fem_probe.cpp').write_bytes(source.read_bytes())
+(out/source.name).write_bytes(source.read_bytes())
 inputs=[source,build/'CMakeFiles/unit_tests.dir/flags.make',build/'CMakeFiles/unit_tests.dir/link.txt']
 inputs += [(build/v).resolve() for v in link if v.endswith('.a')]
 (out/'build-input-hashes.json').write_text(json.dumps({str(v):hashlib.sha256(v.read_bytes()).hexdigest() for v in inputs},indent=2)+'\n')

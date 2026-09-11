@@ -344,3 +344,49 @@ contrast/anisotropy results do not certify those FEM cases. RB-14 remains in
 progress until the practical estimator/fallback evidence is sufficient for a
 production decision. RB-15 is independently eligible; no RB-16/17 policy change
 is implied.
+
+## Stage 3 — physical neighborhoods and shared prediction (2026-09-10)
+
+This continuation supersedes the stage-2 next-work handoff. The same assembled
+2D selected-contact fixture, physical units, free reduction and nonlinear checks
+apply. [The predeclared protocol](../tools/rb14/stage3-protocol.md) fixes all
+candidates and three new holdouts before comparison. Fifteen calibration cases
+remain unchanged; the previous three holdouts are now prior challenges.
+
+Rest-coordinate Euclidean radii .25, .5 and 1 fix exterior increments. Radius .5
+is also combined with p=d0-J H^-1 r from a full sparse residual solve. This shared
+predictor is exact for the frozen quadratic only; its global factor/solve cost
+must be charged in addition to local compliance extraction. With z=H^-1 J^T and
+the lifted local response z_N, the identity p_local-p_full=(z-z_N)^T r separates
+missing exterior residual influence from interior relaxation. This diagnostic
+uses the full reference and is not itself a cheap estimator.
+
+Sparse factor reuse is measured for a batch of all bottom-node normal RHS and
+one residual RHS. This is not a coupled-contact simulation. Its noncontact factor
+is distinct from the production Newton/contact Hessian; availability or reuse in
+production is not assumed. Matrix/factor/RHS payload excludes total peak memory.
+
+Two zero-demand protection proposals use fresh full-reference data: the current
+mapped assignment with trim=1, and k=K_full/b''(.05). The latter matches the unit
+barrier tangent at the target, with k in force/length^3, K in force/length and b''
+in length^2. Positive-demand cases retain the full target coefficient. Fresh
+finite SPD data and positive curvature are required; no stale/invalid-data
+fallback is implemented. Coefficients remain frozen per nonlinear solve and CCD
+remains active. Zero-demand protection has no upper-gap target requirement.
+Both proposals have a discontinuity: the compressed-side target coefficient tends
+to zero at zero demand while either protection branch is finite. The branch-limit
+calculation is algebraic, not a transition simulation. Neither policy is selected.
+
+The [stage-3 results](../tools/rb14/results-20260910-stage3.json) retain one
+incomplete tangent-protection solve and failed prior-challenge coverage. Empirical
+rectangles are calibrated only on the original 15 cases; they are not certified
+enclosures. No interval-endpoint nonlinear solves were run. Measured candidate
+gaps are distinct from nonlinear band guarantees.
+
+**Status: characterized—decision pending within the bounded investigation.**
+Shared prediction addresses the reproduced remote-influence error in these cases,
+but estimator/protection selection and lifecycle remain explicit decisions.
+Assembled contrast/anisotropy, pressure tangents, full contact patches, 3D, general
+interpolation, force-range enclosures and multi-contact resource scaling remain
+outside this evidence. RB-15 is independently eligible. RB-16/17 integration
+requires those model choices; no production behavior is changed by this work.
