@@ -88,6 +88,13 @@ namespace polyfem::solver
 		double mu() const { return mu_; }
 		double epsv() const { return epsv_; }
 		const ipc::TangentialCollisions &friction_collision_set() const { return friction_collision_set_; }
+		/// @brief RB-18 F6: the lagged normal-force magnitudes were built with
+		///        the contact trim at lag time. In semi-implicit mode the
+		///        in-solve controller can move the trim before the next lag
+		///        update; the friction potential is linear in the normal force,
+		///        so value/gradient/Hessian are rescaled by the trim ratio to
+		///        stay consistent with the barrier. 1 in every other mode.
+		double trim_scale() const;
 		const ipc::FrictionPotential &friction_potential() const { return friction_potential_; }
 
 	private:
@@ -103,6 +110,7 @@ namespace polyfem::solver
 		const int n_lagging_iters_;                      ///< Number of lagging iterations
 
 		ipc::TangentialCollisions friction_collision_set_; ///< Lagged friction constraint set
+		double lagged_trim_ = 1;                           ///< Contact trim baked into the lagged normal forces
 
 		const ContactForm &contact_form_; ///< necessary to have the barrier stiffnes, maybe clean me
 

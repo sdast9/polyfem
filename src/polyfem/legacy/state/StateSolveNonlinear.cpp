@@ -410,7 +410,7 @@ namespace polyfem::legacy
 		// Stall detection: restart the nonlinear solve with retuned barrier
 		// stiffness when the line search collapses (semi-implicit mode only).
 		solver::StallRestartOptions stall_opts;
-		std::function<void(const Eigen::VectorXd &)> on_stall = nullptr;
+		std::function<bool(const Eigen::VectorXd &)> on_stall = nullptr;
 		if (auto barrier_form = std::dynamic_pointer_cast<solver::BarrierContactForm>(solve_data.contact_form);
 			barrier_form != nullptr && barrier_form->uses_semi_implicit_stiffness())
 		{
@@ -424,7 +424,7 @@ namespace polyfem::legacy
 
 			const double stall_trim_factor = restart_opts["stall_trim_factor"];
 			on_stall = [barrier_form, stall_trim_factor](const Eigen::VectorXd &x) {
-				barrier_form->retune_on_stall(x, stall_trim_factor);
+				return barrier_form->retune_on_stall(x, stall_trim_factor);
 			};
 		}
 

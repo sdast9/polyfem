@@ -125,6 +125,12 @@ namespace polyfem::solver
 		///        frozen snapshot to the given collision set. Deterministic
 		///        between refreshes (memoized per stencil).
 		void assign_collision_stiffness(ipc::NormalCollisions &collision_set) const;
+		/// @brief Map a memoized per-stencil value (possibly a 0 / +inf
+		///        sentinel for invalid curvature) onto the frozen batch floor,
+		///        cap and user minimum (RB-18 F1/F2/F4).
+		double resolve_stiffness(const double kappa) const;
+		/// @brief Memoization key of a collision stencil: (type tag, vertex ids)
+		std::array<long, 5> stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const;
 
 		/// @brief Multiply the global trim factor (barrier_stiffness_) by the
 		///        given factor, clamped to [trim_min, trim_max].
@@ -142,7 +148,10 @@ namespace polyfem::solver
 		///        the average active gap is below the band (barrier too soft),
 		///        decrease it otherwise (barrier too stiff), then refresh the
 		///        per-contact stiffnesses at x.
-		void retune_on_stall(const Eigen::VectorXd &x, const double factor);
+		///        Returns whether anything changed (per-contact coefficients
+		///        were re-evaluated for a non-empty collision set, or the trim
+		///        moved); false means a restart would repeat an identical solve.
+		bool retune_on_stall(const Eigen::VectorXd &x, const double factor);
 
 	protected:
 		class CoefficientEventScope;
@@ -206,6 +215,10 @@ namespace polyfem::solver
 		/// @brief Memoized per-stencil stiffness for the frozen snapshot;
 		///        key = (stencil type tag, vertex ids)
 		mutable std::map<std::array<long, 5>, double> kappa_cache_;
+		/// @brief Memoized stiffness of the PREVIOUS snapshot (RB-18 F2):
+		///        a stencil whose fresh curvature is nonpositive or overflows
+		///        keeps the value it had rather than losing its barrier
+		mutable std::map<std::array<long, 5>, double> prev_kappa_cache_;
 		/// @brief Newton iterations since the last stiffness refresh
 		int iters_since_refresh_ = 0;
 		uint64_t diagnostic_refresh_id_ = 0; ///< Monotonic per-form completed snapshot identity.
@@ -214,8 +227,19 @@ namespace polyfem::solver
 		/// @brief Frozen per-contact stiffness cap (kappa_spread * median of
 		///        the refresh batch); part of the snapshot for determinism
 		double kappa_cap_ = std::numeric_limits<double>::infinity();
-		/// @brief Median per-contact stiffness of the last refresh batch
+		/// @brief Frozen relative floor (median / kappa_spread) of the refresh
+		///        batch (RB-18 F1); 0 = no floor available
+		double kappa_floor_ = 0.0;
+		/// @brief Median of the POSITIVE finite per-contact stiffnesses of the
+		///        last refresh batch (RB-18 F1); 0 when none is positive
 		double kappa_median_ = 0.0;
+		/// @brief Stencils in the last refresh batch whose curvature was
+		///        nonpositive / overflowed and had no previous value (diagnostic)
+		mutable int kappa_fallback_count_ = 0;
+		/// @brief True only during the uncapped first assignment pass of a
+		///        refresh, when the batch cap/floor are not yet known and
+		///        invalid-curvature sentinels must pass through unresolved
+		mutable bool batch_first_pass_ = false;
 		/// @brief Whether the collision set was non-empty at the last refresh
 		///        (detects contact born mid-solve in post_step)
 		bool kappa_snapshot_had_contacts_ = false;

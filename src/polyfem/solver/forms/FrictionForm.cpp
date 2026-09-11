@@ -12,6 +12,7 @@
 #include <Eigen/Core>
 
 #include <cassert>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -55,16 +56,26 @@ namespace polyfem::solver
 		return time_integrator_ != nullptr ? time_integrator_->dv_dx() : 1;
 	}
 
+	double FrictionForm::trim_scale() const
+	{
+		const auto barrier_contact = dynamic_cast<const BarrierContactForm *>(&contact_form_);
+		if (barrier_contact == nullptr || !barrier_contact->uses_semi_implicit_stiffness())
+			return 1;
+		if (!(lagged_trim_ > 0) || !std::isfinite(lagged_trim_))
+			return 1;
+		return contact_form_.barrier_stiffness() / lagged_trim_;
+	}
+
 	double FrictionForm::value_unweighted(const Eigen::VectorXd &x) const
 	{
-		return friction_potential_(friction_collision_set_, collision_mesh_, compute_surface_velocities(x)) / dv_dx();
+		return trim_scale() * friction_potential_(friction_collision_set_, collision_mesh_, compute_surface_velocities(x)) / dv_dx();
 	}
 
 	void FrictionForm::first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const
 	{
 		const Eigen::VectorXd grad_friction = friction_potential_.gradient(
 			friction_collision_set_, collision_mesh_, compute_surface_velocities(x));
-		gradv = collision_mesh_.to_full_dof(grad_friction);
+		gradv = trim_scale() * collision_mesh_.to_full_dof(grad_friction);
 	}
 
 	void FrictionForm::second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const
@@ -82,7 +93,7 @@ namespace polyfem::solver
 			psd_projection_method = ipc::PSDProjectionMethod::NONE;
 		}
 
-		hessian = dv_dx() * friction_potential_.hessian( //
+		hessian = (trim_scale() * dv_dx()) * friction_potential_.hessian( //
 					  friction_collision_set_, collision_mesh_, compute_surface_velocities(x), psd_projection_method);
 
 		hessian = collision_mesh_.to_full_dof(hessian);
@@ -110,6 +121,7 @@ namespace polyfem::solver
 
 			ipc::BarrierPotential bp = barrier_contact->barrier_potential();
 			bp.set_stiffness(barrier_contact->barrier_stiffness());
+			lagged_trim_ = barrier_contact->barrier_stiffness();
 			friction_collision_set_.build(
 				collision_mesh_, displaced_surface, collision_set,
 				bp, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_);

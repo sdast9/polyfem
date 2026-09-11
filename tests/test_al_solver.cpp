@@ -69,7 +69,7 @@ TEST_CASE("AL final solve rejects exhausted soft restarts", "[al_solver]")
 		CAPTURE(budget);
 		QuarticProblem problem;
 		int retunes = 0, successes = 0;
-		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(budget), [&](const auto &) { ++retunes; });
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(budget), [&](const auto &) { ++retunes; return true; });
 		solver.post_subsolve = [&](double) { ++successes; };
 		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
 		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
@@ -89,7 +89,7 @@ TEST_CASE("AL final solve accepts actual stationarity", "[al_solver]")
 		QuarticProblem problem;
 		auto opts = restart_options(budget);
 		opts.enabled = budget >= 0;
-		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, opts, [](const auto &) {});
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, opts, [](const auto &) { return true; });
 		int successes = 0;
 		solver.post_subsolve = [&](double) { ++successes; };
 		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
@@ -116,12 +116,61 @@ TEST_CASE("AL final solve rejects other nonstationary stops", "[al_solver]")
 	CHECK(sol(0, 0) == 10);
 }
 
+// RB-18 F5: a stall whose retune changes nothing gets ONE restart (fresh
+// solver history), and a second consecutive unchanged stall interrupts the
+// subsolve instead of burning the whole restart budget on identical solves.
+TEST_CASE("AL stops repeating unchanged stall restarts", "[al_solver]")
+{
+	SECTION("soft stalls with nothing to retune")
+	{
+		QuarticProblem problem;
+		int retunes = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(20), [&](const auto &) { ++retunes; return false; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
+		CHECK(sol(0, 0) == 10);
+		CHECK(retunes == 2);
+		CHECK(solver.info()["outcome"] == "interrupted");
+		CHECK(solver.info()["termination_reason"] == "stall persisted with no retunable contact state");
+		CHECK(solver.info()["unchanged_restarts"] == 2);
+	}
+
+	SECTION("a retune that changes something resets the counter")
+	{
+		QuarticProblem problem;
+		int retunes = 0;
+		// no, yes, no, no -> interrupted at the fourth (second consecutive no)
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(20), [&](const auto &) { return (++retunes) == 2; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
+		CHECK(retunes == 4);
+		CHECK(solver.info()["unchanged_restarts"] == 3);
+		CHECK(solver.info()["termination_reason"] == "stall persisted with no retunable contact state");
+	}
+
+	SECTION("hard stalls still revert the iterate before giving up")
+	{
+		QuarticProblem problem;
+		problem.block_steps = true;
+		int retunes = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(20), [&](const auto &) { ++retunes; return false; });
+		solver.direction_filter = [](const auto &, auto &) {};
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
+		// The blocked line search never moves the iterate, so the revert on
+		// the second hard stall changes nothing either: two unchanged stalls.
+		CHECK(retunes == 2);
+		CHECK(solver.info()["outcome"] == "interrupted");
+		CHECK(solver.info()["termination_reason"] == "stall persisted with no retunable contact state");
+	}
+}
+
 TEST_CASE("AL hard line search failures remain failures and clean shared solver", "[al_solver]")
 {
 	QuarticProblem problem;
 	problem.block_steps = true;
 	int retunes = 0;
-	ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(2), [&](const auto &) { ++retunes; });
+	ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(2), [&](const auto &) { ++retunes; return true; });
 	solver.direction_filter = [](const auto &, auto &) {};
 	std::shared_ptr<polysolve::nonlinear::Solver> nl_solver = polysolve::nonlinear::Solver::create(parameters(), linear, 1, logger());
 	Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
@@ -143,7 +192,7 @@ TEST_CASE("AL interrupted iterate is explicitly available for continuation", "[a
 		using ALSolver::minimize_with_stall_restarts;
 	};
 	QuarticProblem problem;
-	ExposedSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(0), [](const auto &) {});
+	ExposedSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
 	Eigen::VectorXd x = Eigen::VectorXd::Constant(1, 10);
 	CHECK(solver.minimize_with_stall_restarts(problem, x, parameters(), linear, 1, nullptr) == ALSolver::SubsolveOutcome::Interrupted);
 	CHECK(x[0] < 10);
@@ -195,7 +244,7 @@ TEST_CASE("AL feasibility permits repeated interrupted passes before reduced con
 	const std::vector<int> boundary{0};
 	auto bc = std::make_shared<BCLagrangianForm>(2, boundary, mass, 0, Eigen::VectorXd::Zero(2));
 	SnapProblem problem(bc, mass);
-	ALSolver preparation({bc}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(0), [](const auto &) {});
+	ALSolver preparation({bc}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
 	int interruptions = 0;
 	preparation.post_subsolve = [&](double) { if (preparation.info()["outcome"] == "interrupted") ++interruptions; };
 	Eigen::MatrixXd sol = Eigen::VectorXd::Constant(2, 10);
@@ -489,7 +538,7 @@ TEST_CASE("AL continuation handles zero initial error and caps penalty growth", 
 	const std::vector<int> boundary{0};
 	auto bc = std::make_shared<BCLagrangianForm>(2, boundary, mass, 0, Eigen::VectorXd::Zero(2));
 	SnapProblem problem(bc, mass);
-	ALSolver preparation({bc}, 3, 2, 5, 1.0, [](const auto &) {}, restart_options(0), [](const auto &) {});
+	ALSolver preparation({bc}, 3, 2, 5, 1.0, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
 	int interruptions = 0;
 	std::vector<double> weights;
 	preparation.post_subsolve = [&](double weight) { if (preparation.info()["outcome"] == "interrupted") ++interruptions; weights.push_back(weight); };

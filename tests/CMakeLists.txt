@@ -7,6 +7,7 @@ set(test_sources
   test_direction_filter.cpp
   test_contact_cache.cpp
   test_contact_stiffness_mapping.cpp
+  test_semi_implicit_coefficients.cpp
   test_assembler.cpp
   test_bases.cpp
   test_clipping.cpp

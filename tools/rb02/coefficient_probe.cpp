@@ -2,6 +2,7 @@
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/solver/forms/FrictionForm.hpp>
 #include <polyfem/utils/Logger.hpp>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -198,12 +199,27 @@ int main()
 			V x = V::Zero(18);
 			f.start(x);
 			auto r = sample(f, x);
-			const double cap = 2 * values[1];
-			for (size_t i = 0; i < f.collision_set().size(); ++i)
-				check(f.collision_set()[i].stiffness_scale <= cap, "batch cap");
+			// RB-18 F1: the median is over the positive values only, the cap
+			// is spread * median and a relative floor median / spread applies.
+			const double spread = values[1] == 0 ? 1e4 : 2;
+			const double median = values[1] == 0 ? 100 : 10;
+			const double cap = spread * median, floor = median / spread;
 			check(f.collision_set().size() == 3, "three independent contacts");
-			if (cap == 0)
-				check(r["energy"] == 0 && r["gradient_norm"] == 0, "zero median suppresses positive contact");
+			// The parallel broad phase does not order the set: compare sorted.
+			std::vector<double> assigned, expected;
+			for (size_t i = 0; i < f.collision_set().size(); ++i)
+			{
+				const double k = f.collision_set()[i].stiffness_scale;
+				check(k <= cap * (1 + 1e-12) && k >= floor * (1 - 1e-12), "batch cap and floor");
+				assigned.push_back(k);
+				expected.push_back(std::min(std::max(values[i], floor), cap));
+			}
+			std::sort(assigned.begin(), assigned.end());
+			std::sort(expected.begin(), expected.end());
+			for (size_t i = 0; i < assigned.size(); ++i)
+				check(close(assigned[i], expected[i]), "batch resolved coefficient");
+			if (values[1] == 0)
+				check(r["energy"] > 0 && r["gradient_norm"] > 0, "zero median no longer suppresses positive contact");
 			out["batches"].push_back(r);
 		}
 		// Existing options, unchanged production defaults; contrast zero median.
@@ -346,11 +362,28 @@ int main()
 			f.refresh_semi_implicit_stiffness(z, true);
 			auto r = sample(f, z);
 			r["length_scale"] = L;
-			check(close(f.barrier_stiffness(), std::min(1., 1e3 * L * L)), "conditioning cap length dependence");
+			// RB-18 F3: the cap is dimensionless (dhat^2-normalized); an
+			// initial trim of 1 is below the cap of 1e3 at every length scale.
+			check(close(f.barrier_stiffness(), 1.), "conditioning cap length independence (unbound)");
 			out["controller_units"].push_back(r);
+			// The same fixture with a high initial trim must be capped to the
+			// same value, conditioning_cap = 1e3, at every length scale.
+			auto m2 = mesh(L, .8);
+			Probe g(m2, L);
+			g.driving /= (L * L);
+			g.set_barrier_stiffness(1e5);
+			g.init(z);
+			g.refresh_semi_implicit_stiffness(z, true);
+			auto r2 = sample(g, z);
+			r2["length_scale"] = L;
+			r2["initial_trim"] = 1e5;
+			check(close(g.barrier_stiffness(), 1e3), "conditioning cap length independence (bound)");
+			out["controller_units"].push_back(r2);
 		}
-		// Nonfinite intermediate curvature is replaced by the literal 1e30.
-		// No invalid geometry or collision query is used in these bounded cases.
+		// RB-18 F4: a NaN curvature, an overflowing curvature with nothing to
+		// fall back on, and a nonpositive/subnormal form weight are errors
+		// rather than a literal 1e30. No invalid geometry or collision query is
+		// used in these bounded cases.
 		for (const std::string name : {"nan_hessian", "infinite_hessian", "finite_overflow", "tiny_positive_weight", "zero_weight"})
 		{
 			auto m = mesh();
@@ -367,79 +400,55 @@ int main()
 				signs << 0, -1, 0, -1, 0, 1;
 				f.driving = 1e308 * (signs * signs.transpose());
 			}
-			f.start(z);
-			auto r = f.state();
-			double k = f.collision_set()[0].stiffness_scale;
-			r["finite_assigned_scale"] = std::isfinite(k);
-			if (name == "nan_hessian" || name == "infinite_hessian" || name == "finite_overflow")
-				check(close(k, 1e30), "nonfinite fallback");
-			if (weight < 1e-300)
+			json r = {{"case", name}};
+			bool threw = false;
+			std::string message;
+			try
 			{
-				check(!std::isfinite(k), "division after fallback can be nonfinite");
-				r["evaluation"] = "rejected by probe finite-coefficient guard; no energy evaluation";
+				f.start(z);
 			}
+			catch (const std::exception &e)
+			{
+				threw = true;
+				message = e.what();
+			}
+			r["threw"] = threw;
+			r["message"] = message;
+			check(threw, name + " rejected");
+			if (name == "nan_hessian")
+				check(message.find("NaN local curvature") != std::string::npos, "NaN message");
+			else if (name == "infinite_hessian" || name == "finite_overflow")
+				check(message.find("overflowing local curvature") != std::string::npos, "overflow message");
 			else
-				r["sample"] = sample(f, z);
-			out["arithmetic"][name] = r;
+				check(message.find("form weight") != std::string::npos, "weight message");
+			out["arithmetic"].push_back(r);
 		}
-		// At fixed x, explicit and post-step controller events change the model.
-		for (const std::string event : {"bump", "calibrate", "refresh_controller", "first_contact_post", "conditioning_post", "emergency_post", "downward_post", "periodic_post", "stall_retune"})
+		// An overflowing curvature WITH a batch reference resolves to the cap,
+		// and a nonpositive one with a previous value keeps that value (F2).
 		{
-			double gap = event == "downward_post" ? .98 : (event == "first_contact_post" || event == "conditioning_post") ? 1.2
-																														  : .2;
-			auto m = mesh(1, gap);
-			json opts = json::object();
-			if (event == "downward_post")
-				opts["controller_interval"] = 1;
-			if (event == "periodic_post")
-				opts["refresh_interval"] = 1;
-			Probe f(m, 1, opts);
-			f.start(z);
-			V x = z;
-			if (event == "first_contact_post" || event == "conditioning_post")
-				x[5] = .8 - gap;
-			if (event == "conditioning_post")
-				f.set_barrier_stiffness(1e5);
-			auto before = sample(f, x);
-			if (event == "bump")
-				f.bump_trim(2);
-			if (event == "calibrate")
-			{
-				V g;
-				f.first_derivative(x, g);
-				f.set_system_gradient_provider([g](const V &, V &v) { v = -3 * g; });
-				check(f.calibrate_trim(x), "calibration accepted");
-			}
-			if (event == "refresh_controller")
-				f.refresh_semi_implicit_stiffness(x, true);
-			if (event == "stall_retune")
-				f.retune_on_stall(x, 2);
-			if (event == "periodic_post" || event == "first_contact_post")
-				f.driving *= 2;
-			if (event.find("post") != std::string::npos)
-			{
-				int n = event == "emergency_post" ? 3 : 1;
-				for (int i = 1; i <= n; ++i)
-					post(f, x, i);
-			}
-			auto after = sample(f, x);
-			check(!close(before["energy"], after["energy"]), event + " objective jump");
-			out["retunes"][event] = {{"before", before}, {"after", after}, {"zero_displacement_energy_jump", double(after["energy"]) - double(before["energy"])}};
+			auto m = mesh(1, .2, 3);
+			Probe f(m, 1, {{"kappa_spread", 2}});
+			f.driving.setIdentity();
+			f.driving *= 100;
+			f.driving(17, 17) = std::numeric_limits<double>::infinity();
+			f.start(V::Zero(18));
+			auto r = sample(f, V::Zero(18));
+			double largest = 0;
+			for (size_t i = 0; i < f.collision_set().size(); ++i)
+				largest = std::max(largest, f.collision_set()[i].stiffness_scale);
+			check(close(largest, 200), "overflow resolves to batch cap");
+			out["arithmetic"].push_back({{"case", "overflow_with_batch"}, {"sample", r}});
 		}
-		// No-op refresh and upward-only calibration controls.
 		{
 			auto m = mesh();
 			Probe f(m);
 			f.start(z);
-			auto before = sample(f, z);
+			check(close(f.collision_set()[0].stiffness_scale, 100), "positive first snapshot");
+			f.driving *= -1;
 			f.refresh_semi_implicit_stiffness(z, false);
-			auto after = sample(f, z);
-			check(close(before["energy"], after["energy"]), "unchanged refresh objective");
-			V g;
-			f.first_derivative(z, g);
-			f.set_system_gradient_provider([g](const V &, V &v) { v = -.5 * g; });
-			check(f.calibrate_trim(z) && f.barrier_stiffness() == 1, "calibration never lowers trim");
-			out["no_op_controls"] = {{"before", before}, {"after", after}, {"trim_after_lower_target", f.barrier_stiffness()}};
+			auto r = sample(f, z);
+			check(close(f.collision_set()[0].stiffness_scale, 100), "negative curvature keeps previous coefficient");
+			out["arithmetic"].push_back({{"case", "negative_after_positive"}, {"sample", r}});
 		}
 		// A finite spread can overflow its product, disabling the effective cap.
 		{
@@ -447,9 +456,12 @@ int main()
 			Probe f(m, 1, {{"kappa_spread", 1e308}});
 			f.start(z);
 			out["overflowing_cap"] = sample(f, z);
-			check(out["overflowing_cap"]["cap"] == "infinity", "cap product overflow");
+			check(out["overflowing_cap"]["cap"] == "infinity", "cap product overflow disables the cap");
+			check(close(f.collision_set()[0].stiffness_scale, 100), "overflowing cap leaves a finite coefficient");
 		}
-		// Lagged friction retains old normal force until explicit lagging update.
+		// RB-18 F6: lagged friction follows the trim immediately (the potential
+		// is linear in the lagged normal force); the explicit lagging update
+		// then re-bases at the new trim and gives the same value.
 		{
 			auto m = mesh();
 			Probe f(m);
@@ -463,7 +475,7 @@ int main()
 			double lagged = friction.value(slip);
 			friction.update_lagging(z, 1);
 			double rebuilt = friction.value(slip);
-			check(before > 0 && close(before, lagged) && close(rebuilt, 2 * before), "friction lag lifecycle");
+			check(before > 0 && close(lagged, 2 * before) && close(rebuilt, 2 * before), "friction lag follows trim");
 			out["friction"] = {{"before", before}, {"after_trim_before_lag", lagged}, {"after_lag_update", rebuilt}};
 		}
 		out["checks"] = checks;

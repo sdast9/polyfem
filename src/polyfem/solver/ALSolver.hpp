@@ -47,7 +47,7 @@ namespace polyfem::solver
 			const double eta_tol,
 			const std::function<void(const Eigen::VectorXd &)> &update_barrier_stiffness,
 			const StallRestartOptions &stall_opts = StallRestartOptions(),
-			const std::function<void(const Eigen::VectorXd &)> &on_stall = nullptr);
+			const std::function<bool(const Eigen::VectorXd &)> &on_stall = nullptr);
 		virtual ~ALSolver() = default;
 
 		void solve_al(NLProblem &nl_problem, Eigen::MatrixXd &sol,
@@ -107,7 +107,10 @@ namespace polyfem::solver
 		/// @brief Stall detection and restart options
 		const StallRestartOptions stall_opts;
 		/// @brief Called with the current (full-size) solution when a stall
-		///        is detected, before restarting the solve.
-		std::function<void(const Eigen::VectorXd &)> on_stall;
+		///        is detected, before restarting the solve. Returns whether it
+		///        changed anything (coefficients or trim). RB-18 F5: a second
+		///        consecutive stall from the same iterate with nothing changed
+		///        interrupts the subsolve instead of repeating identical restarts.
+		std::function<bool(const Eigen::VectorXd &)> on_stall;
 	};
 } // namespace polyfem::solver

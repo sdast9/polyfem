@@ -277,9 +277,12 @@ namespace polyfem::solver
 		}
 	}
 
-	void BarrierContactForm::retune_on_stall(const Eigen::VectorXd &x, const double factor)
+	bool BarrierContactForm::retune_on_stall(const Eigen::VectorXd &x, const double factor)
 	{
+		if (!uses_semi_implicit_stiffness())
+			return false;
 		CoefficientEventScope event(*this, x, "stall_retune");
+		const double trim_before = barrier_stiffness_;
 		// A stall with the gap below the band (average OR a single collapsed
 		// contact) means the barrier is too soft (the solver is crawling
 		// against CCD); otherwise the barrier is likely dominating the
@@ -287,7 +290,7 @@ namespace polyfem::solver
 		// back to a blind softening when the balance is degenerate.
 		refresh_semi_implicit_stiffness(x, /*run_trim_controller=*/false);
 		if (collision_set_.empty())
-			return; // stall unrelated to contact; leave the trim alone
+			return false; // stall unrelated to contact; nothing to retune
 
 		const double avg_d2 = collision_set_.compute_avg_distance(
 			collision_mesh_, kappa_surface_, dhat_);
@@ -306,6 +309,10 @@ namespace polyfem::solver
 			if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
 				bump_trim(1.0 / factor);
 		}
+		// The refresh re-evaluated every active coefficient at x; compare the
+		// memoized values against the previous snapshot so a stall at an
+		// unchanged iterate with an unmoved trim is reported as "no change".
+		return barrier_stiffness_ != trim_before || kappa_cache_ != prev_kappa_cache_;
 	}
 
 	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller)
@@ -322,33 +329,83 @@ namespace polyfem::solver
 		for (int k = 0; k < kappa_hessian_.outerSize(); k++)
 			for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
 				kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+		// The previous snapshot's values back stencils whose fresh curvature
+		// is invalid (RB-18 F2); only a non-empty snapshot is worth keeping.
+		if (!kappa_cache_.empty())
+			prev_kappa_cache_.swap(kappa_cache_);
 		kappa_cache_.clear();
 		iters_since_refresh_ = 0;
 
 		// First pass uncapped to freeze the cap at kappa_spread * median of
 		// the batch (guards against exploded Hessian blocks of crushed
-		// elements); the cap is part of the snapshot for determinism.
+		// elements) and the floor at median / kappa_spread (RB-18 F1: a
+		// contact can never be more than kappa_spread below its batch, so a
+		// nonpositive local curvature cannot delete its barrier); both are
+		// part of the snapshot for determinism. The median is taken over the
+		// POSITIVE finite values only: a zero median previously zeroed every
+		// contact in the batch (RB-02).
 		kappa_cap_ = std::numeric_limits<double>::infinity();
+		kappa_floor_ = 0.0;
 		kappa_median_ = 0.0;
+		kappa_fallback_count_ = 0;
 		const bool first_contact = !kappa_snapshot_had_contacts_ && !collision_set_.empty();
 		kappa_snapshot_had_contacts_ = !collision_set_.empty();
-		assign_collision_stiffness(collision_set_);
+		batch_first_pass_ = true;
+		try
+		{
+			assign_collision_stiffness(collision_set_);
+		}
+		catch (...)
+		{
+			batch_first_pass_ = false;
+			throw;
+		}
+		batch_first_pass_ = false;
 		if (!collision_set_.empty())
 		{
-			std::vector<double> kappas(collision_set_.size());
+			std::vector<double> kappas;
+			kappas.reserve(collision_set_.size());
 			for (size_t i = 0; i < collision_set_.size(); i++)
-				kappas[i] = collision_set_[i].stiffness_scale;
-			std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
-			kappa_median_ = kappas[kappas.size() / 2];
-
-			if (std::isfinite(kappa_spread_) && kappa_spread_ > 0)
 			{
-				kappa_cap_ = kappa_spread_ * kappa_median_;
-				// Re-clamp the already-assigned scales with the frozen cap.
-				for (size_t i = 0; i < collision_set_.size(); i++)
-					collision_set_[i].stiffness_scale =
-						std::min(collision_set_[i].stiffness_scale, kappa_cap_);
+				const double k = collision_set_[i].stiffness_scale;
+				if (k > 0 && std::isfinite(k))
+					kappas.push_back(k);
 			}
+			if (!kappas.empty())
+			{
+				std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
+				kappa_median_ = kappas[kappas.size() / 2];
+			}
+			else
+			{
+				logger().warn(
+					"Semi-implicit barrier stiffness: no contact in the refresh batch of {} has positive local curvature; no batch cap/floor available",
+					collision_set_.size());
+			}
+
+			if (kappa_median_ > 0 && std::isfinite(kappa_spread_) && kappa_spread_ > 0)
+			{
+				const double cap = kappa_spread_ * kappa_median_;
+				if (std::isfinite(cap))
+					kappa_cap_ = cap;
+				else
+					logger().warn(
+						"Semi-implicit barrier stiffness: kappa_spread * median overflows ({} * {:g}); batch cap disabled",
+						kappa_spread_, kappa_median_);
+				kappa_floor_ = kappa_median_ / kappa_spread_;
+			}
+			// Re-resolve the already-assigned scales with the frozen batch
+			// statistics (this also replaces the invalid-curvature sentinels).
+			for (size_t i = 0; i < collision_set_.size(); i++)
+			{
+				const auto cached = kappa_cache_.find(stencil_key(collision_set_, i));
+				if (cached != kappa_cache_.end())
+					collision_set_[i].stiffness_scale = resolve_stiffness(cached->second);
+			}
+			if (kappa_fallback_count_ > 0)
+				logger().debug(
+					"Semi-implicit barrier stiffness: {} of {} contacts had nonpositive/overflowing curvature and no previous value; resolved to floor={:g} / cap={:g}",
+					kappa_fallback_count_, collision_set_.size(), kappa_floor_, kappa_cap_);
 		}
 
 		// Trim controller, one step per refresh: below the gap band the
@@ -384,8 +441,14 @@ namespace polyfem::solver
 				if (first_contact && kappa_median_ > 0 && kappa_hessian_max_ > 0
 					&& !(std::isfinite(severity) && severity < trim_lower_ * dhat_sq))
 				{
+					// RB-18 F3: kappa carries force/length^3 (divided by dhat^2
+					// at assignment) while |H| is force/length, so the ratio
+					// needs a dhat^2 to be dimensionless: trim * kappa * weight
+					// * dhat^2 is the barrier's interface stiffness at gaps
+					// ~dhat, which is what the cap compares to max|H|.
 					const double cap = std::clamp(
-						conditioning_cap_ * kappa_hessian_max_ / (weight_ * kappa_median_),
+						conditioning_cap_ * kappa_hessian_max_
+							/ (weight_ * kappa_median_ * dhat_ * dhat_),
 						trim_min_, trim_max_);
 					if (barrier_stiffness_ > cap)
 					{
@@ -424,6 +487,21 @@ namespace polyfem::solver
 		}
 	}
 
+	std::array<long, 5> BarrierContactForm::stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const
+	{
+		const auto vids = collision_set[i].vertex_ids(collision_mesh_.edges(), collision_mesh_.faces());
+		long type_tag = 3; // face-vertex
+		if (collision_set.is_vertex_vertex(i))
+			type_tag = 0;
+		else if (collision_set.is_edge_vertex(i))
+			type_tag = 1;
+		else if (collision_set.is_edge_edge(i))
+			type_tag = 2;
+		// Doubly braced: std::array wraps a C array, and GCC's
+		// -Werror=missing-braces (on in CI) rejects the flat form clang accepts.
+		return {{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}};
+	}
+
 	void BarrierContactForm::assign_collision_stiffness(ipc::NormalCollisions &collision_set) const
 	{
 		if (!uses_semi_implicit_stiffness() || kappa_surface_.size() == 0)
@@ -441,19 +519,8 @@ namespace polyfem::solver
 			ipc::NormalCollision &collision = collision_set[i];
 			const int n_verts = collision.num_vertices();
 			const auto vids = collision.vertex_ids(E, F);
-
-			long type_tag = 3; // face-vertex
-			if (collision_set.is_vertex_vertex(i))
-				type_tag = 0;
-			else if (collision_set.is_edge_vertex(i))
-				type_tag = 1;
-			else if (collision_set.is_edge_edge(i))
-				type_tag = 2;
-
-			// Doubly braced: std::array wraps a C array, and GCC's
-			// -Werror=missing-braces (on in CI) rejects the flat form clang accepts.
-			const std::array<long, 5> key = {
-				{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}};
+			const std::array<long, 5> key = stencil_key(collision_set, i);
+			const long type_tag = key[0];
 
 			double kappa;
 			const auto cached = kappa_cache_.find(key);
@@ -524,23 +591,82 @@ namespace polyfem::solver
 				// factor and starves for small dhat).
 				kappa /= dhat_ * dhat_;
 
-				// w^T H w can be negative for an unprojected indefinite
-				// Hessian, and avg_mass / d^2 can overflow at tiny distances.
-				if (!std::isfinite(kappa))
-					kappa = 1e30;
-				kappa = std::max(kappa, kappa_min_);
+				// RB-18 F4: a NaN Rayleigh quotient means the frozen Hessian
+				// block itself is NaN -- the Newton system is already invalid,
+				// so fail loudly instead of substituting a literal.
+				if (std::isnan(kappa))
+					log_and_throw_error(
+						"Semi-implicit barrier stiffness: NaN local curvature for contact stencil (type {}, vertices {}, {}, {}, {})",
+						type_tag, vids[0], vids[1], vids[2], vids[3]);
 
 				// Remove the form weight (acceleration scaling); it is
 				// reapplied by ContactForm::weight(). The global
 				// barrier_stiffness_ acts as the trim multiplier, so the
-				// effective coefficient is trim * kappa.
+				// effective coefficient is trim * kappa. The weight is checked
+				// here because set_weight() can change it after construction.
+				if (!std::isfinite(weight_) || !(weight_ >= std::numeric_limits<double>::min()))
+					log_and_throw_error(
+						"Semi-implicit barrier stiffness requires a finite positive (normal) form weight (got {:g})",
+						weight_);
 				kappa /= weight_;
+
+				// RB-18 F2/F4: w^T H w is nonpositive for an unprojected
+				// indefinite or singular local Hessian, and can overflow to
+				// +inf for crushed elements. Neither may delete the barrier
+				// (kappa = 0 leaves CCD as the only protection) nor install an
+				// arbitrary literal. Keep the stencil's previous value when it
+				// has one; otherwise leave a sentinel (0 = needs the batch
+				// floor, +inf = needs the batch cap) that resolve_stiffness()
+				// maps onto the frozen batch statistics.
+				if (!(kappa > 0) || !std::isfinite(kappa))
+				{
+					const auto prev = prev_kappa_cache_.find(key);
+					if (prev != prev_kappa_cache_.end() && prev->second > 0
+						&& std::isfinite(prev->second))
+					{
+						kappa = prev->second;
+					}
+					else
+					{
+						kappa = (kappa > 0) ? std::numeric_limits<double>::infinity() : 0.0;
+						++kappa_fallback_count_;
+					}
+				}
 
 				kappa_cache_.emplace(key, kappa);
 			}
 
-			collision.stiffness_scale = std::min(kappa, kappa_cap_);
+			collision.stiffness_scale = resolve_stiffness(kappa);
 		}
+	}
+
+	double BarrierContactForm::resolve_stiffness(const double kappa) const
+	{
+		// Sentinels from assign_collision_stiffness: 0 = nonpositive curvature
+		// with no previous value, +inf = overflow with no previous value.
+		// During the uncapped first pass of a refresh the batch statistics are
+		// not yet known (floor 0, cap inf) and the sentinel passes through;
+		// the refresh re-resolves every stencil once they are.
+		double k = kappa;
+		if (k == 0.0)
+			k = kappa_floor_; // 0 when no floor is available
+		else if (!std::isfinite(k))
+			k = kappa_cap_; // still inf when no cap is available
+		if (std::isfinite(kappa_cap_))
+			k = std::min(k, kappa_cap_);
+		if (kappa_floor_ > 0)
+			k = std::max(k, kappa_floor_);
+		// kappa_min is the user's absolute floor (system units, so divided
+		// by the form weight like every other coefficient); applied last.
+		if (kappa_min_ > 0)
+			k = std::max(k, kappa_min_ / weight_);
+		// An overflowing local curvature with no previous value and no batch
+		// cap to reference has no finite meaning; an infinite coefficient
+		// would only fail the solve later with an infinite objective.
+		if (!batch_first_pass_ && !std::isfinite(k))
+			log_and_throw_error(
+				"Semi-implicit barrier stiffness: overflowing local curvature with no previous value and no batch cap to fall back on");
+		return k;
 	}
 
 	bool BarrierContactForm::calibrate_trim(const Eigen::VectorXd &x)
@@ -797,6 +923,10 @@ namespace polyfem::solver
 			result["trim_or_global_stiffness_unavailable_reason"] = "Nonfinite production stiffness";
 		result["coefficient_zero_count"] = zeros;
 		result["coefficient_nonfinite_count"] = nonfinite;
+		result["batch_median"] = kappa_median_;
+		result["batch_floor"] = kappa_floor_;
+		result["batch_cap"] = std::isfinite(kappa_cap_) ? json(kappa_cap_) : json(nullptr);
+		result["curvature_fallback_count"] = kappa_fallback_count_;
 		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
 														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
 		result["candidate_count"] = use_cached_candidates_ ? json{{"value", candidates_.size()}}

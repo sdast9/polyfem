@@ -1564,13 +1564,13 @@
         "pointer": "/solver/contact/semi_implicit/kappa_min",
         "default": 0,
         "type": "float",
-        "doc": "Floor for the per-contact stiffness (system units)."
+        "doc": "Absolute floor for the per-contact stiffness (system units), applied after the batch cap/floor. The batch floor median / kappa_spread usually makes this unnecessary."
     },
     {
         "pointer": "/solver/contact/semi_implicit/kappa_spread",
         "default": 1e4,
         "type": "float",
-        "doc": "Cap each per-contact stiffness at kappa_spread times the median of its refresh batch (guards against exploded Hessians of crushed elements)."
+        "doc": "Cap each per-contact stiffness at kappa_spread times the median of the POSITIVE per-contact stiffnesses of its refresh batch (guards against exploded Hessians of crushed elements), and floor it at median / kappa_spread (a nonpositive local curvature cannot delete a contact's barrier). 0 disables both."
     },
     {
         "pointer": "/solver/contact/semi_implicit/gap_floor",
@@ -1594,7 +1594,7 @@
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",
         "default": 1e3,
         "type": "float",
-        "doc": "When a refresh finds the contact unloaded (no gradient-balance signal), cap the effective barrier stiffness at conditioning_cap times the max absolute entry of the system Hessian. Bounds the Newton system's dynamic range until the load provides a force-balance calibration."
+        "doc": "When a refresh finds the contact unloaded (no gradient-balance signal), cap the barrier's effective interface stiffness at gaps ~dhat (trim * kappa * weight * dhat^2, force/length) at conditioning_cap times the max absolute entry of the system Hessian. Dimensionless and length-unit independent. Bounds the Newton system's dynamic range until the load provides a force-balance calibration."
     },
     {
         "pointer": "/solver/contact/semi_implicit/controller_interval",

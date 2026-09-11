@@ -83,6 +83,17 @@ replacement behavior and targeted validation.
 units. It is enabled by default within semi-implicit mode, not in other modes.
 `refresh_interval > 0` deliberately refreshes the snapshot inside the solve.
 
+Coefficient law safeguards (RB-18, 2026-09-11; see
+[docs/rb-18-quick-fixes.md](../../docs/rb-18-quick-fixes.md)): the batch
+median is taken over positive values only, `kappa_spread` also sets a relative
+floor `median / kappa_spread`, a stencil whose local curvature is nonpositive
+or overflows keeps its previous coefficient (else the batch floor/cap), a NaN
+curvature or an overflow with no reference is an error rather than a literal
+1e30, and `conditioning_cap` is dimensionless (normalized by d̂²) so it binds
+at the same trim regardless of length units. At d̂ ≪ 1 the cap now binds at
+first contact where it previously never could; raise `conditioning_cap` to
+loosen it.
+
 The independent `solver.augmented_lagrangian.initial_weight = "hessian_scaled"`
 option initializes the BC penalty from elastic Hessian magnitude, scaled by
 `initial_weight_multiplier`. The fork normalizes the lumped BC metric to mean

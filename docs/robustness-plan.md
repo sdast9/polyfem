@@ -180,6 +180,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [in progress—candidate selection prepared; integration pending](rb-17-validation.md) |
+| RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [in progress](rb-18-quick-fixes.md) |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is
 RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08
@@ -917,3 +918,12 @@ and missing; commits/remotes; any pending model decision; the next item that can
 start. Link the new record from the status row. Never mark a numerical defect
 fixed solely because a scene now finishes, and never mark an RB item complete
 solely because its implementation was committed.
+
+## RB-18 — Quick-block robustness fixes
+
+**Authorized 2026-09-11** after the user's review of RB-01–RB-17. Bounded
+implementation of six fork-local repairs that RB-02 reproduced as defects and
+RB-04/RB-16 observed in trajectories; no model change. The plan, per-fix status
+and progress log live in [rb-18-quick-fixes.md](rb-18-quick-fixes.md), which is
+also that item's validation record. Force-continuation κ, parent-keyed κ and
+per-contact band retirement are explicitly outside RB-18 and need their own items.

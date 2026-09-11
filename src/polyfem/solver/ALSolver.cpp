@@ -15,7 +15,7 @@ namespace polyfem::solver
 		const double eta_tol,
 		const std::function<void(const Eigen::VectorXd &)> &update_barrier_stiffness,
 		const StallRestartOptions &stall_opts,
-		const std::function<void(const Eigen::VectorXd &)> &on_stall)
+		const std::function<bool(const Eigen::VectorXd &)> &on_stall)
 		: alagr_forms{alagr_form},
 		  initial_al_weight(initial_al_weight),
 		  scaling(scaling),
@@ -44,6 +44,13 @@ namespace polyfem::solver
 		// (retuned) stiffness so the collapse path is never walked again.
 		const Eigen::VectorXd subsolve_initial_sol = tmp_sol;
 		int hard_stalls = 0;
+
+		// RB-18 F5: a restart is only worth taking when something changed. One
+		// unchanged restart is still allowed (a fresh solver instance resets
+		// the descent-strategy history, which can free a soft stall on its
+		// own); a second consecutive unchanged stall from the same iterate
+		// would re-run an identical problem, so it interrupts instead.
+		int unchanged_restarts = 0, consecutive_unchanged = 0;
 
 		int restarts = 0;
 		while (true)
@@ -107,6 +114,7 @@ namespace polyfem::solver
 														: polysolve::nonlinear::status_message(status);
 				solve_info_["directional_derivative"] = slope;
 				solve_info_["restarts"] = restarts;
+				solve_info_["unchanged_restarts"] = unchanged_restarts;
 				if (converged)
 				{
 					nl_solver->set_iteration_callback(nullptr);
@@ -116,7 +124,7 @@ namespace polyfem::solver
 			}
 			catch (const std::runtime_error &e)
 			{
-				solve_info_ = {{"outcome", "failed"}, {"error", e.what()}, {"restarts", restarts}};
+				solve_info_ = {{"outcome", "failed"}, {"error", e.what()}, {"restarts", restarts}, {"unchanged_restarts", unchanged_restarts}};
 				// nl_solverin may be shared with later solves
 				nl_solver->set_iteration_callback(nullptr);
 				nl_solver->set_direction_filter(nullptr);
@@ -161,11 +169,15 @@ namespace polyfem::solver
 			// CURRENT iterate is wedged; after the first retune fails to
 			// free it, revert to the subsolve's initial solution and let the
 			// accumulated stiffness prevent the collapse from re-forming.
+			bool iterate_changed = false;
 			if (hard_stall && ++hard_stalls > 1)
 			{
 				logger().warn(
 					"Hard stall persists at the current iterate; reverting to the subsolve's initial solution (restart {}/{})",
 					restarts, stall_opts.max_restarts);
+				// Reverting only changes something if the iterate had moved.
+				iterate_changed = tmp_sol.size() != subsolve_initial_sol.size()
+								  || (tmp_sol.array() != subsolve_initial_sol.array()).any();
 				tmp_sol = subsolve_initial_sol;
 			}
 
@@ -178,7 +190,28 @@ namespace polyfem::solver
 			// on_stall is responsible for retuning the barrier stiffness at
 			// full_sol (the update_barrier_stiffness callback may capture a
 			// stale solution vector, so it is NOT called here).
-			on_stall(full_sol);
+			const bool retuned = on_stall(full_sol);
+			if (retuned || iterate_changed)
+			{
+				consecutive_unchanged = 0;
+			}
+			else
+			{
+				++unchanged_restarts;
+				if (++consecutive_unchanged > 1)
+				{
+					logger().warn(
+						"Line-search stall persists with no retunable contact state (restart {}/{} would repeat an identical solve); subsolve interrupted (not converged)",
+						restarts, stall_opts.max_restarts);
+					solve_info_["outcome"] = "interrupted";
+					solve_info_["termination_reason"] = "stall persisted with no retunable contact state";
+					solve_info_["restarts"] = restarts - 1;
+					solve_info_["unchanged_restarts"] = unchanged_restarts;
+					return SubsolveOutcome::Interrupted;
+				}
+				logger().warn(
+					"Stall retune changed nothing (no active contact or no trim signal); restarting once with fresh solver history");
+			}
 			nl_problem.init(full_sol);
 			tmp_sol = nl_problem.full_to_reduced(full_sol);
 		}
