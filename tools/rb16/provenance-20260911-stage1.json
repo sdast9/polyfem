@@ -1,0 +1,82 @@
+{
+  "command": [
+    "/usr/bin/c++",
+    "-std=c++17",
+    "-O2",
+    "-shared",
+    "-fPIC",
+    "-I/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb13/scope_bridge.cpp",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.cpp",
+    "-o",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/rb-16/20260911-060028-stage1/validated/barrier.dylib"
+  ],
+  "argv": [
+    "tools/rb16/controller_probe.py",
+    "--ipc-source",
+    "../ipc-toolkit-fork",
+    "--output",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/rb-16/20260911-060028-stage1/validated"
+  ],
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "ipc_head": "af317a65d69d0ac7c5efa4bf103bf75e280c323b",
+  "polyfem_head": "e3a01a73281452b507f72e459522981aedb0d68c",
+  "hashes": {
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb13/scope_bridge.cpp": "940aca69a20e5176d95f085997b7f7ccabfeb63eb862327e2c8f898b641e898b",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.cpp": "9f555e32ed4a42444898a361de185969b8bf0e37e5a56edde9e8ec7878ac196e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb16/controller_probe.py": "67f3455f33243108fb11a5647bbcae19c16f6c6e50f81bd4e1c410e15f07505f",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb16/stage1-protocol.md": "16452f5e7356fb0a5be1020ef4d69da24468a11083d69a9908a877d7ee80e4d4",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork/src/ipc/barrier/barrier.hpp": "b830b4e289ffe7a04a4f703669be1eb455b79e56432a744cca23baea44b2cc3b"
+  },
+  "evidence_directory": "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/rb-16/20260911-060028-stage1",
+  "baseline_repositories": {
+    "polyfem": {
+      "head": "e3a01a73281452b507f72e459522981aedb0d68c",
+      "status": "",
+      "branch": "main"
+    },
+    "ipc-toolkit-fork": {
+      "head": "af317a65d69d0ac7c5efa4bf103bf75e280c323b",
+      "status": "",
+      "branch": "semi-implicit-stiffness"
+    },
+    "polysolve-merged": {
+      "head": "4d372fa8a73f42bc224e31d464f1a308e1159ba8",
+      "status": "",
+      "branch": "iteration-callback"
+    }
+  },
+  "retained_runs": [
+    {
+      "directory": "probe-01",
+      "checks": 24057,
+      "completed": 42,
+      "cases": 126,
+      "meaning": "84 incomplete cycles with cancellation-prone energy subtraction; original source retained"
+    },
+    {
+      "directory": "probe-02",
+      "checks": 49968,
+      "completed": 126,
+      "meaning": "stable arithmetic; timing counter incorrectly reset per load"
+    },
+    {
+      "directory": "probe-03",
+      "checks": 49982,
+      "completed": 126,
+      "meaning": "persistent trim cadence; final cycle-accounting assertions not yet added"
+    },
+    {
+      "directory": "validated",
+      "checks": 50108,
+      "completed": 126,
+      "meaning": "final source and whole-cycle accounting"
+    }
+  ],
+  "output_hashes": {
+    "results.json": "242e336e3b6b0ad7b4d2798d070618d612ed771a3ee2eb5005d4b978e9f02583",
+    "trajectories.json": "5c7b3600171e471ab5cea691dad30b550c41668e973b34ef0465ba34a28cf81c",
+    "barrier.dylib": "cbfda1b846a10d8dbb1ec70e5466afa70c8cc2b654e42588173e79863238975c"
+  }
+}
