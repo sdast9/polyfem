@@ -180,7 +180,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [in progress—candidate selection prepared; integration pending](rb-17-validation.md) |
-| RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature with |wᵀHw| → max|H|/d̂² fallback, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [done — `e3fa362e0`](rb-18-quick-fixes.md) |
+| RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature with |wᵀHw| → max|H|/d̂² fallback, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [done — `e3fa362e0`, F7 `4a0df80a1`](rb-18-quick-fixes.md) |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is
 RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08

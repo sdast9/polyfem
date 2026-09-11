@@ -1,7 +1,7 @@
 # RB-18 — Quick-block robustness fixes (coefficient law, stall loop, friction lag)
 
 Date: 2026-09-11
-Status: **done — implemented, validated on the public fixtures, published** (`e3fa362e0` + F7 follow-up on `sdast9/polyfem:main`; hashes in the progress log). See the [progress log](#progress-log) at the bottom.
+Status: **done — implemented, validated on the public fixtures, published** (`e3fa362e0`, `576b1d3d0`, `4a0df80a1` on `sdast9/polyfem:main`). See the [progress log](#progress-log) at the bottom.
 Selected stage: all six fixes below, as one bounded implementation item.
 
 This file is both the plan and the running record. Each fix has a status line
@@ -239,7 +239,7 @@ run with a bumped trim — add one such section).
 
 ### F7 — Nonpositive curvature with no history: |wᵀHw|, then max|H|/d̂²
 
-**Status:** done (validated; committed in the F7 follow-up commit — hash in the progress log).
+**Status:** done (validated; committed in `4a0df80a1`).
 
 **Decision (user, 2026-09-11):** option B with E as fallback, chosen from the
 five alternatives presented (A keep zero, B |wᵀHw|, C PSD-projected block,
@@ -399,6 +399,9 @@ what was measured, what is next.
   has a nonpositive local block at first contact. README doc string updated.
   The "one remaining path to κ=0" in the handoff is now only an identically
   zero system Hessian.
+
+- **2026-09-11 20:55Z** — F7 committed as **`4a0df80a1`** and pushed. Documentation
+  hash update follows.
 
 ## Next session handoff
 
