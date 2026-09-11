@@ -123,10 +123,13 @@ No production coefficient law is selected; application enclosures, nonlinear
 and coupled behavior need the stated downstream work.
 RB-14 estimates the reference quantities cheaply, RB-15 resolves feature consistency,
 RB-16 compares controller timing/bounds, and RB-17 integrates the selected candidate.
-RB-16 [spring stage 1](rb-16-validation.md) now records 126 completed trajectories
-and 50,108 checks. Exact fixed-load intervals improve applicable band occupancy
-at extra solve cost; misleading/unavailable predictors retain violations. Actual
-real-form timing and public FEM cycles remain pending; no controller is selected.
+RB-16 is [characterized—decision pending](rb-16-validation.md): spring evidence
+and real-form/FEM timing comparisons are complete within bounded scope. The FEM
+stage retains 41 incomplete direct-energy cycles alongside 35 completed ones;
+76 paired integral-arithmetic cycles and eight prescribed-top cycles complete.
+Same-load corrections improve tangent-applicable occupancy at extra solve cost;
+uncertain predictions and post-publication force-state changes remain explicit.
+No production controller, estimator, arithmetic repair or default is selected.
 RB-14 and RB-15 are separate investigations and can be selected independently once
 their stated prerequisites exist. Finish missing RB-04 measurements as needed;
 do not rerun its completed probes without a relevant code change or new question.
@@ -175,7 +178,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [characterized—decision pending; stages 1–3 completed](rb-13-validation.md) |
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [characterized—stages 1–3 complete; decision pending](rb-14-validation.md) |
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
-| RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [in progress—spring stage 1 characterized; real-form/FEM pending](rb-16-validation.md) |
+| RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | not started |
 
 Recommended research sequence after existing RB-01–RB-04 evidence is

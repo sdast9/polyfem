@@ -1,7 +1,8 @@
 # RB-16 — Gap controller and update timing
 
 Date: 2026-09-11.
-Status: **in progress — spring stage 1 characterized; real-form/FEM stage pending**.
+Status: **characterized—decision pending; spring and bounded real-form/FEM stages complete**.
+The stage-1 handoff below is historical; the stage-2 disposition supersedes it.
 
 ## Contract and authorization
 
@@ -155,3 +156,182 @@ explicit unresolved handling for unavailable/misleading intervals. No candidate,
 uncertainty enclosure, protection default, stopping gate or early-interruption
 criterion has been selected. RB-17 remains dependent on the remaining RB-16 work
 and the documented model decisions.
+
+## Stage 2 — real-form and assembled FEM comparison (2026-09-11)
+
+### Scope and reproducibility
+
+The user requested “continue.” Resumed clean at `4af92be7b` on main; no interrupted
+solver/build process or incoming changes were found. IPC/PolySolve effective
+local overrides and revisions remain the stage-1 values. Read the handoff,
+source callbacks, current dependency cache, RB-14 assembled fixture and RB-15
+feature probe. The [stage-2 protocol](../tools/rb16/stage2-protocol.md) was written
+before the main matrix and retains declared supplements. Production code,
+dependencies, inputs, CCD, trial cap, floor retirement and tolerances are unchanged.
+
+Fresh evidence: `outputs/rb-16/20260911-083920-stage2/` under the parent workspace.
+The [runner commands](../tools/rb16/README.md#stage-2-assembled-fem-and-real-contact-callbacks),
+[compact measurements](../tools/rb16/results-20260911-stage2.json) and
+[provenance](../tools/rb16/provenance-20260911-stage2.json) are published. Full
+Newton histories, coefficient events, displacements, every input/source snapshot,
+compile/link output and process exits remain in local evidence. No result was
+replaced by a successful rerun.
+
+The probe uses real P1 Neo-Hookean assembly, implicit-Euler-scaled noncontact
+forms, exact-selector IPC geometry, actual semi-implicit refresh/post_step,
+real CCD and elastic validity checks. The alternative uses a positive coefficient
+on a single known parent and recomputes full reduced tangent compliance/demand
+outside each frozen solve. Both forms retain the 50-dhat trial cap. Finite element
+meshes are n=2/4. The inertial predictor is fixed while the load parameter cycles;
+this is not physical time integration or a dynamic refinement claim.
+
+The first matrix applies a bottom-node force against a fixed top. It tests normal
+contact-gap closure but can stretch the block. Eight separate prescribed-top
+cycles exercise actual block compression/unloading and verify prescribed-coordinate
+step validity before solving. Only the selected bottom node and long edge form
+the collision model: neither comparison is whole-surface floor contact.
+The known single parent avoids seam/multiplicity choices; coupled many-contact
+mechanics and general RB-15 parent construction are not certified.
+
+The actual callbacks run in an explicit driver schedule: load-start refresh,
+post_step after accepted Newton steps, then post-publication refresh. The driver
+recomputes derivatives after any event and reports the endpoint under its actual
+solved coefficient. It is not the full production PolySolve/AL/restart lifecycle.
+
+### Completed and incomplete outcomes
+
+| Matrix | Cases | Completed cycles | Incomplete cycles | Checks |
+| --- | ---: | ---: | ---: | ---: |
+| Original direct-energy arithmetic | 76 | 35 | 41 | 43,586 |
+| Paired gradient-integrated energy differences | 76 | 76 | 0 | 48,721 |
+| Prescribed-top compression, integral arithmetic | 8 | 8 | 0 | 6,781 |
+
+All processes/checks passed, totaling **99,088 checks** across these matrices.
+The 41 original iteration-limit cycles are still incomplete, not “passed solves.”
+No residual threshold, iteration budget or Armijo constant was relaxed. Converged
+endpoints satisfy the RB-14 probe criterion `||g_free||/(1+||g_nc||+||g_c||)<=1e-8`.
+This experimental criterion does not replace production's configured termination
+contract. No same-load correction reached its 12-update budget in these cases.
+
+The first original callback case stalls at residual 1.472813529e-8. A separate
+read-only diagnostic demonstrates a feasible full Newton step reaching
+4.834485606e-16, while direct energy subtraction reports +4.996003611e-16.
+Three-/five-point gradient integration gives -9.941810505e-18 and
+-9.941810498e-18; the Armijo RHS is -1.988362066e-21. This reproduces an arithmetic
+sign discrepancy in this driver, not a new controller law or a production fix.
+
+The separately declared paired matrix uses `d5+abs(d5-d3)<=Armijo_rhs` for the same
+objective and frozen coefficient. It has no raw-to-integral fallback or silent
+retry. Quadrature disagreement is an empirical diagnostic, not a certified error
+bound. Added gradient evaluations and measured wall cost are retained. The two
+modes remain separate results even though the paired cycles all complete.
+
+### Controller comparison and physical observations
+
+A predeclared slice, n=2/four subdivisions/multiplier=.01, using integral arithmetic:
+
+| Alternative | Active endpoints in band | Newton steps | Retunes | Minimum gap |
+| --- | ---: | ---: | ---: | ---: |
+| Actual refresh/post_step control | 7/13 | 84 | 25 | .073312 |
+| Tangent intervals, factor 2/window 1/no hysteresis | 13/13 | 129 | 20 | .071203 |
+| Narrow uncertainty | 12/13 | 93 | 7 | .071351 |
+| Wide uncertainty | 2/13 | 86 | 0 | .001436 |
+| Misleading predictor | 11/13 | 101 | 7 | .059184 |
+| Unavailable interval | 2/13 | 86 | 0 | .001436 |
+
+Here dhat=.1 and the original band is [.0707107,.0948683]. Empty/unavailable
+intervals retain prior positive k and explicitly report the unresolved state.
+That preserves a parameter, not an engineering gap guarantee. The biased
+predictor's maximum start-prediction error is .61414 dhat in this slice.
+
+All 32 no-hysteresis tangent-interval configurations in the paired force matrix
+have 100% occupancy among endpoints whose **assembled tangent predictor** has
+p<=U. This is not a true nonlinear-demand oracle. On eight matched window-1 cases,
+factor 4 uses 1,074 Newton steps/83 retunes versus factor 2's 1,199/140. That is a
+bounded comparison, not a selected factor or a general performance optimum.
+Expanded hysteresis can intentionally retain original-band violations; all
+window/hysteresis and refinement results are retained in the JSON matrix.
+
+The prescribed-top supplement completes all eight cycles, each with separation
+and two contact-activation episodes. For n=2, four subdivisions, current timing
+has 8/11 active endpoints in band and 8/9 tangent-applicable endpoints; the outer
+candidate has 9/11 and 9/9 respectively. Active but separating endpoints explain
+why these denominators differ. All four outer top-motion cases have 100% tangent-
+applicable occupancy; they do not pull separating endpoints back into the band.
+Minimum recorded det(F) across top cycles is .737530; prescribed-coordinate error
+is zero and contact action/reaction checks pass. The refinement comparison changes
+load increments, not the fixed dt or inertial history. Point-force amplitudes use
+each mesh's K0, so that mesh comparison is not a same-load continuum convergence
+study. Top-motion amplitudes are identical across meshes.
+
+Start-of-solve tangent predictions are compared with realized endpoints under
+the final coefficient; the full predictor/actual gap and errors are saved for
+each solve. The supplied assembled Hessian has the same projection/model limits
+as RB-14. General estimator coverage, friction, complete global reaction/work
+balance and continuum contact accuracy remain unestablished.
+
+### Endpoint refresh and work separation
+
+The real callback experiment reproduces a post-publication force-state change:
+in the top n=2/eight-subdivision case, the new-state residual reaches **.0570714**
+at unchanged coordinates after the old state satisfied 1e-8. The old endpoint
+is never relabelled as converged under the new state. Its before/after forces,
+coefficients, refresh identity and energy change are recorded explicitly.
+
+Per-direction/search trim and refresh identity checks pass. Every coefficient
+change records zero displacement work and its fixed-coordinate contact-energy
+difference. Conservative contact-energy changes along accepted displacements
+remain separate; whole-cycle telescoping errors are at most 6.94e-17 in the
+original matrix, 4.17e-17 in the paired matrix and 6.94e-18 in top motion.
+These accounting identities do not establish full external-work balance or
+physical dissipation. Force-quadrature/endpoint-energy and derivative controls
+supply independent checks on finite fixed-state paths.
+
+### Verification, source identity and publication
+
+- Rebuilt `PolyFEM_bin` and `unit_tests`, exit 0. Production source/binary hashes
+  remain unchanged; the standalone executable was compiled separately.
+- Targeted cache/mapping/floor-retirement/direction-filter/BC/AL/contact/friction
+  derivative suite: **29 cases / 1,980 assertions passed**. Negative-test error
+  messages accompany the passing summary; no golden was changed.
+- Four independent derivative-only controls: **352 checks**, maximum normalized
+  gradient/Hessian error 4.92e-11/5.95e-11. Integrated and direct finite-path energy
+  differences agree within 1.31e-16.
+- Final-source validation: **1,713 checks** across those four controls and a paired
+  callback case. The raw case remains incomplete; the integral case completes.
+  Both reproduce the earlier endpoint gaps and residuals exactly. This validates
+  the final source after adding the top-motion and derivative-only branches.
+- Compilation, source snapshots, linked archive hashes, cases, runs and replay
+  equivalence are in provenance. The original matrices used earlier saved source
+  versions; additions and their final-source tests are explicit. No original
+  matrix or failure has been overwritten.
+- Formatter, Python syntax, JSON consistency, documentation links, source hashes
+  and `git diff --check` are checked before publication.
+- Full suite, scene smokes, HDA E2E and private/Teseo scenes were not run. This
+  standalone research probe does not alter their production paths.
+
+Publish the new source, protocols, case matrices, analyzer, compact results and
+provenance with these records to `sdast9/polyfem:main`. The final task message and
+local publication record identify the commit; the parent README is local outside
+Git. No companion/HDA publication is needed.
+
+### Final RB-16 disposition
+
+**Characterized—decision pending**, within the stated spring/single-parent FEM
+scope. The required bounded timing/bounds, uncertainty, load-cycle/refinement,
+endpoint-state and cost comparisons are complete. No production controller,
+coefficient, protection default, line-search arithmetic or acceptance gate changed.
+
+The evidence supports carrying bounded same-load corrections with fresh assembled
+predictions into an experimental RB-17 comparison. Keep factors 2/4 and protection
+alternatives explicit; these data do not select production defaults. Current
+callback timing can leave band violations and prepares a different force state
+after publication. Empty/misleading estimates need explicit unresolved handling
+or a separately selected estimator/protection response, not a claimed gap guarantee.
+
+Before production integration choose the RB-14 estimator/uncertainty and zero-demand
+policy, RB-15 parent/seam/discovery semantics, and RB-16 coefficient-update timing,
+bounds and endpoint interpretation. Do not promote the gradient-integral arithmetic
+control as a production solver repair without its own investigation. RB-17 is the
+next named investigation; its model choices and remaining coupled/feature/friction
+validation remain separate from this completed RB-16 characterization.

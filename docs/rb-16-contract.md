@@ -1,6 +1,6 @@
 # RB-16 — Controller timing comparison contract
 
-2026-09-11. Stage 1 is characterized; **RB-16 remains in progress**.
+2026-09-11. **Stages 1–2 characterized—decision pending**, within bounded scope.
 No production controller, estimator, coefficient law or engineering gate is selected.
 See the [validation record](rb-16-validation.md) and
 [predeclared spring protocol](../tools/rb16/stage1-protocol.md).
@@ -85,7 +85,7 @@ A post-publication change cannot relabel an old endpoint as equilibrated under
 its next coefficient state: the standalone control changes residual from
 1.27e-16 to .2632 while adding .10821 energy at unchanged coordinates.
 
-## Remaining RB-16 stage
+## Stage-1 handoff (completed by stage 2 below)
 
 Execute the actual real-form timing/refresh lifecycle and public assembled-FEM
 compression/unloading, starting from the RB-14 n=2/4 P1 Neo-Hookean reference and
@@ -96,3 +96,39 @@ solver convergence and failed solves visible. The spring arithmetic improvement
 is not permission to change production line search. No model decision is needed
 to continue bounded comparisons, but integration/default selection remains gated
 by the plan's decision register.
+
+## Stage 2: actual forms and endpoint-state contract
+
+The [stage-2 record](rb-16-validation.md#stage-2--real-form-and-assembled-fem-comparison-2026-09-11)
+completes the bounded FEM handoff. It uses actual form refresh/post_step, scalar
+parent coefficients, assembled P1 Neo-Hookean/implicit-Euler forms, CCD, elastic
+validity and the 50-dhat trial cap, within an experimental Newton driver.
+The predictor is frozen in time while point force or prescribed top motion cycles;
+this is load-increment refinement, not a dynamic trajectory. The known EV parent
+and selected-node/edge collision model do not resolve general parent construction.
+
+Keep two arithmetic outcomes separate: 35/76 cycles complete with direct energy
+subtraction; all 41 iteration-limit cycles are retained. A separately declared
+3/5-point objective-gradient integration comparison completes 76/76 with the
+same residual and Armijo criteria, and eight prescribed-top cycles complete too.
+The quadrature difference is an empirical check, not a certified error bound.
+This isolates a numerical arithmetic concern without installing a production fix.
+
+The normal band is [.1 sqrt(.5), .1 sqrt(.9)]. Report active occupancy separately
+from applicability inferred from the assembled tangent p; neither is exact nonlinear
+contact acceptance. All 32 no-hysteresis tangent-interval force cases and all four
+outer prescribed-top cases have full tangent-applicable occupancy in the integral
+comparison. Uncertain/unavailable/misleading predictions retain violations and
+positive prior coefficients. Factor/window/hysteresis choices remain experiments.
+
+Every published endpoint retains its solved k and residual. Post-publication
+refresh in the actual form can raise the residual to .0570714 at the same x.
+A future integration must decide whether to freeze that solved coefficient until
+the next solve or perform bounded same-load corrections and publish a new endpoint.
+Neither state may be silently substituted for the other. Coefficient energy
+changes stay separate from displacement work and physical accuracy.
+
+RB-16's bounded investigation is complete. RB-17 can build on these comparisons;
+production selection of estimator, protection, parent/discovery semantics, timing
+and bounds remains an explicit model decision. Coupled contacts, general features,
+friction and full production-wrapper/recovery validation remain outside this claim.

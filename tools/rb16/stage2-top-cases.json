@@ -1,0 +1,74 @@
+[
+  {
+    "n": 2,
+    "subdivisions": 4,
+    "multiplier": 0.01,
+    "policy": "current",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n2-s4-current"
+  },
+  {
+    "n": 2,
+    "subdivisions": 4,
+    "multiplier": 0.01,
+    "policy": "outer",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n2-s4-outer"
+  },
+  {
+    "n": 2,
+    "subdivisions": 8,
+    "multiplier": 0.01,
+    "policy": "current",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n2-s8-current"
+  },
+  {
+    "n": 2,
+    "subdivisions": 8,
+    "multiplier": 0.01,
+    "policy": "outer",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n2-s8-outer"
+  },
+  {
+    "n": 4,
+    "subdivisions": 4,
+    "multiplier": 0.01,
+    "policy": "current",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n4-s4-current"
+  },
+  {
+    "n": 4,
+    "subdivisions": 4,
+    "multiplier": 0.01,
+    "policy": "outer",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n4-s4-outer"
+  },
+  {
+    "n": 4,
+    "subdivisions": 8,
+    "multiplier": 0.01,
+    "policy": "current",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n4-s8-current"
+  },
+  {
+    "n": 4,
+    "subdivisions": 8,
+    "multiplier": 0.01,
+    "policy": "outer",
+    "loading": "top",
+    "arithmetic": "integral",
+    "name": "top-n4-s8-outer"
+  }
+]

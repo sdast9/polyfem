@@ -1,0 +1,46 @@
+[
+  {
+    "n": 2,
+    "multiplier": 0.01,
+    "policy": "current",
+    "name": "derivatives-n2-current",
+    "derivative_only": true
+  },
+  {
+    "n": 2,
+    "multiplier": 0.01,
+    "policy": "outer",
+    "name": "derivatives-n2-outer",
+    "derivative_only": true
+  },
+  {
+    "n": 4,
+    "multiplier": 0.01,
+    "policy": "current",
+    "name": "derivatives-n4-current",
+    "derivative_only": true
+  },
+  {
+    "n": 4,
+    "multiplier": 0.01,
+    "policy": "outer",
+    "name": "derivatives-n4-outer",
+    "derivative_only": true
+  },
+  {
+    "n": 2,
+    "subdivisions": 4,
+    "multiplier": 0.01,
+    "policy": "current",
+    "name": "current-n2-s4-m0.01",
+    "diagnose": true
+  },
+  {
+    "n": 2,
+    "subdivisions": 4,
+    "multiplier": 0.01,
+    "policy": "current",
+    "name": "current-n2-s4-m0.01",
+    "arithmetic": "integral"
+  }
+]
