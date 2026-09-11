@@ -111,7 +111,10 @@ not an assertion that every intermediate barrier energy is physical stored energ
 and zero-demand protection: 5,299 checks, 125/126 nonlinear solves converged, one
 retained incomplete outcome. Shared empirical coverage is 3/3 new holdouts but
 2/3 prior challenges. No estimator or protection policy is selected. **RB-15 is
-independently eligible** for feature consistency; RB-16/17 require model choices.
+[characterized—decision pending](rb-15-validation.md)**: 140 checks compare shared
+parents and complete smooth fields on 2D/3D transitions, with neighborhood and
+force-direction limits retained. Frozen shared parents are the bounded candidate
+recommended for RB-16/17; integration still requires the stated model choices.
 All three RB-13 analytical
 stages are [characterized in the reference contract](rb-13-contract.md).
 The [validation record](rb-13-validation.md) preserves all three probes, including
@@ -167,7 +170,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [characterized—decision pending; stages 1–3 completed](rb-13-validation.md) |
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [characterized—stages 1–3 complete; decision pending](rb-14-validation.md) |
-| RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | not started |
+| RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | not started |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | not started |
 
@@ -732,6 +735,10 @@ or coverage claim from training fixtures alone. Production estimator selection
 requires the comparative evidence; output `docs/rb-14-validation.md` and contract.
 
 ## RB-15 — Feature-consistent local coefficient assignment
+
+Completed bounded investigation 2026-09-11: [contract and recommendation](rb-15-contract.md),
+[validation and limits](rb-15-validation.md). Production assignment remains unselected.
+The protocol below retains the comparison and acceptance contract.
 
 **Question:** can local mechanical scaling survive changes of nearest feature
 without the reproduced frozen-snapshot energy/force jump? Reuse RB-02/04's

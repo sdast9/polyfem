@@ -1,0 +1,128 @@
+{
+  "initial_identity": {
+    "polyfem": {
+      "head": "e3a23f1a3e45fc82da9b98589438c52080fc8c3f\n",
+      "branch": "main\n",
+      "status": ""
+    },
+    "ipc-toolkit-fork": {
+      "head": "af317a65d69d0ac7c5efa4bf103bf75e280c323b\n",
+      "branch": "semi-implicit-stiffness\n",
+      "status": ""
+    },
+    "polysolve-merged": {
+      "head": "4d372fa8a73f42bc224e31d464f1a308e1159ba8\n",
+      "branch": "iteration-callback\n",
+      "status": ""
+    },
+    "polyfem/build/PolyFEM_bin": "8c3e413d1b2181714b483f58cf0a2a84181b047fd5741605d3e6606890d40e49",
+    "polyfem/build/tests/unit_tests": "8c151b161bd85d87e064e4b3d35c1cc9a209ea9101743bd8f2e331bc9fc27101",
+    "polyfem/tools/rb04/candidate-results-20260909.json": "93a598fddd6345e1bd096af23c809c7de748ab341783d66d739bfe83d195392c"
+  },
+  "validated_probe": {
+    "source_sha256": "cf097fe629014e8760fc1ca1ab643645931b6a3ffe39f708ac57e7bcfdc6b434",
+    "executable_sha256": "09cedafbc1686f9f7effc9d38501b238d7dfe553ddbfd892b062567d3d3f538e",
+    "polyfem_head": "e3a23f1a3e45fc82da9b98589438c52080fc8c3f",
+    "build_directory": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build"
+  },
+  "input_hashes": {
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb15/feature_probe.cpp": "cf097fe629014e8760fc1ca1ab643645931b6a3ffe39f708ac57e7bcfdc6b434",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/rb15/protocol.md": "177382d27f357ca9e3e7b8c634b6320b092281cd11f9325e038493f6256d99c9",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/tests/CMakeFiles/unit_tests.dir/flags.make": "b1b60b11ff5d95155325de39f7d7287e6f354af7121f967663628940f68ceb2c",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/tests/CMakeFiles/unit_tests.dir/link.txt": "42ac038cf23c9e2e833de1d78a1f976da88ff55d50f538f8a35f1dcc8fafff9b",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libpolyfem.a": "db646aa3e75003df48a002d42a878a87949d85b9af334350c06431a1acdb5aa3",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/catch2-build/src/libCatch2Main.a": "98183c2e7edea7871188ff993d4bee7df2c944bd91eb3d7c0de8c14126ada585",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/finite-diff-build/libfinitediff_finitediff.a": "26880497ed01aaa95a580b5feb932e2e001941ca377904f7fd8a05f1cd610a7d",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/src/polyfem/autogen/libpolyfem_autogen.a": "6257dbe76da61ad4a301e2982db586a2bdbdba02c6cb3af2a4d8de9634053a03",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/src/polyfem/autogen/liblib_n_bases.a": "d23c3f8b808debc632c933cd9b1fe9d0db173e25192198c13612e66db4c9ebc7",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/src/polyfem/quadrature/libpolyfem_quadrature.a": "b14b5cf6d467a9cdeb03a5e43af3066a8e6cf6defd45722f5bc90f1f1f88bd07",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/libpolysolve.a": "e9e1f9929ef3eb1e32e915bc17a2bf32202506bc3726ac18c708a608d15d3bdb",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/libpolysolve_linear.a": "8807f1f74a576d850a72122a36028ed215621b8a41015ac684f06becd9056069",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/hypre-build/lib/libHYPRE.a": "8460275011fc5d1bfbfef20b65feda4b38dcbfb25d22a3060b1930557a788624",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libumfpack.a": "7c51dd81b7329dae1e3e4a25be3e2fce1ef2f7a287d065d201f852e0c0856674",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/liblinear_spec.a": "83bd55e024a16695758ec886893bb469430bcd36cbf060d3dcae5dda9e6907ea",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/libnon_linear_spec.a": "6dc22d4961d8950ed6ef0ef451ad91ab48d63be9282b5cb31932715606c94045",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/ipc-toolkit-build/libipc_toolkit.a": "434055fce5347f2c19e89db605ed6c9a703f873a18c04ca368da29e974cc3970",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/lib/libigl_vendored_predicates.a": "f571488452981d9e8ec875f47328f0f728a6179b7fdf1f638afa1419ce8774b6",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/tight-inclusion-build/libtight_inclusion.a": "0752af13279e9c52b4e71f22a83049d0a6aa6a4590913357aa9abba69fe2bec7",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/scalable-ccd-build/libscalable_ccd.a": "b2ead8866e333040cbe49bf9c91b845619ec71c7fc3665480b2948e06bdc0252",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/tinyad-build/libTinyAD.a": "c5315e47f658f81f1426b63e38d165d26f1ff48621f573fb89ed0348983306cc",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/hash/libabsl_hash.a": "aaad183198d4c02f8177b352f4d6c41a472993d434e5f71f1e0ed2163d7279a8",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/hash/libabsl_city.a": "63e09c0b38b334f32bff55cbcbf3285d0c285698f49091fb86be20c75c51e786",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/strings/libabsl_strings.a": "6268b4c911bda163f3665df0664e0f4670138cfb1656b58fab354b4056ca3b2a",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/numeric/libabsl_int128.a": "aa05956d6001860578033f196f3b10d24532149f572a48b75f0131941990d287",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/strings/libabsl_strings_internal.a": "db67202193e945d349a957ab28d613b19f50c1e82b5b764407ee6174771ca207",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/base/libabsl_base.a": "28b0827285a102393068416ce1e2d08b498f63b2c8522a603e3d188526cc3298",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/base/libabsl_spinlock_wait.a": "c8cfcb79046b2125f9060ca60ec19b2a4b3d0057c2802d2fea39725d3734bee5",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/base/libabsl_throw_delegate.a": "5759e4e9829ad16e939c2b79a108fd97d78df215fa28d16f622724e11ea06b75",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/base/libabsl_raw_logging_internal.a": "f4615bd240070b6dce61523bc189ea3d01ddeca754e147bea50c41f47030e700",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/abseil-cpp-build/absl/base/libabsl_log_severity.a": "2f409ecb37d7faceba52cba0449afde4b3d2c74aa82eafceaa1695bf705f5fd5",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/filib-build/libfilib.a": "e7f7c9c7c7c130c770a60aa093b99e99177967a51ae5c1efb1d3712ad91b51d7",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/appleclang_21.0_cxx17_64_relwithdebinfo/libtbb.a": "a164d5b970cc558e63a32a8c4db99bbf466bb01965e9965dac339e0c6157a4aa",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/simplebvh-build/libsimple_bvh.a": "379b758d0ea3021a47488311983971d06b8b0bbf7252ed852708c5c202f30b68",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libspqr.a": "37ca2ff39a7000064f128dbb139ee5e96dcbb60598316006226fcb8dd3d9402e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libcholmod.a": "14695ca530f290f9cf912943cea2d430be3ae5e8d7a684c79a02cadf35af732d",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libamd.a": "ddb3fd23e6d86631909d30f23b4d337ca062bd21af0117062c6c980a530ae36f",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libcamd.a": "3460c0553140332bb853b8eeaa4a01b863facdedb8be455f5c2e5c800eba9eea",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libccolamd.a": "5925523d7c4d9b3ec130e6104066b80c8f53ae2515a69ff82849aa32eb89bef4",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libcolamd.a": "c8abca26e2c377281b127dac4575efb8d5b81fdf39cb512c5433b8f298db2597",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libsuitesparseconfig.a": "ac7dc065ad900d2231791dbf1c1dc91d58a8764670e11c473bda95a53c7fc405",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/mshio-build/libmshio.a": "8865110609d3d13ca6833003e74d664ab130acfa87d9c4ccfe320451d3ab4b4d",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/lib/libgeogram.a": "121c0c59a659137f5ecc2b2aa3619582eea291a27a88f9de2d2065ee85f4abf2",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/paraviewo-build/libparaviewo.a": "e9331aa196621bfb046984b19feb73d7588a79b6abcd6e52b8d5f0321f88bc25",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/tinyxml2-build/libtinyxml2.a": "e34ef141b826e406d4780d92986b1b95afb4c3e1280b8f551440b0463f2cb497",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/hdf5-1_14-build/src/libhdf5.a": "3f33c2f2159a9eedae0d8d25bc962dc7560797d145af0aecfe9d05c41bcf649e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/hdf5-1_14-build/hl/src/libhdf5_hl.a": "a349f15d6f2df61e701be564c2fdc51edac7383a01e66db746578d313d9251dc",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/lib/libz.a": "aeee9b0f8b13e902f4d463d66269d0c30b6b0773d99578e449d3779ee79b3160",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/spdlog-build/libspdlog.a": "a1063edce86a2c334e8bf62d210e187e00e67083df63db712e0ba96443210325",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libtinyexpr.a": "f4f1621668bdf281cfa3b2c9ac739f1ed859923ad985af99e5108ae6508526e0",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/json-spec-engine-build/libjse.a": "84626aefc6e6f59e2778a90b7a682baa27e124cdb0f5f98136ed7908fc12b6b1",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libnatsort.a": "dee1973da69947cddd86fc41afbd7d6dc28bd27ec19f363dfed11133607712c6",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/glob-build/libglob.a": "b05fc812d3702dbc356a9e00044114480a6632a1684d177bec9041f823154cc2",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/units-build/units/libunits.a": "28e2cef415766f68d62e5bd530d703fb3039436e9ea54544dec4a1b22b209ec7",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/yaml-cpp-build/libyaml-cpp.a": "1f93951fe36635ba7d4c4429fdb4c1a5d0c35b523abd176a1cb821f1ef9bf353",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libpolyfem_spec.a": "658ee677bd841645d706e1d0b1984dae1c43b82f4fc8fa461621184d2242906b",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libpolyfem_opt_spec.a": "0209aa63e043a5a2bdc656abcd985b9e99c1119b6a95183659416ebdd6d8359e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libpolyfem_objective_spec.a": "24e68dfb5798389aeb5acab02ec20c0516cf18485e1f24763fea86a81e84962e",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libpolyfem_dirichlet_spec.a": "6ced2cf06a1af76a8f6774327f194c685ba48151a7895295dc6e6c2be7a41e9d",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/mmg-build/lib/libmmg.a": "ff04e6b30d688210149470688895be94e406002fa5618fe8ea8ddc7417c9918f",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libclipper_clipper.a": "26debdb4be0b46d6d0d075db6bb41e634315d86433ecbbd1b907d8d7167309cc",
+    "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/catch2-build/src/libCatch2.a": "a4e685731bb393d440ed0df9a638606fe9733455fa939b331d83ca8cadf94a98"
+  },
+  "baseline": {
+    "passed": true,
+    "checks": 68,
+    "energy_jump": -44.49773940297803
+  },
+  "regression": {
+    "command": [
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/tests/unit_tests",
+      "[contact_cache],[contact_stiffness_mapping],[contact_floor_retired],[direction_filter],[bc_scale],[bc_metric],[al_solver],semi-implicit barrier contact form derivatives,semi-implicit friction form derivatives"
+    ],
+    "exit": 0
+  },
+  "regression_summary": "1980 assertions in 29 test cases passed",
+  "retained_exploration": [
+    {
+      "directory": "candidate-01",
+      "outcome": "compile failed: Form name ambiguous"
+    },
+    {
+      "directory": "candidate-02",
+      "outcome": "117 checks; failed attraction assertion; all prior checks passed",
+      "minimum_normal_force": 5511.16462557526
+    },
+    {
+      "directory": "candidate-03",
+      "outcome": "122 checks passed; shifted field center, added multiplicity and onset"
+    },
+    {
+      "directory": "candidate-final",
+      "outcome": "122 checks passed; removed const_cast and added explicit includes"
+    },
+    {
+      "directory": "validated",
+      "outcome": "140 checks passed; added actual candidate intervals and current/shared/global unit checks"
+    }
+  ]
+}
