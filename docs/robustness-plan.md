@@ -106,9 +106,11 @@ spring stiffness. Derive its units and force/curvature interpretation before
 changing its formula. Gap bounds express a desired numerical contact range,
 not an assertion that every intermediate barrier energy is physical stored energy.
 
-**Next session: RB-14, stage 2**, assembled-FEM estimator comparisons.
-[Stage 1](rb-14-validation.md) completed 806 checks on 28 quadratic-network fixtures;
-its empirical stiffness/predictor ranges jointly covered only 6/10 held-out cases. RB-15 is also
+**Next session: RB-14 follow-up**, physical-size neighborhoods and remote
+residual influence, compared with full sparse-factor reuse.
+[Stages 1–2](rb-14-validation.md) are characterized; stage 2 passed 2,772 checks
+on 18 assembled FEM fixtures, but empirical ranges covered 0/3 held-out cases
+jointly. No practical estimator or zero-demand protection policy is selected. RB-15 is also
 independently selectable for feature consistency. All three RB-13 analytical
 stages are [characterized in the reference contract](rb-13-contract.md).
 The [validation record](rb-13-validation.md) preserves all three probes, including
@@ -163,7 +165,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [characterized—decision pending; stages 1–3 completed](rb-13-validation.md) |
-| RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [in progress—stage 1 characterized; assembled-FEM stage pending](rb-14-validation.md) |
+| RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [in progress—stages 1–2 characterized; estimator comparison pending](rb-14-validation.md) |
 | RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | not started |
 | RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | not started |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | not started |

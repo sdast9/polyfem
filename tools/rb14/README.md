@@ -24,3 +24,27 @@ Passing a counterexample check means its limitation was reproduced. Approximate
 estimates are not required to equal the exact reference; their errors and failed
 held-out coverage are retained. No candidate, fallback or empirical interval is
 a selected production model. RB-14 stage 2 remains pending.
+
+
+## Stage 2: actual FEM assembly and mapped contact
+
+From the PolyFEM directory, using an existing compatible Makefiles build:
+
+```bash
+python3 tools/rb14/run_fem_probe.py --build build --output /absolute/fresh/fem-evidence --config tools/rb14/stage2-cases.json
+python3 tools/rb14/analyze_fem_probe.py --input /absolute/fresh/fem-evidence --output /absolute/fresh/fem-summary.json
+```
+
+Read [stage 2's protocol](stage2-protocol.md) before running. The runner compiles
+and links only the standalone probe, reusing the existing unit-test build flags
+and libraries. Each case runs in a separate process and records input, stdout,
+stderr and exit status. Compile/link commands, logs, exit codes and archive hashes
+are preserved. The summary includes all 18 cases and classifications; a structural
+check passing does not imply every candidate was solved or accurate.
+
+The [published result](results-20260910-stage2.json) omits full snapshot matrices
+and endpoint vectors, which remain in local per-case records and are reproducible
+from the checked-in case list. It retains nonlinear histories and errors. This
+is a single selected-vertex/segment contact proxy, not whole-surface contact.
+See the contract/validation for failed empirical coverage, the actual RHS sign,
+zero-demand handling and remaining production decisions.

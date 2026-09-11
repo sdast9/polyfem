@@ -1,6 +1,6 @@
 # RB-14 — Practical compliance and force-demand estimator contract
 
-2026-09-10. **Stage 1 characterized; assembled-FEM stage pending.** This is a
+2026-09-10. **Stages 1–2 characterized; further estimator comparison pending.** This is a
 standalone comparison of candidates, not a selected production estimator.
 See [validation](rb-14-validation.md), [protocol](../tools/rb14/stage1-protocol.md)
 and [results](../tools/rb14/results-20260910-stage1.json).
@@ -184,3 +184,163 @@ residual/tangent consistency, neighborhood construction, conditioning and realis
 cost. Preserve a held-out assembled fixture, isolate stiffness/predictor error,
 and compare fresh fallback before choosing an estimator. Mesh refinement and
 nonlinear realized gaps remain unmeasured here. RB-14 remains in progress.
+
+## Stage 2 — assembled FEM comparison (2026-09-10)
+
+The [stage 2 protocol](../tools/rb14/stage2-protocol.md) and
+[case list](../tools/rb14/stage2-cases.json) define 15 calibration and three
+held-out configurations. The [results](../tools/rb14/results-20260910-stage2.json)
+are assembled with the actual PolyFEM Neo-Hookean, inertia and constant-load
+forms, using the public NonlinearElasticVarForm embedding API. No production
+coefficient, extraction or solver implementation was changed.
+
+### Geometry, assembly and admissible coordinates
+
+A unit square has P1 triangles, with n=2,4,8 subdivisions per side. This is
+fixed-domain refinement: 8/32/128 elements, 18/50/162 total FEM DOFs, and
+12/40/144 free DOFs after clamping both components of the top edge. The n=6
+held-out mesh reverses the cell diagonals. The actual global basis indices and
+coordinates, rather than input vertex ordering, define Q and element adjacency.
+Each P1 basis must have one exact global node; unsupported bases are rejected.
+
+Top displacement c is set in the current full state before taking the residual
+and Hessian. The initial history is uniform downward velocity, including the
+subsequently prescribed top DOFs. This is an explicitly specified one-increment
+support constraint, not a smooth support-motion trajectory. Inertia retains the
+consistent assembled mass coupling to prescribed coordinates. Its actual gradient
+is checked against M(x-x_tilde); the actual integrator predictor is checked against
+initial velocity times dt. Physical H and r divide the weighted form values by
+the actual dt^2 acceleration scaling once. Elastic/inertia Hessians and
+elastic/inertia/body/pressure residuals follow the production provider sets.
+Pressure is zero in these cases; no deformation-dependent pressure-tangent
+consistency is certified.
+
+A single bottom-center FEM vertex is selected into an IPC proxy with two appended,
+prescribed obstacle vertices. Proxy IDs 0 and 1 map to the appended obstacle
+system nodes; proxy ID 2 maps to the FEM contact node. The obstacle segment spans
+x=-9.5 to 10.5, y=-.08. The actual IPC `to_full_dof` and `map_displacements`
+operations verify virtual work and J=J_surface B Q. The exact free selector Q is
+explicitly assembled in the probe, not obtained from a running NLProblem/AL phase.
+This is a supported selector fixture, not an interpolation-model decision or a
+test of the external OBJ/HDF5 builder.
+
+**Only this selected vertex/segment pair participates in contact.** The proxy is
+not the square's complete surface, and the study does not certify nonpenetration
+of omitted surface nodes. The physical gap is d=.08+u_point,y-u_obstacle,y,
+dhat=.1, target=.05. Moving the obstacle by .02 gives initial gap .06. Prescribed
+motion remains in the gap and full residual; obstacle reactions are retained in
+mapped contact gradients. Contact action/reaction is checked after each solve.
+
+The actual BarrierContactForm semi-implicit extraction receives the assembled
+weighted Hessian with FEM-only dimensions. It correctly maps the selected FEM
+node and skips appended obstacle blocks. At the centered EV stencil, the measured
+assigned coefficient matches H_point,yy/(1.5*dhat^2), after removing form weight.
+The factor 1.5 is the squared norm of the [-.5,-.5,1] normal stencil. A separate
+fixed-coefficient solve uses this measured coefficient with trim=1. This executes
+the extraction control but does not exercise adaptive trim/refresh timing.
+
+### Numerical and cost controls
+
+The reduced H is checked SPD with dense eigenvalues; the largest measured condition
+number is 407.388. Dense LLT and independent sparse SimplicialLLT solutions agree
+within the predeclared 1e-8 screen, and their linear residuals are checked. The
+actual noncontact energy/gradient/Hessian directional differences have maximum
+scaled errors 1.03e-9 and 5.60e-11, below the 2e-5 screen. These constant-load
+checks do not establish consistency for absent load terms.
+
+Each positive candidate k is frozen. The scalar quadratic root uses actual mapped
+contact gradients. The realized endpoint uses the assembled nonlinear energy,
+gradient and tangent with the same fixed coefficient. The standalone Newton
+loop enforces the declared residual threshold, checks positive element determinants,
+and invokes the actual elastic/contact step limits and contact CCD. No Hessian
+projection, tolerance relaxation or coefficient retuning is used. Its controls
+are local to this experiment, not new production stopping rules.
+
+Across the 126 candidate records, 54 positive-coefficient nonlinear solves
+converged and 72 zero-demand candidates were classified without an unprotected
+solve. One additional stale-coefficient control converged (55 attempted solves
+total). All returned element determinants are positive; the smallest is .470555.
+Convergence and positive determinants do not imply target accuracy or whole-surface
+collision freedom. The raw trim=1 control sometimes becomes inactive above dhat,
+which is retained as a valid outcome rather than an enforced upper-gap condition.
+
+At n=2/4/8, full dense extraction plus two-RHS solve medians are .791/4.916/97.916
+microseconds; radius-1 medians are .583/.542/.625 microseconds. Radius 1 retains
+10 free DOFs at all three resolutions, so its physical extent shrinks. These
+seven-repeat warm timings include submatrix extraction. Graph construction and
+first physical assembly are recorded separately. Sparse full factorization costs
+3.333/8.667/34.375 microseconds; two RHS solves reusing each factor cost
+.375/1.125/5.583 microseconds. The n=8 sparse matrix/factor payload accounts for
+21,580/23,128 bytes, excluding allocator overhead, working buffers, other forms,
+collision structures and process RSS. Dense input and submatrix storage are
+separate. This is measured small-FEM cost, not production throughput or a resource
+bound; no multi-contact factor/cache lifecycle is installed.
+
+### Measured estimator limits
+
+| Mesh | Full K | Full p | Radius-1 target-demand outcome | Full-reference k, nonlinear gap |
+| --- | ---: | ---: | --- | ---: |
+| n=2 | 11.221507 | .04334612 | Positive; realized gap .04510740 | .04959688 |
+| n=4 | 7.869371 | .04379470 | Zero demand; unprotected solve omitted | .04955783 |
+| n=8 | 5.981886 | .04384994 | Zero demand; unprotected solve omitted | .04954220 |
+
+All graph neighborhoods preserve the restricted-quadratic upper-K inequality.
+That does not prevent missed compression: on refined meshes even radius 2 can
+report zero demand where the full predictor requires a positive coefficient.
+The full K itself changes under refinement because the load/contact acts at a
+single vertex. This is a locality experiment, not converged finite-area contact
+stiffness or continuum engineering accuracy.
+
+In the held-out n=4/speed=1.5 case, the full-reference coefficient realizes
+.04801919, radius 1 realizes .01219297, and radius 2 realizes .03251305, versus
+.05. Thus both local predictor loss and nonlinear Taylor error remain measurable.
+Even the full frozen reference is not an exact nonlinear target-force model.
+The current trim=1 extraction control realizes .07298300 on that case; this is
+not a result from the full adaptive controller or a selected global multiplier.
+
+**Load sign is recorded from the actual assembled objective.** The fixture writes
+boundary_conditions.rhs=[0,-load]. In this code path positive `load` produces an
+upward physical body force and increases the free-gap predictor (load=10 gives
+p=.28770534). RhsAssembler's energy-gradient convention and BodyForm's sign agree
+with the finite-difference check. These cases are unloading comparisons, not
+compressive-load validation. The held-out load=20 case remains unchanged and
+identified accordingly; it was not replaced after inspecting its outcome.
+
+### Empirical coverage and stale-state interpretation
+
+The radius-1 ranges calibrated only from the 15 FEM calibration cases are
+
+```
+K_true/K_radius1 in [.6327360835343682, .999982295929729]
+(p_true-p_radius1)/dhat in [-.3318797684597228, .26814772406686727].
+```
+
+They cover K on 2/3 held-out cases and p on 0/3: joint coverage is **0/3**.
+Applying the unchanged stage-1 ranges covers only 9/15 calibration cases jointly
+and 0/3 held-out cases. Neither set is an input enclosure suitable for a guarantee.
+The derived empirical coefficient rectangles yield 13 inactive/mixed cases and
+five empty intervals, with no active nonempty interval. No midpoint, clamp,
+stiffness increase or coefficient is selected from them.
+
+For dt=.2→.5, reusing the baseline k=17.24624241 gives nonlinear gap .06057172.
+Fresh full-reference computation instead reports p=.05493047, above the .05 target,
+and zero target demand. It therefore does **not** supply a replacement active
+coefficient; the unprotected solve is omitted. This is a useful limit of the
+stage-1 fallback proposal: fresh data resolves stale estimation but does not choose
+active-contact protection when demand is zero. No production fallback is installed.
+
+### Remaining decisions
+
+The stage-2 comparison is complete within this explicit 2D selected-contact scope.
+The evidence argues against promoting fixed graph-radius neighborhoods or their
+empirical error ranges as guarantees. It does not select a different estimator.
+A fixed physical-radius neighborhood, residual influence beyond the neighborhood,
+and reuse of full sparse factors are concrete candidates for a subsequent RB-14
+comparison. Coefficient protection for zero demand and nonlinear force-range
+control still need a declared contract. General interpolation, deformation-dependent
+loads, anisotropic/heterogeneous assembled materials, 3D contact patches and
+multi-contact resource scaling remain unmeasured here; stage 1's spring-network
+contrast/anisotropy results do not certify those FEM cases. RB-14 remains in
+progress until the practical estimator/fallback evidence is sufficient for a
+production decision. RB-15 is independently eligible; no RB-16/17 policy change
+is implied.

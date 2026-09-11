@@ -1,9 +1,10 @@
 # RB-14 — Practical compliance and force-demand estimators
 
 Date: 2026-09-10
-Status: **in progress — stage 1 standalone comparison complete; stage 2 pending**
-Selected stage: supported quadratic networks, estimator errors, held-out coverage
-and fallback controls. Production estimator selection remains pending.
+Status: **in progress — stages 1–2 complete; further estimator comparison pending**
+Current handoff: stage 2 assembled-FEM comparison complete; practical estimator
+and protection choices remain pending. Earlier stage-1 handoff is retained below
+as history and superseded by the stage-2 continuation.
 
 ## Authorization and baseline
 
@@ -125,3 +126,125 @@ No new user model choice is needed to begin that independent comparison.
 Production estimator, invalid-state continuation, uncertainty enclosure and
 coefficient lifecycle choices remain pending. RB-15 remains independently
 eligible; RB-16/17 integration is not authorized by this stage.
+
+## Stage 2 continuation — 2026-09-10
+
+### Scope and incoming state
+
+The user selected “start stage 2” and then “continue.” This stage runs assembled
+FEM comparisons and publishes their limits; it does not choose a production law.
+Started clean on main at `94597b12a87f954816fadce9233dc977d6d5aee7`. Effective IPC
+`af317a65` and PolySolve `4d372fa8` overrides/pins remain unchanged and clean.
+No incoming build/solver was found. The item/handoff, current PF invariants,
+floor retirement, RB-03 map contract, current embedding/provider/form APIs and
+CMake effective overrides were inspected before the comparison.
+
+Evidence is in `outputs/rb-14/20260910-153034-stage2/`. `baseline.json` records
+revisions, processes and shared library/binary/cache, recipes, provider sources
+and previous RB-13/14 artifact hashes. The isolated executable links the existing
+Makefiles build's libraries using its exact unit-test flags and link recipe.
+No production source or library was rebuilt or changed; only the standalone
+C++ probe was compiled. Library hashes recorded after the run are explicitly
+named `linked-archive-hashes-postrun.json`; the main library and binary identities
+were also captured at baseline. Actual source, executable and input identities
+are preserved with the build commands and per-case inputs/outputs/exits.
+
+See [contract stage 2](rb-14-contract.md#stage-2--assembled-fem-comparison-2026-09-10)
+for physical versus weighted units, reduction, prescribed motion, load sign,
+coefficient lifecycle and scope. The [protocol](../tools/rb14/stage2-protocol.md)
+and [case list](../tools/rb14/stage2-cases.json) precede estimator comparisons.
+The in-memory mesh setup uses the same non-strict file-schema initialization as
+existing assembler tests, then supplies explicit vertices/cells. It does not
+bypass mechanical, derivative, determinant or contact checks.
+
+### Setup failures and final execution
+
+All setup artifacts remain, including failures:
+
+- `setup/`: compile failure from a malformed JSON initializer.
+- `setup2/` and `setup3/`: missing required geometry entry; the second run exposed
+  the validator message after enabling logging.
+- `setup4/`: an empty geometry list was rejected by the minimum-one-entry rule.
+- `setup5/`: successful in-memory assembly after using an empty-path placeholder
+  and non-strict file validation, as in the existing assembler fixture.
+- `comparison-build/`: successful initial baseline comparison.
+- `sweep/`: compile failure from attempting the private InertiaForm predictor
+  accessor. The probe now uses the public integrator predictor and independently
+  checks the actual inertia gradient against it; no visibility/API change.
+- `sweep2/`: final formatted C++ source, all 18 declared cases complete. No case
+  was dropped, no tolerance relaxed and no held-out input changed.
+
+The runner was subsequently extended to save archive hashes and compile/link
+exit records for future reproductions. That logging-only change does not alter
+the tested C++ source, binary, input cases or numerical results. The summary
+script strips redundant full matrices and endpoint vectors from the published
+comparison; full local records retain them.
+
+### Results and checks
+
+**2,772 structural/numerical checks passed across 18 FEM fixtures** (15 calibration,
+three held out). There are 126 candidate records: 54 converged positive-k solves
+and 72 zero-demand candidates for which no unprotected solve was attempted.
+The separate stale-dt reuse solve also converged: **55/55 attempted nonlinear
+solves converged**. Zero-demand classifications are not successful contact solves.
+The [checked-in comparison](../tools/rb14/results-20260910-stage2.json) retains
+candidate errors, all nonlinear histories, cost, coverage and classifications.
+
+| Check / finding | Measurement | Outcome |
+| --- | --- | --- |
+| Actual selector extraction | Assembled FEM H through BarrierContactForm, appended obstacle IDs, centered EV normalization | Pass within supported exact-selector fixture |
+| Physical scaling | Actual dt^2, inertia gradient/predictor identities | Pass; no mass double counting |
+| Residual/tangent consistency | Maximum gradient/Hessian FD errors 1.03e-9 / 5.60e-11 | Pass for enabled constant-load cases; pressure derivative unmeasured |
+| Full reference | SPD eigenspectrum, maximum condition number 407.388; dense/sparse LLT agreement and residual screens | Pass on all declared snapshots |
+| Neighborhood locality | n=2/4/8, full K 11.2215/7.8694/5.9819; radius-1 dimension remains 10 | Shrinking physical support and missed demand reproduced |
+| Nonlinear target error | Held-out speed: full .04801919, radius 1 .01219297, radius 2 .03251305 versus .05 | Approximation errors retained despite convergence |
+| Empirical coverage | FEM-calibrated held-out K 2/3, p 0/3, joint 0/3 | Failed generalization reproduced |
+| Stage-1 transfer | Prior empirical ranges cover 9/15 FEM calibration cases jointly and 0/3 held out | Transfer failure retained |
+| Conditional interval | 13 inactive/mixed rectangles, five empty intervals; zero active nonempty intervals | No coefficient chosen from them |
+| Geometry/forces | Minimum endpoint det(F)=.470555; actual proxy CCD/elastic step limits; mapped contact action/reaction | Pass within represented pair; no whole-surface collision claim |
+| Fresh/stale dt | Old k gives .06057172; fresh reference p=.05493047 gives zero target demand | Stale consequence measured; protection policy remains unresolved |
+| Relevant existing regressions | Mapping tests and Neo-Hookean nonlinear branches | 11 cases / 7,994 assertions passed |
+
+The existing suite command is preserved under `existing-tests/`, including RNG
+seed, exit zero and full log. No full scene smoke, HDA suite, private input or
+Teseo was run. No AL/reduced-production stopping, friction, retuning, timestep
+schedule, CCD, trial cap, constraint floor or dependency setting changed.
+
+Positive load values in this probe's negative-y RHS syntax produce upward body
+force in the actual assembled objective; load cases are unloading comparisons.
+This was inspected and recorded, not relabeled as a compressive test or changed
+post hoc. The full nonlinear reference uses the same actual objective, and its
+finite-difference checks pass. No production load-sign defect is alleged.
+
+The sparse n=8 full matrix/factor payload is 21,580/23,128 bytes, with median
+factorization 34.375 us and two solves reusing that factor 5.583 us. Dense full
+extraction/two-solve cost is 97.916 us; radius-1 cost .625 us. These local timings
+are descriptive and noisy. They exclude global cache lifetime, allocator/work
+buffers, process RSS, throughput and multiple-contact scheduling. Reported
+payloads are not total peak memory or resource guarantees.
+
+### Publication, status and next work
+
+The C++ probe, runner, analysis script, protocol, case list, compact results and
+updated contract/record/roadmap are published to `sdast9/polyfem:main`. The final
+message and local `publication.json` identify the commit. Formatting, Python
+syntax, links/anchors, JSON consistency, final residuals/BCs and identity checks
+are retained in `artifact-checks.json`; shared-file checks are in
+`final-identity.json`. Stage-1 executable source/protocol/results remain unchanged;
+its tools README is deliberately extended. The parent workspace README remains
+a local update outside Git. No HDA/dependency publication is needed.
+
+**Stage 2 is complete within the declared scope; RB-14 remains in progress.**
+The comparison supplies actual assembly/extraction and nonlinear evidence, but
+fixed graph-radius candidates and empirical envelopes are not ready for a
+production guarantee. Further candidate work is needed before asking for a
+production selection: compare physical-size neighborhoods and remote residual
+influence, alongside sparse-factor reuse and a declared zero-demand protection
+contract. No alternative is silently selected by this handoff.
+
+Remaining coverage includes assembled material contrast/anisotropy, loaded
+pressure tangents, full contact patches and 3D, general interpolation, nonlinear
+force-range enclosures and multi-contact resource behavior. Stage-1 network
+controls remain useful but do not fill those FEM gaps. RB-15 is independently
+eligible; RB-16/17 integration still requires explicit estimator/assignment
+choices and comparison.
