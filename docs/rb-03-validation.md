@@ -352,5 +352,6 @@ skipped by the default boundary extraction itself and remain outside this item.
 Publish this stage — `BarrierContactForm.{hpp,cpp}`, the mapping tests, the
 probe and its dated result, the hex scene under `tools/rb03/hex-scene/`, the
 contract, this record and the plan/README rows — to `sdast9/polyfem:main`.
-No companion (IPC, PolySolve) or HDA change; the pins are unchanged. The
-publication commit is recorded in the parent README's pin table.
+No companion (IPC, PolySolve) or HDA change; the pins are unchanged.
+Published as `1ea71d93c` on `sdast9/polyfem:main` (this hash note follows in
+a separate documentation commit).
