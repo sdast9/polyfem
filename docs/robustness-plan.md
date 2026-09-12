@@ -177,7 +177,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [closed 2026-09-11 — characterized, limits documented; production law retained, all six reproduced defects repaired by RB-18/RB-20/RB-21](rb-02-validation.md#closure-2026-09-11) |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [closed 2026-09-11 — validated within stated scope: exact indexing (2026-09-08) and the selected interpolated stiffness, parent block condensed onto the stencil with the gap-normalized direction fallback (2026-09-11); nothing pending](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [validated within stated scope 2026-09-12 — record version 2 (attempt stream, candidate counts, failed-attempt iterate, right-endpoint work increments), VTU kinematics aligned; `physical_balance_pass` deliberately unavailable pending an RB-09 threshold](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12) |
-| RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
+| RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | [validated within stated scope 2026-09-12 — stale swept-cache containment, pre-build sweep diagnostics, opt-in `solver/contact/CCD/resource_limits` enforced by the toolkit before allocation (hash grid, brute force); **no default limit set** (user decision pending); retry is RB-08](rb-05-validation.md) |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | not started |
@@ -197,13 +197,15 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | [validated within stated scope 2026-09-12 (`8f76fef69`) — named error for every skipped face, DOF-resolution proxy default for Q2+/serendipity hexahedra (user decision), bit-identical Q1/tet/HDA; Q3+ blocked by RB-23](rb-22-validation.md) |
 | RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | not started — [section](#rb-23--q3-hexahedral-basis-node-bookkeeping) |
 
-The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22 and
-RB-04 are validated within their scope (2026-09-12). Remaining
-order: RB-05 (containment; it can reuse the RB-04 attempt stream's trial norms
-and candidate counts as pre-build diagnostics), then RB-09 references and RB-10 friction (where the
+The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22,
+RB-04 and RB-05 are validated within their scope (2026-09-12). Remaining
+order: RB-09 references and RB-10 friction (where the
 RB-20 friction endpoint move belongs); RB-23 (Q3+ hexahedral basis) is
-independently eligible and is the prerequisite for Q3+ hex contact. RB-05–RB-08 remain the resource/recovery track;
-select them when needed. RB-11 input auditing and RB-12 provenance can be
+independently eligible and is the prerequisite for Q3+ hex contact. RB-06–RB-08 remain the resource/recovery track
+(RB-05's `aborted` attempt row and discarded swept interval are the state RB-06
+starts from; a resource failure is now a distinct, non-retried exception type
+for RB-08 to build a policy on); select them when needed. A default resource
+limit is an open user decision (see the RB-05 record's handoff). RB-11 input auditing and RB-12 provenance can be
 selected at any time. A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
 
@@ -398,6 +400,28 @@ restarts and unavailable fields. Instrumentation completion and physical pass/fa
 are separate. No new global convergence gate is authorized here.
 
 ## RB-05 — Candidate generation and resource failure containment
+
+**Validated within stated scope 2026-09-12** — see the
+[record](rb-05-validation.md). Outcome: the swept candidate cache a contact
+form builds in `line_search_begin` was consumed by every retry path's
+`init`/`update_quantities` after an exception unwound through PolySolve's
+line search (no `line_search_end` on unwind), so a partial or stale sweep
+became the collision set; `init`/`update_quantities` now drop it and the
+build is exception-safe on both sides (PolyFEM discards the interval, the
+toolkit's `Candidates::build` clears on any exception). The default hash
+grid's `(box, cell)` items and pre-filter pair emissions were measured to
+grow without any check — a single vertex sweeping 20 length units costs
+6.1e7 items (972 MB, RSS 1.45 GB) for 11,047 candidates and 50 units would
+need 15 GB; allocation failure is not catchable on macOS (no `bad_alloc`,
+the kernel kills the process) — so the opt-in
+`solver/contact/CCD/resource_limits/{max_cell_items, max_candidate_emissions}`
+are enforced by the toolkit **before** the corresponding allocation (exact
+counts from the boxes / the sorted items), throw a named exception that no
+solver retry handler absorbs, and are refused explicitly for methods that
+cannot enforce them. Pre-build sweep diagnostics are logged and flushed, the
+RB-04 stream records the aborted proposal. Defaults are 0 (bit-identical
+smokes). **No default budget is set**; the record lists measured candidates
+for the user's choice. The section below is the plan as it stood.
 
 **Revised integration scope:** retain collision-candidate protection and account
 separately for RB-14 compliance solves, estimator neighborhoods and retained

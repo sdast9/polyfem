@@ -32,6 +32,12 @@ namespace ipc
 
 namespace polyfem::solver
 {
+	/// @brief RB-05: read the opt-in broad-phase resource limits from the
+	///        `solver/contact/CCD` options (`resource_limits/max_cell_items`,
+	///        `resource_limits/max_candidate_emissions`); absent or zero
+	///        fields leave the corresponding bound disabled.
+	ipc::BroadPhaseBudget broad_phase_budget_from_args(const json &ccd_args);
+
 	/// @brief How the barrier stiffness is chosen and updated
 	enum class BarrierStiffnessMode
 	{
@@ -129,19 +135,49 @@ namespace polyfem::solver
 		///        handed to CCD by line_search_begin since the last reset.
 		///        The swept cache itself is cleared at line_search_end, so
 		///        an endpoint record can only report these retained counts.
+		///        RB-05 adds the broad phase's own intermediates when the
+		///        method measures them (hash grid cell items; pair emissions
+		///        are counted only while a budget is enabled).
 		struct CandidateStatistics
 		{
-			size_t builds = 0; ///< line_search_begin calls since the reset
-			size_t last = 0;   ///< candidates of the most recent build
-			size_t max = 0;    ///< largest build since the reset
+			size_t builds = 0;                   ///< completed line_search_begin builds since the reset
+			size_t last = 0;                     ///< candidates of the most recent build
+			size_t max = 0;                      ///< largest build since the reset
+			bool intermediates_measured = false; ///< the broad phase reported its buffers
+			size_t last_cell_items = 0;          ///< hash-grid (box, cell) items of the last build
+			size_t max_cell_items = 0;           ///< largest item count since the reset
+			size_t last_candidate_emissions = 0; ///< pre-filter pair emissions of the last build (budget enabled only)
+			size_t max_candidate_emissions = 0;  ///< largest emission count since the reset
 		};
 		const CandidateStatistics &candidate_statistics() const { return candidate_statistics_; }
 		void reset_candidate_statistics() { candidate_statistics_ = CandidateStatistics(); }
+
+		/// @brief RB-05: opt-in bound on the broad phase's intermediate buffers,
+		///        enforced by the toolkit before the corresponding allocation
+		///        (ipc::BroadPhaseBudget). Zero fields disable the bound (the
+		///        default, bit-identical to the unbudgeted path). A method that
+		///        cannot enforce a budget is refused here, at configuration
+		///        time, with a named error -- never silently ignored.
+		void set_broad_phase_budget(const ipc::BroadPhaseBudget &budget);
+		const ipc::BroadPhaseBudget &broad_phase_budget() const { return broad_phase_->budget; }
 
 	protected:
 		/// @brief Update the cached candidate set for the current solution
 		/// @param displaced_surface Vertex positions displaced by the current solution
 		virtual void update_collision_set(const Eigen::MatrixXd &displaced_surface) = 0;
+
+		/// @brief Drop the swept candidate cache and leave the cached-candidate
+		///        interval. The cache is valid only inside the line search that
+		///        built it; init and update_quantities start a new solve/step
+		///        and call this first, because PolySolve's line search calls no
+		///        line_search_end while an exception unwinds through it (RB-05).
+		void discard_swept_candidates();
+
+		/// @brief update_collision_set at x, logging (and flushing) a named
+		///        diagnostic before rethrowing any exception -- the toolkit
+		///        throws silently and an escaping exception terminates the
+		///        process without unwinding (RB-05).
+		void rebuild_collision_set(const Eigen::VectorXd &x, const char *operation);
 
 		virtual double barrier_support_size() const { return dhat_; }
 

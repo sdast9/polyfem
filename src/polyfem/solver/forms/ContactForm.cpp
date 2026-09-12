@@ -16,9 +16,29 @@
 #include <igl/writePLY.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace polyfem::solver
 {
+	ipc::BroadPhaseBudget broad_phase_budget_from_args(const json &ccd_args)
+	{
+		ipc::BroadPhaseBudget budget;
+		if (!ccd_args.is_object() || !ccd_args.contains("resource_limits") || !ccd_args["resource_limits"].is_object())
+			return budget;
+		const json &limits = ccd_args["resource_limits"];
+		const auto read = [&](const char *key) -> size_t {
+			if (!limits.contains(key))
+				return 0;
+			const double value = limits[key].get<double>();
+			if (!(value >= 0) || !std::isfinite(value))
+				log_and_throw_error("solver.contact.CCD.resource_limits.{} must be a finite non-negative integer (got {})", key, limits[key].dump());
+			return static_cast<size_t>(value);
+		};
+		budget.max_cell_items = read("max_cell_items");
+		budget.max_candidate_emissions = read("max_candidate_emissions");
+		return budget;
+	}
+
 	ContactForm::ContactForm(const ipc::CollisionMesh &collision_mesh,
 							 const double dhat,
 							 const double avg_mass,
@@ -47,12 +67,60 @@ namespace polyfem::solver
 
 	void ContactForm::init(const Eigen::VectorXd &x)
 	{
-		update_collision_set(compute_displaced_surface(x));
+		// A new solve never continues a line search: a swept cache still
+		// marked active here belongs to a line search that was abandoned by
+		// an exception, and its candidates were never completed for x.
+		discard_swept_candidates();
+		rebuild_collision_set(x, "init");
 	}
 
 	void ContactForm::update_quantities(const double t, const Eigen::VectorXd &x)
 	{
-		update_collision_set(compute_displaced_surface(x));
+		discard_swept_candidates();
+		rebuild_collision_set(x, "update_quantities");
+	}
+
+	void ContactForm::rebuild_collision_set(const Eigen::VectorXd &x, const char *operation)
+	{
+		try
+		{
+			update_collision_set(compute_displaced_surface(x));
+		}
+		catch (const std::exception &e)
+		{
+			// The toolkit throws without logging; name the operation and the
+			// surface here so a resource failure of a static build (init, a
+			// new step, a trial state) leaves a diagnostic before terminate().
+			logger().error(
+				"Contact collision set rebuild failed in {} ({}): {} vertices / {} edges / {} faces, {}, broad phase {}",
+				operation, e.what(), collision_mesh_.num_vertices(), collision_mesh_.num_edges(), collision_mesh_.num_faces(),
+				use_cached_candidates_ ? fmt::format("from the {} cached swept candidates", candidates_.size()) : "static build",
+				broad_phase_->name());
+			logger().flush();
+			throw;
+		}
+	}
+
+	void ContactForm::discard_swept_candidates()
+	{
+		candidates_.clear();
+		use_cached_candidates_ = false;
+	}
+
+	void ContactForm::set_broad_phase_budget(const ipc::BroadPhaseBudget &budget)
+	{
+		broad_phase_->budget = budget;
+		try
+		{
+			broad_phase_->check_budget_supported();
+		}
+		catch (const std::invalid_argument &e)
+		{
+			broad_phase_->budget = ipc::BroadPhaseBudget();
+			log_and_throw_error(
+				"solver.contact.CCD.resource_limits cannot be enforced by broad phase \"{}\" ({}); use hash_grid or brute_force, or leave the limits at 0",
+				broad_phase_->name(), e.what());
+		}
 	}
 
 	Eigen::MatrixXd ContactForm::compute_displaced_surface(const Eigen::VectorXd &x) const
@@ -62,7 +130,7 @@ namespace polyfem::solver
 
 	void ContactForm::solution_changed(const Eigen::VectorXd &new_x)
 	{
-		update_collision_set(compute_displaced_surface(new_x));
+		rebuild_collision_set(new_x, "solution_changed");
 	}
 
 	namespace
@@ -151,37 +219,103 @@ namespace polyfem::solver
 
 	void ContactForm::line_search_begin(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1)
 	{
+		// Any previous interval is over (normally ended by line_search_end;
+		// after an exception nothing ended it): the new sweep replaces it.
+		discard_swept_candidates();
+
 		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
 		Eigen::MatrixXd V1 = compute_displaced_surface(x1);
 
 		// Same absolute-displacement clamp as max_step_size, so the cached
 		// candidates always cover the (clamped) interval CCD prices.
+		const double trial_linf = (V1 - V0).lpNorm<Eigen::Infinity>();
 		const double trial_clamp =
 			trial_clamp_factor(V0, V1, barrier_support_size(), trial_displacement_cap());
 		if (trial_clamp < 1.0)
 			V1 = V0 + trial_clamp * (V1 - V0);
 
-		candidates_.build(
-			collision_mesh_, V0, V1,
-			/*inflation_radius=*/barrier_support_size() / 2,
-			broad_phase_.get());
+		// RB-05 pre-build step diagnostics, logged before the broad phase
+		// allocates anything: the swept interval in barrier supports, and how
+		// localized it is (a few far-moving vertices are what blow up the
+		// hash grid; a uniform sweep re-scales its cells).
+		const double swept_linf = trial_linf * trial_clamp;
+		const auto sweep_summary = [&]() {
+			Eigen::VectorXd per_vertex = (V1 - V0).rowwise().norm();
+			double median = 0;
+			if (per_vertex.size() > 0)
+			{
+				std::nth_element(per_vertex.data(), per_vertex.data() + per_vertex.size() / 2, per_vertex.data() + per_vertex.size());
+				median = per_vertex[per_vertex.size() / 2];
+			}
+			return fmt::format(
+				"trial Linf={:g} ({:g} supports; clamp {:g} -> swept Linf {:g}), median vertex sweep {:g}, {} vertices / {} edges / {} faces, broad phase {}{}",
+				trial_linf, trial_linf / barrier_support_size(), trial_clamp, swept_linf, median,
+				collision_mesh_.num_vertices(), collision_mesh_.num_edges(), collision_mesh_.num_faces(),
+				broad_phase_->name(),
+				broad_phase_->budget.enabled()
+					? fmt::format(" (budget: cell items {}, candidate emissions {})", broad_phase_->budget.max_cell_items, broad_phase_->budget.max_candidate_emissions)
+					: "");
+		};
+		if (logger().should_log(spdlog::level::debug))
+			logger().debug("Broad phase over trial step: {}", sweep_summary());
 
-		logger().debug(
-			"Broad phase over trial step: {} candidates (trial Linf={:g}, trial_clamp={:g})",
-			candidates_.size(), (V1 - V0).lpNorm<Eigen::Infinity>() / trial_clamp,
-			trial_clamp);
+		try
+		{
+			candidates_.build(
+				collision_mesh_, V0, V1,
+				/*inflation_radius=*/barrier_support_size() / 2,
+				broad_phase_.get());
+		}
+		catch (const std::exception &e)
+		{
+			// The toolkit clears its candidate lists on any exception; this
+			// form leaves the interval too, so nothing downstream can treat
+			// the abandoned sweep as a complete candidate set. The sweep
+			// geometry is the pre-failure diagnostic; flush so it survives a
+			// terminate() without unwinding.
+			discard_swept_candidates();
+			logger().error("Broad phase over trial step failed ({}): {}", e.what(), sweep_summary());
+			logger().flush();
+			throw;
+		}
+		catch (...)
+		{
+			discard_swept_candidates();
+			logger().error("Broad phase over trial step failed with a non-standard exception: {}", sweep_summary());
+			logger().flush();
+			throw;
+		}
+
+		const ipc::BroadPhaseBuildStatistics &built = broad_phase_->build_statistics();
+		if (built.measured)
+			logger().debug(
+				"Broad phase over trial step: {} candidates ({} cell items, {} pre-filter pair emissions{}; cell size {:g}, grid {}x{}x{})",
+				candidates_.size(), built.cell_items, built.candidate_emissions,
+				broad_phase_->budget.enabled() ? "" : " [emissions counted only under a budget]",
+				built.cell_size, built.grid_size[0], built.grid_size[1], built.grid_size[2]);
+		else
+			logger().debug(
+				"Broad phase over trial step: {} candidates (trial Linf={:g}, trial_clamp={:g})",
+				candidates_.size(), trial_linf, trial_clamp);
 
 		++candidate_statistics_.builds;
 		candidate_statistics_.last = candidates_.size();
 		candidate_statistics_.max = std::max(candidate_statistics_.max, candidates_.size());
+		if (built.measured)
+		{
+			candidate_statistics_.intermediates_measured = true;
+			candidate_statistics_.last_cell_items = built.cell_items;
+			candidate_statistics_.max_cell_items = std::max(candidate_statistics_.max_cell_items, built.cell_items);
+			candidate_statistics_.last_candidate_emissions = built.candidate_emissions;
+			candidate_statistics_.max_candidate_emissions = std::max(candidate_statistics_.max_candidate_emissions, built.candidate_emissions);
+		}
 
 		use_cached_candidates_ = true;
 	}
 
 	void ContactForm::line_search_end()
 	{
-		candidates_.clear();
-		use_cached_candidates_ = false;
+		discard_swept_candidates();
 	}
 
 	bool ContactForm::is_step_collision_free(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const

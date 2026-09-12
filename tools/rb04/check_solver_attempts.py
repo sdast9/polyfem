@@ -9,6 +9,12 @@ rejected rows carry a finite step bound, and the endpoint record's attempt
 summary, last proposal and termination iteration count agree with the rows.
 Failed attempts must carry the last internal iterate. Norms are objective-side
 bookkeeping; they certify nothing physical.
+
+RB-05: an `aborted` row is a proposal whose line search an exception abandoned
+(a broad-phase resource failure, an allocation failure). It may appear only in
+a failed attempt, at most once, as the step's last row, and it says whether the
+contact broad phase completed its build (`trial.broad_phase_built`); the
+build-count identity stays exact with it.
 """
 import argparse
 from collections import defaultdict
@@ -25,13 +31,15 @@ def check_run(directory):
     by_step = defaultdict(list)
     for row in rows:
         assert row['schema'] == 'polyfem.solver-attempt' and row['version'] == 1
-        assert row['kind'] in ('start', 'accepted', 'rejected')
+        assert row['kind'] in ('start', 'accepted', 'rejected', 'aborted')
         by_step[row['step']].append(row)
     summary = {'name': Path(directory).name, 'steps': []}
     for endpoint in endpoints:
         step_rows = by_step[endpoint['step']]
         assert step_rows, endpoint['step']
-        minimize_ids = sorted({r['minimize_index'] for r in step_rows})
+        # An aborted feasibility check before the first PolySolve minimize
+        # carries minimize_index 0: it belongs to no minimize call (RB-05).
+        minimize_ids = sorted({r['minimize_index'] for r in step_rows if r['kind'] != 'aborted' or r['minimize_index'] > 0})
         assert minimize_ids == list(range(1, len(minimize_ids) + 1))
         accepted_rows = [r for r in step_rows if r['kind'] == 'accepted']
         rejected_rows = [r for r in step_rows if r['kind'] == 'rejected']
@@ -54,19 +62,33 @@ def check_run(directory):
             assert trial['validity_checks'] >= trial['validity_rejections'] >= 0
         for row in rejected_rows:
             assert row['trial']['step_bound'] is not None and row['accepted'] is None
+        aborted_rows = [r for r in step_rows if r['kind'] == 'aborted']
+        assert len(aborted_rows) <= 1
+        if aborted_rows:
+            assert endpoint['outcome'] != 'accepted' and step_rows[-1] is aborted_rows[0]
+            assert aborted_rows[0]['accepted'] is None and isinstance(aborted_rows[0]['trial']['broad_phase_built'], bool)
         attempt = endpoint['attempt_summary']
         assert attempt['minimize_calls'] == len(minimize_ids)
         assert attempt['accepted_iterations'] == len(accepted_rows)
         assert attempt['rejected_proposals'] == len(rejected_rows)
-        assert attempt['validity_checks'] == sum(r['trial']['validity_checks'] for r in accepted_rows + rejected_rows)
+        assert attempt.get('aborted_proposals', 0) == len(aborted_rows)
+        assert attempt['validity_checks'] == sum(r['trial']['validity_checks'] for r in accepted_rows + rejected_rows + aborted_rows)
         assert attempt['step_bound_limited'] == sum(r['trial']['step_bound'] < 1 for r in accepted_rows)
         assert attempt['line_search_truncated'] == sum(
             r['accepted']['fraction_of_trial'] < r['trial']['step_bound'] * (1 - 1e-12) for r in accepted_rows)
         candidates = attempt['broad_phase_candidates']
-        # ALSolver's feasibility checks also build a swept candidate set.
-        assert candidates['builds'] == len(accepted_rows) + len(rejected_rows) + attempt['feasibility_checks'], (candidates, len(accepted_rows), len(rejected_rows), attempt['feasibility_checks'])
-        assert candidates['max'] >= candidates['last'] > 0
-        assert endpoint['contact']['candidate_count']['value'] == candidates['last']
+        # ALSolver's feasibility checks also build a swept candidate set; an
+        # aborted proposal counts only if its broad phase completed the build.
+        built_aborted = sum(r['trial']['broad_phase_built'] for r in aborted_rows)
+        assert candidates['builds'] == len(accepted_rows) + len(rejected_rows) + attempt['feasibility_checks'] + built_aborted, (candidates, len(accepted_rows), len(rejected_rows), attempt['feasibility_checks'], built_aborted)
+        if candidates['builds'] > 0:
+            assert candidates['max'] >= candidates['last'] > 0
+            assert endpoint['contact']['candidate_count']['value'] == candidates['last']
+        else:
+            # RB-05: an attempt aborted before its first broad-phase build.
+            assert aborted_rows and not aborted_rows[0]['trial']['broad_phase_built']
+            assert candidates['last'] == candidates['max'] == 0
+            assert endpoint['contact']['candidate_count']['value'] is None
         proposal = endpoint['proposed_displacement']
         if accepted_rows:
             last = accepted_rows[-1]
@@ -80,10 +102,15 @@ def check_run(directory):
             last_minimize = [r for r in accepted_rows if r['minimize_index'] == minimize_ids[-1]]
             assert endpoint['termination']['iterations'] == len(last_minimize), (endpoint['termination']['iterations'], len(last_minimize))
             assert 'last_internal_iterate' not in endpoint
-        else:
+        elif accepted_rows:
             iterate = endpoint['last_internal_iterate']
             assert iterate['value'] is not None and len(iterate['value']) == len(endpoint['endpoint']['value'])
             assert iterate['iteration'] >= 1 and iterate['value'] != endpoint['endpoint']['value']
+        else:
+            # Failed before any accepted Newton iterate (RB-05: an aborted
+            # first sweep): the record says so instead of carrying one.
+            assert aborted_rows and endpoint['last_internal_iterate']['value'] is None
+            assert endpoint['last_internal_iterate']['unavailable_reason']
         summary['steps'].append(dict(
             step=endpoint['step'], outcome=endpoint['outcome'], minimize_calls=len(minimize_ids),
             accepted=len(accepted_rows), rejected=len(rejected_rows), feasibility_checks=attempt['feasibility_checks'],

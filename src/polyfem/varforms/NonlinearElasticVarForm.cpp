@@ -1357,7 +1357,10 @@ namespace polyfem::varform
 			form->set_output_dir(output_path);
 
 		if (solve_data_.contact_form != nullptr)
+		{
 			solve_data_.contact_form->save_ccd_debug_meshes = args["output"]["advanced"]["save_ccd_debug_meshes"];
+			solve_data_.contact_form->set_broad_phase_budget(solver::broad_phase_budget_from_args(args["solver"]["contact"]["CCD"]));
+		}
 	}
 
 	void NonlinearElasticVarForm::init_solve(
@@ -1577,8 +1580,10 @@ namespace polyfem::varform
 			int minimize_index = 0, accepted_iterations = 0, rejected_proposals = 0, feasibility_checks = 0;
 			int line_search_truncated = 0, step_bound_limited = 0;
 			int validity_checks = 0, validity_rejections = 0, stall_retunes = 0;
+			int aborted_proposals = 0; ///< RB-05: proposals whose line search an exception abandoned
 			// Pending proposal of the current iteration.
 			bool has_proposal = false;
+			size_t proposal_builds = 0;         ///< completed broad-phase builds when the proposal was observed
 			Eigen::VectorXd proposal_x0, trial; ///< trial = x1 - x0 of the sweep handed to the broad phase
 			double trial_norm = 0, trial_linf = 0, step_bound = std::numeric_limits<double>::quiet_NaN();
 			int iteration_validity_checks = 0, iteration_validity_rejections = 0;
@@ -1649,6 +1654,7 @@ namespace polyfem::varform
 				case Kind::Proposal:
 					flush_pending_proposal();
 					attempts.has_proposal = true;
+					attempts.proposal_builds = solve_data_.contact_form ? solve_data_.contact_form->candidate_statistics().builds : 0;
 					attempts.proposal_x0 = *o.x0;
 					attempts.trial = *o.x1 - *o.x0;
 					attempts.trial_norm = attempts.trial.norm();
@@ -1755,8 +1761,13 @@ namespace polyfem::varform
 				{
 					const auto &stats = contact->candidate_statistics();
 					candidates = {{"builds", stats.builds}, {"last", stats.last}, {"max", stats.max}};
+					// RB-05: the broad phase's intermediate buffers, when measured.
+					if (stats.intermediates_measured)
+						candidates["intermediates"] = {{"cell_items_last", stats.last_cell_items}, {"cell_items_max", stats.max_cell_items}, {"candidate_emissions_last", stats.last_candidate_emissions}, {"candidate_emissions_max", stats.max_candidate_emissions}, {"scope", "Hash-grid (box, cell) items per build and pre-filter pair emissions per build (emissions counted only while solver.contact.CCD.resource_limits is enabled, otherwise 0)"}};
+					else
+						candidates["intermediates"] = nullptr;
 				}
-				observations["summary"] = {{"minimize_calls", attempts.minimize_index}, {"accepted_iterations", attempts.accepted_iterations}, {"rejected_proposals", attempts.rejected_proposals}, {"feasibility_checks", attempts.feasibility_checks}, {"line_search_truncated", attempts.line_search_truncated}, {"step_bound_limited", attempts.step_bound_limited}, {"validity_checks", attempts.validity_checks}, {"validity_rejections", attempts.validity_rejections}, {"stall_retunes", attempts.stall_retunes}, {"broad_phase_candidates", candidates}, {"scope", "All PolySolve minimize calls of this attempt (AL, reduced, lagging); restarts and AL weights are in termination and the coefficient-event stream"}};
+				observations["summary"] = {{"minimize_calls", attempts.minimize_index}, {"accepted_iterations", attempts.accepted_iterations}, {"rejected_proposals", attempts.rejected_proposals}, {"aborted_proposals", attempts.aborted_proposals}, {"feasibility_checks", attempts.feasibility_checks}, {"line_search_truncated", attempts.line_search_truncated}, {"step_bound_limited", attempts.step_bound_limited}, {"validity_checks", attempts.validity_checks}, {"validity_rejections", attempts.validity_rejections}, {"stall_retunes", attempts.stall_retunes}, {"broad_phase_candidates", candidates}, {"scope", "All PolySolve minimize calls of this attempt (AL, reduced, lagging); restarts and AL weights are in termination and the coefficient-event stream"}};
 				if (attempts.last_proposal.is_object())
 					observations["proposed_displacement"] = attempts.last_proposal;
 				if (outcome != "accepted" && attempts.has_iterate && attempts.iterate.allFinite())
@@ -1972,6 +1983,19 @@ namespace polyfem::varform
 		catch (const std::exception &e)
 		{
 			diagnostic_termination = {{"exception", e.what()}, {"subsolve_state_at_failure", diagnostic_termination}};
+			// RB-05: a proposal still pending when the attempt fails was neither
+			// accepted nor rejected -- an exception abandoned its line search
+			// (a broad-phase resource failure, an allocation failure). Record
+			// it with its trial norms and whether the broad phase completed
+			// its build, instead of letting the flush misfile it.
+			if (attempts.has_proposal)
+			{
+				json trial = trial_json();
+				trial["broad_phase_built"] = solve_data_.contact_form && solve_data_.contact_form->candidate_statistics().builds > attempts.proposal_builds;
+				write_attempt("aborted", attempts.has_iterate ? attempts.iterate_iteration : 0, trial, nullptr, NaN, NaN);
+				++attempts.aborted_proposals;
+				attempts.has_proposal = false;
+			}
 			emit_diagnostics("failed_attempt", e.what());
 			throw;
 		}

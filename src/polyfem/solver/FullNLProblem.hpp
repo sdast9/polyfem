@@ -19,7 +19,7 @@ namespace polyfem::solver
 	{
 		enum class Kind
 		{
-			Proposal,      ///< line_search_begin: the trial sweep [x0, x1] handed to the contact broad phase
+			Proposal,      ///< line_search_begin: the trial sweep [x0, x1] about to be handed to the contact broad phase (observed before the forms build it, so a failing build still leaves its trial on record -- RB-05)
 			StepBound,     ///< max_step_size: the fraction of [x0, x1] the forms (inversion check, CCD) allow
 			Validity,      ///< is_step_valid: one line-search trial [x0, x1] and the forms' verdict
 			LineSearchEnd, ///< line_search_end: the swept candidate cache is released

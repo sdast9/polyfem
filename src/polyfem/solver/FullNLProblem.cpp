@@ -82,14 +82,17 @@ namespace polyfem::solver
 
 	void FullNLProblem::line_search_begin(const TVector &x0, const TVector &x1)
 	{
-		for (auto &f : forms_)
-			f->line_search_begin(x0, x1);
-
+		// Observed BEFORE the forms build their swept candidate sets: the
+		// contact broad phase is the first large allocation of an iteration,
+		// and a failing build must not take the record of its trial with it.
 		IterationObservation observation;
 		observation.kind = IterationObservation::Kind::Proposal;
 		observation.x0 = &x0;
 		observation.x1 = &x1;
 		observe(observation);
+
+		for (auto &f : forms_)
+			f->line_search_begin(x0, x1);
 	}
 
 	void FullNLProblem::line_search_end()

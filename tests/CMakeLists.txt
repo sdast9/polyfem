@@ -10,6 +10,7 @@ set(test_sources
   test_hex_collision_surface.cpp
   test_semi_implicit_coefficients.cpp
   test_kappa_continuity.cpp
+  test_resource_containment.cpp
   test_assembler.cpp
   test_bases.cpp
   test_clipping.cpp

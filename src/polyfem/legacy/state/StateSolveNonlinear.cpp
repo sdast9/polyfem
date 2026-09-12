@@ -329,7 +329,10 @@ namespace polyfem::legacy
 			form->set_output_dir(output_dir);
 
 		if (solve_data.contact_form != nullptr)
+		{
 			solve_data.contact_form->save_ccd_debug_meshes = args["output"]["advanced"]["save_ccd_debug_meshes"];
+			solve_data.contact_form->set_broad_phase_budget(solver::broad_phase_budget_from_args(args["solver"]["contact"]["CCD"]));
+		}
 
 		// --------------------------------------------------------------------
 		// Initialize nonlinear problems

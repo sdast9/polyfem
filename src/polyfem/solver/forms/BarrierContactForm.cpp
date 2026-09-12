@@ -1267,7 +1267,14 @@ namespace polyfem::solver
 		if (use_cached_candidates_)
 			result["candidate_count"] = {{"value", candidates_.size()}, {"scope", "Active swept candidate cache"}};
 		else if (stats.builds > 0)
+		{
 			result["candidate_count"] = {{"value", stats.last}, {"max", stats.max}, {"builds", stats.builds}, {"scope", "Broad-phase candidates of the last trial sweep handed to CCD since the last statistics reset; max/builds over those sweeps"}};
+			// RB-05: the broad phase's own intermediates, when it measures them.
+			if (stats.intermediates_measured)
+				result["candidate_count"]["broad_phase_intermediates"] = {{"cell_items", {{"last", stats.last_cell_items}, {"max", stats.max_cell_items}}}, {"candidate_emissions", {{"last", stats.last_candidate_emissions}, {"max", stats.max_candidate_emissions}}}, {"scope", "Hash-grid (box, cell) items of the sweep's build and pre-filter pair emissions of its detection passes (emissions counted only while a resource limit is enabled, otherwise 0)"}};
+			else
+				result["candidate_count"]["broad_phase_intermediates"] = {{"value", nullptr}, {"unavailable_reason", "The configured broad phase does not measure its intermediate buffers"}};
+		}
 		else
 			result["candidate_count"] = {{"value", nullptr}, {"unavailable_reason", "No line search built a swept candidate set since the last statistics reset"}};
 		return result;
