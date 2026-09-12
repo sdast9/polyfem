@@ -595,9 +595,9 @@ populated budget is not `physical_balance_pass`.
 
 ### Publication
 
-The tested implementation is committed on `sdast9/polyfem:main` (hash recorded
-in the following documentation commit) with the compact results, the runner and
-checker, this record, the contract and the plan/README status. Companion
+The tested implementation is commit `6252a9119` on `sdast9/polyfem:main`, with
+the compact results, the runner and checker, this record, the contract and the
+plan status (this hash line is the following documentation commit). Companion
 source pins and HDA assets are unchanged. `tested-binaries.txt` holds the
 hashes of the validated binaries; the final endpoint run used
 `PolyFEM_bin` `b29eeb6d…`; the prior run on `a8f5300f…` (before an include-order tidy; retained as `prior-a8f5300f-*`) agrees with it to threaded run-to-run noise (~1e-16 relative in the work increments).
