@@ -273,7 +273,7 @@ the boxes; the emission count is one linear pass over the sorted items.
   `sdast9/ipc-toolkit:semi-implicit-stiffness`; PolyFEM pin bumped in
   `cmake/recipes/ipc_toolkit.cmake`; the build's local override points at the
   same checkout.
-- PolyFEM commit: recorded in the following documentation commit, on `sdast9/polyfem:main`.
+- PolyFEM commit: `db38cbff2` on `sdast9/polyfem:main` (this documentation note follows it).
 - HDA assets unchanged (no source or asset edit; E2E run only).
 - Remaining working-tree changes: none intended.
 - Local/private evidence not distributed: the evidence directory (logs, VTUs,
