@@ -164,7 +164,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | ID | Deliverable | Prerequisite | Current status |
 | --- | --- | --- | --- |
 | RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
-| RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [characterized—decision pending](rb-02-validation.md) |
+| RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [closed 2026-09-11 — characterized, limits documented; production law retained, all six reproduced defects repaired by RB-18/RB-20/RB-21](rb-02-validation.md#closure-2026-09-11) |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [characterized—decision pending; exact indexing validated](rb-03-validation.md) |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [characterized—limits documented; endpoint/path diagnostics validated](rb-04-validation.md) |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
@@ -204,7 +204,7 @@ work. It does **not** preselect any of these remaining decisions:
 
 | Decision | Prepare evidence in | Required before proceeding |
 | --- | --- | --- |
-| New coefficient positivity/cap/retuning law | RB-02 evidence; RB-13–RB-17 | Compare alternatives with units, derivatives and force/work effects; obtain the user's model choice |
+| New coefficient positivity/cap/retuning law | RB-02 evidence; RB-13–RB-17 | Compare alternatives with units, derivatives and force/work effects; obtain the user's model choice. **Decided 2026-09-11:** the production law is retained, as repaired by RB-18 (positive-only median, relative floor, curvature fallback, d̂²-normalized cap, nonfinite errors) and RB-20/RB-21 (continuation, parent identity); no new law is pending |
 | Local stiffness definition for a nonidentity map | RB-03 / RB-13–RB-15 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient |
 | New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping |
 | Enabled production resource or AL budgets | RB-05 / RB-07 | Measure overhead/failure behavior and state proposed limits; user selects defaults; opt-in disabled-by-default mechanisms may be tested first |
@@ -256,6 +256,13 @@ configuration/candidate rebuild. Run focused suite and public smokes. No stiffne
 CCD, tolerance or input-model change is in scope.
 
 ## RB-02 — Per-contact coefficient and lifecycle audit
+
+**Closed 2026-09-11.** The audit's six reproduced defects were repaired in
+production by RB-18, RB-20 and RB-21, and the user chose to retain the
+production adaptive-barrier law rather than select a new model; see the
+[closure section](rb-02-validation.md#closure-2026-09-11) of the record. The
+probe in `tools/rb02/` is the regression for the repaired law. The text below
+is retained as the protocol that was executed and is not an active work order.
 
 **Question:** what exact objective is evaluated within a line search and across
 retunes, and can an active contact lose its barrier through coefficient policy?

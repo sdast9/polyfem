@@ -1,7 +1,7 @@
 # RB-02 — Per-contact coefficient and lifecycle audit
 
-Date: 2026-09-08
-Status: **characterized—decision pending**
+Date: 2026-09-08 (audit); closed 2026-09-11
+Status: **closed — characterized, limits documented; production law retained** (see [Closure](#closure-2026-09-11); the audit finished as characterized—decision pending and its record below is unchanged)
 Selected stage: RB-02 stages 1–4, bounded characterization and model alternatives.
 No production coefficient, lifecycle, solver, dependency or HDA change.
 
@@ -200,3 +200,35 @@ but its dependent supported-mapping work remains pending RB-03. A model-choice
 follow-up should select a bounded alternative and its validation protocol before
 changing coefficients or moving retunes. Do not mark the contact model validated
 because this investigation is published.
+
+## Closure (2026-09-11)
+
+**Status: closed — characterized, limits documented; production law retained.**
+
+On 2026-09-11 the user reviewed RB-01–RB-17 and the interior-point
+literature in the parent workspace and decided to keep IPC's adaptive barrier
+as the production contact model: no new coefficient law, estimator or
+controller is to be selected. That is the model decision this item was held
+open for. Every defect the audit reproduced has since been repaired in
+production, bounded to the existing law, by RB-18 (`e3fa362e0` … `4a0df80a1`),
+RB-20 and RB-21 (`0324ce096`, `21f9fd592`, `beb6ef641`; toolkit `e3c8d3fe`).
+Disposition of the six decisions in the [contract's final table](rb-02-contract.md#unit-covariance-and-model-decisions):
+
+| Contract issue | Disposition |
+| --- | --- |
+| Zero median erases a positive contact | Repaired — [RB-18 F1](rb-18-quick-fixes.md#the-six-fixes): positive-only batch median with a relative κ floor; `[0,0,100]` no longer becomes `[0,0,0]` |
+| Nonpositive normal curvature | Repaired — [RB-18 F2/F7](rb-18-quick-fixes.md#the-six-fixes) (user choice B+E): previous κ → \|wᵀHw\| → max\|H\|/d̂²; κ=0 only for an identically zero system Hessian |
+| Stencil-switch (EV/VV, FV/EV) jump | Repaired — [RB-21](rb-21-parent-keyed-kappa.md): coefficient keyed on the candidate primitive pair and weight-averaged over parent contributions; seams exactly C⁰ in the default formulation (`[kappa_continuity][parent]` regression) |
+| Controller unit dependence | Repaired — [RB-18 F3](rb-18-quick-fixes.md#the-six-fixes): `conditioning_cap` normalized by d̂², so the first-contact trim is equal across converted length scales |
+| Retune and history/friction mismatch | Repaired within the retained lifecycle — [RB-18 F6](rb-18-quick-fixes.md#the-six-fixes) (lagged friction follows the trim), [RB-18 F5](rb-18-quick-fixes.md#the-six-fixes) (no repeated unchanged stall restarts) and [RB-20](rb-20-force-continuation.md) (persisting contacts keep their realized coefficient across refreshes; post-publication drift 17–53 % → ~1e-16). Remaining documented limits: a retune inside a solve still does not reset quasi-Newton history (stage 4; no convergence failure measured; the one allowed restart of F5 rebuilds the solver), and the friction lag follows the trim but not per-contact κ assignment for contacts born mid-step |
+| Invalid arithmetic | Repaired — [RB-18 F4](rb-18-quick-fixes.md#the-six-fixes): NaN curvature, overflow with no reference and zero/subnormal weights are errors naming the stencil; finite overflow uses the cap; the check runs after the weight division and cap multiplication |
+
+The RB-02 probe (`tools/rb02/`) now carries the repaired expectations and is
+the regression for this law: 243/243 checks at RB-18's final state
+(`final-probe-f7/`), with the pre-fix 257-check run retained as the defect
+baseline. Retained, not closed here: RB-03 interpolation curvature (its own
+item), physical certification of the retained law (RB-09/RB-10 references;
+the RB-20 friction endpoint move of 1.6e-2 on the public smoke is where a
+reference comparison belongs), and the private-scene/Ballburst/Teseo runs this
+audit never made. Closing this item records a decision, not a physical
+validation of the contact model.
