@@ -1,8 +1,10 @@
 # RB-03 — Collision/FEM coordinate contract
 
 Date: 2026-09-08. Original characterization, followed by an exact-selector
-indexing repair (validated within its stated scope). Interpolation stiffness remains
-unresolved. See [validation](rb-03-validation.md).
+indexing repair (validated within its stated scope) and, on 2026-09-11, the
+selected interpolated-stencil stiffness (local condensation with a
+gap-normalized direction fallback; see the [last section](#selected-interpolated-stiffness--2026-09-11)).
+See [validation](rb-03-validation.md).
 This does not certify the semi-implicit model or arbitrary collision meshes.
 
 ## Coordinates and the established chain rule
@@ -102,7 +104,10 @@ energy can vary along ker(B), although surface coordinates do not. Nor is
 `B H_system B^T` automatically an energy Hessian in surface coordinates. A
 force pullback B^T and a displacement lift are different operations.
 
-## Concrete interpolation alternatives — no selection made
+## Concrete interpolation alternatives — characterized 2026-09-08
+
+The table below is the original comparison; the selection made on 2026-09-11
+is recorded in the [last section](#selected-interpolated-stiffness--2026-09-11).
 
 The fixture averages two FEM nodes into the contact point. Endpoint stiffnesses
 are 10 and 20; the averaged point's node stiffnesses are 100 and 400, each
@@ -176,8 +181,83 @@ contribute zero blocks, preserving the existing FEM-only obstacle convention.
 The map lookup is constructed only in semi-implicit mode and assumes the mesh
 map remains fixed during form use. Force/Hessian chain rules are unchanged.
 
-A stencil with any non-selector or duplicate row retains its entire legacy
-sampling path, including its obstacle rows. No hybrid interpolation law is
-introduced. Thus the original interpolation comparison and its mixed-obstacle
-counterexample remain relevant. See the repair stage in the validation record
-for current acceptance checks and publication status.
+Until 2026-09-11 a stencil with any non-selector or duplicate row retained
+its entire legacy sampling path, including its obstacle rows. That path is now
+replaced by the definition below; see the repair and interpolation stages in
+the validation record for acceptance checks and publication status.
+
+## Selected interpolated stiffness — 2026-09-11
+
+The user chose, from the alternatives above, **local condensation with the
+gap-normalized force direction as fallback** ("(ii) with (i′)"), after the
+2026-09-11 decision to retain the production adaptive-barrier law. The
+selection is the production definition stated precisely and extended, not a
+new model:
+
+*The production law reads the frozen driving Hessian's local block for the
+stencil's nodes — every other DOF held fixed — along the unit contact
+direction `w` (`wᵀ H_local w`). For a stencil whose surface vertices are
+interpolated from parent nodes `P` with map rows `B`, the same quantity is the
+stiffness felt by a rigid stencil displacement `w` when every DOF outside `P`
+is fixed and the parents settle to minimum energy:*
+
+```
+K_s = (B H_PP⁻¹ Bᵀ)⁻¹          kappa_raw = wᵀ K_s w
+```
+
+For exact selectors there is no freedom to settle and `K_s = P H Pᵀ` exactly,
+so selector stencils keep the repaired extraction bit for bit (the two code
+paths coincide; the five public smokes and the `adaptive` mode are untouched).
+Conventions carried over from the selector contract:
+
+- Parent nodes outside the Hessian or with an identically zero diagonal
+  block (obstacle and prescribed proxies) are fixed: they carry no motion and
+  are excluded from `P`. A surface vertex left with no movable parent is
+  dropped from the constraint and contributes zero, exactly as its zero block
+  does for a selector stencil. A stencil with nothing movable returns the
+  zero sentinel and goes through the RB-18 F2/F7 chain.
+- **Fallback (i′).** When `H_PP` is not SPD (LLT fails), or the kept rows of
+  `B` are dependent (column-pivoted QR rank below the row count at relative
+  threshold 1e-10: duplicate proxy vertices, two rows on one node), or the
+  condensed matrix is not finite, the curvature is the gap-normalized force
+  direction
+  `|w_K|⁴ (wᵀ B H_PP Bᵀ w) / (wᵀ B Bᵀ w)²`
+  — the energy along `u = Bᵀ w` scaled so that the stencil's own motion
+  along `w` is unit; it equals `wᵀ H w` for selectors and the condensed value
+  for a single interpolated vertex, and never needs an inverse. Its result
+  then enters the same RB-18 chain (previous κ → |·| → max|H|/d̂² → batch
+  floor/cap) as any other raw curvature.
+- The quadratic forms are evaluated by the toolkit's own
+  `ipc::semi_implicit_stiffness` on embedded `dim·n_verts` matrices, so the
+  contact direction (AUTO distance type for RB-21 parent candidates, the
+  subfeature for built stencils) has a single definition.
+- Cost: one dense LLT of size `dim·|P|` (≤ 12 for a hex face centroid, ≤ 48
+  for a four-vertex stencil of centroids, ~120 for P3 sampled proxies) per
+  fresh estimate; under RB-20 only contacts born since the published endpoint
+  are estimated. Parent lists are stored once per non-selector map row.
+- Diagnostics: `diagnostic_state()` reports `interpolated_condensed_count`
+  and `interpolated_direction_count` for the last refresh batch, with a debug
+  log line at each refresh.
+
+Measured on the fixtures of this contract (unchanged geometry, `dhat` = trim =
+weight = 1): the averaged-point fixture now reads **218.3333** (the
+minimum-energy lift of the table above; legacy 71.6667), the mixed
+FEM/obstacle proxy **133.3333** (the averaged FEM point condensed to
+`(.25/100 + .25/100)⁻¹ = 200` on its `1/1.5` share of `w`; obstacle rows
+zero; legacy 83.3333), a duplicate-row stencil **45** and an indefinite parent
+block **123.75** through the fallback. The gap-normalized direction reads
+198.75 on the averaged-point fixture, 9 % below the condensed value; for a
+single vertex smeared over `k` decoupled parents of stiffness `h` both give
+the parallel-spring value `k·h`, where the raw force direction `wᵀ B H Bᵀ w`
+reads `h/k` and legacy sampling read a zero block (a hex centroid's proxy ID
+lies outside the FE node range).
+
+Limits retained: the "every other DOF fixed" local-block convention is
+production's, not a global condensation (RB-13's `K_eff`); the fallback for
+dependent rows is a heuristic bounded by the batch cap (a vertex duplicated on
+an edge endpoint reads 630 on the unit fixture); `H_PP` is the driving Hessian
+as provided (elastic plus inertia, unprojected), so a crushed block falls to
+(i′) then the RB-18 chain; Q2+ hexahedral boundary faces are skipped by the
+default extraction itself (no proxy is built), which is outside this item; no
+private scene, Ballburst or Teseo run, and no physical certification of the
+retained law.

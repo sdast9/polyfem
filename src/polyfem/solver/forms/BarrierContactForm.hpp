@@ -154,6 +154,16 @@ namespace polyfem::solver
 		///        stencil at the frozen snapshot, after the RB-18 F2/F4/F7
 		///        resolution (may return a 0 / +inf sentinel).
 		double estimate_stiffness(const ipc::CollisionStencil &stencil, const std::array<long, 5> &key) const;
+		/// @brief Frozen curvature along the contact direction of a stencil
+		///        with interpolated, scaled, empty or duplicate map rows
+		///        (RB-03 interpolated stiffness, 2026-09-11): the parent
+		///        block condensed onto the stencil's surface vertices, or
+		///        the gap-normalized force direction when the block is not
+		///        SPD or the kept rows are dependent. Rows without a movable
+		///        parent contribute zero. Same units as the exact-selector
+		///        w^T H w; 0 when nothing in the stencil is movable.
+		double interpolated_stiffness(const ipc::CollisionStencil &stencil, const ipc::VectorMax12d &positions,
+									  const std::array<long, 4> &vids, const int n_verts) const;
 		/// @brief Memo lookup (or fresh estimate + insert) of a key's
 		///        coefficient, resolved against the frozen batch statistics.
 		double memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const;
@@ -230,9 +240,13 @@ namespace polyfem::solver
 		Eigen::VectorXd lumped_vertex_masses_;
 
 		/// @brief Collision vertex to system node for exact unit selector rows;
-		///        -1 marks a row whose stiffness definition remains unresolved.
+		///        -1 marks an interpolated, scaled or empty row, whose parents
+		///        are listed in interpolation_parents_ (RB-03).
 		///        CollisionMesh's displacement map is immutable during form use.
 		Eigen::VectorXi stiffness_node_ids_;
+		/// @brief (system node, weight) parents of each collision vertex whose
+		///        map row is not an exact unit selector; empty for selectors
+		std::vector<std::vector<std::pair<int, double>>> interpolation_parents_;
 
 		/// @brief Displaced surface frozen at the last stiffness refresh
 		Eigen::MatrixXd kappa_surface_;
@@ -281,6 +295,11 @@ namespace polyfem::solver
 		mutable int kappa_abs_fallback_count_ = 0;
 		/// @brief ... resolved with max|H| / dhat^2 (RB-18 F7 fallback E)
 		mutable int kappa_global_fallback_count_ = 0;
+		/// @brief Stencils with interpolated map rows in the last refresh
+		///        batch resolved by local condensation / by the
+		///        gap-normalized direction fallback (RB-03, diagnostic)
+		mutable int kappa_interpolated_count_ = 0;
+		mutable int kappa_direction_fallback_count_ = 0;
 		/// @brief True only during the uncapped first assignment pass of a
 		///        refresh, when the batch cap/floor are not yet known and
 		///        invalid-curvature sentinels must pass through unresolved

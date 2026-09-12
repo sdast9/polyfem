@@ -1,10 +1,11 @@
 # RB-03 — Collision/FEM coordinate mapping
 
-Date: 2026-09-08
-Status: **exact selector indexing validated within stated scope; interpolation decision pending**
+Date: 2026-09-08 (characterization, indexing repair); 2026-09-11 (interpolated stiffness)
+Status: **validated within stated scope** — exact selector indexing (2026-09-08) and the selected interpolated-stencil stiffness (2026-09-11); see the [last stage](#interpolated-stencil-stiffness--2026-09-11)
 
-The characterization below is historical. The indexing repair stage is recorded
-at the end of this document; its targeted validation is complete.
+The characterization below is historical. The indexing repair stage and the
+interpolated-stiffness stage are recorded at the end of this document; their
+targeted validation is complete.
 
 ## Contract and authorization
 
@@ -257,3 +258,99 @@ RB-04 can proceed using the established derivative maps and exact-selector
 stiffness support. It must keep interpolated/mixed-stencil stiffness and RB-02's
 coefficient/lifecycle decisions explicitly unresolved. This closes the bounded
 indexing repair, not the entire RB-03 model decision.
+
+
+## Interpolated-stencil stiffness — 2026-09-11
+
+After the 2026-09-11 decision to retain the production adaptive-barrier law,
+the user selected, from [the contract's alternatives](rb-03-contract.md#selected-interpolated-stiffness--2026-09-11),
+**local condensation of the parent block with the gap-normalized force
+direction as fallback** for stencils whose map rows are interpolated, scaled,
+empty or duplicated. This stage implements that definition in
+`BarrierContactForm::interpolated_stiffness`, replaces the legacy proxy-ID
+sampling those stencils used, and validates it. No coefficient law,
+controller, friction, CCD, trial-cap, dependency or HDA change; exact selector
+stencils keep the 2026-09-08 extraction unchanged.
+
+### Baseline and reproduction
+
+PolyFEM started clean on `main` at `a0883f608` (the RB-02 closure over the
+RB-20/21 code `beb6ef641`); companion IPC `e3c8d3fe` on
+`semi-implicit-stiffness` and PolySolve `5afe3b5d` on `iteration-callback`,
+both clean and matching the pins, used through the existing
+`CPM_*_SOURCE` overrides. No build or simulation was running. Evidence relative
+to the parent workspace: `outputs/rb-03/20260912T025302Z-interpolation/`
+(`baseline/baseline.txt` with repo states, pins, effective sources and
+pre-change binary hashes; `baseline/CMakeCache.txt`; `tested-manifest.txt`
+with post-build binary and changed-source hashes; `source.patch`).
+
+The defect was reproduced three ways on the unchanged library before any
+production edit: the existing `[contact_stiffness_mapping]` tests pass with
+their legacy assertions (3 cases / 88 assertions, `baseline/mapping-tests/`);
+the probe passes 110 checks reading 71.6667 for the interpolated contact and
+83.3333 for the mixed FEM/obstacle proxy (`baseline/probe/`); and the new
+tests of this stage, built against the unchanged library, fail decisively
+(`baseline/new-tests-pre-fix/`: 4 cases, 2 failed, 31 of 169 assertions):
+every synthetic variant reads the legacy 71.6667, and on a real Q1 hex column
+the centroid contacts read **101.0 = max|H|/d̂²** — the RB-18 F7 global
+fallback, because a centroid's proxy ID lies outside the FE node range and
+its block was read as zero (`curvature_global_fallback_count == 2`).
+
+Where interpolated rows arise in production (source audit): Q1 hexahedral
+boundary faces on the default path (face centroid with four .25 weights,
+`io/OutData.cpp`), `max_order` sampled proxies and spline bases,
+`max_edge_length` collision proxies, and external `linear_map` weights.
+Simplicial P1/P2 meshes and the HDA pipeline produce only selectors.
+
+### Change
+
+`BarrierContactForm` keeps, per non-selector map row, its (node, weight)
+parents (built once from the sparse map). `estimate_stiffness` routes any
+stencil that is not an exact distinct selection to `interpolated_stiffness`,
+which assembles the dense parent block `H_PP` and the kept rows `B` from the
+frozen Hessian, excludes fixed parents (outside the Hessian or with a zero
+diagonal block) and drops rows without a movable parent, then returns
+`wᵀ (B H_PP⁻¹ Bᵀ)⁻¹ w` through the toolkit's own `semi_implicit_stiffness`
+(LLT of `H_PP`, column-pivoted QR rank check on `B` at 1e-10, LLT of the
+compliance, finiteness check), or the fallback
+`|w_K|⁴ (wᵀ B H_PP Bᵀ w)/(wᵀ B Bᵀ w)²` when any of those fail. The result
+enters the unchanged d̂² normalization, weight check and RB-18 F2/F4/F7
+chain. Two diagnostic counters (`interpolated_condensed_count`,
+`interpolated_direction_count`) and a per-refresh debug line were added.
+IPC and PolySolve are unchanged.
+
+### Validation
+
+| Check | Expected criterion | Measured result | Exit |
+| --- | --- | --- | --- |
+| Rebuild `PolyFEM_bin unit_tests -j 6` | complete; no new warnings | complete (`build.log`; only pre-existing deprecation/libigl warnings) | 0 |
+| `[contact_stiffness_mapping]`, seeds 1–3 | all assertions pass | **4 cases / 169 assertions** on each seed (`mapping-tests-post-fix/`): exact-selector cases unchanged (88 assertions); six synthetic variants match hand-derived values (94.2424, 86.6667, 630, 70, 123.75, 213.75 via the F7 \|·\| chain) and an independent dense oracle; a real Q1 hex column against an obstacle plane through the production builder (18 centroid rows) matches the oracle on every collision with all interpolated stencils condensed and zero fallbacks | 0 |
+| `[semi_implicit_coefficients] [kappa_continuity] [contact_cache]`, seed 1 | unchanged | 12 cases / 834 assertions (`semi-implicit-suites/`) | 0 |
+| Affected suite, RB-18/19/20 tag list + `[kappa_continuity]`, seed 1 | no assertion failure | **56 cases / 3,496 assertions** (`affected-suite-rb20-list/`; RB-20 had 55 / 3,415 — the difference is exactly this stage's new mapping case and 81 assertions) | 0 |
+| Plan's affected selection + semi-implicit tags, seed 1 | no assertion failure | 39 cases / 2,206 assertions (`affected-suite/`) | 0 |
+| Standalone probe (`tools/rb03/run_probe.py`) | flipped and new checks pass | **120 checks** (`probe-post-fix/`, published as [results-20260911-interpolation.json](../tools/rb03/results-20260911-interpolation.json)): interpolated contact 218.3333 = minimum-energy lift, obstacle proxy 133.3333, dependent rows 45, indefinite block 123.75, counters as expected; all 2026-09-08 derivative/FD/virtual-work/NLProblem checks retained | 0 |
+| Five public smokes (`run-smoke-final.sh`, OUT only) | exit 0, four steps, endpoints at run-to-run noise of the same-session baseline | all exit 0, zero error lines, 5 saved steps; max endpoint difference vs `baseline/smokes` **2.2e-16 / 1.4e-16 / 1.2e-16 / 4.5e-16 / 2.0e-16** (adaptive / semi / alhess / friction / transient), identical trim histories; the baseline itself differs from RB-20's published endpoints by ≤6.0e-16 (thread summation order, RB-19); zero interpolated rows logged, as every smoke mesh is simplicial | 0 |
+| Hex scene `tools/rb03/hex-scene/quasistatic-semi-hex.json` (4×4×4 Q1 hex unit cube, otherwise `quasistatic-semi.json`) | completes; interpolated path exercised | exit 0, zero error lines, four steps; first refresh **42 of 61 contacts have interpolated map rows: 42 condensed, 0 direction fallback**, no invalid-curvature fallbacks; coefficients 8.1e11–2.2e13 (tet smoke 1.5e12–8.2e12), trims 2,2,2,2,2,4,4,4 (tet 2,2,2,4,4,8,8,8), Linf 0.24272 (tet 0.24282), 0.86 s (`hex-scene/`) — completion and diagnostic evidence, not a physical comparison | 0 |
+| HDA `test_polyfem_hda.py`, Houdini 22.0.429 hython | round trip and end-to-end pass on the rebuilt binary | PASS / PASS (`hda-e2e.log`) | 0 |
+| clang-format (four C++ files), `git diff --check`, local links | clean | clean | — |
+
+Tolerances were fixed before the runs: unit-test comparisons 1e-10 relative
+(1e-9 on the hex oracle, whose condensation goes through a dense 60×60
+coupled block), probe `close` at 1e-9 relative. No threshold was relaxed and
+no golden regenerated. The hex scene has no pre-change counterpart in this
+session (the pre-change binary was rebuilt in place); its pre-change behavior
+is the unit test's measured global-fallback reading.
+
+Not measured: physical accuracy of the condensed stiffness on hex or proxy
+meshes, mesh/time refinement, friction on interpolated stencils, `max_order` /
+`max_edge_length` / external-map scenes beyond the probe's builder fixture,
+other platforms, private scenes, Teseo or Ballburst. Q2+ hexahedral faces are
+skipped by the default boundary extraction itself and remain outside this item.
+
+### Publication
+
+Publish this stage — `BarrierContactForm.{hpp,cpp}`, the mapping tests, the
+probe and its dated result, the hex scene under `tools/rb03/hex-scene/`, the
+contract, this record and the plan/README rows — to `sdast9/polyfem:main`.
+No companion (IPC, PolySolve) or HDA change; the pins are unchanged. The
+publication commit is recorded in the parent README's pin table.

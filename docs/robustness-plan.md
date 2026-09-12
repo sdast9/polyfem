@@ -147,7 +147,7 @@ recovery feature depends on it. Small read-only probes do not need automatic ret
 
 Evidence carried forward: RB-02/04 reproduce the frozen EV/VV coefficient jump;
 Fixed mode removes that specific jump but does not solve coefficient selection.
-RB-03 exact indexing is repaired while interpolation curvature remains open.
+RB-03 exact indexing is repaired and, since 2026-09-11, interpolated stencils condense their parent block.
 RB-04 separates coefficient-event energy from displacement work and pre-/post-lag
 friction states. The .5/.9 trim band is a working baseline, not an established
 optimum; before-contact failures and successful repeats remain in the evidence.
@@ -165,7 +165,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | --- | --- | --- | --- |
 | RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [closed 2026-09-11 — characterized, limits documented; production law retained, all six reproduced defects repaired by RB-18/RB-20/RB-21](rb-02-validation.md#closure-2026-09-11) |
-| RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [characterized—decision pending; exact indexing validated](rb-03-validation.md) |
+| RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [validated within stated scope — exact indexing (2026-09-08) and the selected interpolated stiffness: parent block condensed onto the stencil, gap-normalized direction fallback (2026-09-11)](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [characterized—limits documented; endpoint/path diagnostics validated](rb-04-validation.md) |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
@@ -205,7 +205,7 @@ work. It does **not** preselect any of these remaining decisions:
 | Decision | Prepare evidence in | Required before proceeding |
 | --- | --- | --- |
 | New coefficient positivity/cap/retuning law | RB-02 evidence; RB-13–RB-17 | Compare alternatives with units, derivatives and force/work effects; obtain the user's model choice. **Decided 2026-09-11:** the production law is retained, as repaired by RB-18 (positive-only median, relative floor, curvature fallback, d̂²-normalized cap, nonfinite errors) and RB-20/RB-21 (continuation, parent identity); no new law is pending |
-| Local stiffness definition for a nonidentity map | RB-03 / RB-13–RB-15 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient |
+| Local stiffness definition for a nonidentity map | RB-03 / RB-13–RB-15 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient. **Decided 2026-09-11:** local condensation of the parent block onto the stencil, `(B H_PP⁻¹ Bᵀ)⁻¹`, with the gap-normalized force direction as fallback; implemented and validated in RB-03 |
 | New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping |
 | Enabled production resource or AL budgets | RB-05 / RB-07 | Measure overhead/failure behavior and state proposed limits; user selects defaults; opt-in disabled-by-default mechanisms may be tested first |
 | Automatic timestep/load retry policy | RB-08 | User approves the concrete policy or specified opt-in prototype before implementation |
@@ -306,6 +306,14 @@ concrete alternatives and validation requirements. Do not mark the contact model
 validated merely because the audit is complete.
 
 ## RB-03 — Contact geometry to FEM coordinate mapping
+
+**Validated within stated scope 2026-09-11.** The exact-selector indexing
+repair (2026-09-08) and the user's selected interpolated-stencil stiffness —
+the parent block condensed onto the stencil, with the gap-normalized force
+direction as fallback — are implemented and validated; see the
+[contract](rb-03-contract.md#selected-interpolated-stiffness--2026-09-11) and
+[record](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11).
+The text below is retained as the protocol that was executed.
 
 **Invariant:** gradients, Hessians and stiffness inputs must refer to compatible
 coordinates, including interpolation and prescribed/obstacle DOFs.

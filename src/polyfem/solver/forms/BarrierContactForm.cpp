@@ -202,11 +202,13 @@ namespace polyfem::solver
 		{
 			// IPC's to_full_vertex_id reverses surface selection only: its
 			// result is a proxy ID, not necessarily a system Hessian node ID.
-			// Read S*T once in O(nnz + rows + cols), without a dense
-			// map. Only exact unit selectors have the established local
-			// curvature contract used below; do not round interpolation rows.
+			// Read S*T once in O(nnz + rows + cols), without a dense map.
+			// Exact unit selectors extract their Hessian blocks directly;
+			// every other row (interpolated, scaled, empty) keeps its
+			// (node, weight) parents for the RB-03 condensed stiffness.
 			const auto &map = collision_mesh_.displacement_map();
 			stiffness_node_ids_ = Eigen::VectorXi::Constant(map.rows(), -1);
+			interpolation_parents_.assign(map.rows(), {});
 			Eigen::VectorXi counts = Eigen::VectorXi::Zero(map.rows());
 			for (int col = 0; col < map.outerSize(); ++col)
 				for (Eigen::SparseMatrix<double>::InnerIterator it(map, col); it; ++it)
@@ -214,10 +216,18 @@ namespace polyfem::solver
 					{
 						++counts[it.row()];
 						stiffness_node_ids_[it.row()] = it.value() == 1. ? it.col() : -1;
+						interpolation_parents_[it.row()].emplace_back(int(it.col()), it.value());
 					}
 			for (int row = 0; row < counts.size(); ++row)
+			{
 				if (counts[row] != 1)
 					stiffness_node_ids_[row] = -1;
+				if (stiffness_node_ids_[row] >= 0)
+				{
+					interpolation_parents_[row].clear();
+					interpolation_parents_[row].shrink_to_fit();
+				}
+			}
 
 			if (enable_shape_derivatives)
 				log_and_throw_error("Semi-implicit barrier stiffness does not support shape derivatives!");
@@ -403,6 +413,8 @@ namespace polyfem::solver
 		kappa_fallback_count_ = 0;
 		kappa_abs_fallback_count_ = 0;
 		kappa_global_fallback_count_ = 0;
+		kappa_interpolated_count_ = 0;
+		kappa_direction_fallback_count_ = 0;
 		const bool first_contact = !kappa_snapshot_had_contacts_ && !collision_set_.empty();
 		kappa_snapshot_had_contacts_ = !collision_set_.empty();
 		batch_first_pass_ = true;
@@ -485,6 +497,11 @@ namespace polyfem::solver
 					kappa_fallback_count_ + kappa_abs_fallback_count_ + kappa_global_fallback_count_,
 					collision_set_.size(), kappa_abs_fallback_count_, kappa_global_fallback_count_,
 					kappa_fallback_count_, kappa_floor_, kappa_cap_);
+			if (kappa_interpolated_count_ + kappa_direction_fallback_count_ > 0)
+				logger().debug(
+					"Semi-implicit barrier stiffness: {} of {} contacts have interpolated map rows: {} condensed the parent block, {} used the gap-normalized direction fallback",
+					kappa_interpolated_count_ + kappa_direction_fallback_count_, collision_set_.size(),
+					kappa_interpolated_count_, kappa_direction_fallback_count_);
 		}
 
 		// Trim controller, one step per refresh: below the gap band the
@@ -620,45 +637,51 @@ namespace polyfem::solver
 		// Hessian provider instead (elastic + inertia curvature of the
 		// incremental potential).
 		ipc::VectorMax4d local_mass = ipc::VectorMax4d::Zero(n_verts);
-		ipc::MatrixMax12d local_hess =
-			ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
-		// Exact selector/permutation stencils use system node IDs. Preserve
-		// the WHOLE legacy stencil if any row is interpolated, scaled, empty,
-		// or duplicates another selected node: choosing an energy lift for
-		// such a stencil is a separate RB-03 decision.
+		// Exact selector/permutation stencils use system node IDs (RB-03
+		// indexing repair). A stencil with an interpolated, scaled or empty
+		// row, or two rows on the same node, has no Hessian block of its own
+		// in surface coordinates: its curvature is the parent block condensed
+		// onto the stencil (RB-03 interpolated stiffness, 2026-09-11).
 		std::array<long, 4> node_ids;
+		std::array<long, 4> surface_ids;
 		bool exact_selection = true;
 		for (int a = 0; a < n_verts; ++a)
 		{
+			surface_ids[a] = vids[a];
 			node_ids[a] = stiffness_node_ids_[vids[a]];
 			exact_selection = exact_selection && node_ids[a] >= 0;
 			for (int b = 0; b < a; ++b)
 				exact_selection = exact_selection && node_ids[a] != node_ids[b];
 		}
-		if (!exact_selection)
-			for (int a = 0; a < n_verts; ++a)
-				node_ids[a] = collision_mesh_.to_full_vertex_id(vids[a]);
-		for (int a = 0; a < n_verts; a++)
-		{
-			const long va = node_ids[a];
-			for (int b = 0; b < n_verts; b++)
-			{
-				const long vb = node_ids[b];
-				if (dim * va + dim > kappa_hessian_.rows()
-					|| dim * vb + dim > kappa_hessian_.cols())
-					continue; // e.g., obstacle DOF not in the Hessian
-				for (int k = 0; k < dim; k++)
-					for (int l = 0; l < dim; l++)
-						local_hess(dim * a + k, dim * b + l) =
-							kappa_hessian_.coeff(dim * va + k, dim * vb + l);
-			}
-		}
 
 		// kappa = avg_mass / d^2 + w^T H w [Ando 2024]; for a parent
 		// candidate the direction is the closest point on the WHOLE
 		// primitive (AUTO distance type), for a built stencil its subfeature.
-		double kappa = ipc::semi_implicit_stiffness(
-			stencil, positions, local_mass, local_hess, dmin_);
+		double kappa;
+		if (exact_selection)
+		{
+			ipc::MatrixMax12d local_hess =
+				ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
+			for (int a = 0; a < n_verts; a++)
+			{
+				const long va = node_ids[a];
+				for (int b = 0; b < n_verts; b++)
+				{
+					const long vb = node_ids[b];
+					if (dim * va + dim > kappa_hessian_.rows()
+						|| dim * vb + dim > kappa_hessian_.cols())
+						continue; // e.g., obstacle DOF not in the Hessian
+					for (int k = 0; k < dim; k++)
+						for (int l = 0; l < dim; l++)
+							local_hess(dim * a + k, dim * b + l) =
+								kappa_hessian_.coeff(dim * va + k, dim * vb + l);
+				}
+			}
+			kappa = ipc::semi_implicit_stiffness(
+				stencil, positions, local_mass, local_hess, dmin_);
+		}
+		else
+			kappa = interpolated_stiffness(stencil, positions, surface_ids, n_verts);
 
 		// Unit conversion: the Ando stiffness is an interface SPRING
 		// stiffness [force/length], while the clamped-log barrier acts on
@@ -733,6 +756,121 @@ namespace polyfem::solver
 			}
 		}
 		return kappa;
+	}
+
+	double BarrierContactForm::interpolated_stiffness(
+		const ipc::CollisionStencil &stencil, const ipc::VectorMax12d &positions,
+		const std::array<long, 4> &vids, const int n_verts) const
+	{
+		// Definition (RB-03 decision, 2026-09-11): with the map rows B of the
+		// stencil's surface vertices over their parent nodes P, the local
+		// stiffness is K = (B H_PP^-1 B^T)^-1 -- the frozen parent block
+		// statically condensed onto the stencil, i.e. the stiffness felt by a
+		// rigid stencil displacement along the contact direction when every
+		// DOF outside P is fixed and the parents settle to minimum energy.
+		// For exact selectors this IS the direct block extraction (no freedom
+		// to settle), so the two paths agree on selector stencils. Parents
+		// without a nonzero diagonal block (obstacle / prescribed proxies) or
+		// outside the Hessian are fixed and carry no motion; a row left with
+		// no movable parent is dropped and contributes zero, as its zero block
+		// does in the selector contract. Fallback (i'): if H_PP is not SPD or
+		// the kept rows are dependent (duplicate proxies, two rows on one
+		// node), use the gap-normalized force direction
+		//   |w_K|^4 (w^T B H_PP B^T w) / (w^T B B^T w)^2,
+		// which is the same energy read along u = B^T w scaled to produce the
+		// stencil's own motion, and equals w^T H w for selectors.
+		const int dim = collision_mesh_.dim();
+		const int n = dim * n_verts;
+		const auto fixed_node = [&](const long j) {
+			if (dim * j + dim > kappa_hessian_.rows() || dim * j + dim > kappa_hessian_.cols())
+				return true;
+			for (int k = 0; k < dim; ++k)
+				for (int l = 0; l < dim; ++l)
+					if (kappa_hessian_.coeff(dim * j + k, dim * j + l) != 0.)
+						return false;
+			return true;
+		};
+		std::vector<long> parents;
+		std::vector<std::vector<std::pair<int, double>>> rows(n_verts);
+		std::array<int, 4> slot = {-1, -1, -1, -1};
+		int n_kept = 0;
+		for (int a = 0; a < n_verts; ++a)
+		{
+			const auto add = [&](const long node, const double weight) {
+				if (weight == 0. || fixed_node(node))
+					return;
+				auto it = std::find(parents.begin(), parents.end(), node);
+				if (it == parents.end())
+					it = parents.insert(parents.end(), node);
+				rows[a].emplace_back(int(it - parents.begin()), weight);
+			};
+			const long node = stiffness_node_ids_[vids[a]];
+			if (node >= 0)
+				add(node, 1.);
+			else
+				for (const auto &[j, weight] : interpolation_parents_[vids[a]])
+					add(j, weight);
+			if (!rows[a].empty())
+				slot[a] = n_kept++;
+		}
+		if (n_kept == 0)
+			return 0.; // nothing movable: sentinel for the RB-18 F2/F7 chain
+
+		const int np = dim * int(parents.size()), nk = dim * n_kept;
+		Eigen::MatrixXd hpp(np, np);
+		for (int i = 0; i < int(parents.size()); ++i)
+			for (int j = 0; j < int(parents.size()); ++j)
+				for (int k = 0; k < dim; ++k)
+					for (int l = 0; l < dim; ++l)
+						hpp(dim * i + k, dim * j + l) =
+							kappa_hessian_.coeff(dim * parents[i] + k, dim * parents[j] + l);
+		Eigen::MatrixXd b = Eigen::MatrixXd::Zero(nk, np);
+		for (int a = 0; a < n_verts; ++a)
+			for (const auto &[p, weight] : rows[a])
+				for (int k = 0; k < dim; ++k)
+					b(dim * slot[a] + k, dim * p + k) += weight;
+
+		// Quadratic forms along the toolkit's own contact direction (zero
+		// masses: the mass term is not used by this form).
+		const ipc::VectorMax4d zero_mass = ipc::VectorMax4d::Zero(n_verts);
+		const auto quad = [&](const Eigen::MatrixXd &k) {
+			ipc::MatrixMax12d local = ipc::MatrixMax12d::Zero(n, n);
+			for (int a = 0; a < n_verts; ++a)
+				for (int c = 0; c < n_verts; ++c)
+					if (slot[a] >= 0 && slot[c] >= 0)
+						local.block(dim * a, dim * c, dim, dim) =
+							k.block(dim * slot[a], dim * slot[c], dim, dim);
+			return ipc::semi_implicit_stiffness(stencil, positions, zero_mass, local, dmin_);
+		};
+
+		Eigen::LLT<Eigen::MatrixXd> llt(hpp);
+		if (llt.info() == Eigen::Success)
+		{
+			Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(b);
+			qr.setThreshold(1e-10);
+			if (qr.rank() == nk)
+			{
+				const Eigen::MatrixXd compliance = b * llt.solve(b.transpose());
+				Eigen::LLT<Eigen::MatrixXd> llt_compliance(compliance);
+				if (llt_compliance.info() == Eigen::Success)
+				{
+					const Eigen::MatrixXd k = llt_compliance.solve(Eigen::MatrixXd::Identity(nk, nk));
+					if (k.allFinite())
+					{
+						++kappa_interpolated_count_;
+						return quad(k);
+					}
+				}
+			}
+		}
+
+		++kappa_direction_fallback_count_;
+		const double q1 = quad(b * hpp * b.transpose());
+		const double q2 = quad(b * b.transpose());
+		const double wk2 = quad(Eigen::MatrixXd::Identity(nk, nk));
+		if (!(q2 > 0) || !std::isfinite(q2))
+			return 0.;
+		return wk2 * wk2 * q1 / (q2 * q2);
 	}
 
 	double BarrierContactForm::memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const
@@ -1113,6 +1251,8 @@ namespace polyfem::solver
 		result["curvature_fallback_count"] = kappa_fallback_count_;
 		result["curvature_abs_fallback_count"] = kappa_abs_fallback_count_;
 		result["curvature_global_fallback_count"] = kappa_global_fallback_count_;
+		result["interpolated_condensed_count"] = kappa_interpolated_count_;
+		result["interpolated_direction_count"] = kappa_direction_fallback_count_;
 		result["force_continuation"] = force_continuation_;
 		result["continuation_max_ratio"] = continuation_max_ratio_;
 		result["continued_count"] = kappa_continued_count_;

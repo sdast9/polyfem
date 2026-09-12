@@ -1,0 +1,161 @@
+{
+  "NLProblem_prescribed": {
+    "gradient_relative_error": 4.5862702479589334e-11,
+    "hessian_relative_error": 2.9410793070247686e-12,
+    "reduced_dofs": 4
+  },
+  "candidate_force_effects": {
+    "actual": {
+      "energy": 647.6893179766796,
+      "force_norm": 2551.9010983138987,
+      "kappa": 218.33333333333326
+    },
+    "gap_normalized_direction_fallback": {
+      "energy": 589.5950470894584,
+      "force_norm": 2323.009205907881,
+      "kappa": 198.74999999999994
+    },
+    "legacy_vertex_sampling_before_2026_09_11": {
+      "energy": 212.6003104808949,
+      "force_norm": 837.6469254007458,
+      "kappa": 71.66666666666667
+    },
+    "minimum_energy_lift_candidate": {
+      "energy": 647.68931797668,
+      "force_norm": 2551.9010983139,
+      "kappa": 218.33333333333337
+    },
+    "minimum_norm_lift_candidate": {
+      "energy": 1003.671233200504,
+      "force_norm": 3954.472694333754,
+      "kappa": 338.3333333333334
+    },
+    "transpose_direction_candidate": {
+      "energy": 262.0422431508705,
+      "force_norm": 1032.448535959059,
+      "kappa": 88.33333333333336
+    }
+  },
+  "checks": 120,
+  "exact_selector_obstacle_curvature": {
+    "actual": 66.66666666666666,
+    "expected": 66.66666666666667
+  },
+  "external_builder": {
+    "energy": 494.41932669975535,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 1.0129936367600364e-10,
+    "hessian_relative_error": 1.191776385665044e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "fixed_form_interpolation": {
+    "energy": 2.9665159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 9.26714161050625e-11,
+    "hessian_relative_error": 1.1647031907577122e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "fixed_obstacle": {
+    "energy": 494.41932669975535,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 1.0129936367600364e-10,
+    "hessian_relative_error": 1.191776385665044e-07,
+    "reduced_dofs": 4,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "identity": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 6,
+    "gradient_relative_error": 6.918130004241871e-11,
+    "hessian_relative_error": 3.7603383384087787e-07,
+    "reduced_dofs": 6,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "interpolation": {
+    "energy": 494.41932669975535,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 1.0129936367600364e-10,
+    "hessian_relative_error": 1.191776385665044e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "interpolation_curvature": {
+    "actual": 218.33333333333326,
+    "gap_normalized_direction_fallback": 198.74999999999994,
+    "legacy_vertex_sampling_before_2026_09_11": 71.66666666666667,
+    "minimum_energy_lift_candidate": 218.33333333333337,
+    "minimum_norm_lift_candidate": 338.3333333333334,
+    "transpose_direction_candidate": 88.33333333333336
+  },
+  "interpolation_fallbacks": {
+    "dependent_rows": 44.99999999999999,
+    "indefinite_parent_block": 123.74999999999997
+  },
+  "moving_obstacle": {
+    "energy": 604.2366675194548,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 4.556263638700851e-11,
+    "hessian_relative_error": 2.2110268458215104e-07,
+    "reduced_dofs": 4,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  },
+  "obstacle_curvature": {
+    "actual_with_fem_only_hessian": 133.3333333333333,
+    "legacy_before_2026_09_11": 83.33333333333333,
+    "note": "proxy IDs are not FEM/obstacle DOF IDs"
+  },
+  "permutation": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 6,
+    "gradient_relative_error": 6.918130004241871e-11,
+    "hessian_relative_error": 3.76033833840878e-07,
+    "reduced_dofs": 6,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 5.551115123125783e-17
+  },
+  "permutation_curvature": {
+    "actual": 26.666666666666664,
+    "identity": 71.66666666666666,
+    "required_by_permutation": 26.66666666666667
+  },
+  "prescribed_contact_work": {
+    "dE_dt": 124.71170896337058,
+    "fem_force_y": 2494.2341792674115,
+    "finite_difference_dE_dt": 124.71170902017548,
+    "obstacle_force_y": -2494.2341792674115
+  },
+  "status": "exact selector indexing repaired; interpolated stiffness = parent block condensed onto the stencil, gap-normalized direction fallback (2026-09-11)",
+  "surface_selection": {
+    "energy": 296.65159601985334,
+    "force_balance_norm": 0.0,
+    "full_dofs": 8,
+    "gradient_relative_error": 6.918130004241871e-11,
+    "hessian_relative_error": 3.7603383384087787e-07,
+    "reduced_dofs": 8,
+    "rotation_energy_error": 0.0,
+    "translation_energy_error": 0.0,
+    "virtual_work_error": 0.0
+  }
+}

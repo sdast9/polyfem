@@ -9,6 +9,7 @@
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <h5pp/h5pp.h>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -240,7 +241,13 @@ int main()
 		check((a * l - M::Identity(6, 6)).norm() < 1e-12, "explicit right inverse");
 		M compliance = a * hf.inverse() * a.transpose();
 		M energy_min = compliance.inverse();
-		out["interpolation_curvature"] = {{"actual_vertex_sampling", ip.coefficient()}, {"transpose_direction_candidate", (a.transpose() * w).dot(hf * (a.transpose() * w))}, {"minimum_norm_lift_candidate", (l * w).dot(hf * (l * w))}, {"minimum_energy_lift_candidate", w.dot(energy_min * w)}};
+		// RB-03 decision (2026-09-11): production condenses the parent block
+		// onto the stencil (minimum-energy lift); the gap-normalized
+		// direction |w|^4 (w^T B H B^T w)/(w^T B B^T w)^2 is its fallback.
+		const V force_direction = a.transpose() * w;
+		const double transpose_direction = force_direction.dot(hf * force_direction);
+		const double gap_normalized_direction = transpose_direction / std::pow(force_direction.squaredNorm(), 2);
+		out["interpolation_curvature"] = {{"actual", ip.coefficient()}, {"legacy_vertex_sampling_before_2026_09_11", 215. / 3.}, {"transpose_direction_candidate", transpose_direction}, {"gap_normalized_direction_fallback", gap_normalized_direction}, {"minimum_norm_lift_candidate", (l * w).dot(hf * (l * w))}, {"minimum_energy_lift_candidate", w.dot(energy_min * w)}};
 		Probe unit(im, hf, false);
 		unit.start(V::Zero(8));
 		V unit_g;
@@ -350,11 +357,37 @@ int main()
 		check(close(selected_k, 100. * 2. / 3.), "external selector obstacle FEM-only curvature");
 		selected_h.start(ox);
 		check(close(selected_h.coefficient(), selected_k), "external moving obstacle selector curvature");
-		check(close(obstacle_h.coefficient(), 250. / 3.), "interpolated obstacle legacy behavior retained");
-		check(close(ip.coefficient(), 215. / 3.), "interpolated contact legacy behavior retained");
+		// Interpolated stiffness (2026-09-11): the averaged point condenses
+		// its two parents, (.25/100 + .25/400)^-1 = 320, and the selector
+		// endpoints keep their blocks: (.25*10 + .25*20 + 320)/1.5.
+		check(close(ip.coefficient(), w.dot(energy_min * w)), "interpolated contact condenses the parent block (minimum-energy lift)");
+		check(close(ip.coefficient(), 327.5 / 1.5), "interpolated contact hand-derived value");
+		// Obstacle proxies have no movable parent in a FEM-only Hessian and
+		// contribute zero; the averaged FEM point condenses to
+		// (.25/100 + .25/100)^-1 = 200 along its unit share 1/1.5 of w.
+		check(close(obstacle_h.coefficient(), 400. / 3.), "interpolated obstacle condenses over FEM parents; obstacle rows contribute zero");
+		out["obstacle_curvature"]["legacy_before_2026_09_11"] = 250. / 3.;
+		// Fallback (i'): two rows on one node cannot prescribe independent
+		// motion; the gap-normalized direction reads 9 * (.25*10 + .25*20)/1.5.
+		M dup = M::Zero(3, 3);
+		dup(0, 0) = dup(1, 1) = dup(2, 0) = 1;
+		auto dm = tiny(p, dup);
+		Probe dup_h(dm, h);
+		dup_h.start(V::Zero(6));
+		check(close(dup_h.coefficient(), 45.), "dependent map rows use the gap-normalized direction fallback");
+		check(dup_h.diagnostic_state()["interpolated_direction_count"].get<int>() == 1 && dup_h.diagnostic_state()["interpolated_condensed_count"].get<int>() == 0, "dependent rows counted as direction fallback");
+		// Fallback (i'): an indefinite parent block cannot be condensed;
+		// (.25*10 + .25*20 - .25*100 + .25*400)/1.5 / (2/3)^2.
+		V negative(8);
+		negative << 10, 10, 20, 20, -100, -100, 400, 400;
+		Probe indefinite(im, M(negative.asDiagonal()));
+		indefinite.start(V::Zero(8));
+		check(close(indefinite.coefficient(), 123.75), "indefinite parent block uses the gap-normalized direction fallback");
+		check(ip.diagnostic_state()["interpolated_condensed_count"].get<int>() == 1 && ip.diagnostic_state()["interpolated_direction_count"].get<int>() == 0, "interpolated contact counted as condensed");
+		out["interpolation_fallbacks"] = {{"dependent_rows", dup_h.coefficient()}, {"indefinite_parent_block", indefinite.coefficient()}};
 		out["exact_selector_obstacle_curvature"] = {{"actual", selected_k}, {"expected", 100. * 2. / 3.}};
 		out["checks"] = checks;
-		out["status"] = "exact selector indexing repaired; interpolation stiffness decision pending";
+		out["status"] = "exact selector indexing repaired; interpolated stiffness = parent block condensed onto the stencil, gap-normalized direction fallback (2026-09-11)";
 		std::cout << out.dump(2) << std::endl;
 		return 0;
 	}
