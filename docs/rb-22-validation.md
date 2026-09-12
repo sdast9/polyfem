@@ -173,8 +173,9 @@ relied on the silent partial surface now stop with an error.
   `tests/test_hex_collision_surface.cpp`, `tests/test_contact_stiffness_mapping.cpp`,
   `tests/CMakeLists.txt`, `tools/rb22/` (runner, A/B script, 21 scenes,
   README), this record, the plan row, README rows.
-- Remote/branch/commit: recorded in the completion message and the plan row
-  (`sdast9/polyfem:main`).
+- Remote/branch/commit: implementation, tests, tools and this record in
+  `8f76fef69` on `sdast9/polyfem:main` (tested source identity: the
+  working tree of that commit; binary hashes in `inputs/`).
 - Companion pins: unchanged (`e3c8d3fe`, `5afe3b5d`). HDA: unchanged.
 - Remaining working-tree changes: none owned by this item after the commit;
   the other session's README/memory edits were preserved.
