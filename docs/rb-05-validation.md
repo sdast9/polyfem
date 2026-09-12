@@ -339,6 +339,9 @@ controls on the HDA with explanations a novice can follow.
   `default` run (no key) and a `bvh-automatic` run were added, and the
   expected exit statuses (0/0/0/3/3/1/0) are asserted.
 
+Published as `377a83fda` on `sdast9/polyfem:main` (this note follows it);
+HDA `0f7b8fd` on `sdast9/houdini-plugins:main`.
+
 ### Validation (binaries `PolyFEM_bin` `edb2789f…`, `unit_tests` `bb85f83e…`)
 
 | Check | Criterion | Result | Status |
