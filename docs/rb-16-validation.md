@@ -1,7 +1,7 @@
 # RB-16 — Gap controller and update timing
 
 Date: 2026-09-11.
-Status: **characterized—decision pending; spring and bounded real-form/FEM stages complete**.
+Status: **closed 2026-09-11 — characterized, limits documented; global band controller retained** (see [Closure](#closure-2026-09-11)); the spring and bounded real-form/FEM stages finished characterized—decision pending.
 The stage-1 handoff below is historical; the stage-2 disposition supersedes it.
 
 ## Contract and authorization
@@ -335,3 +335,23 @@ bounds and endpoint interpretation. Do not promote the gradient-integral arithme
 control as a production solver repair without its own investigation. RB-17 is the
 next named investigation; its model choices and remaining coupled/feature/friction
 validation remain separate from this completed RB-16 characterization.
+
+## Closure (2026-09-11)
+
+**Status: closed — characterized, limits documented; global band controller retained.**
+
+On 2026-09-11 the user reviewed RB-01–RB-17 and the interior-point literature and decided to keep IPC's adaptive barrier as the production contact model: no new coefficient law, estimator, assignment or controller is to be selected. The global .5/.9 trim band with the existing refresh cadence stays
+the production controller ([RB-17 retirement](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11)).
+Disposition of this item's open decisions:
+
+| Open decision | Disposition |
+| --- | --- |
+| Coefficient-update timing / cadence vs bounded same-load interval corrections | Not adopted as a new controller. The post-publication force-state change this item measured is removed by [RB-20](rb-20-force-continuation.md) force continuation (no re-estimation after the published endpoint); the cadence stays |
+| Bounds / protection factors 2 and 4, endpoint interpretation | Not selected; the batch floor/cap and the RB-18 F2/F7 chain are the production bounds |
+| Stall and lag behavior observed in the FEM cycles | Repaired in production by [RB-18 F5](rb-18-quick-fixes.md#the-six-fixes) (no repeated unchanged stall restarts) and F6 (lagged friction follows the trim) |
+| Gradient-integral arithmetic control | Not promoted; remains an experimental control in `tools/rb16/` |
+| Roundoff-floor solve failures in the FEM stage | Diagnosed and repaired by [RB-19](rb-19-line-search-roundoff.md) (line-search gradient-norm fallback at energy roundoff) |
+
+The spring and FEM-stage evidence (41 incomplete direct-energy cycles retained
+alongside the completed ones), tools and contract are unchanged. Closing
+records a decision, not a physical validation.

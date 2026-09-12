@@ -1,7 +1,7 @@
 # RB-03 — Collision/FEM coordinate mapping
 
 Date: 2026-09-08 (characterization, indexing repair); 2026-09-11 (interpolated stiffness)
-Status: **validated within stated scope** — exact selector indexing (2026-09-08) and the selected interpolated-stencil stiffness (2026-09-11); see the [last stage](#interpolated-stencil-stiffness--2026-09-11)
+Status: **closed 2026-09-11 — validated within stated scope**: exact selector indexing (2026-09-08) and the selected interpolated-stencil stiffness (2026-09-11, see the [last stage](#interpolated-stencil-stiffness--2026-09-11)); no decision pending — the interpolation curvature choice this item was held open for was made and implemented, not left unselected
 
 The characterization below is historical. The indexing repair stage and the
 interpolated-stiffness stage are recorded at the end of this document; their

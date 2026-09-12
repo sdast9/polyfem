@@ -92,6 +92,13 @@ A user instruction in the current session can explicitly change scope; record it
 
 ## Agreed adaptive-barrier direction and next session
 
+**Status 2026-09-11.** After reviewing RB-01–RB-17 the user retained the
+production adaptive-barrier law; RB-13–RB-16 are closed with their evidence
+kept (see their rows and closure sections), RB-17 is retired, and the
+mechanical fixes that came out of that stream are RB-18–RB-21 and the RB-03
+interpolation stage. The narrative below is the research plan as it stood and
+is not an active work order.
+
 The user chose to improve the existing adaptive barrier, retaining Hessian-based
 scaling and gap-band feedback. Fixed mode is a comparison baseline; replacing the
 method with a trajectory-wide fixed coefficient or AL contact is not selected.
@@ -165,7 +172,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | --- | --- | --- | --- |
 | RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [closed 2026-09-11 — characterized, limits documented; production law retained, all six reproduced defects repaired by RB-18/RB-20/RB-21](rb-02-validation.md#closure-2026-09-11) |
-| RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [validated within stated scope — exact indexing (2026-09-08) and the selected interpolated stiffness: parent block condensed onto the stencil, gap-normalized direction fallback (2026-09-11)](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
+| RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [closed 2026-09-11 — validated within stated scope: exact indexing (2026-09-08) and the selected interpolated stiffness, parent block condensed onto the stencil with the gap-normalized direction fallback (2026-09-11); nothing pending](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [characterized—limits documented; endpoint/path diagnostics validated](rb-04-validation.md) |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
@@ -175,20 +182,23 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | not started |
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
-| RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [characterized—decision pending; stages 1–3 completed](rb-13-validation.md) |
-| RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [characterized—stages 1–3 complete; decision pending](rb-14-validation.md) |
-| RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [characterized—decision pending; bounded 2D/3D comparison complete](rb-15-validation.md) |
-| RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [characterized—decision pending; spring and bounded real-form/FEM comparisons complete](rb-16-validation.md) |
+| RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [closed 2026-09-11 — characterized, limits documented; production law retained, no K_eff law adopted; units used by RB-18 F3, algebra by RB-03](rb-13-validation.md#closure-2026-09-11) |
+| RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [closed 2026-09-11 — characterized, limits documented; no estimator or protection policy adopted (RB-18 law for new contacts, RB-20 continuation for persisting ones)](rb-14-validation.md#closure-2026-09-11) |
+| RB-15 | Feature-consistent local coefficient assignment | RB-02/04 transition evidence; RB-13 units | [closed 2026-09-11 — characterized; the frozen-shared-parents recommendation is implemented by RB-21 (parent identity) and RB-20 (continuation)](rb-15-validation.md#closure-2026-09-11) |
+| RB-16 | Mechanically informed gap controller and update timing | RB-13 bounds; RB-14 estimator; RB-15 candidate for integrated tests | [closed 2026-09-11 — characterized, limits documented; global band controller retained; its stall/lag/post-publication findings went to production via RB-18 F5/F6, RB-19 and RB-20](rb-16-validation.md#closure-2026-09-11) |
 | RB-17 | Integrated adaptive-barrier candidate comparison | RB-14–RB-16; RB-04 required measurements; RB-06 if failed-attempt recovery is exercised | [retired—per-contact band targeting withdrawn after the coupled gate; evidence retained; not integrated](rb-17-validation.md#retired-per-contact-band-targeting-2026-09-11) |
 | RB-18 | Quick-block fixes: coefficient law (positive median, relative floor, nonpositive/nonfinite curvature with |wᵀHw| → max|H|/d̂² fallback, d̂²-normalized conditioning cap), no-change stall restarts, lagged friction follows trim | RB-02 counterexamples; RB-04/RB-16 stall and lag evidence | [done — `e3fa362e0`, F7 `4a0df80a1`](rb-18-quick-fixes.md) |
 | RB-19 | Line-search gradient-norm fallback at energy roundoff (PolySolve), step-1 no-contact stall diagnosis, cube-on-floor NaN | RB-18 handoff; RB-04 refinement failures; RB-16 roundoff evidence | [done — PolySolve `5afe3b5d4`, pin bump on main](rb-19-line-search-roundoff.md) |
 | RB-20 | Force-continuation κ: persisting contacts keep their realized coefficient across refreshes; Hessian estimate only for new contacts | RB-04 H5 drift evidence; RB-15 frozen-coefficient recommendation; RB-18 law for new contacts | [done — default on; drift 17–53% → 1e-16 at equal cost with RB-21](rb-20-force-continuation.md) |
 | RB-21 | Parent-keyed κ: candidate identity carried through the toolkit builder; coefficient keyed on the parent, weighted over contributions | RB-15 parent invariant; RB-20 continuation; toolkit fork | [done — toolkit `e3c8d3fe`; seams exact in the default formulation](rb-21-parent-keyed-kappa.md) |
+| RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | not started — [section](#rb-22--high-order-hexahedral-collision-surface) |
 
-Recommended research sequence after existing RB-01–RB-04 evidence is
-RB-13 → RB-14 / RB-15 → RB-16 → RB-17 → RB-09 → RB-10. RB-05–RB-08
-remain the resource/recovery track; select them when needed. RB-11 input auditing
-and RB-12 provenance can be selected earlier. A dependency does not authorize completing two items
+The RB-13–RB-17 research sequence is closed/retired (2026-09-11). Remaining
+order: RB-05 (containment), then RB-09 references and RB-10 friction (where the
+RB-20 friction endpoint move belongs), with RB-22 (high-order hex surfaces)
+independently eligible now. RB-05–RB-08 remain the resource/recovery track;
+select them when needed. RB-11 input auditing and RB-12 provenance can be
+selected at any time. A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
 
 Status vocabulary: `not started`, `in progress`, `characterized—decision pending`, `characterized—limits documented`,
@@ -660,6 +670,10 @@ stage, not unrelated sweeping edits.
 
 ## RB-13 — Mechanical coefficient estimate and conditional bounds
 
+**Closed 2026-09-11** (production law retained; see the
+[closure](rb-13-validation.md#closure-2026-09-11)). The protocol below is
+retained as executed.
+
 **Question:** can we derive a mechanically interpretable estimate and a conditional
 interval for k from material response, inertia and predicted compressive demand?
 This is analytical characterization and a standalone probe, not a production law.
@@ -730,6 +744,10 @@ floor. Finish as characterized with remaining modeling choices stated.
 
 ## RB-14 — Practical compliance and force-demand estimators
 
+**Closed 2026-09-11** (no estimator or protection policy adopted; see the
+[closure](rb-14-validation.md#closure-2026-09-11)). The protocol below is
+retained as executed.
+
 **Prerequisite:** RB-13 reference equations and supported-map contract. Full RB-04
 closure is not required for small estimator probes. Read current Hessian extraction,
 provider scaling and RB-03 interpolation limits before any new local extraction.
@@ -762,9 +780,11 @@ requires the comparative evidence; output `docs/rb-14-validation.md` and contrac
 
 ## RB-15 — Feature-consistent local coefficient assignment
 
-Completed bounded investigation 2026-09-11: [contract and recommendation](rb-15-contract.md),
-[validation and limits](rb-15-validation.md). Production assignment remains unselected.
-The protocol below retains the comparison and acceptance contract.
+**Closed 2026-09-11**: the bounded investigation's recommendation (frozen
+shared parents) is implemented by RB-21 and RB-20; see the
+[contract and recommendation](rb-15-contract.md) and the
+[closure](rb-15-validation.md#closure-2026-09-11). The protocol below retains
+the comparison and acceptance contract as executed.
 
 **Question:** can local mechanical scaling survive changes of nearest feature
 without the reproduced frozen-snapshot energy/force jump? Reuse RB-02/04's
@@ -794,6 +814,10 @@ production mode switch bundled into the fixture. Propose the best assignment for
 RB-16/17; retain a decision-pending status until its implementation choice is made.
 
 ## RB-16 — Mechanically informed gap controller and update timing
+
+**Closed 2026-09-11** (global band controller retained; see the
+[closure](rb-16-validation.md#closure-2026-09-11)). The protocol below is
+retained as executed.
 
 **Prerequisites:** RB-13 interval semantics, RB-14 estimator and reference baseline;
 RB-15 candidate required for integrated comparisons. Start with simple springs
@@ -988,3 +1012,71 @@ nothing over the baseline and remove the drift. Both files are living
 plan+record documents with progress logs:
 [rb-20-force-continuation.md](rb-20-force-continuation.md),
 [rb-21-parent-keyed-kappa.md](rb-21-parent-keyed-kappa.md).
+
+## RB-22 — High-order hexahedral collision surface
+
+**Added 2026-09-11** from the RB-03 source audit of where interpolated map rows
+arise. Not started.
+
+**Defect (reproduced 2026-09-11, evidence
+`outputs/rb-03/20260912T025302Z-interpolation/q2-hex-probe/` in the parent
+workspace):** the default boundary extraction
+(`io/OutData.cpp::extract_boundary_mesh`, the `is_cube` branch) only
+tessellates Q1 quad faces; every other hexahedral face is dropped with a
+*trace*-level "skipping element … since it is not Q1". On the RB-03 hex scene
+(`tools/rb03/hex-scene/`) with `space/discr_order: 2` and contact enabled, the
+collision mesh has no faces (broad phase: 0 candidates) and the first Newton
+solve dies with `EXC_BAD_ACCESS` in `BCLagrangianForm::project_hessian` via
+`NLProblem::full_hessian_to_reduced_hessian` (exit 138) in **both**
+`semi_implicit` and `adaptive` stiffness modes; the same scene with contact
+disabled, and Q2 *tetrahedra* with contact, complete. The opt-in sampled
+extraction, `contact/collision_mesh: {enabled: true, tessellation_type:
+"max_order"}`, builds a conforming lattice surface for the Q2 hexes (136
+contacts, completes in 2.6 s, all rows exact selectors because the order-2
+lattice reproduces the Q2 nodes). Q1 hexes and every simplicial order are
+unaffected. The crash predates RB-03's interpolation stage (the adaptive mode
+never enters that code).
+
+**Invariant:** a contact-enabled scene must either build a conforming,
+watertight collision surface for every boundary face of every element type it
+accepts, or stop with a named error naming the element/order; a silently
+empty surface and an out-of-bounds crash are both violations.
+
+**Read:** `io/OutData.cpp` (`extract_boundary_mesh` cube branch;
+`extract_boundary_mesh_sampled` and its `element_ref_nodes`/lattice handling
+of `nfv == 4`; the prism/pyramid DOF-based path added for hybrid meshes),
+`varforms/NonlinearElasticVarForm.cpp::build_collision_mesh`, the crash site
+(`BCLagrangianForm::project_hessian`, `NLProblem::full_hessian_to_reduced_hessian`)
+to identify which size the empty surface corrupts, and the RB-03
+[map contract](rb-03-contract.md) (exact selectors vs interpolated rows are
+both supported by the stiffness code).
+
+**Stages:**
+1. Reproduce on the recorded inputs; trace the crash mechanism (which matrix
+   dimension the faceless collision mesh feeds into the reduced projection).
+   Bounded permitted fix without a model decision: refuse a contact-enabled
+   scene whose extraction skipped faces (or produced no faces) with a named
+   error listing the skipped elements and orders, and raise the skip message
+   from trace to warning.
+2. Compare the candidate defaults for Q2+ hex faces with evidence:
+   (a) route hexahedral (and mixed) meshes above Q1 to the sampled lattice
+   extraction at the element order automatically; (b) extend the cube branch
+   to tessellate high-order quad faces from their own DOFs, as the hybrid
+   prism/pyramid path does; (c) keep the opt-in and error by default. Measure
+   conformity/watertightness across order mismatches, selector vs interpolated
+   rows, proxy size and build time, and the RB-03 mapping oracle on the
+   resulting stencils.
+3. Tests through the production builder: Q2 and Q3 hex unit tests (face
+   count, watertight, displacement-map rows), the RB-03 `[contact_stiffness_mapping]`
+   oracle on a Q2 hex contact, a Q2 hex variant of the RB-03 hex scene, and a
+   regression that the former crash is now a named error or a working surface.
+   Existing Q1 hex, simplicial and HDA paths must stay bit-identical.
+
+**Decision boundary:** choosing the default extraction for high-order
+hexahedra is a user-facing behavior change; present (a)/(b)/(c) with the
+measurements before selecting. The named error for the current silent failure
+is a permitted repair within the item.
+
+**Acceptance:** no crash on a Q2+ hex contact scene; either a conforming
+surface with completed public smokes or an explicit error; unchanged Q1/tet
+smokes; record and status row per the template.

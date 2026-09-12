@@ -1,7 +1,7 @@
 # RB-15 — Feature-consistent local coefficient assignment
 
 Date: 2026-09-11 (started September 10).
-Status: **characterized—decision pending**, within the bounded investigation.
+Status: **closed 2026-09-11 — characterized; recommendation implemented by RB-20/RB-21** (see [Closure](#closure-2026-09-11)); the bounded investigation itself finished characterized—decision pending.
 Selected stage: compare frozen feature keys, shared parents and complete smooth
 fields; reproduce 2D discontinuity, extend to 3D and characterize lifecycle/limits.
 
@@ -139,3 +139,21 @@ unresolved. Before integration select parent construction, seam/multiplicity
 semantics, the RB-14 estimator and outer discovery/refresh policy. RB-16 can use
 this bounded candidate for further controller investigation; RB-17 still needs the
 explicit model decisions. No downstream work is silently included in this session.
+
+## Closure (2026-09-11)
+
+**Status: closed — characterized; recommendation implemented by RB-20/RB-21.**
+
+On 2026-09-11 the user reviewed RB-01–RB-17 and the interior-point literature and decided to keep IPC's adaptive barrier as the production contact model: no new coefficient law, estimator, assignment or controller is to be selected. This item's recommended bounded candidate — frozen shared parents —
+is what production now does; the alternatives are not selected. Disposition:
+
+| Open decision | Disposition |
+| --- | --- |
+| Parent construction and unknown-parent discovery | Implemented by [RB-21](rb-21-parent-keyed-kappa.md): the toolkit builder records the candidate primitive pair(s) that built each collision (`NormalCollision::parents`, toolkit `e3c8d3fe`), so parents are known by construction — no discovery algorithm is needed |
+| Seam / multiplicity semantics | Implemented by RB-21: the coefficient is keyed on the parent candidate and the built collision's scale is the weight-mean of its parent contributions; seams are exactly C⁰ in the default formulation (`[kappa_continuity][parent]` regression), with the improved-max formulation's half-jump documented and not used |
+| Frozen coefficients across the lifecycle | Implemented by [RB-20](rb-20-force-continuation.md): a contact keeps the coefficient that acted at the published endpoint; refresh drift 17–53 % → ~1e-16 |
+| Complete smooth field (changes forces; tangential attraction) | Not selected |
+| Estimator for the parent (RB-14) | Not selected; the production law estimates new parents (see RB-14 closure) |
+
+The 2D/3D probes (`tools/rb15/`), measurements and contract are unchanged.
+Closing records a decision and its implementation, not a physical validation.

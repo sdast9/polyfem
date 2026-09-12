@@ -1,7 +1,7 @@
 # RB-14 — Practical compliance and force-demand estimators
 
 Date: 2026-09-10
-Status: **characterized—decision pending; stages 1–3 complete within bounded scope**
+Status: **closed 2026-09-11 — characterized, limits documented; production law retained** (see [Closure](#closure-2026-09-11); stages 1–3 complete within bounded scope 2026-09-10)
 Current handoff: stage 3 compares physical neighborhoods, shared prediction and
 protection proposals. No production model is selected. Earlier handoffs below
 are preserved as history and superseded by stage 3.
@@ -342,3 +342,19 @@ The tools, protocol, inputs, compact results and documentation are published to
 commit. `artifact-checks.json` records residual/BC, syntax, formatting, link and
 result checks; `final-identity.json` records preservation of shared artifacts.
 The workspace README is updated locally outside Git.
+
+## Closure (2026-09-11)
+
+**Status: closed — characterized, limits documented; production law retained.**
+
+On 2026-09-11 the user reviewed RB-01–RB-17 and the interior-point literature and decided to keep IPC's adaptive barrier as the production contact model: no new coefficient law, estimator, assignment or controller is to be selected. Disposition of this item's open decisions:
+
+| Open decision | Disposition |
+| --- | --- |
+| Production estimator (physical-radius local vs shared predictor, calibrated guarantee) | Not adopted. New contacts keep the frozen-Hessian estimate of the production law as repaired by [RB-18](rb-18-quick-fixes.md); persisting contacts keep their realized coefficient under [RB-20](rb-20-force-continuation.md) force continuation, which removes the re-estimation the estimator work was meant to improve |
+| Zero-demand protection policy (fresh-current vs tangent matching, discontinuous branches) | Not adopted; the RB-18 F2/F7 chain (previous κ → \|wᵀHw\| → max\|H\|/d̂² → batch floor/cap) is the production handling of invalid or vanishing curvature |
+| Uncertainty enclosures / nonlinear band coverage | Retained as limits; no production acceptance criterion is derived from them |
+| Cost of global factor/solve for shared prediction | Moot for production; recorded timings stay as evidence |
+
+The stage records, `tools/rb14/` probes, protocol, results and contract are
+unchanged. Closing records a decision, not a physical validation.

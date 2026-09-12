@@ -1,7 +1,7 @@
 # RB-13 — Mechanical coefficient estimate and conditional bounds
 
 Updated: 2026-09-10
-Status: **characterized — decision pending; stages 1–3 completed**
+Status: **closed 2026-09-11 — characterized, limits documented; production law retained** (see [Closure](#closure-2026-09-11); stages 1–3 completed 2026-09-10)
 Current selected stage: stage 3 mechanical scope tests; analytical investigation complete.
 
 ## Stage 1 record — 2026-09-09
@@ -453,3 +453,22 @@ assignment. RB-16 still needs estimator/assignment decisions before integrated
 controller work, and RB-17 must evaluate the selected candidate before default
 promotion. No additional user model decision is necessary to finish this
 characterization; downstream model changes retain their own decision boundaries.
+
+## Closure (2026-09-11)
+
+**Status: closed — characterized, limits documented; production law retained.**
+
+On 2026-09-11 the user reviewed RB-01–RB-17 and the interior-point literature and decided to keep IPC's adaptive barrier as the production contact model: no new coefficient law, estimator, assignment or controller is to be selected. That resolves what this item was held open for: no production
+estimator, coefficient assignment, controller or default is to be selected from
+the RB-13 reference. Disposition of its open decisions:
+
+| Open decision | Disposition |
+| --- | --- |
+| Adopt a compliance/K_eff-based coefficient law (`K_eff = 1/(J H⁻¹ Jᵀ)`, conditional bounds) | Not adopted. The production Rayleigh-quotient law stays; RB-13's own inequality `K_direction ≥ K_eff` (contract, stage 3) is retained as the documented relation between the two, and the reference/bounds remain analytical evidence only |
+| Reference stiffness and units for a positive floor / conditioning | Resolved in production by [RB-18 F3](rb-18-quick-fixes.md#the-six-fixes) (d̂²-normalized conditioning cap) and F1/F2/F7 (relative floor, curvature fallbacks); no absolute floor introduced |
+| Local stiffness for interpolated maps | Resolved by [RB-03](rb-03-contract.md#selected-interpolated-stiffness--2026-09-11): the parent block condensed onto the stencil uses the same `(B H_PP⁻¹ Bᵀ)⁻¹` algebra on a stencil's parent set — a local extension of the production law, not the global `K_eff` law |
+| Nonlinear/coupled prediction, application enclosures | Retained as limits; no downstream item depends on them after the decision |
+
+The stage 1–3 records, probes (`tools/rb13/`), contract and roadmap are
+unchanged and remain the mechanical reference for any future re-opening.
+Closing records a decision, not a physical validation of the retained law.
