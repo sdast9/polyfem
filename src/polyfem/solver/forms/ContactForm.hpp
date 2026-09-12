@@ -32,11 +32,17 @@ namespace ipc
 
 namespace polyfem::solver
 {
-	/// @brief RB-05: read the opt-in broad-phase resource limits from the
-	///        `solver/contact/CCD` options (`resource_limits/max_cell_items`,
-	///        `resource_limits/max_candidate_emissions`); absent or zero
-	///        fields leave the corresponding bound disabled.
-	ipc::BroadPhaseBudget broad_phase_budget_from_args(const json &ccd_args);
+	/// @brief RB-05: the `solver/contact/CCD/resource_limits` options as
+	///        written: per bound, -1 = automatic (the production default when
+	///        the broad phase can enforce it, disabled with a notice
+	///        otherwise), 0 = disabled, N > 0 = explicit (an error when the
+	///        broad phase cannot enforce it). Absent fields are automatic.
+	struct ResourceLimits
+	{
+		long long max_cell_items = -1;
+		long long max_candidate_emissions = -1;
+	};
+	ResourceLimits resource_limits_from_args(const json &ccd_args);
 
 	/// @brief How the barrier stiffness is chosen and updated
 	enum class BarrierStiffnessMode
@@ -152,14 +158,31 @@ namespace polyfem::solver
 		const CandidateStatistics &candidate_statistics() const { return candidate_statistics_; }
 		void reset_candidate_statistics() { candidate_statistics_ = CandidateStatistics(); }
 
-		/// @brief RB-05: opt-in bound on the broad phase's intermediate buffers,
+		/// @brief RB-05: bound on the broad phase's intermediate buffers,
 		///        enforced by the toolkit before the corresponding allocation
-		///        (ipc::BroadPhaseBudget). Zero fields disable the bound (the
-		///        default, bit-identical to the unbudgeted path). A method that
-		///        cannot enforce a budget is refused here, at configuration
-		///        time, with a named error -- never silently ignored.
+		///        (ipc::BroadPhaseBudget). Zero fields disable the bound
+		///        (bit-identical to the unbudgeted path). A method that cannot
+		///        enforce a budget is refused here, at configuration time,
+		///        with a named error -- never silently ignored.
 		void set_broad_phase_budget(const ipc::BroadPhaseBudget &budget);
 		const ipc::BroadPhaseBudget &broad_phase_budget() const { return broad_phase_->budget; }
+
+		/// @brief Production defaults applied by automatic resource limits:
+		///        hash-grid cell items (16 B each plus 8 B of merge indices:
+		///        about 2.4 GB) and pre-filter pair emissions per detection
+		///        pass (about 35 B each as measured: about 1.75 GB). Every
+		///        public scene needs ~2,400 items per sweep; the runaway cases
+		///        measured in RB-05 (a few vertices sweeping far) needed 6e7
+		///        items and up, uniform sweeps 1e7 emissions and up.
+		static constexpr size_t default_max_cell_items = 100000000;
+		static constexpr size_t default_max_candidate_emissions = 50000000;
+
+		/// @brief Resolve the written limits (see ResourceLimits) against this
+		///        form's broad phase and apply them: automatic bounds become
+		///        the defaults when the method can enforce them and are
+		///        disabled with a logged notice otherwise; explicit bounds are
+		///        applied as written (an error when not enforceable).
+		void apply_resource_limits(const ResourceLimits &limits);
 
 	protected:
 		/// @brief Update the cached candidate set for the current solution

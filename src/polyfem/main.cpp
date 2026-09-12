@@ -10,11 +10,17 @@
 #include <polyfem/optimization/OptState.hpp>
 #endif
 
+#include <polyfem/utils/ExitStatus.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/varforms/VarForm.hpp>
 #include <polyfem/io/YamlToJson.hpp>
 #include <polyfem/varforms/VarFormFactory.hpp>
+
+#include <ipc/broad_phase/broad_phase.hpp>
+#include <ipc/utils/logger.hpp>
+
+#include <new>
 
 using namespace polyfem;
 using namespace solver;
@@ -140,7 +146,9 @@ int forward_simulation_with_legacy_state(const std::vector<std::string> &names,
 	return EXIT_SUCCESS;
 }
 
-int main(int argc, char **argv)
+// The former main: argument parsing and the simulation. Any named failure
+// it throws is reported by main below.
+static int run(int argc, char **argv)
 {
 	using namespace polyfem;
 
@@ -293,3 +301,47 @@ int optimization_simulation(const CLI::App &command_line,
 	return opt_state.run(opt_args, is_strict);
 }
 #endif
+
+namespace
+{
+	// RB-05 / RB-12: every named failure ends here instead of in
+	// std::terminate, so the last lines of the log say what happened in
+	// plain terms, the sinks are flushed, and the exit status tells a
+	// refusal from a crash (ExitStatus.hpp).
+	int report_failure(const ExitStatus status, const std::string &what, const std::string &advice)
+	{
+		logger().critical("PolyFEM stopped: {}", what);
+		if (!advice.empty())
+			logger().critical("{}", advice);
+		logger().critical(
+			"Exit status {} ({}).", int(status),
+			status == ExitStatus::ResourceLimit ? "resource limit; not a crash, the accepted steps on disk are intact" : "named failure; not a crash");
+		logger().flush();
+		ipc::logger().flush();
+		return status;
+	}
+} // namespace
+
+int main(int argc, char **argv)
+{
+	try
+	{
+		return run(argc, argv);
+	}
+	catch (const ipc::BroadPhaseBudgetExceeded &e)
+	{
+		return report_failure(
+			ExitStatus::ResourceLimit, e.what(),
+			"A contact broad-phase resource limit was reached before the memory was allocated: the solver's trial step would have swept the surfaces so far that finding their candidate pairs needed more scratch memory than solver.contact.CCD.resource_limits allows (a safety stop, not a crash). Usually a few nodes moved very far in one Newton trial. Reduce the time step or the load increment, use a BVH broad phase, or raise the limits (0 disables them).");
+	}
+	catch (const std::bad_alloc &e)
+	{
+		return report_failure(
+			ExitStatus::ResourceLimit, std::string("memory allocation failed (") + e.what() + ")",
+			"The system refused a memory allocation. Reduce the mesh or the time step, close other programs, or run on a machine with more memory.");
+	}
+	catch (const std::exception &e)
+	{
+		return report_failure(ExitStatus::Failure, e.what(), "");
+	}
+}

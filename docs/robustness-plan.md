@@ -177,7 +177,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [closed 2026-09-11 — characterized, limits documented; production law retained, all six reproduced defects repaired by RB-18/RB-20/RB-21](rb-02-validation.md#closure-2026-09-11) |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [closed 2026-09-11 — validated within stated scope: exact indexing (2026-09-08) and the selected interpolated stiffness, parent block condensed onto the stencil with the gap-normalized direction fallback (2026-09-11); nothing pending](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [validated within stated scope 2026-09-12 — record version 2 (attempt stream, candidate counts, failed-attempt iterate, right-endpoint work increments), VTU kinematics aligned; `physical_balance_pass` deliberately unavailable pending an RB-09 threshold](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12) |
-| RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | [validated within stated scope 2026-09-12 — stale swept-cache containment, pre-build sweep diagnostics, opt-in `solver/contact/CCD/resource_limits` enforced by the toolkit before allocation (hash grid, brute force); **no default limit set** (user decision pending); retry is RB-08](rb-05-validation.md) |
+| RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | [validated within stated scope 2026-09-12 — stale swept-cache containment, pre-build sweep diagnostics, `solver/contact/CCD/resource_limits` enforced by the toolkit before allocation (hash grid, brute force), **on by default (automatic: 1e8 items / 5e7 emissions; user decision 2026-09-12)**, exit status 3 for a resource failure / 1 for any named failure, HDA controls with novice tooltips; retry is RB-08](rb-05-validation.md) |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | not started |
@@ -204,8 +204,9 @@ RB-20 friction endpoint move belongs); RB-23 (Q3+ hexahedral basis) is
 independently eligible and is the prerequisite for Q3+ hex contact. RB-06–RB-08 remain the resource/recovery track
 (RB-05's `aborted` attempt row and discarded swept interval are the state RB-06
 starts from; a resource failure is now a distinct, non-retried exception type
-for RB-08 to build a policy on); select them when needed. A default resource
-limit is an open user decision (see the RB-05 record's handoff). RB-11 input auditing and RB-12 provenance can be
+for RB-08 to build a policy on); select them when needed. The default resource
+limits and the exit statuses were decided on 2026-09-12 (RB-05 follow-up):
+named failures exit 1, resource failures 3, an abort signal is a real crash. RB-11 input auditing and RB-12 provenance can be
 selected at any time. A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
 
@@ -419,9 +420,12 @@ are enforced by the toolkit **before** the corresponding allocation (exact
 counts from the boxes / the sorted items), throw a named exception that no
 solver retry handler absorbs, and are refused explicitly for methods that
 cannot enforce them. Pre-build sweep diagnostics are logged and flushed, the
-RB-04 stream records the aborted proposal. Defaults are 0 (bit-identical
-smokes). **No default budget is set**; the record lists measured candidates
-for the user's choice. The section below is the plan as it stood.
+RB-04 stream records the aborted proposal. **Follow-up (user decision
+2026-09-12):** the limits are on by default (`-1` = automatic: 1e8 items /
+5e7 emissions where enforceable, dropped with a notice for BVH & co.; `0`
+disables), `main` maps a resource failure to exit status 3 and any other
+named failure to 1, and the Houdini node exposes Automatic / Off / Custom
+with novice tooltips. The section below is the plan as it stood.
 
 **Revised integration scope:** retain collision-candidate protection and account
 separately for RB-14 compliance solves, estimator neighborhoods and retained

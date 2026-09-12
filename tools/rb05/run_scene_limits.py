@@ -6,23 +6,29 @@ python3 tools/rb05/run_scene_limits.py --binary build/PolyFEM_bin --output /abso
 For each scene, isolated copies of the input are run with the physical
 diagnostics on and:
 
-  unlimited    no resource limits (the reference);
-  generous     limits far above the scene's needs -- the solution must be
-               bit-identical to `unlimited` (the counting paths run, the
-               bounds never fire);
-  tiny         max_cell_items = 1 -- the first static broad-phase build (the
-               contact form's init) must fail with the named resource error
-               before any allocation: no accepted step, a failed-attempt
-               record, non-zero exit;
-  sweep        max_cell_items just below the first trial sweep's item count
-               (read from `generous`'s log) -- the failure must happen inside
-               line_search_begin: the pre-build sweep diagnostics are logged,
-               an `aborted` row with broad_phase_built=false ends the attempt
-               stream, the RB-04 attempt-stream checker accepts the run;
-  unsupported  limits with broad_phase "bvh" -- refused at startup with the
-               named configuration error, before any solve.
+  unlimited      resource_limits explicitly 0/0 (the reference);
+  default        no resource_limits key: the spec default (-1 = automatic)
+                 applies the production limits (hash_grid) -- the solution
+                 must be bit-identical to `unlimited`;
+  generous       explicit limits far above the scene's needs -- bit-identical
+                 to `unlimited` (the counting paths run, the bounds never fire);
+  tiny           max_cell_items = 1 -- the first static broad-phase build (the
+                 contact form's init) must fail with the named resource error
+                 before any allocation: no accepted step, a failed-attempt
+                 record, exit status 3;
+  sweep          max_cell_items just below the first trial sweep's item count
+                 (read from `generous`'s log) -- the failure must happen inside
+                 line_search_begin: the pre-build sweep diagnostics are logged,
+                 an `aborted` row with broad_phase_built=false ends the attempt
+                 stream, the RB-04 attempt-stream checker accepts the run,
+                 exit status 3;
+  unsupported    explicit limits with broad_phase "bvh" -- refused at startup
+                 with the named configuration error, exit status 1;
+  bvh-automatic  broad_phase "bvh" with automatic limits -- runs normally
+                 (exit 0) with a logged notice that the limits are dropped.
 
 Everything is written under --output; nothing is regenerated or relaxed.
+The expected exit statuses are asserted (ExitStatus.hpp: 0 / 1 / 3).
 """
 import argparse
 import hashlib
@@ -63,6 +69,9 @@ def last_solution(directory):
     return hashlib.sha256(struct.pack('<%dd' % len(values), *values)).hexdigest(), len(vtus)
 
 
+EXPECTED_EXIT = {'unlimited': 0, 'default': 0, 'generous': 0, 'tiny': 3, 'sweep': 3, 'unsupported': 1, 'bvh-automatic': 0}
+
+
 def run(scene, name, limits, broad_phase=None):
     directory = out / scene.stem / name
     (directory / 'output').mkdir(parents=True, exist_ok=True)
@@ -88,6 +97,8 @@ def run(scene, name, limits, broad_phase=None):
         'name': name, 'command': cmd, 'exit': exit_code, 'limits': limits, 'broad_phase': broad_phase,
         'solution_sha256': sha, 'vtu_steps': steps,
         'budget_error_lines': [l for l in text.splitlines() if 'resource budget exceeded' in l or 'cannot be enforced' in l],
+        'limit_notice_lines': [l for l in text.splitlines() if 'Contact broad-phase resource limits' in l][:2],
+        'stop_lines': [l for l in text.splitlines() if 'PolyFEM stopped' in l or 'Exit status' in l],
         'sweep_failure_lines': [l for l in text.splitlines() if 'Broad phase over trial step failed' in l],
         'pre_build_lines': len([l for l in text.splitlines() if 'Broad phase over trial step: trial Linf' in l]),
         'intermediate_lines': [l for l in text.splitlines() if 'cell items' in l and 'pre-filter pair emissions' in l][:3],
@@ -112,14 +123,17 @@ def run(scene, name, limits, broad_phase=None):
         except AssertionError as error:
             record['attempt_stream_check_passed'] = False
             record['attempt_stream_check_error'] = repr(error)
-    print(name, 'exit', exit_code, 'steps', steps, 'sha', (sha or '')[:12], 'budget lines', len(record['budget_error_lines']), 'aborted', len(record.get('aborted_rows', [])), 'stream check', record.get('attempt_stream_check_passed'), flush=True)
+    record['expected_exit'] = EXPECTED_EXIT[name]
+    record['exit_as_expected'] = exit_code == EXPECTED_EXIT[name]
+    print(name, 'exit', exit_code, '(expected', EXPECTED_EXIT[name], ')', 'steps', steps, 'sha', (sha or '')[:12], 'budget lines', len(record['budget_error_lines']), 'aborted', len(record.get('aborted_rows', [])), 'stream check', record.get('attempt_stream_check_passed'), flush=True)
     return record
 
 
 results = {'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'threads': args.threads, 'scenes': {}}
 for scene in scenes:
     records = {}
-    records['unlimited'] = run(scene, 'unlimited', None)
+    records['unlimited'] = run(scene, 'unlimited', {'max_cell_items': 0, 'max_candidate_emissions': 0})
+    records['default'] = run(scene, 'default', None)
     records['generous'] = run(scene, 'generous', {'max_cell_items': 10**9, 'max_candidate_emissions': 10**9})
     records['tiny'] = run(scene, 'tiny', {'max_cell_items': 1})
     # The first trial sweep's item count, from the generous run's log.
@@ -128,7 +142,11 @@ for scene in scenes:
     records['sweep'] = run(scene, 'sweep', {'max_cell_items': sweep_items - 1}) if sweep_items else {'skipped': 'no sweep statistics in the generous log'}
     records['sweep_threshold_items'] = sweep_items
     records['unsupported'] = run(scene, 'unsupported', {'max_cell_items': 1000}, broad_phase='bvh')
-    records['generous_identical_to_unlimited'] = records['generous']['solution_sha256'] == records['unlimited']['solution_sha256'] and records['unlimited']['solution_sha256'] is not None
+    records['bvh-automatic'] = run(scene, 'bvh-automatic', None, broad_phase='bvh')
+    reference = records['unlimited']['solution_sha256']
+    records['generous_identical_to_unlimited'] = records['generous']['solution_sha256'] == reference and reference is not None
+    records['default_identical_to_unlimited'] = records['default']['solution_sha256'] == reference and reference is not None
+    records['all_exits_as_expected'] = all(r.get('exit_as_expected') for r in records.values() if isinstance(r, dict) and 'exit' in r)
     results['scenes'][scene.stem] = records
-    print(scene.stem, 'generous == unlimited:', records['generous_identical_to_unlimited'], flush=True)
+    print(scene.stem, 'generous == unlimited:', records['generous_identical_to_unlimited'], 'default == unlimited:', records['default_identical_to_unlimited'], 'exits as expected:', records['all_exits_as_expected'], flush=True)
 (out / 'results.json').write_text(json.dumps(results, indent=2, default=str) + '\n')

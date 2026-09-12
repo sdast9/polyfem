@@ -20,23 +20,23 @@
 
 namespace polyfem::solver
 {
-	ipc::BroadPhaseBudget broad_phase_budget_from_args(const json &ccd_args)
+	ResourceLimits resource_limits_from_args(const json &ccd_args)
 	{
-		ipc::BroadPhaseBudget budget;
+		ResourceLimits limits;
 		if (!ccd_args.is_object() || !ccd_args.contains("resource_limits") || !ccd_args["resource_limits"].is_object())
-			return budget;
-		const json &limits = ccd_args["resource_limits"];
-		const auto read = [&](const char *key) -> size_t {
-			if (!limits.contains(key))
-				return 0;
-			const double value = limits[key].get<double>();
-			if (!(value >= 0) || !std::isfinite(value))
-				log_and_throw_error("solver.contact.CCD.resource_limits.{} must be a finite non-negative integer (got {})", key, limits[key].dump());
-			return static_cast<size_t>(value);
+			return limits;
+		const json &written = ccd_args["resource_limits"];
+		const auto read = [&](const char *key, long long &field) {
+			if (!written.contains(key))
+				return;
+			const double value = written[key].is_number() ? written[key].get<double>() : std::numeric_limits<double>::quiet_NaN();
+			if (!std::isfinite(value) || value < -1)
+				log_and_throw_error("solver.contact.CCD.resource_limits.{} must be -1 (automatic), 0 (disabled) or a positive integer (got {})", key, written[key].dump());
+			field = value < 0 ? -1 : static_cast<long long>(value);
 		};
-		budget.max_cell_items = read("max_cell_items");
-		budget.max_candidate_emissions = read("max_candidate_emissions");
-		return budget;
+		read("max_cell_items", limits.max_cell_items);
+		read("max_candidate_emissions", limits.max_candidate_emissions);
+		return limits;
 	}
 
 	ContactForm::ContactForm(const ipc::CollisionMesh &collision_mesh,
@@ -105,6 +105,43 @@ namespace polyfem::solver
 	{
 		candidates_.clear();
 		use_cached_candidates_ = false;
+	}
+
+	void ContactForm::apply_resource_limits(const ResourceLimits &limits)
+	{
+		const bool enforceable = broad_phase_->supports_budget();
+		ipc::BroadPhaseBudget budget;
+		bool automatic = false, explicit_bound = false, dropped = false;
+		const auto resolve = [&](const long long written, const size_t production_default) -> size_t {
+			if (written > 0)
+			{
+				explicit_bound = true;
+				return static_cast<size_t>(written);
+			}
+			if (written == 0)
+				return 0;
+			automatic = true;
+			if (enforceable)
+				return production_default;
+			dropped = true;
+			return 0;
+		};
+		budget.max_cell_items = resolve(limits.max_cell_items, default_max_cell_items);
+		budget.max_candidate_emissions = resolve(limits.max_candidate_emissions, default_max_candidate_emissions);
+		// An explicit bound on a method that cannot enforce it is refused;
+		// an automatic one is dropped with a notice (the method's default
+		// behavior is what the user asked for, not a limit).
+		set_broad_phase_budget(budget);
+		if (dropped && !explicit_bound)
+			logger().info(
+				"Contact broad-phase resource limits: automatic limits are not enforceable by broad phase \"{}\" (only hash_grid and brute_force count their intermediates before allocating); running without them",
+				broad_phase_->name());
+		else if (budget.enabled())
+			logger().info(
+				"Contact broad-phase resource limits ({}): max_cell_items {}, max_candidate_emissions {} ({})",
+				automatic && !explicit_bound ? "automatic" : "explicit", budget.max_cell_items, budget.max_candidate_emissions, broad_phase_->name());
+		else
+			logger().info("Contact broad-phase resource limits disabled ({})", broad_phase_->name());
 	}
 
 	void ContactForm::set_broad_phase_budget(const ipc::BroadPhaseBudget &budget)

@@ -1735,19 +1735,19 @@
             "max_cell_items",
             "max_candidate_emissions"
         ],
-        "doc": "Opt-in bounds on the intermediate buffers the contact broad phase allocates for one trial sweep, enforced by the IPC toolkit before the corresponding allocation (RB-05). 0 disables a bound; both default to 0, i.e. no protection, the historical behavior. On a violation the attempt fails with a named resource error: no partial candidate set is used, the accepted state is kept and nothing is retried. Only hash_grid and brute_force can enforce a bound; any other broad_phase is refused at startup when a bound is set. The bounds do not cover the collision set, CCD time or the memory of other forms."
+        "doc": "Bounds on the intermediate buffers the contact broad phase allocates for one trial sweep, enforced by the IPC toolkit before the corresponding allocation (RB-05). Each bound is -1 (automatic, the default), 0 (disabled) or a positive count. Automatic applies the production defaults (100000000 cell items, about 2.4 GB of scratch; 50000000 candidate emissions per pass, about 1.75 GB) when the broad phase can enforce them (hash_grid, brute_force) and disables the bound with a logged notice otherwise (bvh, spatial_hash, sweep_and_prune cannot count before allocating; bvh and sweep_and_prune do not suffer the localized-sweep blow-up). An explicit positive bound with a broad phase that cannot enforce it is an error at startup. On a violation the attempt fails with a named resource error and the process exits with status 3: no partial candidate set is used, the accepted state is kept and nothing is retried. The bounds do not cover the collision set, CCD time or the memory of other forms."
     },
     {
         "pointer": "/solver/contact/CCD/resource_limits/max_cell_items",
-        "default": 0,
+        "default": -1,
         "type": "int",
-        "doc": "hash_grid only: maximum number of (element box, grid cell) items of one broad-phase build over the swept vertex, edge and face boxes (16 bytes each, plus 8 bytes per item during candidate detection), counted exactly from the boxes before any item is inserted. A few vertices sweeping far cover about (sweep / cell)^3 cells each; a uniform sweep re-scales the cell size and stays small."
+        "doc": "hash_grid only: maximum number of (element box, grid cell) items of one broad-phase build over the swept vertex, edge and face boxes (16 bytes each, plus 8 bytes per item during candidate detection), counted exactly from the boxes before any item is inserted. -1 = automatic (100000000 when enforceable), 0 = disabled. A few vertices sweeping far cover about (sweep / cell)^3 cells each; a uniform sweep re-scales the cell size and stays small."
     },
     {
         "pointer": "/solver/contact/CCD/resource_limits/max_candidate_emissions",
-        "default": 0,
+        "default": -1,
         "type": "int",
-        "doc": "Maximum number of candidate pair emissions of one detection pass (edge-edge or face-vertex in 3D, edge-vertex in 2D) before the collision filter, the box overlap test and deduplication: hash_grid counts the item pairs sharing a cell from its sorted items, brute_force the box pairs it compares. Every candidate buffer of that pass holds at most this many entries."
+        "doc": "Maximum number of candidate pair emissions of one detection pass (edge-edge or face-vertex in 3D, edge-vertex in 2D) before the collision filter, the box overlap test and deduplication: hash_grid counts the item pairs sharing a cell from its sorted items, brute_force the box pairs it compares. Every candidate buffer of that pass holds at most this many entries. -1 = automatic (50000000 when enforceable), 0 = disabled."
     },
     {
         "pointer": "/solver/contact/friction_iterations",

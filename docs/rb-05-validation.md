@@ -2,9 +2,10 @@
 
 Date: 2026-09-12
 Status: **validated within stated scope** (stage 1: containment of the swept
-candidate cache, pre-build step diagnostics, opt-in broad-phase resource
-limits enforced before allocation; **no default limit is set** — that is the
-user's choice per the plan's decision register)
+candidate cache, pre-build step diagnostics, broad-phase resource limits
+enforced before allocation; **the limits are on by default since the
+follow-up below (user decision 2026-09-12)**, together with meaningful exit
+statuses and the Houdini controls)
 Selected stage: inventory → bounded reproduction → containment + opt-in limit
 → validation. Retry/backoff is RB-08; rollback of the exposed failed iterate
 is RB-06; the production broad-phase default and the 50·d̂ trial cap are
@@ -298,3 +299,59 @@ the boxes; the emission count is one linear pass over the sorted items.
   exposed failed iterate; the `aborted` row and the discarded interval are
   the state it starts from), RB-08 (retry, now that a resource failure is a
   distinct, non-retried exception type).
+
+## Follow-up — defaults on, exit statuses, Houdini controls (2026-09-12)
+
+**User decisions (2026-09-12):** enable the limits by default with the
+measured values, give a resource failure a real exit status, and expose the
+controls on the HDA with explanations a novice can follow.
+
+### What changed
+
+- `solver/contact/CCD/resource_limits/{max_cell_items, max_candidate_emissions}`
+  now default to **-1 = automatic**: `ContactForm::apply_resource_limits`
+  applies the production defaults (`default_max_cell_items` 10⁸ ≈ 2.4 GB of
+  items + merge indices, `default_max_candidate_emissions` 5·10⁷ ≈ 1.75 GB at
+  the measured ~35 B/emission) when the broad phase can enforce them
+  (`hash_grid`, `brute_force`) and drops them with an info-level notice
+  otherwise — the HDA's default broad phase is **BVH**, so an error there
+  would have broken every HDA scene. `0` disables a bound; an explicit
+  positive bound with a method that cannot enforce it stays a startup error.
+  A one-line notice states the effective limits on every run.
+- `main` catches every named failure (`src/polyfem/utils/ExitStatus.hpp`):
+  `ipc::BroadPhaseBudgetExceeded` and `std::bad_alloc` → **exit 3** with a
+  plain-language explanation (safety stop, not a crash; steps on disk are
+  kept; reduce the step / load increment, use BVH, or raise the limits); any
+  other `std::exception` → **exit 1** with `PolyFEM stopped: <what>`. Sinks
+  are flushed before returning. An abort signal (−6 / 134) now means a real
+  crash or assertion; RB-22's record documented 134 for named errors, which
+  is historical from this commit on. No existing tool asserted on −6 (the
+  RB-04 runner requires equal non-zero codes for its failure pair).
+- HDA (`sdast9/houdini-plugins` `0f7b8fd`): Contact ▸ CCD Parameters
+  gains *Resource Limits* (Automatic / Off / Custom) with *Max Grid Items*
+  and *Max Candidate Pairs* for Custom, exported as −1 / 0 / N and restored on
+  import; novice tooltips explain the mechanism, the numbers, the exit status
+  and the fixes; the Broad Phase tooltip says which methods can blow up.
+  `test_polyfem_hda.py` checks the automatic default, the Custom/Off round
+  trips and the tooltips. All three assets rebuilt; local, published and
+  installed hashes match.
+- `tools/rb05/run_scene_limits.py`: `unlimited` is now explicit 0/0, a
+  `default` run (no key) and a `bvh-automatic` run were added, and the
+  expected exit statuses (0/0/0/3/3/1/0) are asserted.
+
+### Validation (binaries `PolyFEM_bin` `edb2789f…`, `unit_tests` `bb85f83e…`)
+
+| Check | Criterion | Result | Status |
+| --- | --- | --- | --- |
+| `[resource_containment]` (option semantics −1/0/N, automatic resolution per method, explicit refusal) | pass | 2 cases / 86 assertions | pass |
+| Affected selection | no failure | 78 cases / 5,139 assertions | pass |
+| A/B smokes, baseline `b29eeb6d` (no limits) vs follow-up (automatic limits on) | bit-identical | 6/6 proxies and solutions identical, max|diff| 0.0 (`followup/ab-smokes/`) | pass |
+| E2E both scenes: `default` == `unlimited` == `generous` | identical SHAs; exits 0/0/0/3/3/1/0 | `quasistatic-semi` and `quasistatic-adaptive`: identical SHAs, all exits as expected; `tiny`/`sweep` end with `PolyFEM stopped: … Exit status 3`, `unsupported` with exit status 1 (`followup/scene-limits/`) | pass |
+| `bvh-automatic` | runs, notice logged, exit 0 | exit 0, five steps, notice "automatic limits are not enforceable by broad phase LBVH … running without them" | pass |
+| RB-04 endpoint runner + both checkers | pass | `passed: true`, events check exit 0, attempts check exit 0 (`followup/rb04-endpoints/`) | pass |
+| HDA: all 13 test scripts on this binary (`followup/hda-tests/`) | pass | 13/13 exit 0; `test_polyfem_hda.py` 7/7 PASS incl. the new resource-limit round trip | pass |
+| clang-format / `git diff --check` | clean | clean | pass |
+
+The BVH run's solution differs from the hash-grid runs by 1.9·10⁻¹⁶
+(`followup/scene-limits-quick/`): the collision set's summation order, as
+expected — not a limit effect.

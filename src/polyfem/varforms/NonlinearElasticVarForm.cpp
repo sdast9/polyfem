@@ -1359,7 +1359,7 @@ namespace polyfem::varform
 		if (solve_data_.contact_form != nullptr)
 		{
 			solve_data_.contact_form->save_ccd_debug_meshes = args["output"]["advanced"]["save_ccd_debug_meshes"];
-			solve_data_.contact_form->set_broad_phase_budget(solver::broad_phase_budget_from_args(args["solver"]["contact"]["CCD"]));
+			solve_data_.contact_form->apply_resource_limits(solver::resource_limits_from_args(args["solver"]["contact"]["CCD"]));
 		}
 	}
 

@@ -247,14 +247,55 @@ TEST_CASE("A broad-phase resource limit fails before allocation and leaves no pa
 		brute.init(in_contact);
 		CHECK(brute.collision_set().size() == fresh.collision_set().size());
 	}
-	SECTION("options are read from solver/contact/CCD/resource_limits")
+	SECTION("options are read from solver/contact/CCD/resource_limits: -1 automatic, 0 off, N explicit")
 	{
-		CHECK(!broad_phase_budget_from_args(json::object()).enabled());
-		CHECK(!broad_phase_budget_from_args(json{{"broad_phase", "hash_grid"}}).enabled());
-		const auto budget = broad_phase_budget_from_args(json{{"resource_limits", {{"max_cell_items", 5}}}});
-		CHECK(budget.max_cell_items == 5);
-		CHECK(budget.max_candidate_emissions == 0);
-		CHECK(broad_phase_budget_from_args(json{{"resource_limits", {{"max_cell_items", 0}, {"max_candidate_emissions", 0}}}}).enabled() == false);
-		CHECK_THROWS_WITH(broad_phase_budget_from_args(json{{"resource_limits", {{"max_candidate_emissions", -1}}}}), Catch::Matchers::ContainsSubstring("non-negative"));
+		const auto absent = resource_limits_from_args(json::object());
+		CHECK((absent.max_cell_items == -1 && absent.max_candidate_emissions == -1));
+		const auto no_key = resource_limits_from_args(json{{"broad_phase", "hash_grid"}});
+		CHECK((no_key.max_cell_items == -1 && no_key.max_candidate_emissions == -1));
+		const auto partial = resource_limits_from_args(json{{"resource_limits", {{"max_cell_items", 5}}}});
+		CHECK((partial.max_cell_items == 5 && partial.max_candidate_emissions == -1));
+		const auto off = resource_limits_from_args(json{{"resource_limits", {{"max_cell_items", 0}, {"max_candidate_emissions", 0}}}});
+		CHECK((off.max_cell_items == 0 && off.max_candidate_emissions == 0));
+		const auto automatic = resource_limits_from_args(json{{"resource_limits", {{"max_cell_items", -1}, {"max_candidate_emissions", -1}}}});
+		CHECK((automatic.max_cell_items == -1 && automatic.max_candidate_emissions == -1));
+		CHECK_THROWS_WITH(resource_limits_from_args(json{{"resource_limits", {{"max_candidate_emissions", -2}}}}), Catch::Matchers::ContainsSubstring("-1 (automatic)"));
+		CHECK_THROWS_WITH(resource_limits_from_args(json{{"resource_limits", {{"max_cell_items", "many"}}}}), Catch::Matchers::ContainsSubstring("-1 (automatic)"));
+	}
+	SECTION("automatic limits: the production defaults where enforceable, dropped with a notice elsewhere")
+	{
+		ProbeForm grid(mesh);
+		grid.apply_resource_limits(ResourceLimits());
+		CHECK(grid.broad_phase_budget().max_cell_items == ContactForm::default_max_cell_items);
+		CHECK(grid.broad_phase_budget().max_candidate_emissions == ContactForm::default_max_candidate_emissions);
+		grid.init(in_contact);
+		CHECK(grid.collision_set().size() == fresh.collision_set().size());
+
+		ProbeForm brute(mesh, ipc::BroadPhaseMethod::BRUTE_FORCE);
+		brute.apply_resource_limits(ResourceLimits());
+		CHECK(brute.broad_phase_budget().max_candidate_emissions == ContactForm::default_max_candidate_emissions);
+
+		ProbeForm bvh(mesh, ipc::BroadPhaseMethod::LBVH);
+		bvh.apply_resource_limits(ResourceLimits()); // no throw: automatic bounds are dropped
+		CHECK(!bvh.broad_phase_budget().enabled());
+		bvh.init(in_contact);
+		CHECK(bvh.collision_set().size() == fresh.collision_set().size());
+		ResourceLimits mixed;
+		mixed.max_cell_items = -1;
+		mixed.max_candidate_emissions = 7; // explicit: refused on a method that cannot enforce it
+		CHECK_THROWS_WITH(bvh.apply_resource_limits(mixed), Catch::Matchers::ContainsSubstring("cannot be enforced"));
+		CHECK(!bvh.broad_phase_budget().enabled());
+
+		ResourceLimits off;
+		off.max_cell_items = 0;
+		off.max_candidate_emissions = 0;
+		grid.apply_resource_limits(off);
+		CHECK(!grid.broad_phase_budget().enabled());
+		ResourceLimits custom;
+		custom.max_cell_items = 12;
+		custom.max_candidate_emissions = 0;
+		grid.apply_resource_limits(custom);
+		CHECK(grid.broad_phase_budget().max_cell_items == 12);
+		CHECK(grid.broad_phase_budget().max_candidate_emissions == 0);
 	}
 }
