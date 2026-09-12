@@ -1,0 +1,932 @@
+{
+ "date": "2026-09-12",
+ "stage": "RB-04 remainder: record version 2 (attempt observation, candidate counts, right-endpoint work increments) and VTU kinematics alignment",
+ "binary_sha256": "b29eeb6d43ba296a3c7ac90a194e96b7727e81f5b1157c87ab91ce002d9c5509",
+ "passed": true,
+ "thresholds": {
+  "displacement_on_off": 1e-10,
+  "elastic_energy_relative": 1e-09,
+  "det_F_bc_absolute": 1e-10,
+  "top_reaction_over_E": 1e-09,
+  "kinetic_energy_relative": 1e-09,
+  "vtu_velocity_absolute": 1e-10,
+  "vtu_acceleration_absolute": 1e-09,
+  "support_work_relative_vs_independent_top_reaction": 1e-08,
+  "record_arithmetic_identities_relative": 1e-08,
+  "fraction_minus_step_bound": 1e-09
+ },
+ "runs": [
+  {
+   "name": "quasistatic-semi-off",
+   "exit": 0,
+   "wall_seconds_uncontrolled": 4.61
+  },
+  {
+   "name": "quasistatic-semi-on",
+   "exit": 0,
+   "wall_seconds_uncontrolled": 4.21,
+   "steps": [
+    {
+     "step": 1,
+     "displacement_on_off_max": 1.4224732503009818e-16,
+     "elastic_energy_relative_error": 2.0624113395489874e-15,
+     "top_reaction_error_over_E": 3.5268698840937424e-17,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 4.646694268255996e-05,
+     "min_det_F": 0.9735930005887271,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 33672.3578935189,
+     "independent_support_work": 33672.35789351892,
+     "support_work_error": 6.482238246501537e-16,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 0.0,
+     "barrier_energy": 53.74929081508442,
+     "barrier_energy_at_solve_start": 0.0,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 9,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 2,
+      "validity_checks": 18,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 11,
+       "last": 754,
+       "max": 978
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 1.4299461384384267e-08,
+      "trial_linf": 1.0715241340053527e-08,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0000000000000002,
+      "accepted_norm": 1.4299461384384267e-08,
+      "iteration": 9,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 2,
+     "displacement_on_off_max": 1.734723475976807e-16,
+     "elastic_energy_relative_error": 1.4187307762488624e-15,
+     "top_reaction_error_over_E": 1.6311944044539186e-16,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 6.590018397375546e-07,
+     "min_det_F": 0.9351471385054038,
+     "bc_error": 0.0,
+     "termination": "Gradient vector norm too small",
+     "support_work_increment": 88400.56918504278,
+     "independent_support_work": 88400.56918504288,
+     "support_work_error": 1.1522805255339602e-15,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 53.74929081508442,
+     "barrier_energy": 166.53694457425405,
+     "barrier_energy_at_solve_start": 53.749290815084414,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 6,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 1,
+      "validity_checks": 12,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 8,
+       "last": 512,
+       "max": 922
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 4.5436342063807985e-09,
+      "trial_linf": 1.5361674848834994e-09,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 4.5436342063807985e-09,
+      "iteration": 6,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 3,
+     "displacement_on_off_max": 1.5612511283791264e-16,
+     "elastic_energy_relative_error": 9.128546052539444e-16,
+     "top_reaction_error_over_E": 1.4019960391038226e-16,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 1.324313448166509e-07,
+     "min_det_F": 0.8962795855328367,
+     "bc_error": 0.0,
+     "termination": "Gradient vector norm too small",
+     "support_work_increment": 152180.2061944466,
+     "independent_support_work": 152180.2061944465,
+     "support_work_error": 5.737337319999986e-16,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 166.53694457425394,
+     "barrier_energy": 263.34607337344823,
+     "barrier_energy_at_solve_start": 166.536944574254,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 6,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 1,
+      "validity_checks": 12,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 8,
+       "last": 406,
+       "max": 904
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 1.3627626015033573e-09,
+      "trial_linf": 4.129406851183237e-10,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 1.3627626015033573e-09,
+      "iteration": 6,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 4,
+     "displacement_on_off_max": 1.97758476261356e-16,
+     "elastic_energy_relative_error": 1.6860226355460653e-15,
+     "top_reaction_error_over_E": 5.593579044060517e-16,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 2.118183725530571e-05,
+     "min_det_F": 0.8571425451096358,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 227407.01273155998,
+     "independent_support_work": 227407.01273156033,
+     "support_work_error": 1.5357680729265486e-15,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 1.1368683772161603e-13,
+     "barrier_energy": 501.36713721795593,
+     "barrier_energy_at_solve_start": 263.3460733734483,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 5,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 1,
+      "validity_checks": 10,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 7,
+       "last": 389,
+       "max": 904
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 7.013667766309616e-06,
+      "trial_linf": 8.696899563703786e-07,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 7.013667766309616e-06,
+      "iteration": 5,
+      "minimize_index": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "transient-semi-off",
+   "exit": 0,
+   "wall_seconds_uncontrolled": 4.17
+  },
+  {
+   "name": "transient-semi-on",
+   "exit": 0,
+   "wall_seconds_uncontrolled": 4.21,
+   "steps": [
+    {
+     "step": 1,
+     "displacement_on_off_max": 1.9081958235744878e-16,
+     "elastic_energy_relative_error": 3.9661620961248085e-15,
+     "top_reaction_error_over_E": 1.206931688808491e-05,
+     "kinetic_energy_relative_error": 1.99767681427164e-16,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 4.6070575778367426e-05,
+     "min_det_F": 0.9735810137820309,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 33701.76324548893,
+     "independent_support_work": null,
+     "support_work_error": null,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 0.0,
+     "barrier_energy": 53.713128411076745,
+     "barrier_energy_at_solve_start": 0.0,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 9,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 2,
+      "validity_checks": 18,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 11,
+       "last": 754,
+       "max": 978
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 1.4236177284221842e-08,
+      "trial_linf": 1.066903522126128e-08,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 1.4236177284221842e-08,
+      "iteration": 9,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 2,
+     "displacement_on_off_max": 2.2898349882893854e-16,
+     "elastic_energy_relative_error": 0.0,
+     "top_reaction_error_over_E": 2.1131383015087475e-07,
+     "kinetic_energy_relative_error": 8.457781944607639e-16,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 6.60351294009315e-07,
+     "min_det_F": 0.935149285401274,
+     "bc_error": 0.0,
+     "termination": "Gradient vector norm too small",
+     "support_work_increment": 88398.7146002739,
+     "independent_support_work": null,
+     "support_work_error": null,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 53.713128411076774,
+     "barrier_energy": 166.55404131727536,
+     "barrier_energy_at_solve_start": 53.713128411076745,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 6,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 0,
+      "validity_checks": 12,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 8,
+       "last": 512,
+       "max": 922
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 4.548557056875982e-09,
+      "trial_linf": 1.5386774285253146e-09,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 4.548557056875982e-09,
+      "iteration": 6,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 3,
+     "displacement_on_off_max": 2.0816681711721685e-16,
+     "elastic_energy_relative_error": 1.3692818149777694e-15,
+     "top_reaction_error_over_E": 4.035582792375091e-08,
+     "kinetic_energy_relative_error": 3.5570936000091334e-16,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 1.3111058594036996e-07,
+     "min_det_F": 0.8962799036563504,
+     "bc_error": 0.0,
+     "termination": "Gradient vector norm too small",
+     "support_work_increment": 152180.608516866,
+     "independent_support_work": null,
+     "support_work_error": null,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 166.55404131727536,
+     "barrier_energy": 263.3423292397243,
+     "barrier_energy_at_solve_start": 166.55404131727533,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 6,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 1,
+      "validity_checks": 12,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 8,
+       "last": 406,
+       "max": 904
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 1.3652122536785944e-09,
+      "trial_linf": 4.139862064267419e-10,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 1.3652122536785944e-09,
+      "iteration": 6,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 4,
+     "displacement_on_off_max": 2.671474153004283e-16,
+     "elastic_energy_relative_error": 3.0654955007292314e-16,
+     "top_reaction_error_over_E": 6.423938145071212e-08,
+     "kinetic_energy_relative_error": 1.1405081804958354e-15,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 2.0605681902698804e-05,
+     "min_det_F": 0.8571429051597864,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 227407.8609183679,
+     "independent_support_work": null,
+     "support_work_error": null,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 0.0,
+     "barrier_energy": 501.3597531788014,
+     "barrier_energy_at_solve_start": 263.3423292397243,
+     "lagging_state": "not applicable",
+     "updated_lag_residual_norm_objective": null,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 5,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 1,
+      "validity_checks": 10,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 7,
+       "last": 389,
+       "max": 904
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 6.884301441047904e-06,
+      "trial_linf": 8.548661386553746e-07,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 6.884301441047904e-06,
+      "iteration": 5,
+      "minimize_index": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "quasistatic-semi-friction-off",
+   "exit": 0,
+   "wall_seconds_uncontrolled": 4.35
+  },
+  {
+   "name": "quasistatic-semi-friction-on",
+   "exit": 0,
+   "wall_seconds_uncontrolled": 4.33,
+   "steps": [
+    {
+     "step": 1,
+     "displacement_on_off_max": 2.5673907444456745e-16,
+     "elastic_energy_relative_error": 1.427823235072372e-15,
+     "top_reaction_error_over_E": 7.113946398798231e-17,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 35736.21872757234,
+     "min_det_F": 0.9735930005887271,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 33672.35789351888,
+     "independent_support_work": 33672.35789351892,
+     "support_work_error": 1.2964476493003074e-15,
+     "frictional_dissipation_increment": 0.0,
+     "retuning_energy_change": 0.0,
+     "barrier_energy": 53.74929081508449,
+     "barrier_energy_at_solve_start": 0.0,
+     "lagging_state": "not converged",
+     "updated_lag_residual_norm_objective": 2233.5136704732713,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 9,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 2,
+      "validity_checks": 18,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 11,
+       "last": 754,
+       "max": 978
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 1.4299461347427007e-08,
+      "trial_linf": 1.0715241340053527e-08,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 1.4299461347427007e-08,
+      "iteration": 9,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 2,
+     "displacement_on_off_max": 3.937822290467352e-16,
+     "elastic_energy_relative_error": 5.985478057920506e-16,
+     "top_reaction_error_over_E": 9.625462199908089e-17,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 25581.9810059017,
+     "min_det_F": 0.9292502260867788,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 93332.62087557878,
+     "independent_support_work": 93332.62087557884,
+     "support_work_error": 6.23651588435242e-16,
+     "frictional_dissipation_increment": 2427.0302742883796,
+     "retuning_energy_change": 53.74929081508449,
+     "barrier_energy": 181.1651663590015,
+     "barrier_energy_at_solve_start": 53.74929081508449,
+     "lagging_state": "not converged",
+     "updated_lag_residual_norm_objective": 1598.8738128688562,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 6,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 0,
+      "step_bound_limited": 0,
+      "validity_checks": 12,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 8,
+       "last": 514,
+       "max": 916
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 5.571693727978709e-08,
+      "trial_linf": 1.6859994129113376e-08,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0,
+      "accepted_norm": 5.571693727978709e-08,
+      "iteration": 6,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 3,
+     "displacement_on_off_max": 4.0419056990259605e-16,
+     "elastic_energy_relative_error": 0.0,
+     "top_reaction_error_over_E": 4.664291771936343e-16,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 22711.595199309777,
+     "min_det_F": 0.8799859398783941,
+     "bc_error": 0.0,
+     "termination": "Relative gradient vector too small",
+     "support_work_increment": 167131.60698246848,
+     "independent_support_work": 167131.60698246877,
+     "support_work_error": 1.7413616039500015e-15,
+     "frictional_dissipation_increment": 3383.9773109606226,
+     "retuning_energy_change": 181.1651663590015,
+     "barrier_energy": 306.08438588725727,
+     "barrier_energy_at_solve_start": 181.16516635900155,
+     "lagging_state": "not converged",
+     "updated_lag_residual_norm_objective": 1419.4746999568613,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 12,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 4,
+      "step_bound_limited": 1,
+      "validity_checks": 33,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 14,
+       "last": 466,
+       "max": 808
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 9.93838307307072e-09,
+      "trial_linf": 4.816005464217121e-09,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 0.9999999999999999,
+      "accepted_norm": 9.93838307307072e-09,
+      "iteration": 12,
+      "minimize_index": 1
+     }
+    },
+    {
+     "step": 4,
+     "displacement_on_off_max": 4.753142324176451e-16,
+     "elastic_energy_relative_error": 2.858579712993203e-16,
+     "top_reaction_error_over_E": 1.4252707692760088e-16,
+     "kinetic_energy_relative_error": null,
+     "vtu_velocity_error": 0.0,
+     "vtu_acceleration_error": 0.0,
+     "free_residual_norm": 74596.47093667688,
+     "min_det_F": 0.8292896224405826,
+     "bc_error": 0.0,
+     "termination": "Gradient vector norm too small",
+     "support_work_increment": 257089.19008071432,
+     "independent_support_work": 257089.1900807144,
+     "support_work_error": 3.3961424721335865e-16,
+     "frictional_dissipation_increment": 4500.353756575909,
+     "retuning_energy_change": 306.08438588725716,
+     "barrier_energy": 407.29014749343787,
+     "barrier_energy_at_solve_start": 306.0843858872572,
+     "lagging_state": "not converged",
+     "updated_lag_residual_norm_objective": 4662.279433542305,
+     "attempt_summary": {
+      "minimize_calls": 1,
+      "accepted_iterations": 22,
+      "rejected_proposals": 0,
+      "feasibility_checks": 2,
+      "line_search_truncated": 13,
+      "step_bound_limited": 1,
+      "validity_checks": 87,
+      "validity_rejections": 0,
+      "stall_retunes": 0,
+      "broad_phase_candidates": {
+       "builds": 24,
+       "last": 452,
+       "max": 742
+      }
+     },
+     "last_proposal": {
+      "trial_norm": 6.483001730719713e-11,
+      "trial_linf": 2.571101317960789e-11,
+      "step_bound": 1.0,
+      "accepted_fraction_of_trial": 1.0000000000000002,
+      "accepted_norm": 6.483001730719713e-11,
+      "iteration": 22,
+      "minimize_index": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "quasistatic-semi-failure-off",
+   "exit": -6,
+   "wall_seconds_uncontrolled": 3.86
+  },
+  {
+   "name": "quasistatic-semi-failure-on",
+   "exit": -6,
+   "wall_seconds_uncontrolled": 3.9,
+   "failure_record": {
+    "outcome": "failed_attempt",
+    "version": 2,
+    "phase": "reduced",
+    "error": "Final reduced solve did not converge: {\"directional_derivative\":-217.40600815442872,\"energy\":725.7532286817233,\"fDelta\":5385.486836010277,\"gradNorm\":870995.2174972732,\"internal_solver\":[],\"iterations\":2,\"line_search\":\"RobustArmijo\",\"line_search_iterations\":0,\"outcome\":\"interrupted\",\"restarts\":1,\"status\":8,\"termination_reason\":\"Objective function specified to stop\",\"time_assembly\":0.0,\"time_broad_phase_ccd\":0.0004373545,\"time_ccd\":8.689599999999999e-05,\"time_checking_for_nan_inf\":0.0001230415,\"time_classical_line_search\":0.00013443800000000002,\"time_constraint_set_update\":0.00030325,\"time_grad\":0.000184167,\"time_inverting\":0.0,\"time_line_search\":0.0010592915000000001,\"time_line_search_constraint_set_update\":8.33955e-05,\"time_obj_fun\":6.593699999999999e-05,\"total_time\":0.006699541,\"unchanged_restarts\":0,\"xDelta\":0.003390053921832757}",
+    "subsolve_state_at_failure": {
+     "outcome": "interrupted",
+     "restarts": 1,
+     "unchanged_restarts": 0,
+     "termination_reason": "Objective function specified to stop",
+     "iterations": 2
+    },
+    "attempt_summary": {
+     "minimize_calls": 2,
+     "accepted_iterations": 4,
+     "rejected_proposals": 0,
+     "feasibility_checks": 2,
+     "stall_retunes": 1,
+     "step_bound_limited": 2,
+     "broad_phase_candidates": {
+      "builds": 6,
+      "last": 866,
+      "max": 978
+     }
+    },
+    "last_internal_iterate": {
+     "iteration": 2,
+     "minimize_index": 2,
+     "dofs": 387,
+     "max_abs_difference_from_retained_caller_coordinates": 0.0625
+    },
+    "unavailable": {
+     "external_work_increment": "Attempt did not return an accepted endpoint",
+     "frictional_dissipation_increment": "Attempt did not return an accepted endpoint",
+     "retuning_energy_change": "Attempt did not return an accepted endpoint",
+     "physical_balance_pass": "No physical acceptance threshold is authorized for RB-04; the discrete budget terms are reported separately"
+    }
+   }
+  }
+ ],
+ "solver_attempts_summary": [
+  {
+   "name": "quasistatic-semi-on",
+   "steps": [
+    {
+     "step": 1,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 9,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 2,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 11,
+      "last": 754,
+      "max": 978
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 1.4299461384384267e-08
+    },
+    {
+     "step": 2,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 6,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 8,
+      "last": 512,
+      "max": 922
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 4.5436342063807985e-09
+    },
+    {
+     "step": 3,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 6,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 8,
+      "last": 406,
+      "max": 904
+     },
+     "max_fraction_minus_bound": 8.881784197001252e-16,
+     "last_trial_norm": 1.3627626015033573e-09
+    },
+    {
+     "step": 4,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 5,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 7,
+      "last": 389,
+      "max": 904
+     },
+     "max_fraction_minus_bound": 3.3306690738754696e-16,
+     "last_trial_norm": 7.013667766309616e-06
+    }
+   ]
+  },
+  {
+   "name": "transient-semi-on",
+   "steps": [
+    {
+     "step": 1,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 9,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 2,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 11,
+      "last": 754,
+      "max": 978
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 1.4236177284221842e-08
+    },
+    {
+     "step": 2,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 6,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 0,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 8,
+      "last": 512,
+      "max": 922
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 4.548557056875982e-09
+    },
+    {
+     "step": 3,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 6,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 8,
+      "last": 406,
+      "max": 904
+     },
+     "max_fraction_minus_bound": 3.3306690738754696e-16,
+     "last_trial_norm": 1.3652122536785944e-09
+    },
+    {
+     "step": 4,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 5,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 7,
+      "last": 389,
+      "max": 904
+     },
+     "max_fraction_minus_bound": 3.3306690738754696e-16,
+     "last_trial_norm": 6.884301441047904e-06
+    }
+   ]
+  },
+  {
+   "name": "quasistatic-semi-friction-on",
+   "steps": [
+    {
+     "step": 1,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 9,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 2,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 11,
+      "last": 754,
+      "max": 978
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 1.4299461347427007e-08
+    },
+    {
+     "step": 2,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 6,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 0,
+     "line_search_truncated": 0,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 8,
+      "last": 514,
+      "max": 916
+     },
+     "max_fraction_minus_bound": 0.0,
+     "last_trial_norm": 5.571693727978709e-08
+    },
+    {
+     "step": 3,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 12,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 4,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 14,
+      "last": 466,
+      "max": 808
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 9.93838307307072e-09
+    },
+    {
+     "step": 4,
+     "outcome": "accepted",
+     "minimize_calls": 1,
+     "accepted": 22,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 1,
+     "line_search_truncated": 13,
+     "stall_retunes": 0,
+     "candidates": {
+      "builds": 24,
+      "last": 452,
+      "max": 742
+     },
+     "max_fraction_minus_bound": 2.220446049250313e-16,
+     "last_trial_norm": 6.483001730719713e-11
+    }
+   ]
+  },
+  {
+   "name": "quasistatic-semi-failure-on",
+   "steps": [
+    {
+     "step": 1,
+     "outcome": "failed_attempt",
+     "minimize_calls": 2,
+     "accepted": 4,
+     "rejected": 0,
+     "feasibility_checks": 2,
+     "step_bound_limited": 2,
+     "line_search_truncated": 0,
+     "stall_retunes": 1,
+     "candidates": {
+      "builds": 6,
+      "last": 866,
+      "max": 978
+     },
+     "max_fraction_minus_bound": 0.0,
+     "last_trial_norm": 0.03552146924600405
+    }
+   ]
+  }
+ ],
+ "smoke_identity": [
+  "quasistatic-adaptive: steps 5/5 solution IDENTICAL max|diff|=0.0 (baseline = RB-22 candidate binary 9de4616d, single-threaded)",
+  "quasistatic-semi: steps 5/5 solution IDENTICAL max|diff|=0.0 (baseline = RB-22 candidate binary 9de4616d, single-threaded)",
+  "quasistatic-semi-alhess: steps 5/5 solution IDENTICAL max|diff|=0.0 (baseline = RB-22 candidate binary 9de4616d, single-threaded)",
+  "quasistatic-semi-friction: steps 5/5 solution IDENTICAL max|diff|=0.0 (baseline = RB-22 candidate binary 9de4616d, single-threaded)",
+  "transient-semi: steps 5/5 solution IDENTICAL max|diff|=0.0 (baseline = RB-22 candidate binary 9de4616d, single-threaded)"
+ ],
+ "affected_suite": "All tests passed (5053 assertions in 76 test cases)"
+}

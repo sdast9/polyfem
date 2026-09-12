@@ -138,14 +138,17 @@ Same-load corrections improve tangent-applicable occupancy at extra solve cost;
 uncertain predictions and post-publication force-state changes remain explicit.
 No production controller, estimator, arithmetic repair or default is selected.
 RB-14 and RB-15 are separate investigations and can be selected independently once
-their stated prerequisites exist. Finish missing RB-04 measurements as needed;
-do not rerun its completed probes without a relevant code change or new question.
-RB-04 is not a blocker for RB-05 resource containment or RB-13 analytical work.
+their stated prerequisites exist. RB-04 is complete within its stated scope
+(2026-09-12): record version 2 carries the attempt observation, candidate
+counts, a failed attempt's internal iterate and the right-endpoint work
+increments, the nonlinear VTU kinematics are aligned, and its earlier limits
+are mapped to RB-18–RB-21/RB-03 or carried by RB-09/RB-10. Do not rerun its
+completed probes without a relevant code change or new question; reopen a
+measurement only when RB-09 needs a tighter first-contact quadrature.
 Its discrete work convention, actual contact-path errors and coefficient/lag
-endpoint identities are now characterized on the bounded fixtures. Use those
-limits to decide whether an integrated candidate comparison needs additional
-measurements; normal-law theory need not wait for full friction certification. RB-04 is now characterized with endpoint/path accounting limits documented;
-see its final disposition before asking for tighter measurements.
+endpoint identities are characterized on the bounded fixtures;
+`physical_balance_pass` deliberately stays unavailable until an RB-09 threshold
+is selected. See its [remainder section](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12).
 
 Retain the existing RB-05–RB-12 IDs because records already refer to them. Resource
 containment, rollback and validation remain necessary; numbering is not execution
@@ -173,7 +176,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-01 | Contact-cache ownership and invalidation | none | [validated within stated scope](rb-01-validation.md) |
 | RB-02 | Coefficient/lifecycle contract and counterexamples | RB-01 for same-process comparisons | [closed 2026-09-11 — characterized, limits documented; production law retained, all six reproduced defects repaired by RB-18/RB-20/RB-21](rb-02-validation.md#closure-2026-09-11) |
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [closed 2026-09-11 — validated within stated scope: exact indexing (2026-09-08) and the selected interpolated stiffness, parent block condensed onto the stencil with the gap-normalized direction fallback (2026-09-11); nothing pending](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
-| RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [characterized—limits documented; endpoint/path diagnostics validated](rb-04-validation.md) |
+| RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [validated within stated scope 2026-09-12 — record version 2 (attempt stream, candidate counts, failed-attempt iterate, right-endpoint work increments), VTU kinematics aligned; `physical_balance_pass` deliberately unavailable pending an RB-09 threshold](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12) |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | not started |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
@@ -194,9 +197,10 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | [validated within stated scope 2026-09-12 (`8f76fef69`) — named error for every skipped face, DOF-resolution proxy default for Q2+/serendipity hexahedra (user decision), bit-identical Q1/tet/HDA; Q3+ blocked by RB-23](rb-22-validation.md) |
 | RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | not started — [section](#rb-23--q3-hexahedral-basis-node-bookkeeping) |
 
-The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22 is
-validated within its scope (2026-09-12). Remaining
-order: RB-05 (containment), then RB-09 references and RB-10 friction (where the
+The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22 and
+RB-04 are validated within their scope (2026-09-12). Remaining
+order: RB-05 (containment; it can reuse the RB-04 attempt stream's trial norms
+and candidate counts as pre-build diagnostics), then RB-09 references and RB-10 friction (where the
 RB-20 friction endpoint move belongs); RB-23 (Q3+ hexahedral basis) is
 independently eligible and is the prerequisite for Q3+ hex contact. RB-05–RB-08 remain the resource/recovery track;
 select them when needed. RB-11 input auditing and RB-12 provenance can be
@@ -356,6 +360,11 @@ advertising arbitrary high-order/remeshed support. Keep identity-mode regression
 and other contact formulations unchanged.
 
 ## RB-04 — Accepted-step physical accounting and diagnostics
+
+**Status (2026-09-12): validated within stated scope**; see the
+[record](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12)
+and the [contract](rb-04-contract.md). The requirements below are retained as
+the item's definition.
 
 **Deliverable:** an opt-in, versioned machine-readable record of accepted states
 and failed attempts. It reports accuracy evidence; it does not change acceptance

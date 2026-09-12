@@ -125,6 +125,19 @@ namespace polyfem::solver
 
 		std::shared_ptr<ipc::BroadPhase> get_broad_phase() const { return broad_phase_; }
 
+		/// @brief RB-04: broad-phase candidate counts of the trial sweeps
+		///        handed to CCD by line_search_begin since the last reset.
+		///        The swept cache itself is cleared at line_search_end, so
+		///        an endpoint record can only report these retained counts.
+		struct CandidateStatistics
+		{
+			size_t builds = 0; ///< line_search_begin calls since the reset
+			size_t last = 0;   ///< candidates of the most recent build
+			size_t max = 0;    ///< largest build since the reset
+		};
+		const CandidateStatistics &candidate_statistics() const { return candidate_statistics_; }
+		void reset_candidate_statistics() { candidate_statistics_ = CandidateStatistics(); }
+
 	protected:
 		/// @brief Update the cached candidate set for the current solution
 		/// @param displaced_surface Vertex positions displaced by the current solution
@@ -184,5 +197,7 @@ namespace polyfem::solver
 		bool use_cached_candidates_ = false;
 		/// @brief Cached candidate set for the current solution
 		ipc::Candidates candidates_;
+		/// @brief Retained candidate counts of this solve's trial sweeps (RB-04)
+		CandidateStatistics candidate_statistics_;
 	};
 } // namespace polyfem::solver

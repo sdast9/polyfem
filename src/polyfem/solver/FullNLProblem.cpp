@@ -64,16 +64,42 @@ namespace polyfem::solver
 		return false;
 	}
 
+	void FullNLProblem::observe(const IterationObservation &observation)
+	{
+		if (!iteration_observer_ || iteration_observer_failed_)
+			return;
+		try
+		{
+			iteration_observer_(observation);
+		}
+		catch (const std::exception &e)
+		{
+			// Observation must not alter the solve: disable after the first failure.
+			iteration_observer_failed_ = true;
+			logger().warn("Iteration observer failed and is disabled for this solve: {}", e.what());
+		}
+	}
+
 	void FullNLProblem::line_search_begin(const TVector &x0, const TVector &x1)
 	{
 		for (auto &f : forms_)
 			f->line_search_begin(x0, x1);
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::Proposal;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observe(observation);
 	}
 
 	void FullNLProblem::line_search_end()
 	{
 		for (auto &f : forms_)
 			f->line_search_end();
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::LineSearchEnd;
+		observe(observation);
 	}
 
 	double FullNLProblem::max_step_size(const TVector &x0, const TVector &x1)
@@ -113,17 +139,38 @@ namespace polyfem::solver
 				f->max_step_size(x0, step == 1 ? x1 : TVector(x0 + step * (x1 - x0)));
 			step *= s;
 			if (step <= 0)
-				return 0;
+			{
+				step = 0;
+				break;
+			}
 		}
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::StepBound;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observation.step_bound = step;
+		observe(observation);
 		return step;
 	}
 
 	bool FullNLProblem::is_step_valid(const TVector &x0, const TVector &x1)
 	{
+		bool valid = true;
 		for (auto &f : forms_)
 			if (f->enabled() && !f->is_step_valid(x0, x1))
-				return false;
-		return true;
+			{
+				valid = false;
+				break;
+			}
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::Validity;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observation.valid = valid;
+		observe(observation);
+		return valid;
 	}
 
 	bool FullNLProblem::is_step_collision_free(const TVector &x0, const TVector &x1)
@@ -188,5 +235,13 @@ namespace polyfem::solver
 	{
 		for (auto &f : forms_)
 			f->post_step(data);
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::Accepted;
+		observation.x1 = &data.x;
+		observation.grad = &data.grad;
+		observation.iteration = data.iter_num;
+		observation.solver_info = &data.solver_info;
+		observe(observation);
 	}
 } // namespace polyfem::solver

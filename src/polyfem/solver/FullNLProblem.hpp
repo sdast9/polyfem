@@ -1,13 +1,46 @@
 #pragma once
 
+#include <polyfem/Common.hpp>
 #include <polyfem/solver/forms/Form.hpp>
 #include <polysolve/nonlinear/Problem.hpp>
 
+#include <functional>
+#include <limits>
 #include <memory>
 #include <vector>
 
 namespace polyfem::solver
 {
+	/// @brief RB-04: one passive observation of a nonlinear solve in full
+	///        coordinates, emitted from the PolySolve hooks the problem
+	///        already receives. Observers report; they cannot change the
+	///        solve, and an observer that throws is disabled with a warning.
+	struct IterationObservation
+	{
+		enum class Kind
+		{
+			Proposal,      ///< line_search_begin: the trial sweep [x0, x1] handed to the contact broad phase
+			StepBound,     ///< max_step_size: the fraction of [x0, x1] the forms (inversion check, CCD) allow
+			Validity,      ///< is_step_valid: one line-search trial [x0, x1] and the forms' verdict
+			LineSearchEnd, ///< line_search_end: the swept candidate cache is released
+			Accepted       ///< post_step: an accepted iterate (PolySolve emits the start point before its first iteration)
+		};
+		/// A Newton iteration is observed as Validity* (finite-energy stage),
+		/// Proposal, StepBound, Validity* (descent stage), LineSearchEnd,
+		/// Accepted. ALSolver's feasibility checks before a subsolve appear as
+		/// Proposal, Validity, LineSearchEnd with no StepBound. PolySolve's
+		/// post_step reports the number of iterations completed before the
+		/// call, so the start point and the first update both carry 0.
+		Kind kind;
+		const Eigen::VectorXd *x0 = nullptr;                          ///< Current iterate (Proposal, StepBound, Validity)
+		const Eigen::VectorXd *x1 = nullptr;                          ///< Trial endpoint, or the accepted iterate (Accepted)
+		const Eigen::VectorXd *grad = nullptr;                        ///< Objective gradient at the accepted iterate
+		double step_bound = std::numeric_limits<double>::quiet_NaN(); ///< StepBound result
+		bool valid = true;                                            ///< Validity verdict
+		int iteration = -1;                                           ///< Accepted: iterations completed before this post_step
+		const json *solver_info = nullptr;                            ///< Accepted: PolySolve solver info at that iterate
+	};
+
 	class FullNLProblem : public polysolve::nonlinear::Problem
 	{
 	public:
@@ -49,8 +82,20 @@ namespace polyfem::solver
 
 		virtual double normalize_forms();
 
+		/// @brief RB-04: install (or clear, with nullptr) the passive
+		///        iteration observer. Disabled observation costs one null check.
+		void set_iteration_observer(std::function<void(const IterationObservation &)> observer)
+		{
+			iteration_observer_ = std::move(observer);
+			iteration_observer_failed_ = false;
+		}
+
 	protected:
 		std::vector<std::shared_ptr<Form>> forms_;
 		const bool is_residual_;
+
+		void observe(const IterationObservation &observation);
+		std::function<void(const IterationObservation &)> iteration_observer_ = nullptr;
+		bool iteration_observer_failed_ = false;
 	};
 } // namespace polyfem::solver

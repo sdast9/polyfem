@@ -1,6 +1,7 @@
 #include <polyfem/time_integrator/ImplicitEuler.hpp>
 #include <polyfem/time_integrator/ImplicitNewmark.hpp>
 #include <polyfem/time_integrator/BDF.hpp>
+#include <polyfem/varforms/ElasticVarForm.hpp>
 
 #include <polyfem/utils/Logger.hpp>
 
@@ -174,4 +175,47 @@ TEST_CASE("time integrator factories", "[time_integrator]")
 	Eigen::MatrixXd x_prevs = Eigen::MatrixXd::Zero(1, 2);
 	configured_bdf->init(x_prevs, x_prevs, x_prevs, dt);
 	CHECK(configured_bdf->steps() == 2);
+}
+
+TEST_CASE("Saved-solution kinematics follow the integrator history state", "[time_integrator][output_kinematics]")
+{
+	const int n = 4;
+	const double dt = .25;
+	const Eigen::VectorXd x0 = Eigen::VectorXd::LinSpaced(n, 0, 1);
+	const Eigen::VectorXd v0 = Eigen::VectorXd::Constant(n, .5);
+	const Eigen::VectorXd a0 = Eigen::VectorXd::Constant(n, -2);
+
+	// Before initialization the kinematics are zero, not a read of an empty history.
+	ImplicitEuler uninitialized;
+	const auto [v_none, a_none] = varform::saved_solution_kinematics(uninitialized, x0);
+	CHECK(v_none.isZero());
+	CHECK(a_none.isZero());
+
+	ImplicitEuler integrator;
+	integrator.init(x0, v0, a0, dt);
+
+	// The history head (initial save, or an export after advancing) reads the stored values.
+	const auto [v_head, a_head] = varform::saved_solution_kinematics(integrator, x0);
+	CHECK(v_head == v0);
+	CHECK(a_head == a0);
+
+	// A new endpoint exported before advancing (the nonlinear time loop) is
+	// differenced with the integrator's own rule; the legacy v_prev() export
+	// would have reported the previous step's velocity here.
+	const Eigen::VectorXd x1 = x0 + Eigen::VectorXd::Constant(n, .1);
+	const auto [v1, a1] = varform::saved_solution_kinematics(integrator, x1);
+	CHECK((v1 - (x1 - x0) / dt).norm() < 1e-14);
+	CHECK((a1 - (v1 - v0) / dt).norm() < 1e-14);
+	CHECK(integrator.v_prev() == v0);
+
+	// After advancing (the FSI embedding order) the same solution reads the same kinematics.
+	integrator.update_quantities(x1);
+	const auto [v1_after, a1_after] = varform::saved_solution_kinematics(integrator, x1);
+	CHECK(v1_after == v1);
+	CHECK(a1_after == a1);
+
+	// A solution of another size cannot be differenced against this history.
+	const auto [v_bad, a_bad] = varform::saved_solution_kinematics(integrator, Eigen::VectorXd::Zero(n + 1));
+	CHECK(v_bad.isZero());
+	CHECK(a_bad.size() == n + 1);
 }

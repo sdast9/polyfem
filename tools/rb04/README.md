@@ -1,7 +1,8 @@
 # RB-04 endpoint diagnostics
 
-Enable `output.physical_diagnostics: true` to append version 1 JSON records to
-`physical-diagnostics.jsonl` in the configured output directory. The default is
+Enable `output.physical_diagnostics: true` to append version 2 JSON records to
+`physical-diagnostics.jsonl` in the configured output directory (version 1
+fields keep their meaning; see the contract's version 2 section). The default is
 false. Records are observational: a returned solve is `accepted` even if finite
 friction lagging did not converge. They impose no new acceptance criterion.
 
@@ -25,10 +26,11 @@ The expected failure currently terminates the CLI with SIGABRT from its uncaught
 solver exception; a flushed failure record must exist and step 1 must not be
 published. The runner does not change that CLI behavior.
 
-The existing VTU `velocity` field on the nonlinear path contains `v_prev()`
-before history advancement. It is **not** used as a current-endpoint kinetic
-energy oracle. The reference uses `(u_n-u_{n-1})/dt` for the public ImplicitEuler
-fixture. Higher-order time integrators require their own history reference.
+Since 2026-09-12 the VTU `velocity`/`acceleration` fields of the nonlinear path
+are the kinematics of the saved endpoint (before that they were the previous
+step's history head). The runner checks them against `(u_n-u_{n-1})/dt` for
+the public ImplicitEuler fixtures and still reconstructs the kinetic-energy
+reference from the displacement history, not from the VTU field.
 
 Focused snapshot test: `[physical_diagnostics]`. It checks private coefficient
 memoization, unchanged production energy/gradient/Hessian, finite differences,
@@ -132,3 +134,23 @@ solver outputs. `run_candidate_probe.py --source tools/rb04/contact_path_probe.c
 That source includes `candidate_probe.cpp`; retain both when copying the probe.
 Compact results: `contact-path-results-20260909.json`. See the validation record
 for the first-contact .00131 quadrature discrepancy and non-exhaustive event limits.
+
+
+### Solver-attempt stream (record version 2)
+
+The same opt-in also writes `solver-attempts.jsonl`: one row per PolySolve
+minimize start, accepted Newton update (trial sweep norms, forms' step bound,
+line-search validity trials, accepted fraction) and rejected proposal. The
+endpoint record carries `attempt_summary`, `proposed_displacement`, the retained
+`contact.candidate_count` statistics, the right-endpoint work increments
+(`support_work_increment`, `external_work_increment`,
+`frictional_dissipation_increment`, `retuning_energy_change`, cumulative sums)
+and, for a failed attempt, `last_internal_iterate`. `run_endpoints.py` checks
+all of these; the stream alone can be checked with
+
+```sh
+python3 tools/rb04/check_solver_attempts.py /absolute/fresh/evidence --output /absolute/new-attempt-summary.json
+```
+
+Compact results of the 2026-09-12 validation: `results-20260912.json`.
+`physical_balance_pass` remains unavailable by decision (no threshold selected).

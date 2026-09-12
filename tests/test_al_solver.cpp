@@ -5,6 +5,10 @@
 #include <polyfem/utils/Logger.hpp>
 #include <polysolve/linear/Solver.hpp>
 
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
 using namespace polyfem;
 using namespace polyfem::solver;
 using Catch::Matchers::ContainsSubstring;
@@ -625,4 +629,152 @@ TEST_CASE("AL converted units and density preserve reduced solutions", "[al_solv
 				CHECK(std::abs((f->h * sol)(1, 0)) * length / energy < 1e-9);
 				CHECK(solver.info()["outcome"] == "converged");
 			}
+}
+
+TEST_CASE("Iteration observer reports proposals, bounds and accepted iterates without changing the solve", "[al_solver][iteration_observer]")
+{
+	using Kind = IterationObservation::Kind;
+	struct Event
+	{
+		Kind kind;
+		Eigen::VectorXd x0, x1;
+		double step_bound;
+		bool valid;
+		int iteration;
+		double energy;
+	};
+	// A form that can veto every step through the forms' step bound, so the
+	// bound of 0 is observed through the same hook production CCD uses.
+	struct Blocker : Form
+	{
+		bool blocked = false;
+		std::string name() const override { return "blocker"; }
+		double value_unweighted(const Eigen::VectorXd &) const override { return 0; }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override { g = Eigen::VectorXd::Zero(x.size()); }
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override { h.resize(x.size(), x.size()); }
+		double max_step_size(const Eigen::VectorXd &, const Eigen::VectorXd &) const override { return blocked ? 0 : 1; }
+	};
+	const auto blocker = std::make_shared<Blocker>();
+	NLProblem problem(1, 0, {std::make_shared<Quartic>(), blocker}, {}, nullptr, 1, 1, QuarticProblem::mass(), 1);
+	const auto observe = [&](std::vector<Event> *events) {
+		if (events)
+			problem.set_iteration_observer([events](const IterationObservation &o) {
+				events->push_back({o.kind, o.x0 ? *o.x0 : Eigen::VectorXd(), o.x1 ? *o.x1 : Eigen::VectorXd(), o.step_bound, o.valid, o.iteration,
+								   o.solver_info && o.solver_info->contains("energy") ? (*o.solver_info)["energy"].get<double>() : std::nan("")});
+			});
+		else
+			problem.set_iteration_observer(nullptr);
+	};
+	const auto solve = [&]() {
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		solver.solve_reduced(problem, sol, parameters(), linear, 1);
+		return std::make_pair(sol(0, 0), solver.info()["iterations"].get<int>());
+	};
+
+	std::vector<Event> events;
+	observe(&events);
+	const auto [x_observed, iterations] = solve();
+	observe(nullptr);
+	const auto [x_control, control_iterations] = solve();
+	CHECK(x_observed == x_control);
+	CHECK(iterations == control_iterations);
+	REQUIRE(iterations > 0);
+
+	// The reduced solve opens with ALSolver's feasibility check (a proposal
+	// closed by line_search_end without a step bound), then PolySolve reports
+	// the start point; every later accepted iterate follows a proposal and a
+	// step bound and lies on the proposed trial segment.
+	REQUIRE(events.size() > 4);
+	CHECK(events[0].kind == Kind::Proposal);
+	CHECK(events[1].kind == Kind::Validity);
+	CHECK(events[2].kind == Kind::LineSearchEnd);
+	CHECK(events[3].kind == Kind::Accepted);
+	CHECK(events[3].iteration == 0);
+	CHECK(events[3].x1[0] == 10);
+	int updates = 0, proposals = 0, feasibility = 0, validity = 0, ends = 0;
+	const Event *proposal = nullptr, *bound = nullptr;
+	for (size_t i = 4; i < events.size(); ++i)
+	{
+		const Event &e = events[i];
+		switch (e.kind)
+		{
+		case Kind::Validity:
+			++validity;
+			CHECK(e.valid);
+			break;
+		case Kind::Proposal:
+			proposal = &e;
+			bound = nullptr;
+			break;
+		case Kind::StepBound:
+			REQUIRE(proposal != nullptr);
+			CHECK(e.x0 == proposal->x0);
+			CHECK(e.x1 == proposal->x1);
+			CHECK(e.step_bound == 1);
+			bound = &e;
+			++proposals;
+			break;
+		case Kind::LineSearchEnd:
+			++ends;
+			if (proposal != nullptr && bound == nullptr)
+				++feasibility;
+			break;
+		case Kind::Accepted:
+			REQUIRE(proposal != nullptr);
+			REQUIRE(bound != nullptr);
+			{
+				const double trial = proposal->x1[0] - proposal->x0[0];
+				const double fraction = (e.x1[0] - proposal->x0[0]) / trial;
+				CHECK(fraction > 0);
+				CHECK(fraction <= bound->step_bound + 1e-12);
+				CHECK(std::isfinite(e.energy));
+				CHECK(e.iteration == updates); // iterations completed before this update
+			}
+			++updates;
+			proposal = nullptr;
+			bound = nullptr;
+			break;
+		}
+	}
+	CHECK(updates == iterations);
+	CHECK(proposals == iterations);
+	CHECK(ends == iterations);
+	CHECK(feasibility == 0);
+	CHECK(validity >= iterations);
+
+	// A vetoed step (bound 0) is observed as a proposal with a zero bound and
+	// no accepted iterate after it; the failure itself is unchanged.
+	blocker->blocked = true;
+	events.clear();
+	observe(&events);
+	{
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Line search failed"));
+	}
+	const auto last_bound = std::find_if(events.rbegin(), events.rend(), [](const Event &e) { return e.kind == Kind::StepBound; });
+	REQUIRE(last_bound != events.rend());
+	CHECK(last_bound->step_bound == 0);
+	CHECK(std::count_if(events.begin(), events.end(), [](const Event &e) { return e.kind == Kind::Accepted; }) == 1); // the start point only
+	blocker->blocked = false;
+
+	// A throwing observer is disabled after its first call and the solve is unchanged.
+	int calls = 0;
+	problem.set_iteration_observer([&](const IterationObservation &) {
+		++calls;
+		throw std::runtime_error("Injected observer failure");
+	});
+	{
+		const auto [x_throwing, throwing_iterations] = solve();
+		CHECK(x_throwing == x_control);
+		CHECK(throwing_iterations == control_iterations);
+	}
+	CHECK(calls == 1);
+
+	// Cleared observer: no events.
+	events.clear();
+	observe(nullptr);
+	solve();
+	CHECK(events.empty());
 }

@@ -230,3 +230,24 @@ coarse right-endpoint contact remainder is predominantly quadrature error on
 these fixtures. Synthetic feature discontinuity remains reproduced and unresolved
 as a model issue. Do not extrapolate the small public net discrepancy to every
 contact path. RB-04 is characterized with these limits, not physically certified.
+
+
+## Increments carried in the endpoint record (version 2, 2026-09-12)
+
+The right-endpoint terms above are now written per accepted step by the
+diagnostics writer itself: `support_work_increment` (= W_D,right of the step),
+`body_load_work_increment`, `external_work_increment`,
+`frictional_dissipation_increment` (= C_f,right with the solved-lag friction
+gradient captured before the final lag update), `retuning_energy_change`
+(= P, with B(x_(n-1);θ_(n-1)) taken from the previous published endpoint and,
+for the first accepted step of a process, from the production state at solve
+start) and their cumulative sums over the process. Definitions, signs and
+availability rules are in the
+[contract](rb-04-contract.md#version-2--attempt-observation-candidate-counts-and-discrete-work-increments-2026-09-12);
+measured values and the independent support-work check are in the
+[validation record](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12).
+Under the RB-20 force continuation every persisting contact keeps its
+coefficient, so on the public fixtures P reduces to the global trim change
+applied to the previous endpoint energy. The elastic and contact remainders
+R_elastic and R_contact of the budget above remain postprocessing quantities
+(path quadrature), and a populated budget is still not `physical_balance_pass`.

@@ -75,10 +75,26 @@ namespace polyfem::varform
 		virtual void init_forms(const json &args, int dim, Eigen::MatrixXd &sol, double t);
 		virtual void solve_tensor_nonlinear(int step, Eigen::MatrixXd &sol, bool init_lagging = true);
 
+		/// @brief RB-04 endpoint record (version 2). `observations` carries the
+		///        attempt summary, last proposal and, for a failed attempt, the
+		///        last internal iterate from the iteration observer, plus the
+		///        barrier energy measured at solve start.
 		void write_physical_diagnostics(int step, const Eigen::VectorXd &x,
 										const Eigen::VectorXd &start, const std::string &outcome,
 										const std::string &phase, const json &termination, const json &lagging,
-										double elapsed, const std::string &error = "") const;
+										const json &observations, double elapsed, const std::string &error = "");
+
+		/// @brief RB-04 right-endpoint trajectory accounting carried across the
+		///        accepted endpoints of this process (docs/rb-04-work-convention.md).
+		struct TrajectoryAccounting
+		{
+			bool has_previous_endpoint = false;
+			double previous_endpoint_barrier_energy = 0; ///< B(x_(n-1); theta_(n-1)) in physical energy units
+			bool previous_endpoint_barrier_energy_available = false;
+			double external_work = 0, frictional_dissipation = 0, retuning_energy_change = 0;
+			bool external_work_available = true, frictional_dissipation_available = true, retuning_energy_change_available = true;
+			int accepted_steps = 0;
+		};
 
 		std::shared_ptr<assembler::PressureAssembler> build_pressure_assembler() const;
 		void build_collision_mesh(const mesh::Mesh &mesh, const json &args);
@@ -98,6 +114,7 @@ namespace polyfem::varform
 		std::vector<std::shared_ptr<solver::Form>> forms;
 		std::string diagnostic_run_id_;
 		void configure_coefficient_diagnostics(int step, const std::string &phase);
+		TrajectoryAccounting trajectory_accounting_;
 		bool contact_dhat_was_explicit_ = false;
 
 		int n_obstacle_vertices() const override { return obstacle.n_vertices(); }

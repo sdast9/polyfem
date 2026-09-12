@@ -108,7 +108,7 @@ namespace polyfem::varform
 	void NonlinearElasticVarForm::write_physical_diagnostics(
 		int step, const Eigen::VectorXd &x, const Eigen::VectorXd &start,
 		const std::string &outcome, const std::string &phase, const json &termination,
-		const json &lagging, double elapsed, const std::string &error) const
+		const json &lagging, const json &observations, double elapsed, const std::string &error)
 	{
 		if (!args["output"].value("physical_diagnostics", false))
 			return;
@@ -117,17 +117,32 @@ namespace polyfem::varform
 		const auto vector = [&](const Eigen::VectorXd &v) {
 			return v.allFinite() ? json{{"value", std::vector<double>(v.data(), v.data() + v.size())}} : missing("Nonfinite vector");
 		};
-		json record = {{"schema", "polyfem.physical-diagnostics"}, {"version", 1}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
+		// Version 2 (RB-04 remainder): attempt summary and last proposal from the
+		// iteration observer, the last internal iterate of a failed attempt,
+		// retained candidate counts, and right-endpoint discrete work increments
+		// under the declared convention. Version 1 fields keep their meaning.
+		json record = {{"schema", "polyfem.physical-diagnostics"}, {"version", 2}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"work", "internal energy; right-endpoint discrete estimates, not path integrals"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
 		record["time"] = args["time"].is_object() ? scalar(args["time"].value("t0", 0.) + step * args["time"].value("dt", 0.)) : missing("Static solve has no physical time");
 		record["accepted_displacement"] = outcome == "accepted" ? vector(x - start) : missing("Attempt did not return an accepted endpoint");
-		record["proposed_displacement"] = missing("Per-line-search proposals are not retained by this endpoint recorder");
+		record["attempt_summary"] = observations.value("summary", json{{"unavailable_reason", "No attempt observation"}});
+		record["proposed_displacement"] = observations.contains("proposed_displacement")
+											  ? observations["proposed_displacement"]
+											  : missing("No line-search proposal was observed in this attempt");
+		record["barrier_energy_at_solve_start"] = observations.contains("barrier_energy_at_solve_start")
+													  ? observations["barrier_energy_at_solve_start"]
+													  : missing("Not measured at solve start");
 		record["endpoint"] = vector(x);
-		record["coordinate_state"] = outcome == "accepted" ? "Returned nonlinear solve endpoint, before time advancement"
-														   : "Retained caller coordinates with current attempt form state; failed internal trial is not exposed";
-		record["external_work"] = missing("Requires trajectory quadrature of body, traction and prescribed-boundary work");
-		record["frictional_dissipation"] = missing("Requires trajectory integration; friction objective is not dissipated work");
-		record["retuning_energy_change"] = missing("Endpoint snapshots do not retain every fixed-coordinate coefficient event");
-		record["physical_balance_pass"] = missing("No physical acceptance threshold or complete work budget selected");
+		if (outcome == "accepted")
+			record["coordinate_state"] = "Returned nonlinear solve endpoint, before time advancement";
+		else
+		{
+			record["coordinate_state"] = "Retained caller coordinates with current attempt form state; the last internal Newton iterate is in last_internal_iterate";
+			record["last_internal_iterate"] = observations.contains("last_internal_iterate")
+												  ? observations["last_internal_iterate"]
+												  : missing("No accepted Newton iterate was observed before the failure");
+		}
+		record["work_convention"] = "Right-endpoint discrete increments: endpoint force dotted with the accepted displacement of this step, physical units; support force on the system sign; solved-lag friction; parameter-state energy change at the previous physical coordinates (docs/rb-04-work-convention.md). Not path integrals and not a physical balance.";
+		record["physical_balance_pass"] = missing("No physical acceptance threshold is authorized for RB-04; the discrete budget terms are reported separately");
 		const size_t rss = getCurrentRSS(), peak = getPeakRSS();
 		record["current_rss_bytes"] = rss ? json{{"value", rss}} : missing("Platform RSS unavailable");
 		record["peak_rss_bytes"] = peak ? json{{"value", peak}} : missing("Platform peak RSS unavailable");
@@ -240,6 +255,79 @@ namespace polyfem::varform
 				record["bc_error_inf"] = missing("No simple Dirichlet selector constraint");
 			if (!record.contains("contact"))
 				record["contact"] = missing("No supported active barrier contact form");
+
+			// Right-endpoint discrete work increments of this accepted step
+			// (docs/rb-04-work-convention.md). These are the declared
+			// bookkeeping terms of the discrete budget, not path integrals.
+			if (outcome == "accepted")
+			{
+				const Eigen::VectorXd dx = x - start;
+				if (complete)
+				{
+					double support_work = 0;
+					bool has_support = false;
+					for (const auto &constraint : solve_data_.al_form)
+						if (dynamic_cast<const BCLagrangianForm *>(constraint.get()))
+						{
+							const auto &A = constraint->constraint_matrix();
+							support_work += (A.transpose() * (A * residual)).dot(dx);
+							has_support = true;
+						}
+					double body_work = 0;
+					bool has_body = false;
+					for (const auto &row : record["forms"])
+						if (row["name"] == "body" && row.contains("gradient_force_units") && row["gradient_force_units"]["value"].is_array())
+						{
+							const auto g = row["gradient_force_units"]["value"].get<std::vector<double>>();
+							body_work = -Eigen::Map<const Eigen::VectorXd>(g.data(), g.size()).dot(dx);
+							has_body = true;
+						}
+					record["support_work_increment"] = has_support ? scalar(support_work) : missing("No simple Dirichlet selector constraint");
+					record["support_work_increment_convention"] = "Support force on the system (residual on prescribed DOFs) dotted with the accepted displacement; W_D,right of the work convention";
+					record["body_load_work_increment"] = has_body ? scalar(body_work) : json{{"value", 0.}, {"convention", "No body/traction load form; identically zero"}};
+					record["external_work_increment"] = has_support ? scalar(support_work + body_work) : missing("No simple Dirichlet selector constraint");
+				}
+				else
+				{
+					record["support_work_increment"] = missing("Unsupported active form; residual is partial");
+					record["body_load_work_increment"] = missing("Unsupported active form; residual is partial");
+					record["external_work_increment"] = missing("Unsupported active form; residual is partial");
+				}
+
+				if (!solve_data_.friction_form || !solve_data_.friction_form->enabled())
+					record["frictional_dissipation_increment"] = {{"value", 0.}, {"convention", "No friction form; identically zero"}};
+				else if (lagging.contains("friction_before_update") && lagging["friction_before_update"].contains("gradient_force_units"))
+				{
+					const auto g = lagging["friction_before_update"]["gradient_force_units"].get<std::vector<double>>();
+					if (g.size() == size_t(dx.size()))
+						record["frictional_dissipation_increment"] = scalar(Eigen::Map<const Eigen::VectorXd>(g.data(), g.size()).dot(dx));
+					else
+						record["frictional_dissipation_increment"] = missing("Pre-update friction gradient has the wrong size");
+				}
+				else
+					record["frictional_dissipation_increment"] = missing("No pre-update friction observation for this attempt");
+				record["frictional_dissipation_increment_convention"] = "Solved-lag friction gradient (before the final lag update) dotted with the accepted displacement; C_f,right of the work convention, a resistance-work estimate, not integrated continuum dissipation";
+
+				if (!solve_data_.contact_form || !solve_data_.contact_form->enabled() || !record.contains("barrier_start_energy_with_endpoint_snapshot"))
+					record["retuning_energy_change"] = solve_data_.contact_form && solve_data_.contact_form->enabled()
+														   ? missing("No endpoint coefficient snapshot evaluation at the start coordinates")
+														   : json{{"value", 0.}, {"convention", "No barrier contact form; identically zero"}};
+				else if (!trajectory_accounting_.previous_endpoint_barrier_energy_available)
+					record["retuning_energy_change"] = missing("Barrier energy of the previous physical endpoint is unavailable in this process");
+				else if (!record["barrier_start_energy_with_endpoint_snapshot"].contains("value") || record["barrier_start_energy_with_endpoint_snapshot"]["value"].is_null())
+					record["retuning_energy_change"] = missing("Start energy under the endpoint snapshot is unavailable");
+				else
+					record["retuning_energy_change"] = scalar(record["barrier_start_energy_with_endpoint_snapshot"]["value"].get<double>() - trajectory_accounting_.previous_endpoint_barrier_energy);
+				record["retuning_energy_change_convention"] = "B(x_(n-1); theta_n) - B(x_(n-1); theta_(n-1)): barrier energy change from the coefficient state of the previous published endpoint to this endpoint's state, at the previous physical coordinates; P of the work convention. For the first accepted step of this process theta_(n-1) is the state at solve start.";
+				record["previous_endpoint_barrier_energy"] = trajectory_accounting_.previous_endpoint_barrier_energy_available
+																 ? scalar(trajectory_accounting_.previous_endpoint_barrier_energy)
+																 : missing("Unavailable in this process");
+			}
+			else
+			{
+				for (const auto *key : {"support_work_increment", "body_load_work_increment", "external_work_increment", "frictional_dissipation_increment", "retuning_energy_change"})
+					record[key] = missing("Attempt did not return an accepted endpoint");
+			}
 			if (solve_data_.time_integrator && !args.value("/time/quasistatic"_json_pointer, true) && mass_.rows() == x.size())
 			{
 				const Eigen::VectorXd v = solve_data_.time_integrator->compute_velocity(x);
@@ -277,13 +365,43 @@ namespace polyfem::varform
 		catch (const std::exception &e)
 		{
 			record["measurement_error"] = e.what();
-			for (const auto *key : {"full_residual", "free_residual_norm", "bc_error_inf", "reactions", "contact", "kinetic_energy", "min_det_F"})
+			for (const auto *key : {"full_residual", "free_residual_norm", "bc_error_inf", "reactions", "contact", "kinetic_energy", "min_det_F",
+									"support_work_increment", "body_load_work_increment", "external_work_increment", "frictional_dissipation_increment", "retuning_energy_change"})
 				if (!record.contains(key))
 					record[key] = missing(std::string("Measurement failed: ") + e.what());
 		}
 		for (const auto *key : {"elastic_energy", "barrier_energy"})
 			if (!record.contains(key))
 				record[key] = missing("Form absent, disabled or not measured");
+
+		// Cumulative right-endpoint sums over the accepted endpoints of this
+		// process; a single unavailable increment makes the sum unavailable.
+		if (outcome == "accepted")
+		{
+			auto &acc = trajectory_accounting_;
+			const auto accumulate = [&](const char *key, double &sum, bool &available) {
+				const json &increment = record[key];
+				if (available && increment.contains("value") && increment["value"].is_number())
+					sum += increment["value"].get<double>();
+				else
+					available = false;
+			};
+			accumulate("external_work_increment", acc.external_work, acc.external_work_available);
+			accumulate("frictional_dissipation_increment", acc.frictional_dissipation, acc.frictional_dissipation_available);
+			accumulate("retuning_energy_change", acc.retuning_energy_change, acc.retuning_energy_change_available);
+			++acc.accepted_steps;
+			const auto cumulative = [&](double sum, bool available) {
+				return available ? scalar(sum) : missing("An increment of an earlier or this accepted step in this process was unavailable");
+			};
+			record["external_work_cumulative"] = cumulative(acc.external_work, acc.external_work_available);
+			record["frictional_dissipation_cumulative"] = cumulative(acc.frictional_dissipation, acc.frictional_dissipation_available);
+			record["retuning_energy_change_cumulative"] = cumulative(acc.retuning_energy_change, acc.retuning_energy_change_available);
+			record["cumulative_scope"] = fmt::format("Sum over the {} accepted endpoint(s) of this process; a restarted process starts at zero", acc.accepted_steps);
+			// The published endpoint's coefficient state becomes theta_(n-1) of the next step.
+			acc.has_previous_endpoint = true;
+			acc.previous_endpoint_barrier_energy_available = record["barrier_energy"].contains("value") && record["barrier_energy"]["value"].is_number();
+			acc.previous_endpoint_barrier_energy = acc.previous_endpoint_barrier_energy_available ? record["barrier_energy"]["value"].get<double>() : 0;
+		}
 		std::ofstream file(resolve_output_path("physical-diagnostics.jsonl"), std::ios::app);
 		file << record.dump() << std::endl;
 		if (!file)
@@ -1444,11 +1562,210 @@ namespace polyfem::varform
 				return {{"unavailable_reason", e.what()}};
 			}
 		};
+
+		// RB-04 remainder: passive attempt observation. The iteration observer
+		// sees every trial sweep handed to the contact broad phase, the forms'
+		// step bound, every line-search validity trial and every accepted
+		// iterate, in full coordinates; it writes the opt-in
+		// solver-attempts.jsonl stream and retains what the endpoint record
+		// needs (attempt summary, last proposal, a failed attempt's last
+		// internal iterate). It cannot alter the solve.
+		constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
+		struct AttemptObservation
+		{
+			std::ofstream stream;
+			int minimize_index = 0, accepted_iterations = 0, rejected_proposals = 0, feasibility_checks = 0;
+			int line_search_truncated = 0, step_bound_limited = 0;
+			int validity_checks = 0, validity_rejections = 0, stall_retunes = 0;
+			// Pending proposal of the current iteration.
+			bool has_proposal = false;
+			Eigen::VectorXd proposal_x0, trial; ///< trial = x1 - x0 of the sweep handed to the broad phase
+			double trial_norm = 0, trial_linf = 0, step_bound = std::numeric_limits<double>::quiet_NaN();
+			int iteration_validity_checks = 0, iteration_validity_rejections = 0;
+			// Last accepted iterate.
+			bool has_iterate = false;
+			Eigen::VectorXd iterate;
+			int iterate_iteration = -1, iterate_minimize_index = 0;
+			json last_proposal;
+		} attempts;
+		json diagnostic_observations = json::object();
+		const auto finite_or_null = [](double v) { return std::isfinite(v) ? json(v) : json(nullptr); };
+		const auto info_number = [](const json *info, const char *key) {
+			return info && info->contains(key) && (*info)[key].is_number() ? (*info)[key].get<double>() : std::numeric_limits<double>::quiet_NaN();
+		};
+		const auto trial_json = [&]() -> json {
+			return {{"norm", attempts.trial_norm}, {"linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"validity_checks", attempts.iteration_validity_checks}, {"validity_rejections", attempts.iteration_validity_rejections}, {"scope", "Sweep handed to the contact broad phase after the finite-energy stage; step_bound is the forms' inversion/CCD fraction of it"}};
+		};
+		// PolySolve's solver info at post_step holds the objective and gradient
+		// norm of the iterate the direction was computed from (x0), not of
+		// the accepted point; the start row carries the start energy only.
+		const auto write_attempt = [&](const std::string &kind, int iteration, const json &trial, const json &accepted, double energy, double grad_norm) {
+			if (!attempts.stream.is_open())
+				return;
+			const json row = {{"schema", "polyfem.solver-attempt"}, {"version", 1}, {"run_id", diagnostic_run_id_}, {"step", step}, {"phase", diagnostic_phase}, {"minimize_index", attempts.minimize_index}, {"iteration", iteration}, {"kind", kind}, {"trial", trial}, {"accepted", accepted}, {"energy_objective_at_x0", finite_or_null(energy)}, {"gradient_norm_objective_at_x0", finite_or_null(grad_norm)}, {"units", "internal length; objective units at the iterate the proposal was computed from; Euclidean/Linf norms over full node-major DOFs"}};
+			// Flushed per row: an uncaught solver exception terminates the
+			// process without unwinding, so a buffered stream would lose the
+			// failed attempt's history.
+			attempts.stream << row.dump() << std::endl;
+		};
+		// A pending proposal with a step bound that no accepted iterate
+		// followed was rejected by the line search; one without a step bound
+		// was an ALSolver feasibility check, not a Newton proposal.
+		const auto flush_pending_proposal = [&]() {
+			if (!attempts.has_proposal)
+				return;
+			if (std::isfinite(attempts.step_bound))
+			{
+				++attempts.rejected_proposals;
+				write_attempt("rejected", attempts.has_iterate ? attempts.iterate_iteration : 0, trial_json(), nullptr, NaN, NaN);
+			}
+			else
+				++attempts.feasibility_checks;
+			attempts.has_proposal = false;
+		};
+		if (auto contact = solve_data_.contact_form)
+			contact->reset_candidate_statistics();
+		if (diagnostics_enabled && solve_data_.nl_problem)
+		{
+			attempts.stream.open(resolve_output_path("solver-attempts.jsonl"), std::ios::app);
+			if (!attempts.stream)
+				logger().warn("Could not open solver-attempts.jsonl; attempt stream disabled for step {}", step);
+			solve_data_.nl_problem->set_iteration_observer([&](const solver::IterationObservation &o) {
+				using Kind = solver::IterationObservation::Kind;
+				switch (o.kind)
+				{
+				case Kind::Validity:
+					// Trials of a feasibility check (proposal without a step bound) are not line-search trials.
+					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
+						break;
+					++attempts.validity_checks;
+					++attempts.iteration_validity_checks;
+					if (!o.valid)
+					{
+						++attempts.validity_rejections;
+						++attempts.iteration_validity_rejections;
+					}
+					break;
+				case Kind::Proposal:
+					flush_pending_proposal();
+					attempts.has_proposal = true;
+					attempts.proposal_x0 = *o.x0;
+					attempts.trial = *o.x1 - *o.x0;
+					attempts.trial_norm = attempts.trial.norm();
+					attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
+					attempts.step_bound = NaN;
+					break;
+				case Kind::StepBound:
+					attempts.step_bound = o.step_bound;
+					break;
+				case Kind::LineSearchEnd:
+					// A real line search ends before its accepted iterate is
+					// reported; only a feasibility check is closed here.
+					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
+						flush_pending_proposal();
+					break;
+				case Kind::Accepted:
+				{
+					const double energy = info_number(o.solver_info, "energy");
+					const double grad_norm = info_number(o.solver_info, "gradNorm");
+					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
+						flush_pending_proposal();
+					if (!attempts.has_proposal)
+					{
+						// PolySolve reports the start point before its first
+						// iteration; its gradient is not evaluated yet.
+						++attempts.minimize_index;
+						attempts.iteration_validity_checks = attempts.iteration_validity_rejections = 0;
+						attempts.iterate_iteration = 0;
+						write_attempt("start", 0, nullptr, nullptr, energy, NaN);
+					}
+					else
+					{
+						// o.iteration counts the iterations completed before this update.
+						const int iteration = o.iteration + 1;
+						const Eigen::VectorXd dx = *o.x1 - attempts.proposal_x0;
+						const double fraction = attempts.trial_norm > 0 ? dx.dot(attempts.trial) / (attempts.trial_norm * attempts.trial_norm) : NaN;
+						const json trial = trial_json();
+						const json accepted = {{"fraction_of_trial", finite_or_null(fraction)}, {"norm", dx.norm()}, {"linf", dx.size() ? dx.lpNorm<Eigen::Infinity>() : 0}};
+						// Backtracking beyond the forms' bound is a line-search
+						// truncation; stopping at the bound is the bound's doing.
+						if (std::isfinite(attempts.step_bound) && attempts.step_bound < 1)
+							++attempts.step_bound_limited;
+						if (std::isfinite(fraction) && std::isfinite(attempts.step_bound) && fraction < attempts.step_bound * (1 - 1e-12))
+							++attempts.line_search_truncated;
+						attempts.last_proposal = {{"trial_norm", attempts.trial_norm}, {"trial_linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"accepted_fraction_of_trial", finite_or_null(fraction)}, {"accepted_norm", dx.norm()}, {"iteration", iteration}, {"minimize_index", attempts.minimize_index}, {"scope", "Last Newton proposal accepted before this record; the per-iteration stream is solver-attempts.jsonl"}};
+						++attempts.accepted_iterations;
+						write_attempt("accepted", iteration, trial, accepted, energy, grad_norm);
+						attempts.has_proposal = false;
+						attempts.iteration_validity_checks = attempts.iteration_validity_rejections = 0;
+						attempts.iterate_iteration = iteration;
+					}
+					attempts.has_iterate = true;
+					attempts.iterate = *o.x1;
+					attempts.iterate_minimize_index = attempts.minimize_index;
+					break;
+				}
+				}
+			});
+			// Barrier energy of the start coordinates under the production
+			// coefficient state at solve start: for the first accepted step of
+			// this process it is B(x_0; theta_0) of the retuning convention.
+			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form); barrier && barrier->enabled())
+			{
+				try
+				{
+					const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+					if (!(scale > 0) || !std::isfinite(scale))
+						throw std::runtime_error("Invalid acceleration scaling");
+					const double energy = barrier->diagnostic_snapshot(diagnostic_start).value(diagnostic_start) / scale;
+					if (!std::isfinite(energy))
+						throw std::runtime_error("Nonfinite barrier energy");
+					diagnostic_observations["barrier_energy_at_solve_start"] = {{"value", energy}, {"scope", "Start coordinates evaluated with the production coefficient state at solve start (private snapshot); physical energy units"}};
+					if (!trajectory_accounting_.has_previous_endpoint)
+					{
+						trajectory_accounting_.previous_endpoint_barrier_energy = energy;
+						trajectory_accounting_.previous_endpoint_barrier_energy_available = true;
+					}
+				}
+				catch (const std::exception &e)
+				{
+					diagnostic_observations["barrier_energy_at_solve_start"] = {{"value", nullptr}, {"unavailable_reason", e.what()}};
+				}
+			}
+		}
+		// Clears the observer before the locals it captures are destroyed
+		// (declared after them, so destroyed first), on every exit path.
+		struct ObserverGuard
+		{
+			std::shared_ptr<solver::NLProblem> problem;
+			~ObserverGuard()
+			{
+				if (problem)
+					problem->set_iteration_observer(nullptr);
+			}
+		} observer_guard{diagnostics_enabled ? solve_data_.nl_problem : nullptr};
+
 		const auto emit_diagnostics = [&](const std::string &outcome, const std::string &error = "") {
 			try
 			{
+				flush_pending_proposal();
+				json observations = diagnostic_observations;
+				json candidates = nullptr;
+				if (auto contact = solve_data_.contact_form)
+				{
+					const auto &stats = contact->candidate_statistics();
+					candidates = {{"builds", stats.builds}, {"last", stats.last}, {"max", stats.max}};
+				}
+				observations["summary"] = {{"minimize_calls", attempts.minimize_index}, {"accepted_iterations", attempts.accepted_iterations}, {"rejected_proposals", attempts.rejected_proposals}, {"feasibility_checks", attempts.feasibility_checks}, {"line_search_truncated", attempts.line_search_truncated}, {"step_bound_limited", attempts.step_bound_limited}, {"validity_checks", attempts.validity_checks}, {"validity_rejections", attempts.validity_rejections}, {"stall_retunes", attempts.stall_retunes}, {"broad_phase_candidates", candidates}, {"scope", "All PolySolve minimize calls of this attempt (AL, reduced, lagging); restarts and AL weights are in termination and the coefficient-event stream"}};
+				if (attempts.last_proposal.is_object())
+					observations["proposed_displacement"] = attempts.last_proposal;
+				if (outcome != "accepted" && attempts.has_iterate && attempts.iterate.allFinite())
+					observations["last_internal_iterate"] = {{"value", std::vector<double>(attempts.iterate.data(), attempts.iterate.data() + attempts.iterate.size())},
+															 {"iteration", attempts.iterate_iteration},
+															 {"minimize_index", attempts.iterate_minimize_index},
+															 {"scope", "Last accepted Newton iterate observed inside the failed attempt, full coordinates; not the retained caller coordinates and not a restored accepted state. Its objective history is in solver-attempts.jsonl"}};
 				write_physical_diagnostics(step, sol, diagnostic_start, outcome, diagnostic_phase,
-										   diagnostic_termination, diagnostic_lagging,
+										   diagnostic_termination, diagnostic_lagging, observations,
 										   std::chrono::duration<double>(std::chrono::steady_clock::now() - diagnostic_start_time).count(), error);
 			}
 			catch (const std::exception &e)
@@ -1519,7 +1836,8 @@ namespace polyfem::varform
 				stall_opts.max_restarts = restart_opts["max_restarts"];
 
 				const double stall_trim_factor = restart_opts["stall_trim_factor"];
-				on_stall = [barrier_form, stall_trim_factor](const Eigen::VectorXd &x) {
+				on_stall = [barrier_form, stall_trim_factor, &attempts](const Eigen::VectorXd &x) {
+					++attempts.stall_retunes;
 					return barrier_form->retune_on_stall(x, stall_trim_factor);
 				};
 			}

@@ -15,6 +15,8 @@
 
 #include <igl/writePLY.h>
 
+#include <algorithm>
+
 namespace polyfem::solver
 {
 	ContactForm::ContactForm(const ipc::CollisionMesh &collision_mesh,
@@ -168,6 +170,10 @@ namespace polyfem::solver
 			"Broad phase over trial step: {} candidates (trial Linf={:g}, trial_clamp={:g})",
 			candidates_.size(), (V1 - V0).lpNorm<Eigen::Infinity>() / trial_clamp,
 			trial_clamp);
+
+		++candidate_statistics_.builds;
+		candidate_statistics_.last = candidates_.size();
+		candidate_statistics_.max = std::max(candidate_statistics_.max, candidates_.size());
 
 		use_cached_candidates_ = true;
 	}

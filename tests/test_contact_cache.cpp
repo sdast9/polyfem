@@ -291,6 +291,40 @@ TEST_CASE("Physical diagnostic snapshots preserve contact state and frozen deriv
 	CHECK(empty.diagnostic_state()["active_count"] == 0);
 	CHECK(empty.diagnostic_state()["coefficient_range"]["value"].is_null());
 	CHECK(empty.diagnostic_state()["candidate_count"]["value"].is_null());
+	CHECK(form.candidate_statistics().builds == 0);
+}
+
+TEST_CASE("Endpoint records retain the candidate counts of this solve's trial sweeps", "[physical_diagnostics][contact_cache]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	REQUIRE(form.diagnostic_state()["candidate_count"]["value"].is_null());
+	Eigen::VectorXd toward = zero;
+	toward[5] = -.15; // Vertex 2 sweeps toward the edge: one edge-vertex candidate.
+	form.line_search_begin(zero, toward);
+	const size_t during = form.diagnostic_state()["candidate_count"]["value"].get<size_t>();
+	CHECK(during >= 1);
+	CHECK(form.diagnostic_state()["candidate_count"]["scope"] == "Active swept candidate cache");
+	form.line_search_end();
+	const auto after = form.diagnostic_state()["candidate_count"];
+	CHECK(after["value"].get<size_t>() == during);
+	CHECK(after["builds"].get<size_t>() == 1);
+	CHECK(after["max"].get<size_t>() == during);
+	Eigen::VectorXd away = zero;
+	away[5] = 5; // Far sweep: the broad phase may build a different count.
+	form.line_search_begin(zero, away);
+	form.line_search_end();
+	const auto &stats = form.candidate_statistics();
+	CHECK(stats.builds == 2);
+	CHECK(stats.max >= stats.last);
+	CHECK(stats.max >= during);
+	// A private snapshot carries the retained counts; a reset clears them.
+	CHECK(form.diagnostic_snapshot(zero).diagnostic_state()["candidate_count"]["builds"].get<size_t>() == 2);
+	form.reset_candidate_statistics();
+	CHECK(form.diagnostic_state()["candidate_count"]["value"].is_null());
+	CHECK(form.candidate_statistics().builds == 0);
 }
 
 TEST_CASE("Coefficient event accounting observes outer mutations without changing them", "[coefficient_events]")

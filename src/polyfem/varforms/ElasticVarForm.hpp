@@ -4,6 +4,8 @@
 
 #include <polyfem/assembler/Mass.hpp>
 
+#include <utility>
+
 namespace polyfem::mesh
 {
 	class Obstacle;
@@ -22,6 +24,19 @@ namespace polyfem::time_integrator
 
 namespace polyfem::varform
 {
+	/// @brief Velocity and acceleration of a saved solution (RB-04 output
+	///        kinematics alignment). The nonlinear time loop exports each
+	///        accepted endpoint before advancing the integrator history, so
+	///        there v_prev()/a_prev() are the previous step's kinematics; the
+	///        FSI embedding exports after advancing, when x_prev() is the
+	///        saved solution and v_prev()/a_prev() are its kinematics. A
+	///        solution equal to the history head therefore reads the stored
+	///        values; any other solution is differenced with the integrator's
+	///        own rule at the current history. Zero before initialization.
+	std::pair<Eigen::VectorXd, Eigen::VectorXd> saved_solution_kinematics(
+		const time_integrator::ImplicitTimeIntegrator &time_integrator,
+		const Eigen::VectorXd &solution);
+
 	class ElasticVarForm : public VarForm
 	{
 		friend class polyfem::test::VarFormTestAccess;

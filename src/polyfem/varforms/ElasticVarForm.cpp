@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <map>
 #include <ostream>
+#include <tuple>
 
 #include <igl/Timer.h>
 
@@ -444,6 +445,22 @@ namespace polyfem::varform
 				indices[p2n[i]] = i;
 		}
 		return indices;
+	}
+
+	std::pair<Eigen::VectorXd, Eigen::VectorXd> saved_solution_kinematics(
+		const time_integrator::ImplicitTimeIntegrator &time_integrator,
+		const Eigen::VectorXd &solution)
+	{
+		if (time_integrator.steps() == 0 || time_integrator.x_prev().size() != solution.size())
+			return {Eigen::VectorXd::Zero(solution.size()), Eigen::VectorXd::Zero(solution.size())};
+
+		// History already advanced to this solution (FSI embedding, initial
+		// save): the stored values are its kinematics.
+		if (time_integrator.x_prev() == solution)
+			return {time_integrator.v_prev(), time_integrator.a_prev()};
+
+		const Eigen::VectorXd v = time_integrator.compute_velocity(solution);
+		return {v, time_integrator.compute_acceleration(v)};
 	}
 
 	std::vector<io::OutputField> ElasticVarForm::elastic_output_fields(
@@ -954,16 +971,22 @@ namespace polyfem::varform
 
 		if (problem->is_time_dependent())
 		{
-			if (velocity && options.export_field("velocity"))
-				append_sampled_dof_field(
-					"velocity",
-					time_integrator ? time_integrator->v_prev() : Eigen::VectorXd::Zero(solution.size()),
-					actual_dim);
-			if (acceleration && options.export_field("acceleration"))
-				append_sampled_dof_field(
-					"acceleration",
-					time_integrator ? time_integrator->a_prev() : Eigen::VectorXd::Zero(solution.size()),
-					actual_dim);
+			const bool export_velocity = velocity && options.export_field("velocity");
+			const bool export_acceleration = acceleration && options.export_field("acceleration");
+			if (export_velocity || export_acceleration)
+			{
+				// Kinematics of the saved solution, not of the integrator's
+				// history head: the nonlinear loop saves before advancing
+				// (RB-04 output alignment; see saved_solution_kinematics).
+				Eigen::VectorXd saved_velocity = Eigen::VectorXd::Zero(solution.size());
+				Eigen::VectorXd saved_acceleration = Eigen::VectorXd::Zero(solution.size());
+				if (time_integrator)
+					std::tie(saved_velocity, saved_acceleration) = saved_solution_kinematics(*time_integrator, solution.col(0));
+				if (export_velocity)
+					append_sampled_dof_field("velocity", saved_velocity, actual_dim);
+				if (export_acceleration)
+					append_sampled_dof_field("acceleration", saved_acceleration, actual_dim);
+			}
 		}
 
 		if (forces)

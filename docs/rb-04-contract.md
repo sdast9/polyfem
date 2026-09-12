@@ -199,3 +199,128 @@ coefficients; it is neither a Newton-history trace nor a collision certificate.
 Errors remain unavailable with a reason. Up to 1024 changed grid intervals can
 trigger 24 extra evaluations each; this is an expensive research option.
 See [validation and scope](rb-04-validation.md#actual-contact-path-measurements-and-rb-04-disposition-2026-09-09).
+
+
+## Version 2 — attempt observation, candidate counts and discrete work increments (2026-09-12)
+
+The record schema stays `polyfem.physical-diagnostics`; `version` is now 2.
+Every version 1 field keeps its meaning. Version 2 resolves the fields that
+version 1 carried as unavailable, except `physical_balance_pass`, which stays
+unavailable by decision: no physical acceptance threshold is authorized for
+RB-04, and the discrete budget terms are reported separately so that a later
+item can select one.
+
+### Iteration observer and the solver-attempts stream
+
+`FullNLProblem` accepts a passive iteration observer. It is installed only
+while `physical_diagnostics` is on, for the duration of one
+`solve_tensor_nonlinear` call, and cleared on every exit path. It sees the
+PolySolve hooks the problem already receives, in full coordinates: the trial
+sweep handed to the contact broad phase (`line_search_begin`), the forms'
+inversion/CCD step bound (`max_step_size`), every line-search validity trial
+(`is_step_valid`), the release of the swept cache (`line_search_end`) and every
+accepted iterate (`post_step`). An observer that throws is disabled for that
+solve with a warning; it cannot change the solve. Disabled observation costs a
+null check per hook.
+
+Two facts of the existing solver stack shape the stream. `ALSolver` performs a
+feasibility check before each subsolve (`line_search_begin`, `is_step_valid`,
+`line_search_end`, no step bound); it is counted as `feasibility_checks`, not
+as a proposal, and its validity trial is not a line-search trial. PolySolve's
+`post_step` reports the number of iterations completed *before* the call, so
+the start point and the first update both carry 0; the stream identifies the
+start of a minimize as an accepted iterate with no pending proposal and numbers
+updates from 1, so `accepted_iterations` equals PolySolve's `iterations`.
+
+With the same opt-in flag the active VarForm appends `solver-attempts.jsonl`
+(schema `polyfem.solver-attempt`, version 1), flushed per row so that a fatal
+solver exception leaves a complete history. Each row carries the run ID, step,
+phase (`augmented_lagrangian`, `reduced`, `lagging`), `minimize_index` (count
+of PolySolve minimize calls in this attempt), `iteration` and `kind`:
+
+- `start`: the start point of a minimize (`energy_objective_at_x0`; the
+  gradient is not evaluated yet and is null).
+- `accepted`: `trial` (`norm`, `linf`, `step_bound`, `validity_checks`,
+  `validity_rejections` of this iteration's line search) and `accepted`
+  (`fraction_of_trial`, `norm`, `linf`). The trial is the sweep handed to the
+  broad phase after PolySolve's finite-energy stage; `fraction_of_trial` is the
+  accepted fraction of that sweep, so `0 < fraction ≤ step_bound`.
+- `rejected`: a trial with a step bound that no accepted iterate followed (the
+  line search failed and the solver changed strategy, or the attempt failed).
+
+`energy_objective_at_x0` and `gradient_norm_objective_at_x0` are PolySolve's
+solver info at `post_step`: the objective and gradient norm at the iterate the
+direction was computed from, not at the accepted point. Norms are Euclidean and
+Linf over full node-major DOFs in internal length units. The stream is solver
+bookkeeping; it certifies nothing physical.
+
+### Endpoint record additions
+
+- `attempt_summary`: `minimize_calls`, `accepted_iterations`,
+  `rejected_proposals`, `feasibility_checks`, `step_bound_limited` (accepted
+  iterations whose forms' bound was below 1), `line_search_truncated`
+  (accepted fraction below the bound, i.e. energy backtracking beyond it),
+  `validity_checks`/`validity_rejections`, `stall_retunes` (calls of the
+  stall retune hook in this attempt) and `broad_phase_candidates`
+  (`builds`, `last`, `max`). AL weights and restart counts remain in
+  `termination` and the coefficient-event stream.
+- `proposed_displacement`: the last Newton proposal accepted before the record
+  (`trial_norm`, `trial_linf`, `step_bound`, `accepted_fraction_of_trial`,
+  `accepted_norm`, `iteration`, `minimize_index`); unavailable when no
+  proposal was observed. Every proposal is in the stream.
+- `contact.candidate_count`: the retained counts of this solve's trial sweeps
+  (`value` = last build, `max`, `builds`), since the swept cache is cleared at
+  `line_search_end` and cannot be read at the endpoint. The statistics are
+  reset at the start of every `solve_tensor_nonlinear` call; a form that built
+  no candidates reports the reason. `builds` counts the feasibility checks too.
+- Failed attempts: `last_internal_iterate` (`value` in full coordinates,
+  `iteration`, `minimize_index`) is the last accepted Newton iterate observed
+  inside the failed attempt. `endpoint` remains the retained caller
+  coordinates; neither is a restored accepted state (RB-06).
+- `barrier_energy_at_solve_start`: the start coordinates evaluated with the
+  production coefficient state at solve start through a private snapshot.
+
+### Right-endpoint discrete work increments
+
+For an accepted endpoint with a complete residual, with `dx` the accepted
+displacement of the step and all forces in physical units
+(docs/rb-04-work-convention.md):
+
+- `support_work_increment` = Σ_c (AᵀA r)·dx over simple selector constraints:
+  the support force on the system dotted with `dx` (`W_D,right`).
+- `body_load_work_increment` = −(g_body/s)·dx; identically zero without a
+  body/traction form. `external_work_increment` is their sum.
+- `frictional_dissipation_increment` = g_f,pre-update·dx, the solved-lag
+  friction gradient (before the final lag update) dotted with `dx`
+  (`C_f,right`): a resistance-work estimate, not integrated continuum
+  dissipation; identically zero without a friction form; unavailable without a
+  pre-update observation.
+- `retuning_energy_change` = B(x_(n-1); θ_n) − B(x_(n-1); θ_(n-1)) (`P`): the
+  endpoint snapshot's start energy minus the previous published endpoint's
+  `barrier_energy`. For the first accepted step of a process θ_(n-1) is the
+  state at solve start (`barrier_energy_at_solve_start`);
+  `previous_endpoint_barrier_energy` records the value used. Under the RB-20
+  force continuation every persisting contact keeps its coefficient, so on the
+  public fixtures `P` is exactly the global trim change applied to the
+  previous endpoint energy.
+- `*_cumulative`: sums over the accepted endpoints of this process
+  (`cumulative_scope`); unavailable once any increment was unavailable. A
+  restarted process starts at zero.
+
+Unsupported active forms make the residual, and therefore the support and
+external work, unavailable. Failed attempts carry all increments as
+unavailable. `work_convention` restates the convention in the record. These
+are the declared bookkeeping terms of the discrete right-endpoint budget, not
+path integrals and not a physical balance.
+
+### VTU kinematics alignment
+
+The nonlinear time loop exports each accepted endpoint before advancing the
+integrator history, so the `velocity`/`acceleration` VTU fields of version 1
+runs were the previous step's values (inherited from upstream PolyFEM; the FSI
+embedding exports after advancing and was correct). The exporter now writes
+the kinematics of the saved solution: a solution equal to the history head
+reads the stored values, any other solution is differenced with the
+integrator's own rule at the current history (`saved_solution_kinematics`).
+The diagnostic `velocity`/`kinetic_energy` fields were already defined this
+way; the VTU fields now agree with them and with the displacement history.

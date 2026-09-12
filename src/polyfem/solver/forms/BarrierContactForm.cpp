@@ -1260,8 +1260,16 @@ namespace polyfem::solver
 		result["coefficient_identity"] = parent_keyed_ ? "parent" : "stencil";
 		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
 														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
-		result["candidate_count"] = use_cached_candidates_ ? json{{"value", candidates_.size()}}
-														   : json{{"value", nullptr}, {"unavailable_reason", "Swept candidate cache is not active at this endpoint"}};
+		// The swept cache is cleared at line_search_end, so an endpoint sees
+		// the retained counts of this solve's trial sweeps (RB-04), not a
+		// live cache. A form that never built candidates reports the reason.
+		const auto &stats = candidate_statistics();
+		if (use_cached_candidates_)
+			result["candidate_count"] = {{"value", candidates_.size()}, {"scope", "Active swept candidate cache"}};
+		else if (stats.builds > 0)
+			result["candidate_count"] = {{"value", stats.last}, {"max", stats.max}, {"builds", stats.builds}, {"scope", "Broad-phase candidates of the last trial sweep handed to CCD since the last statistics reset; max/builds over those sweeps"}};
+		else
+			result["candidate_count"] = {{"value", nullptr}, {"unavailable_reason", "No line search built a swept candidate set since the last statistics reset"}};
 		return result;
 	}
 

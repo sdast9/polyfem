@@ -1,13 +1,16 @@
 # RB-04 — Accepted-step physical accounting and diagnostics
 
-Dates: 2026-09-08–2026-09-09
-Status: **characterized—limits documented; opt-in endpoint and path instrumentation validated**
-Continuation: [candidate research log](rb-04-research-log.md) records the user's
-coherent-model direction, trim-band hypothesis, 15-run pilot, and exact remaining
-event/work-accounting tasks. The pilot does not close trajectory accounting.
-Historical initial stage: inventory and opt-in version 1 returned/failed endpoint records,
-with independent public-fixture measurements. See the final dated disposition for the completed bounded accounting scope
-and remaining accuracy limitations.
+Dates: 2026-09-08–2026-09-09; remainder completed 2026-09-12
+Status: **validated within stated scope** — the record's required fields are
+complete (version 2: attempt observation, candidate counts, failed-attempt
+iterate, right-endpoint work increments), the nonlinear VTU kinematics are
+aligned, and the limits documented on 2026-09-09 are either resolved by
+RB-18–RB-21/RB-03 or carried by RB-09/RB-10 as measurement limits. See the
+[remainder section](#remainder-completed--record-version-2-2026-09-12).
+Continuation history: the [candidate research log](rb-04-research-log.md)
+records the user's coherent-model direction, trim-band hypothesis, 15-run
+pilot, and the event/work-accounting stages. The dated sections below are the
+historical stages in order; each states what was then still pending.
 
 Current user-selected direction: improve the existing adaptive barrier; Fixed
 mode remains a reference and AL is deferred. See the
@@ -455,3 +458,152 @@ continuity claims. Friction reversal/stick-slip and coupled-lag accuracy remain
 RB-10, and unsupported maps remain subject to RB-03. Existing missing diagnostic
 fields retain unavailable reasons; a populated arithmetic budget is not an
 automatic `physical_balance_pass`.
+
+
+## Remainder completed — record version 2 (2026-09-12)
+
+**Status: validated within stated scope.** The user asked for the remainder of
+RB-04. The remainder, taken from the record's pending list, the contract's
+unavailable fields and the plan's required fields, was: per-subsolve attempt
+identity and per-trial proposals with a failed attempt's internal coordinates;
+candidate counts at the endpoint; the nonlinear VTU velocity lag; the
+`external_work`, `frictional_dissipation` and `retuning_energy_change` fields
+the work convention had since defined; and the documented limits that
+RB-18–RB-21 and RB-03 had resolved in the meantime. `physical_balance_pass`
+stays unavailable by decision (no threshold is authorized here).
+
+Started clean on `main` at `eb855713a` (RB-22 published), effective IPC local
+`e3c8d3fe` (`semi-implicit-stiffness`), PolySolve local `5afe3b5d`
+(`iteration-callback`), same compiler/build settings; no solver or build
+process was running. No dependency, coefficient law, friction-lag budget,
+tolerance, CCD, trial cap, restart policy, default or HDA asset changed. No
+private scene or Teseo ran. Evidence: parent
+`outputs/rb-04/20260912T140912Z-remainder/` (baseline, build logs, affected
+suite, `endpoints/` on/off/failure runs with both stream checkers, single- and
+multi-threaded smokes, HDA log, `tested.patch`, `tested-binaries.txt`). The
+first endpoint run (`endpoints-unflushed-stream/`) exposed that the attempt
+stream of the aborting failure run was lost — libc++ terminates without
+unwinding when no handler exists, so a buffered `ofstream` never flushed; rows
+are now flushed individually. `endpoints-preformat/` is the passing run before
+the final clang-format pass; the final `endpoints/` run uses the committed
+sources. Compact results: [results-20260912.json](../tools/rb04/results-20260912.json).
+
+### What changed
+
+- `FullNLProblem`: passive iteration observer on the hooks the problem already
+  receives (proposal, step bound, validity trial, line-search end, accepted
+  iterate); disabled after a throwing observer; one null check when unused.
+- `ContactForm`: retained candidate statistics of the trial sweeps
+  (`builds`/`last`/`max`), reset at the start of each `solve_tensor_nonlinear`;
+  `BarrierContactForm::diagnostic_state` reports them.
+- `NonlinearElasticVarForm`: opt-in `solver-attempts.jsonl` stream; record
+  version 2 with `attempt_summary`, `proposed_displacement`,
+  `last_internal_iterate` (failures), `barrier_energy_at_solve_start`, the
+  right-endpoint increments `support_work_increment`,
+  `body_load_work_increment`, `external_work_increment`,
+  `frictional_dissipation_increment`, `retuning_energy_change`, their
+  cumulative sums and conventions; stall retunes counted through the existing
+  hook. See the [contract](rb-04-contract.md#version-2--attempt-observation-candidate-counts-and-discrete-work-increments-2026-09-12).
+- `ElasticVarForm`: VTU `velocity`/`acceleration` are the kinematics of the
+  saved solution (`saved_solution_kinematics`), not the integrator history head.
+  This changes the exported fields of every transient nonlinear run from the
+  previous step's values to the current step's; solutions are untouched.
+- Tests: `[iteration_observer]` (proposal/bound/accepted structure on a
+  quartic problem, vetoed step observed as bound 0, throwing observer
+  disabled with an unchanged solve, cleared observer silent),
+  `[output_kinematics]` (history head, pre-advance difference, post-advance
+  identity, size guard), candidate statistics in `[physical_diagnostics]`.
+- Tools: `run_endpoints.py` checks version 2 (independent support work, VTU
+  kinematics, record identities, attempt summaries, failed-attempt iterate);
+  new `check_solver_attempts.py`.
+
+Two facts of the existing stack shaped the observer and are recorded in the
+contract: `ALSolver` runs a feasibility check (`line_search_begin`,
+`is_step_valid`, `line_search_end`, no step bound) before every subsolve, and
+PolySolve's `post_step` reports the iterations completed before the call, so
+the start point and the first update both carry 0.
+
+### Validation
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| Build `PolyFEM_bin`/`unit_tests` (formatted sources) | Exit 0 | Exit 0 | Pass |
+| Affected selection incl. new tags | No failure, seed 1 | 76 cases / 5,053 assertions | Pass |
+| Three public off/on pairs | Four steps; displacement max difference < 1e-10 | Six runs exit 0; max 9.26e-16 over 12 endpoints | Pass |
+| Independent P1 energy / det(F) / BC / quasistatic reaction / transient kinetic | Original thresholds | Max energy 4.60e-15 relative, kinetic 1.14e-15; reactions/BC/det(F) within 1e-10 | Pass |
+| VTU velocity and acceleration vs saved displacement differences | < 1e-10 / 1e-9 | 0.0 at all 12 endpoints (both fixture kinds) | Pass |
+| `support_work_increment` vs independent top reaction × prescribed increment (quasistatic, friction) | Relative < 1e-8 | Max 3.03e-15 | Pass |
+| Record identities: support = Σ reactions·dx, `C_f` = g_pre·dx, `P` = start energy − previous endpoint energy, cumulative sums | 1e-8/1e-9 relative | All 12 endpoints | Pass |
+| Attempt streams (`check_solver_attempts.py`) | Start rows, consecutive iterations, `0 < fraction ≤ step_bound`, summary/termination identities | Max fraction − bound 2.2e-16; `accepted_iterations` = PolySolve `iterations` at every endpoint | Pass |
+| Coefficient-event checker | Unchanged | Pass | Pass |
+| Deliberate failure off/on | Both −6; no accepted step 1; failed record | Both −6; `last_internal_iterate` at iteration 2 of minimize 2 (max 0.0625 from the retained caller coordinates), `stall_retunes` 1, `minimize_calls` 2, increments unavailable | Pass |
+| Five public smokes, single-threaded, vs the previous binary `9de4616d` (RB-22 candidate) | Solution identity | All five `IDENTICAL`, max diff 0.0 | Pass |
+| Five public smokes, threaded | Exit 0, zero error lines, PVD 0,.25,.5,.75,1 | All five | Pass |
+| HDA end-to-end, Houdini 22.0.429 | Pass against the final binary | Pass | Pass |
+| clang-format on changed hunks, Python compile, whitespace | No introduced issue | Clean | Pass |
+
+Wall times overlapped with nothing else but are not benchmarks.
+
+### Measured at the current production
+
+Public fixtures, dt .25, four steps, `coefficient_identity: parent`,
+`force_continuation` on (all values in the record's physical units):
+
+| Fixture | Newton iterations per step | Bound-limited iterations | Line-search truncations | Candidates last/max, step 1 | Support work increments | `P` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Quasistatic frictionless | 9, 6, 6, 5 | 2, 1, 1, 1 | 0 | 754 / 978 | 33672.358, 88400.569, 152180.206, 227407.013 | 0, 53.749, 166.537, 0 |
+| Transient frictionless | 9, 6, 6, 5 | 2, 0, 1, 1 | 0 | 754 / 978 | 33701.763, 88398.715, 152180.609, 227407.861 | 0, 53.713, 166.554, 0 |
+| Quasistatic friction | 9, 6, 12, 22 | 2, 0, 1, 1 | 0, 0, 4, 13 | 754 / 978 | 33672.358, 93332.621, 167131.607, 257089.190 | 0, 53.749, 181.165, 306.084 |
+
+The bound-limited iterations are the first two of the first-contact step
+(CCD) and, later, single iterations stopped at the 50·d̂ trial cap
+(Linf .05). Under force continuation every persisting contact keeps its
+coefficient (47 continued / 0 fresh at steps 2–4), so `P` is exactly the global
+trim change applied to the previous endpoint energy: trim 2→4→8→8 on the
+frictionless fixtures (`P` = B_(n-1) at the doublings, 0 at step 4) and
+2→4→8→16 with friction. Before RB-20 this term also contained coefficient
+re-estimation. Solved-lag friction work `C_f,right` is 0, 2427.030, 3383.977,
+4500.354 (cumulative 10311.361); the pre-update friction residuals are
+4.65e-5, 5.86e-6, 2.88e-5, 2.08e-8 against updated-lag residuals 35736.2,
+25582.0, 22711.6, 74596.5 (force units) after the existing one-iteration lag
+budget, so the H6 force-state identity holds at the current production; the
+values differ from the 2026-09-09 ones because RB-18 F7 and RB-20 changed the
+friction path by design. The failure fixture spends 4 accepted iterations
+across 2 minimize calls with one stall retune before the reduced solve is
+interrupted, exactly as the option budget prescribes.
+
+### Documented limits and where they now stand
+
+| Limit as documented in 2026-09-09 | Standing on 2026-09-12 |
+| --- | --- |
+| Per-trial proposals and per-subsolve attempts not retained; failed attempts expose only the retained caller state | Resolved: attempt stream, `attempt_summary`, `proposed_displacement`, `last_internal_iterate` |
+| Candidate count unavailable at the endpoint | Resolved: retained statistics of the solve's trial sweeps |
+| Nonlinear VTU velocity lags the saved displacement | Resolved (upstream-inherited ordering; exporter aligned; FSI embedding unaffected) |
+| `external_work`, `frictional_dissipation`, `retuning_energy_change` unavailable | Resolved as declared right-endpoint discrete increments with cumulative sums; not path integrals |
+| `physical_balance_pass` unavailable | Retained by decision: no threshold is authorized here (plan decision boundary); a later item may select one from the reported terms |
+| Post-publication contact-force drift (145746.710 at the final quasistatic endpoint; 17.4/8.5/4.2 % across dt) | Resolved by RB-20/RB-21 (force continuation on parent-keyed coefficients): drift ~1e-16 / ≤6.5e-4 |
+| Step-1 pre-contact failures after 20 restarts in the refinement matrix | Explained by RB-19 (TBB summation-order noise at the energy roundoff floor; PolySolve gradient-norm fallback) |
+| RB-02 EV/VV coefficient jump (−44.4977) reproduced by the path detector | Resolved by RB-21 (parent-keyed coefficients are C⁰ across closest-feature switches); the detector control remains as evidence |
+| Interpolated-stencil maps outside the supported contract | RB-03 condensed stiffness (2026-09-11); selector meshes bit-identical |
+| First-contact path quadrature mismatch .00131 on the coarse segment; non-exhaustive event isolation | Measurement limits, retained; tighten only if an RB-09 comparison needs it |
+| Friction reversal/stick-slip and coupled-lag accuracy; finite-lag increment dependence | RB-10 |
+| Physical accuracy, mesh convergence, optimal trim band | Not claimed here; RB-09 |
+
+Physical accuracy of the contact model is not certified by this record. A
+complete version 2 budget is a bookkeeping identity of declared terms; a
+populated budget is not `physical_balance_pass`.
+
+### Publication
+
+The tested implementation is committed on `sdast9/polyfem:main` (hash recorded
+in the following documentation commit) with the compact results, the runner and
+checker, this record, the contract and the plan/README status. Companion
+source pins and HDA assets are unchanged. `tested-binaries.txt` holds the
+hashes of the validated binaries; the final endpoint run used
+`PolyFEM_bin` `b29eeb6d…`; the prior run on `a8f5300f…` (before an include-order tidy; retained as `prior-a8f5300f-*`) agrees with it to threaded run-to-run noise (~1e-16 relative in the work increments).
+
+**Handoff:** RB-04 is complete within its stated scope. RB-05 can reuse
+`attempt_summary.broad_phase_candidates` and the attempt stream's trial
+norms as its pre-build diagnostics; RB-06 owns rollback of the exposed failed
+iterate; RB-10 owns friction accuracy; RB-09 owns the physical threshold that
+`physical_balance_pass` deliberately does not select.
