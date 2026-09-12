@@ -152,6 +152,10 @@ namespace polyfem::solver
 				continue;
 			TVector tmp;
 			f->first_derivative(x, tmp);
+			// a form with a mismatched size would be silently truncated
+			// (Eigen's size assert is compiled out in release builds)
+			if (tmp.size() != grad.size())
+				log_and_throw_error("Form \"{}\" returned a gradient of size {} for a problem with {} DOFs", f->name(), tmp.size(), grad.size());
 			grad += tmp;
 		}
 	}
@@ -165,6 +169,11 @@ namespace polyfem::solver
 				continue;
 			THessian tmp;
 			f->second_derivative(x, tmp);
+			// Eigen's dynamic sparse sum takes the size of the operand that
+			// does not match, so a mismatched form would silently grow the
+			// system Hessian and corrupt the reduced projection (RB-22)
+			if (tmp.rows() != hessian.rows() || tmp.cols() != hessian.cols())
+				log_and_throw_error("Form \"{}\" returned a {}x{} Hessian for a problem with {} DOFs", f->name(), tmp.rows(), tmp.cols(), hessian.rows());
 			hessian += tmp;
 		}
 	}

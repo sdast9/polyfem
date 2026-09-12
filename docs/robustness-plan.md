@@ -191,12 +191,14 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-19 | Line-search gradient-norm fallback at energy roundoff (PolySolve), step-1 no-contact stall diagnosis, cube-on-floor NaN | RB-18 handoff; RB-04 refinement failures; RB-16 roundoff evidence | [done — PolySolve `5afe3b5d4`, pin bump on main](rb-19-line-search-roundoff.md) |
 | RB-20 | Force-continuation κ: persisting contacts keep their realized coefficient across refreshes; Hessian estimate only for new contacts | RB-04 H5 drift evidence; RB-15 frozen-coefficient recommendation; RB-18 law for new contacts | [done — default on; drift 17–53% → 1e-16 at equal cost with RB-21](rb-20-force-continuation.md) |
 | RB-21 | Parent-keyed κ: candidate identity carried through the toolkit builder; coefficient keyed on the parent, weighted over contributions | RB-15 parent invariant; RB-20 continuation; toolkit fork | [done — toolkit `e3c8d3fe`; seams exact in the default formulation](rb-21-parent-keyed-kappa.md) |
-| RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | not started — [section](#rb-22--high-order-hexahedral-collision-surface) |
+| RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | [validated within stated scope 2026-09-12 — named error for every skipped face, DOF-resolution proxy default for Q2+/serendipity hexahedra (user decision), bit-identical Q1/tet/HDA; Q3+ blocked by RB-23](rb-22-validation.md) |
+| RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | not started — [section](#rb-23--q3-hexahedral-basis-node-bookkeeping) |
 
-The RB-13–RB-17 research sequence is closed/retired (2026-09-11). Remaining
+The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22 is
+validated within its scope (2026-09-12). Remaining
 order: RB-05 (containment), then RB-09 references and RB-10 friction (where the
-RB-20 friction endpoint move belongs), with RB-22 (high-order hex surfaces)
-independently eligible now. RB-05–RB-08 remain the resource/recovery track;
+RB-20 friction endpoint move belongs); RB-23 (Q3+ hexahedral basis) is
+independently eligible and is the prerequisite for Q3+ hex contact. RB-05–RB-08 remain the resource/recovery track;
 select them when needed. RB-11 input auditing and RB-12 provenance can be
 selected at any time. A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
@@ -1016,7 +1018,21 @@ plan+record documents with progress logs:
 ## RB-22 — High-order hexahedral collision surface
 
 **Added 2026-09-11** from the RB-03 source audit of where interpolated map rows
-arise. Not started.
+arise. **Validated within stated scope 2026-09-12** — see the
+[record](rb-22-validation.md). Outcome: the crash mechanism is the empty
+extraction padded to `n_bases + n_faces` rows with an identity map (an
+oversized contact Hessian that Eigen's dynamic sparse sum silently adopts and
+the reduced projection indexes out of bounds); every extraction now returns a
+`BoundaryExtractionReport`, the contact builder refuses incomplete, empty,
+size-mismatched or degenerate surfaces with named errors, and — the user's
+decision, option (b) below — meshes with Q2+/serendipity hexahedral boundary
+faces get the DOF-resolution proxy (`tessellation_type: "dof"`, the upstream
+hybrid default) automatically: exact selector rows, conforming by
+construction, the same oriented surface as the lattice on Lagrange Q2. The
+baseline also ran a two-body Q2 hex/tet scene to completion with the hex
+absent from the surface (the cube fell through it), which is the silent
+form of the same defect. Q3+ hexahedra are blocked by RB-23. The section
+below is the plan as it stood.
 
 **Defect (reproduced 2026-09-11, evidence
 `outputs/rb-03/20260912T025302Z-interpolation/q2-hex-probe/` in the parent
@@ -1080,3 +1096,46 @@ is a permitted repair within the item.
 **Acceptance:** no crash on a Q2+ hex contact scene; either a conforming
 surface with completed public smokes or an explicit error; unchanged Q1/tet
 smokes; record and status row per the template.
+
+## RB-23 — Q3+ hexahedral basis node bookkeeping
+
+**Added 2026-09-12** from RB-22. Not started.
+
+**Defect (characterized 2026-09-12, `tests/test_hex_collision_surface.cpp`
+hidden tests `[q3_hex_defect]`, RB-22 record):** for `discr_order: 3`
+hexahedra the basis builder stores edge/face node positions that are not the
+geometric images of the reference nodes (`autogen::q_nodes_3d(3)`): on the
+4-hex column `data/quad_test/hex.HYBRID`, 124 of 256 positions mismatch (the
+two nodes of an edge swapped, the four face-interior nodes permuted) and the
+12 face-interior nodes of the 3 shared faces are placed at different physical
+points by their two elements — the global Q3 hex basis is discontinuous
+across element faces. Q2 hexahedra pass the same checks. Upstream tests only
+linear and quadratic hex bases. Both collision proxies are therefore
+degenerate at Q3 (109 zero-area faces on the 4×4×4 cube) and the contact
+builder refuses them with a named error naming this cause. Separately, per-
+element mixed hexahedral orders hit `assert(false)` (`// TODO`) in the
+interface-element stitching of `LagrangeBasis3d::build_bases`.
+
+**Invariant:** every basis function's stored node position is the image of
+its reference node under the element's geometric map, and elements sharing a
+global node map it to the same point.
+
+**Read:** `src/polyfem/basis/LagrangeBasis3d.cpp` (`hex_local_to_global`:
+edge nodes from `MeshNodes::node_ids_from_edge`, face nodes from
+`node_ids_from_face` in the `find_quad_face` frame; `hex_face_local_nodes`
+corner-nearest matching of the face-interior nodes), `src/polyfem/mesh/
+MeshNodes.cpp`, `src/polyfem/mesh/mesh3D/Mesh3D.cpp::face_node`, the
+autogen `q_3_nodes_3d` layout, and the RB-22 record.
+
+**Stages:** 1. reproduce with `unit_tests "[q3_hex_defect]"` and decide
+whether the swap is in the local→global order, the stored positions, or the
+face frame; 2. repair so that Q3 (and Q4 if the tables exist) satisfy the
+invariant, keeping Q1/Q2 bit-identical; 3. remove the hidden tag so the
+acceptance tests run by default, add a Q3 hex patch/convergence test, and
+rerun the RB-22 `q3-*` scenes (both proxies must complete). The mixed-order
+stitching TODO is a separate decision: implement or refuse with a named error.
+
+**Decision boundary:** a basis-builder change is outside any contact item; it
+needs its own authorization. **Acceptance:** the hidden tests pass, Q1/Q2
+unchanged, the RB-22 Q3 scenes complete or stop with a named error unrelated
+to node positions.

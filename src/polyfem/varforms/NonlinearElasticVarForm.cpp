@@ -575,18 +575,45 @@ namespace polyfem::varform
 		Eigen::MatrixXi collision_edges, collision_triangles;
 		std::vector<Eigen::Triplet<double>> displacement_map_entries;
 
+		// RB-22: which extraction built the FE surface and what it skipped.
+		// A contact-enabled scene must get a complete surface or a named
+		// error; a silently partial or empty one corrupts the Hessian sizes
+		// downstream (empty displacement map + padded vertex rows = an
+		// identity map larger than the DOF vector).
+		io::OutGeometryData::BoundaryExtractionReport extraction_report;
+		std::string extraction_name = "preconstructed collision proxy";
+
 		const auto extract_default_collision_mesh = [&]() {
 			if (args.at("/space/basis_type"_json_pointer) == "Spline")
 			{
+				extraction_name = "max_order lattice sampling (spline basis)";
 				io::OutGeometryData::extract_boundary_mesh_sampled(
 					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
-					collision_vertices, collision_edges, collision_triangles, displacement_map_entries);
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					/*sampling_order=*/0, &extraction_report);
+			}
+			else if (io::OutGeometryData::has_high_order_hex_boundary(mesh, bases, total_local_boundary))
+			{
+				// RB-22 default (user decision 2026-09-12): Q2+/serendipity
+				// hexahedral boundaries get the DOF-resolution proxy -- every
+				// proxy vertex is a node with an exact displacement-map row,
+				// conforming by construction, the same oriented surface as the
+				// max_order lattice on Lagrange Q2 -- instead of the Q1-only
+				// default extraction that skipped their faces. Q1 hexahedra
+				// keep the centroid split; simplicial meshes are untouched.
+				extraction_name = "the DOF-resolution proxy (high-order hexahedra)";
+				io::OutGeometryData::extract_boundary_mesh_nodal(
+					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					&extraction_report);
 			}
 			else
 			{
+				extraction_name = "the default boundary extraction";
 				io::OutGeometryData::extract_boundary_mesh(
 					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
-					collision_vertices, collision_edges, collision_triangles, displacement_map_entries);
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					&extraction_report);
 			}
 		};
 
@@ -610,10 +637,20 @@ namespace polyfem::varform
 			else if (collision_mesh_args.contains("tessellation_type")
 					 && collision_mesh_args["tessellation_type"] == "max_order")
 			{
+				extraction_name = "max_order lattice sampling";
 				io::OutGeometryData::extract_boundary_mesh_sampled(
 					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
 					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
-					utils::json_value<int>(collision_mesh_args, "sampling_order", 0));
+					utils::json_value<int>(collision_mesh_args, "sampling_order", 0), &extraction_report);
+			}
+			else if (collision_mesh_args.contains("tessellation_type")
+					 && collision_mesh_args["tessellation_type"] == "dof")
+			{
+				extraction_name = "the DOF-resolution proxy";
+				io::OutGeometryData::extract_boundary_mesh_nodal(
+					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					&extraction_report);
 			}
 			else if (collision_mesh_args.contains("max_edge_length"))
 			{
@@ -653,6 +690,96 @@ namespace polyfem::varform
 		const int num_fe_collision_vertices = collision_vertices.rows();
 		assert(collision_edges.size() == 0 || collision_edges.maxCoeff() < num_fe_collision_vertices);
 		assert(collision_triangles.size() == 0 || collision_triangles.maxCoeff() < num_fe_collision_vertices);
+
+		// RB-22 contract: refuse an incomplete or empty FE collision surface
+		// instead of building a partial collision mesh.
+		if (!extraction_report.complete())
+		{
+			log_and_throw_error(
+				"Contact is enabled but {} produced an incomplete collision surface: {}. "
+				"Refusing to build a partial collision mesh; choose a boundary tessellation that supports these elements "
+				"(contact/collision_mesh: {{\"enabled\": true, \"tessellation_type\": \"dof\" | \"max_order\"}}), "
+				"lower the element order, use a supported element type, or disable contact.",
+				extraction_name, extraction_report.describe());
+		}
+		const int n_fe_primitives = mesh.is_volume() ? int(collision_triangles.rows()) : int(collision_edges.rows());
+		if (extraction_report.n_boundary_faces > 0 && n_fe_primitives == 0)
+		{
+			log_and_throw_error(
+				"Contact is enabled but {} produced no collision {} from {} boundary {} of the FE mesh; refusing to build an empty collision surface.",
+				extraction_name, mesh.is_volume() ? "faces" : "edges", extraction_report.n_boundary_faces, mesh.is_volume() ? "faces" : "edges");
+		}
+		if (displacement_map_entries.empty() && num_fe_collision_vertices != num_fe_nodes)
+		{
+			log_and_throw_error(
+				"Collision mesh construction: the boundary extraction returned {} vertex rows with an identity displacement map, but the FE space has {} nodes; the collision mesh would not match the DOF vector.",
+				num_fe_collision_vertices, num_fe_nodes);
+		}
+		if (mesh.is_volume())
+		{
+			// A degenerate (zero-area) FE collision face has no normal and
+			// poisons every distance it enters. It means coincident or
+			// collinear boundary node positions: known for Q3+ hexahedra,
+			// whose edge/face node positions are not the images of their
+			// reference nodes (RB-22 record) -- refuse instead of failing
+			// later with "initial solution has intersections".
+			int degenerate = 0, first = -1;
+			for (int i = 0; i < collision_triangles.rows(); ++i)
+			{
+				const Eigen::RowVector3d a = collision_vertices.row(collision_triangles(i, 0));
+				const Eigen::RowVector3d ab = collision_vertices.row(collision_triangles(i, 1)) - a;
+				const Eigen::RowVector3d ac = collision_vertices.row(collision_triangles(i, 2)) - a;
+				const double scale = std::max({ab.squaredNorm(), ac.squaredNorm(), (ac - ab).squaredNorm()});
+				if (!(ab.cross(ac).norm() > 1e-12 * scale))
+				{
+					if (first < 0)
+						first = i;
+					++degenerate;
+				}
+			}
+			if (degenerate > 0)
+			{
+				const auto at = [&](const int v) {
+					return fmt::format("[{:g}, {:g}, {:g}]", collision_vertices(v, 0), collision_vertices(v, 1), collision_vertices(v, 2));
+				};
+				log_and_throw_error(
+					"Contact is enabled but {} produced {} degenerate (zero-area) collision faces out of {} (first: face {} on vertices {}, {}, {} at {}, {}, {}); the boundary node positions are coincident or collinear. Known cause: Q3+ hexahedral bases store edge/face node positions that are not the geometric images of their reference nodes (see docs/rb-22-validation.md); use Q2 hexahedra or tetrahedra.",
+					extraction_name, degenerate, collision_triangles.rows(), first,
+					collision_triangles(first, 0), collision_triangles(first, 1), collision_triangles(first, 2),
+					at(collision_triangles(first, 0)), at(collision_triangles(first, 1)), at(collision_triangles(first, 2)));
+			}
+		}
+		{
+			// RB-22 diagnostic: proxy size and how many FE surface vertices are
+			// exact node selectors (single unit entry) versus interpolated rows.
+			std::vector<int> counts(num_fe_collision_vertices, 0);
+			std::vector<double> single(num_fe_collision_vertices, 0.);
+			for (const auto &t : displacement_map_entries)
+				if (t.row() < num_fe_collision_vertices && t.value() != 0.)
+				{
+					++counts[t.row()];
+					single[t.row()] = t.value();
+				}
+			int selector_rows = 0, interpolated_rows = 0;
+			std::vector<bool> on_surface(num_fe_collision_vertices, false);
+			for (int i = 0; i < collision_triangles.size(); ++i)
+				on_surface[collision_triangles(i)] = true;
+			for (int i = 0; i < collision_edges.size(); ++i)
+				on_surface[collision_edges(i)] = true;
+			for (int i = 0; i < num_fe_collision_vertices; ++i)
+			{
+				if (!on_surface[i])
+					continue;
+				if (displacement_map_entries.empty() || (counts[i] == 1 && single[i] == 1.))
+					++selector_rows;
+				else
+					++interpolated_rows;
+			}
+			logger().debug(
+				"Collision mesh from {}: {} FE surface vertices ({} exact selector rows, {} interpolated rows), {} faces, {} edges",
+				extraction_name, selector_rows + interpolated_rows, selector_rows, interpolated_rows,
+				collision_triangles.rows(), collision_edges.rows());
+		}
 
 		// Append the obstacles to the collision mesh
 		if (obstacle.n_vertices() > 0)

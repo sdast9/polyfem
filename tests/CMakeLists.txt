@@ -7,6 +7,7 @@ set(test_sources
   test_direction_filter.cpp
   test_contact_cache.cpp
   test_contact_stiffness_mapping.cpp
+  test_hex_collision_surface.cpp
   test_semi_implicit_coefficients.cpp
   test_kappa_continuity.cpp
   test_assembler.cpp

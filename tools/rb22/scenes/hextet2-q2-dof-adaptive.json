@@ -1,0 +1,137 @@
+{
+    "boundary_conditions": {
+        "dirichlet_boundary": [
+            {
+                "dimension": [
+                    true,
+                    true,
+                    true
+                ],
+                "id": 1111,
+                "value": [
+                    0,
+                    0,
+                    0
+                ]
+            }
+        ],
+        "rhs": [
+            0,
+            9.8,
+            0
+        ]
+    },
+    "contact": {
+        "dhat": 0.001,
+        "enabled": true,
+        "epsv": 0.001,
+        "friction_coefficient": 0.0,
+        "use_convergent_formulation": false,
+        "collision_mesh": {
+            "enabled": true,
+            "tessellation_type": "dof"
+        }
+    },
+    "geometry": [
+        {
+            "mesh": "../../../data/contact/examples/3D/hex_tet/hexcube.msh",
+            "surface_selection": "../../../data/contact/examples/3D/hex_tet/surface_sidesets11.txt",
+            "transformation": {
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ]
+            },
+            "volume_selection": 11
+        },
+        {
+            "mesh": "../../../data/contact/examples/3D/hex_tet/cube.msh",
+            "transformation": {
+                "rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "scale": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "translation": [
+                    0.0,
+                    1.05,
+                    0.0
+                ]
+            },
+            "volume_selection": 21
+        }
+    ],
+    "materials": [
+        {
+            "E": 10000000.0,
+            "id": 11,
+            "nu": 0.45,
+            "rho": 1000.0,
+            "type": "NeoHookean"
+        },
+        {
+            "E": 100000.0,
+            "id": 21,
+            "nu": 0.45,
+            "rho": 1000.0,
+            "type": "NeoHookean"
+        }
+    ],
+    "time": {
+        "dt": 0.01,
+        "integrator": "ImplicitEuler",
+        "tend": 0.3
+    },
+    "space": {
+        "discr_order": 2
+    },
+    "solver": {
+        "linear": {
+            "solver": "Eigen::SimplicialLDLT"
+        },
+        "nonlinear": {
+            "iterations_per_strategy": 1,
+            "line_search": {
+                "method": "RobustArmijo"
+            },
+            "solver": "Newton"
+        },
+        "advanced": {
+            "lump_mass_matrix": false
+        },
+        "contact": {
+            "barrier_stiffness": "adaptive"
+        }
+    },
+    "output": {
+        "log": {
+            "level": "debug"
+        },
+        "paraview": {
+            "file_name": "hextet2-q2-dof-adaptive.pvd",
+            "options": {
+                "material": true,
+                "body_ids": true
+            }
+        },
+        "advanced": {
+            "save_time_sequence": true
+        }
+    }
+}

@@ -372,3 +372,102 @@ TEST_CASE("Q1 hex face centroids get condensed stiffness through the production 
 	CHECK(diagnostic["curvature_global_fallback_count"].get<int>() == 0);
 	std::filesystem::remove(obstacle);
 }
+
+TEST_CASE("Q2 hex contacts through the production builder are exact selectors under both RB-22 tessellations", "[contact_stiffness_mapping][hex][rb22]")
+{
+	// RB-22: a Q2 hexahedral column over an obstacle plane, built through the
+	// production collision-mesh builder with the two supported high-order
+	// tessellations. Every proxy vertex of the DOF-resolution proxy is a node
+	// (exact selector rows); the order-2 lattice reproduces the Q2 nodes, so
+	// max_order gives the same 74-vertex surface. The RB-03 oracle must agree
+	// with the production stiffness on every contact.
+	const std::string type = GENERATE("dof", "max_order");
+	CAPTURE(type);
+	const std::filesystem::path obstacle = std::filesystem::temp_directory_path() / ("polyfem_rb22_hex_obstacle_" + type + ".obj");
+	{
+		std::ofstream out(obstacle);
+		REQUIRE(out.good());
+		out << "v -10 -10 -0.5\nv 30 -10 -0.5\nv 30 30 -0.5\nv -10 30 -0.5\nf 1 2 3\nf 1 3 4\n";
+	}
+	json in_args;
+	in_args["/geometry/0/mesh"_json_pointer] = std::string(POLYFEM_DATA_DIR) + "/quad_test/hex.HYBRID";
+	in_args["/geometry/1/mesh"_json_pointer] = obstacle.string();
+	in_args["/geometry/1/is_obstacle"_json_pointer] = true;
+	in_args["/materials/type"_json_pointer] = "NeoHookean";
+	in_args["/materials/E"_json_pointer] = 1e5;
+	in_args["/materials/nu"_json_pointer] = 0.3;
+	in_args["/materials/rho"_json_pointer] = 1e3;
+	in_args["/space/discr_order"_json_pointer] = 2;
+	in_args["/contact/enabled"_json_pointer] = true;
+	in_args["/contact/collision_mesh/enabled"_json_pointer] = true;
+	in_args["/contact/collision_mesh/tessellation_type"_json_pointer] = type;
+	in_args["/time/time_steps"_json_pointer] = 1;
+	in_args["/time/tend"_json_pointer] = 1;
+	in_args["/output/log/level"_json_pointer] = "warning";
+
+	State state;
+	state.init(in_args, true);
+	state.set_max_threads(1);
+	state.load_mesh();
+	test::VarFormTestAccess::prepare(*state.variational_formulation);
+	const test::VarFormDebugData debug = test::VarFormTestAccess::debug_data(*state.variational_formulation);
+	const io::OutputSpace output_space = state.variational_formulation->output_space();
+	REQUIRE(output_space.collision_mesh != nullptr);
+	const ipc::CollisionMesh &mesh = *output_space.collision_mesh;
+	REQUIRE(mesh.dim() == 3);
+	REQUIRE(debug.n_obstacle_vertices == 4);
+	const int n_fe = debug.n_bases - debug.n_obstacle_vertices;
+	REQUIRE(n_fe == 81); // 3 x 3 x 9 Q2 nodes
+	CHECK(mesh.num_vertices() == 74 + 4);
+	CHECK(mesh.num_faces() == 18 * 8 + 2);
+
+	const Eigen::MatrixXd map(mesh.displacement_map()); // S * T: rows are surface vertices
+	REQUIRE(map.rows() == mesh.num_vertices());
+	REQUIRE(map.cols() == debug.n_bases);
+	int selector_rows = 0;
+	for (int r = 0; r < map.rows(); ++r)
+	{
+		int entries = 0;
+		bool unit = true;
+		for (int j = 0; j < map.cols(); ++j)
+			if (map(r, j) != 0)
+			{
+				++entries;
+				unit = unit && map(r, j) == 1.;
+			}
+		selector_rows += entries == 1 && unit;
+	}
+	CHECK(selector_rows == 74 + 4);
+
+	// Frozen synthetic Hessian: SPD with cross-node coupling on the FE
+	// nodes, zero (fixed) blocks on the obstacle nodes.
+	const int n = 3 * debug.n_bases;
+	Eigen::MatrixXd h = Eigen::MatrixXd::Zero(n, n);
+	{
+		const int m = 3 * n_fe;
+		const Eigen::VectorXd v = Eigen::VectorXd::LinSpaced(m, .1, 1.);
+		h.topLeftCorner(m, m) = v * v.transpose();
+		h.topLeftCorner(m, m).diagonal() += Eigen::VectorXd::LinSpaced(m, 10., 100.);
+	}
+	MappedForm form(mesh, h, {{"coefficient_identity", "stencil"}});
+	const Eigen::VectorXd x = Eigen::VectorXd::Zero(n);
+	form.start(x);
+	REQUIRE(form.collision_set().size() > 0);
+
+	for (size_t i = 0; i < form.collision_set().size(); ++i)
+	{
+		const Oracle o = oracle(mesh, form.collision_set()[i], x, h);
+		CAPTURE(i, o.interpolated, o.condensed, o.kept);
+		REQUIRE(o.kept > 0);
+		CHECK_FALSE(o.interpolated);
+		CHECK(o.condensed);
+		CHECK(form.collision_set()[i].stiffness_scale == Catch::Approx(o.kappa).epsilon(1e-9));
+	}
+	const json diagnostic = form.diagnostic_state();
+	CHECK(diagnostic["interpolated_condensed_count"].get<int>() == 0);
+	CHECK(diagnostic["interpolated_direction_count"].get<int>() == 0);
+	CHECK(diagnostic["curvature_fallback_count"].get<int>() == 0);
+	CHECK(diagnostic["curvature_abs_fallback_count"].get<int>() == 0);
+	CHECK(diagnostic["curvature_global_fallback_count"].get<int>() == 0);
+	std::filesystem::remove(obstacle);
+}

@@ -1292,10 +1292,11 @@
         "options": [
             "regular",
             "irregular",
-            "max_order"
+            "max_order",
+            "dof"
         ],
         "default": "regular",
-        "doc": "Type of tessellation to use for building the collision mesh."
+        "doc": "Type of tessellation to use for building the collision mesh. regular/irregular apply to max_edge_length proxies; max_order samples every boundary face on a uniform lattice of the maximal element order (interpolated displacement-map rows on lower-order faces); dof builds the proxy from the boundary DOFs themselves (every proxy vertex is a node with an exact displacement-map row; conforming across per-element order changes). When no collision_mesh block is given, meshes with Q2+/serendipity hexahedral boundary faces get the dof proxy automatically (the default extraction tessellates only Q1 quad faces); a contact-enabled scene whose extraction skipped faces is refused with an error naming the elements and orders."
     },
     {
         "pointer": "/contact/collision_mesh/sampling_order",

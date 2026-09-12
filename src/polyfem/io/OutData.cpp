@@ -2,6 +2,7 @@
 
 #include <array>
 #include <map>
+#include <set>
 
 #include "Evaluator.hpp"
 #include "MatrixIO.hpp"
@@ -129,23 +130,6 @@ namespace polyfem::io
 			return std::max(1, q);
 		}
 
-		// reference-node layout of an element (vertices first); false if unsupported
-		bool element_ref_nodes(const mesh::Mesh &mesh, const int el, const basis::ElementBases &b, Eigen::MatrixXd &ref_nodes)
-		{
-			const int p = b.bases.empty() ? 1 : b.bases.front().order();
-			if (mesh.is_simplex(el))
-				autogen::p_nodes_3d(p, ref_nodes);
-			else if (mesh.is_cube(el))
-				autogen::q_nodes_3d(p, ref_nodes);
-			else if (mesh.is_prism(el))
-				autogen::prism_nodes_3d(p, prism_q_order(b), ref_nodes);
-			else if (mesh.is_pyramid(el))
-				autogen::pyramid_nodes_3d(p, ref_nodes);
-			else
-				return false;
-			return ref_nodes.rows() == long(b.bases.size());
-		}
-
 		int element_n_vertices(const mesh::Mesh &mesh, const int el)
 		{
 			if (mesh.is_simplex(el))
@@ -156,6 +140,73 @@ namespace polyfem::io
 				return 6;
 			assert(mesh.is_cube(el));
 			return 8;
+		}
+
+		// reference-node layout of an element (vertices first); false if unsupported
+		bool element_ref_nodes(const mesh::Mesh &mesh, const int el, const basis::ElementBases &b, Eigen::MatrixXd &ref_nodes)
+		{
+			// never leave a previous element's layout behind: the autogen
+			// tables assert (debug) or leave `val` untouched (release) for an
+			// order they do not carry
+			ref_nodes.resize(0, 3);
+			const int p = b.bases.empty() ? 1 : b.bases.front().order();
+			if (p < 1)
+				return false;
+			if (mesh.is_simplex(el))
+				autogen::p_nodes_3d(p, ref_nodes);
+			else if (mesh.is_cube(el))
+			{
+				if (p == 2 && b.bases.size() == 20)
+					autogen::q_nodes_3d(-2, ref_nodes); // serendipity Q2
+				else if (p <= 3)
+					autogen::q_nodes_3d(p, ref_nodes);
+			}
+			else if (mesh.is_prism(el))
+				autogen::prism_nodes_3d(p, prism_q_order(b), ref_nodes);
+			else if (mesh.is_pyramid(el))
+				autogen::pyramid_nodes_3d(p, ref_nodes);
+			else
+				return false;
+			return ref_nodes.rows() == long(b.bases.size()) && ref_nodes.rows() >= element_n_vertices(mesh, el);
+		}
+
+		int element_order(const basis::ElementBases &b)
+		{
+			return b.bases.empty() ? -1 : b.bases.front().order();
+		}
+
+		// Record a face the extraction cannot tessellate. The per-face line
+		// is debug level; the entry point emits one warning summarizing the
+		// report, and the contact builder refuses an incomplete surface.
+		void skip_face(OutGeometryData::BoundaryExtractionReport &report, const basis::ElementBases &b,
+					   const int element_id, const int primitive_id, const std::string &reason)
+		{
+			report.skipped.push_back({element_id, primitive_id, element_order(b), int(b.bases.size()), reason});
+			logger().debug("Boundary extraction skipped face {} of element {}: {}", primitive_id, element_id, reason);
+		}
+
+		// every boundary face of an element whose reference layout is unsupported
+		void skip_element(OutGeometryData::BoundaryExtractionReport &report, const basis::ElementBases &b,
+						  const mesh::LocalBoundary &lb, const std::string &what)
+		{
+			const std::string reason = fmt::format(
+				"{} does not support this element (order {}, {} nodes)", what, element_order(b), b.bases.size());
+			for (int j = 0; j < lb.size(); ++j)
+				skip_face(report, b, lb.element_id(), lb.global_primitive_id(j), reason);
+		}
+
+		void init_report(OutGeometryData::BoundaryExtractionReport &report, const std::vector<mesh::LocalBoundary> &total_local_boundary)
+		{
+			report = OutGeometryData::BoundaryExtractionReport();
+			for (const mesh::LocalBoundary &lb : total_local_boundary)
+				report.n_boundary_faces += lb.size();
+		}
+
+		void warn_if_incomplete(const OutGeometryData::BoundaryExtractionReport &report, const std::string &what)
+		{
+			if (report.complete())
+				return;
+			logger().warn("{} produced an incomplete boundary surface: {}. A contact-enabled scene refuses this surface.", what, report.describe());
 		}
 
 		// local vertex pairs forming the element's edges, derived from the
@@ -431,6 +482,57 @@ namespace polyfem::io
 
 	} // namespace
 
+	std::string OutGeometryData::BoundaryExtractionReport::describe(const int max_listed) const
+	{
+		if (!unsupported_mesh.empty())
+			return unsupported_mesh;
+		if (skipped.empty())
+			return "complete";
+
+		std::set<int> elements;
+		std::map<std::pair<int, int>, int> orders; // (order, n_nodes) -> faces
+		for (const SkippedBoundaryFace &f : skipped)
+		{
+			elements.insert(f.element_id);
+			++orders[{f.order, f.n_nodes}];
+		}
+
+		std::string ids;
+		int listed = 0;
+		for (const int e : elements)
+		{
+			if (listed++ == max_listed)
+			{
+				ids += fmt::format(", ... ({} more)", elements.size() - max_listed);
+				break;
+			}
+			ids += (ids.empty() ? "" : ", ") + std::to_string(e);
+		}
+		std::string order_text;
+		for (const auto &kv : orders)
+			order_text += fmt::format("{}order {} with {} nodes: {} faces", order_text.empty() ? "" : "; ", kv.first.first, kv.first.second, kv.second);
+
+		return fmt::format(
+			"skipped {} of {} boundary faces on {} elements [{}] ({}); first reason: {}",
+			skipped.size(), n_boundary_faces, elements.size(), ids, order_text, skipped.front().reason);
+	}
+
+	bool OutGeometryData::has_high_order_hex_boundary(
+		const mesh::Mesh &mesh,
+		const std::vector<basis::ElementBases> &bases,
+		const std::vector<mesh::LocalBoundary> &total_local_boundary)
+	{
+		if (!mesh.is_volume())
+			return false;
+		for (const mesh::LocalBoundary &lb : total_local_boundary)
+		{
+			const int el = lb.element_id();
+			if (lb.size() > 0 && mesh.is_cube(el) && bases[el].bases.size() != 8)
+				return true;
+		}
+		return false;
+	}
+
 	void OutGeometryData::extract_boundary_mesh_sampled(
 		const mesh::Mesh &mesh,
 		const int n_bases,
@@ -440,7 +542,8 @@ namespace polyfem::io
 		Eigen::MatrixXi &boundary_edges,
 		Eigen::MatrixXi &boundary_triangles,
 		std::vector<Eigen::Triplet<double>> &displacement_map_entries,
-		const int sampling_order)
+		const int sampling_order,
+		BoundaryExtractionReport *report)
 	{
 		using namespace polyfem::mesh;
 
@@ -456,9 +559,13 @@ namespace polyfem::io
 		{
 			logger().warn("max_order collision-proxy sampling requires a conforming volume mesh without polytopes; falling back to the standard boundary extraction");
 			extract_boundary_mesh(mesh, n_bases, bases, total_local_boundary,
-								  node_positions, boundary_edges, boundary_triangles, displacement_map_entries);
+								  node_positions, boundary_edges, boundary_triangles, displacement_map_entries, report);
 			return;
 		}
+
+		BoundaryExtractionReport local_report;
+		BoundaryExtractionReport &rep = report ? *report : local_report;
+		init_report(rep, total_local_boundary);
 
 		displacement_map_entries.clear();
 		const Mesh3D &mesh3d = dynamic_cast<const Mesh3D &>(mesh);
@@ -494,7 +601,10 @@ namespace polyfem::io
 			const basis::ElementBases &b = bases[el];
 			Eigen::MatrixXd ref_nodes;
 			if (b.bases.empty() || !element_ref_nodes(mesh, el, b, ref_nodes))
+			{
+				skip_element(rep, b, lb, "max_order lattice sampling");
 				continue;
+			}
 
 			// the rational pyramid bases are 0/0 at the apex (z=1), which is a
 			// corner of every triangular pyramid face; apex samples are instead
@@ -732,6 +842,190 @@ namespace polyfem::io
 
 		if (const char *dump = getenv("POLYFEM_DUMP_COLLISION_PROXY"))
 			igl::write_triangle_mesh(dump, node_positions, boundary_triangles);
+
+		warn_if_incomplete(rep, "max_order lattice sampling");
+	}
+
+	void OutGeometryData::extract_boundary_mesh_nodal(
+		const mesh::Mesh &mesh,
+		const int n_bases,
+		const std::vector<basis::ElementBases> &bases,
+		const std::vector<mesh::LocalBoundary> &total_local_boundary,
+		Eigen::MatrixXd &node_positions,
+		Eigen::MatrixXi &boundary_edges,
+		Eigen::MatrixXi &boundary_triangles,
+		std::vector<Eigen::Triplet<double>> &displacement_map_entries,
+		BoundaryExtractionReport *report)
+	{
+		using namespace polyfem::mesh;
+
+		// Build the proxy from the DOFs on the boundary: every proxy vertex IS
+		// a global DOF (weight-1 displacement map), each face edge is
+		// subdivided by the DOFs located on it -- a property of the edge, not
+		// of the element looking at it, so neighboring faces conform by
+		// construction even when their orders differ (hybrid prism/pyramid
+		// promotion, per-element hex orders) -- and face interiors by the
+		// element's own owned face nodes. Stitched nodes are skipped; the
+		// DOFs they depend on subdivide the edge instead.
+		if (!mesh.is_volume() || mesh.has_poly()
+			|| !dynamic_cast<const Mesh3D &>(mesh).is_conforming())
+		{
+			logger().warn("The DOF-resolution collision proxy requires a conforming volume mesh without polytopes; falling back to the standard boundary extraction");
+			extract_boundary_mesh(mesh, n_bases, bases, total_local_boundary,
+								  node_positions, boundary_edges, boundary_triangles, displacement_map_entries, report);
+			return;
+		}
+
+		BoundaryExtractionReport local_report;
+		BoundaryExtractionReport &rep = report ? *report : local_report;
+		init_report(rep, total_local_boundary);
+
+		displacement_map_entries.clear();
+		const Mesh3D &mesh3d = dynamic_cast<const Mesh3D &>(mesh);
+
+		std::vector<Eigen::Vector3d> node_positions_vec;
+		node_positions_vec.reserve(n_bases);
+		std::vector<std::tuple<int, int, int>> tris;
+		std::vector<bool> visited_node(n_bases, false);
+
+		const auto edge_dofs = build_edge_dofs(mesh, bases);
+		constexpr long S = PROXY_PARAM_SCALE;
+
+		const auto emit_dof = [&](const int gindex, const Eigen::Vector3d &pos) {
+			if (gindex >= int(node_positions_vec.size()))
+				node_positions_vec.resize(gindex + 1, Eigen::Vector3d::Zero());
+			node_positions_vec[gindex] = pos;
+			if (!visited_node[gindex])
+				displacement_map_entries.emplace_back(gindex, gindex, 1);
+			visited_node[gindex] = true;
+		};
+
+		Eigen::MatrixXd ref_nodes;
+		for (const LocalBoundary &lb : total_local_boundary)
+		{
+			const int el = lb.element_id();
+			const basis::ElementBases &b = bases[el];
+			if (b.bases.empty() || !element_ref_nodes(mesh, el, b, ref_nodes))
+			{
+				skip_element(rep, b, lb, "the DOF-resolution proxy");
+				continue;
+			}
+
+			for (int j = 0; j < lb.size(); ++j)
+			{
+				const int eid = lb.global_primitive_id(j);
+				const Eigen::VectorXi nodes = b.local_nodes_for_primitive(eid, mesh3d);
+				const int nfv = mesh3d.n_face_vertices(eid);
+				assert(nfv == 3 || nfv == 4);
+				assert(nodes.size() >= nfv);
+
+				// exact face parameters (units of 1/S) and the DOF of each point
+				std::vector<std::array<long, 2>> pts;
+				std::vector<int> dof;
+
+				// face corners come first in the local ordering (cyclic for quads)
+				std::array<std::array<long, 2>, 4> cp;
+				if (nfv == 3)
+					cp = {{{{0, 0}}, {{S, 0}}, {{0, S}}, {{0, 0}}}};
+				else
+					cp = {{{{0, 0}}, {{S, 0}}, {{S, S}}, {{0, S}}}};
+				std::array<int, 4> cd{{-1, -1, -1, -1}};
+				bool ok = true;
+				for (int k = 0; k < nfv; ++k)
+				{
+					const auto &glob = b.bases[nodes(k)].global();
+					assert(glob.size() == 1); // face corners always own their DOF
+					if (glob.size() != 1)
+					{
+						ok = false;
+						break;
+					}
+					cd[k] = glob.front().index;
+					pts.push_back(cp[k]);
+					dof.push_back(cd[k]);
+					emit_dof(cd[k], glob.front().node.transpose());
+				}
+				if (!ok)
+				{
+					skip_face(rep, b, el, eid, "a face corner does not own its DOF");
+					continue;
+				}
+
+				// edge subdivision: the DOFs located on each face edge
+				for (int k = 0; k < nfv; ++k)
+				{
+					const int va = cd[k], vb = cd[(k + 1) % nfv];
+					const auto it = edge_dofs.find({std::min(va, vb), std::max(va, vb)});
+					if (it == edge_dofs.end())
+						continue;
+					for (const auto &ed : it->second)
+					{
+						const long s = va < vb ? std::get<0>(ed) : S - std::get<0>(ed);
+						const auto &A = cp[k];
+						const auto &B = cp[(k + 1) % nfv];
+						pts.push_back({{(A[0] * (S - s) + B[0] * s) / S, (A[1] * (S - s) + B[1] * s) / S}});
+						dof.push_back(std::get<1>(ed));
+						emit_dof(std::get<1>(ed), std::get<2>(ed));
+					}
+				}
+
+				// owned face-interior nodes at the element's own resolution
+				// (reference faces are planar parallelograms -> affine map)
+				const Eigen::RowVector3d c0 = ref_nodes.row(nodes(0));
+				const Eigen::RowVector3d A3 = ref_nodes.row(nodes(1)) - c0;
+				const Eigen::RowVector3d B3 = ref_nodes.row(nodes(nfv - 1)) - c0;
+				const double aa = A3.squaredNorm(), bb = B3.squaredNorm(), ab = A3.dot(B3);
+				const double det = aa * bb - ab * ab;
+				for (long n = nfv; n < nodes.size(); ++n)
+				{
+					const auto &glob = b.bases[nodes(n)].global();
+					if (glob.size() != 1)
+						continue; // stitched interface node
+					const Eigen::RowVector3d d3 = ref_nodes.row(nodes(n)) - c0;
+					const double du = d3.dot(A3), dv = d3.dot(B3);
+					const double u = (du * bb - dv * ab) / det;
+					const double v = (dv * aa - du * ab) / det;
+					const long lu = std::lround(u * S), lv = std::lround(v * S);
+					assert(std::abs(u * S - lu) < 1e-6 && std::abs(v * S - lv) < 1e-6);
+					// nodes on a face edge already subdivide the edge above
+					const bool on_edge = nfv == 3
+											 ? (lu == 0 || lv == 0 || lu + lv == S)
+											 : (lu == 0 || lu == S || lv == 0 || lv == S);
+					if (on_edge)
+						continue;
+					pts.push_back({{lu, lv}});
+					dof.push_back(glob.front().index);
+					emit_dof(glob.front().index, glob.front().node.transpose());
+				}
+
+				std::vector<std::array<int, 3>> local_tris;
+				if (!triangulate_lattice(pts, nfv, local_tris))
+					triangulate_convex_pointset(pts, local_tris);
+				for (const auto &t : local_tris)
+					tris.emplace_back(dof[t[0]], dof[t[1]], dof[t[2]]);
+			}
+		}
+
+		// downstream consumers (e.g. the shape-derivative code) expect every
+		// FE node to have a row, as the pre-split extraction guaranteed
+		node_positions_vec.resize(
+			std::max(node_positions_vec.size(), size_t(n_bases)), Eigen::Vector3d::Zero());
+
+		node_positions.resize(node_positions_vec.size(), 3);
+		for (int i = 0; i < int(node_positions_vec.size()); ++i)
+			node_positions.row(i) = node_positions_vec[i];
+
+		boundary_triangles.resize(tris.size(), 3);
+		for (int i = 0; i < int(tris.size()); ++i)
+			boundary_triangles.row(i) << std::get<0>(tris[i]), std::get<2>(tris[i]), std::get<1>(tris[i]);
+
+		if (boundary_triangles.rows() > 0)
+			igl::edges(boundary_triangles, boundary_edges);
+
+		if (const char *dump = getenv("POLYFEM_DUMP_COLLISION_PROXY"))
+			igl::write_triangle_mesh(dump, node_positions, boundary_triangles);
+
+		warn_if_incomplete(rep, "the DOF-resolution proxy");
 	}
 
 	void OutGeometryData::extract_boundary_mesh(
@@ -742,17 +1036,23 @@ namespace polyfem::io
 		Eigen::MatrixXd &node_positions,
 		Eigen::MatrixXi &boundary_edges,
 		Eigen::MatrixXi &boundary_triangles,
-		std::vector<Eigen::Triplet<double>> &displacement_map_entries)
+		std::vector<Eigen::Triplet<double>> &displacement_map_entries,
+		BoundaryExtractionReport *report)
 	{
 		using namespace polyfem::mesh;
 
 		displacement_map_entries.clear();
+
+		BoundaryExtractionReport local_report;
+		BoundaryExtractionReport &rep = report ? *report : local_report;
+		init_report(rep, total_local_boundary);
 
 		if (mesh.is_volume())
 		{
 			if (mesh.has_poly())
 			{
 				logger().warn("Skipping as the mesh has polygons");
+				rep.unsupported_mesh = "the boundary extraction does not support polyhedral elements";
 				return;
 			}
 
@@ -775,14 +1075,7 @@ namespace polyfem::io
 			// interface (anisotropic prisms promote their tet/pyramid neighbors),
 			// so tessellating each boundary face at its own order produces
 			// T-junctions along shared edges, and stitched interface nodes have
-			// no DOF of their own.  Build the proxy from the DOFs on the
-			// boundary instead: every proxy vertex IS a global DOF (weight-1
-			// displacement map), each face edge is subdivided by the DOFs
-			// located on it -- a property of the edge, not of the element
-			// looking at it, so neighboring faces conform by construction --
-			// and face interiors by the element's own owned face nodes.
-			// Stitched nodes are skipped; the DOFs they depend on subdivide the
-			// edge instead.
+			// no DOF of their own. Such meshes get the DOF-resolution proxy.
 			bool has_prism_or_pyramid = false;
 			for (const LocalBoundary &lb : total_local_boundary)
 			{
@@ -795,137 +1088,8 @@ namespace polyfem::io
 
 			if (has_prism_or_pyramid && mesh3d.is_conforming())
 			{
-				const auto edge_dofs = build_edge_dofs(mesh, bases);
-				constexpr long S = PROXY_PARAM_SCALE;
-
-				const auto emit_dof = [&](const int gindex, const Eigen::Vector3d &pos) {
-					if (gindex >= int(node_positions_vec.size()))
-						node_positions_vec.resize(gindex + 1, Eigen::Vector3d::Zero());
-					node_positions_vec[gindex] = pos;
-					if (!visited_node[gindex])
-						displacement_map_entries.emplace_back(gindex, gindex, 1);
-					visited_node[gindex] = true;
-				};
-
-				Eigen::MatrixXd ref_nodes;
-				for (const LocalBoundary &lb : total_local_boundary)
-				{
-					const int el = lb.element_id();
-					const basis::ElementBases &b = bases[el];
-					if (b.bases.empty() || !element_ref_nodes(mesh, el, b, ref_nodes))
-						continue;
-
-					for (int j = 0; j < lb.size(); ++j)
-					{
-						const int eid = lb.global_primitive_id(j);
-						const Eigen::VectorXi nodes = b.local_nodes_for_primitive(eid, mesh3d);
-						const int nfv = mesh3d.n_face_vertices(eid);
-						assert(nfv == 3 || nfv == 4);
-						assert(nodes.size() >= nfv);
-
-						// exact face parameters (units of 1/S) and the DOF of each point
-						std::vector<std::array<long, 2>> pts;
-						std::vector<int> dof;
-
-						// face corners come first in the local ordering (cyclic for quads)
-						std::array<std::array<long, 2>, 4> cp;
-						if (nfv == 3)
-							cp = {{{{0, 0}}, {{S, 0}}, {{0, S}}, {{0, 0}}}};
-						else
-							cp = {{{{0, 0}}, {{S, 0}}, {{S, S}}, {{0, S}}}};
-						std::array<int, 4> cd{{-1, -1, -1, -1}};
-						bool ok = true;
-						for (int k = 0; k < nfv; ++k)
-						{
-							const auto &glob = b.bases[nodes(k)].global();
-							assert(glob.size() == 1); // face corners always own their DOF
-							if (glob.size() != 1)
-							{
-								ok = false;
-								break;
-							}
-							cd[k] = glob.front().index;
-							pts.push_back(cp[k]);
-							dof.push_back(cd[k]);
-							emit_dof(cd[k], glob.front().node.transpose());
-						}
-						if (!ok)
-							continue;
-
-						// edge subdivision: the DOFs located on each face edge
-						for (int k = 0; k < nfv; ++k)
-						{
-							const int va = cd[k], vb = cd[(k + 1) % nfv];
-							const auto it = edge_dofs.find({std::min(va, vb), std::max(va, vb)});
-							if (it == edge_dofs.end())
-								continue;
-							for (const auto &ed : it->second)
-							{
-								const long s = va < vb ? std::get<0>(ed) : S - std::get<0>(ed);
-								const auto &A = cp[k];
-								const auto &B = cp[(k + 1) % nfv];
-								pts.push_back({{(A[0] * (S - s) + B[0] * s) / S, (A[1] * (S - s) + B[1] * s) / S}});
-								dof.push_back(std::get<1>(ed));
-								emit_dof(std::get<1>(ed), std::get<2>(ed));
-							}
-						}
-
-						// owned face-interior nodes at the element's own resolution
-						// (reference faces are planar parallelograms -> affine map)
-						const Eigen::RowVector3d c0 = ref_nodes.row(nodes(0));
-						const Eigen::RowVector3d A3 = ref_nodes.row(nodes(1)) - c0;
-						const Eigen::RowVector3d B3 = ref_nodes.row(nodes(nfv - 1)) - c0;
-						const double aa = A3.squaredNorm(), bb = B3.squaredNorm(), ab = A3.dot(B3);
-						const double det = aa * bb - ab * ab;
-						for (long n = nfv; n < nodes.size(); ++n)
-						{
-							const auto &glob = b.bases[nodes(n)].global();
-							if (glob.size() != 1)
-								continue; // stitched interface node
-							const Eigen::RowVector3d d3 = ref_nodes.row(nodes(n)) - c0;
-							const double du = d3.dot(A3), dv = d3.dot(B3);
-							const double u = (du * bb - dv * ab) / det;
-							const double v = (dv * aa - du * ab) / det;
-							const long lu = std::lround(u * S), lv = std::lround(v * S);
-							assert(std::abs(u * S - lu) < 1e-6 && std::abs(v * S - lv) < 1e-6);
-							// nodes on a face edge already subdivide the edge above
-							const bool on_edge = nfv == 3
-													 ? (lu == 0 || lv == 0 || lu + lv == S)
-													 : (lu == 0 || lu == S || lv == 0 || lv == S);
-							if (on_edge)
-								continue;
-							pts.push_back({{lu, lv}});
-							dof.push_back(glob.front().index);
-							emit_dof(glob.front().index, glob.front().node.transpose());
-						}
-
-						std::vector<std::array<int, 3>> local_tris;
-						if (!triangulate_lattice(pts, nfv, local_tris))
-							triangulate_convex_pointset(pts, local_tris);
-						for (const auto &t : local_tris)
-							tris.emplace_back(dof[t[0]], dof[t[1]], dof[t[2]]);
-					}
-				}
-
-				// downstream consumers (e.g. the shape-derivative code) expect every
-				// FE node to have a row, as the pre-split extraction guaranteed
-				node_positions_vec.resize(
-					std::max(node_positions_vec.size(), size_t(n_bases)), Eigen::Vector3d::Zero());
-
-				node_positions.resize(node_positions_vec.size(), 3);
-				for (int i = 0; i < int(node_positions_vec.size()); ++i)
-					node_positions.row(i) = node_positions_vec[i];
-
-				boundary_triangles.resize(tris.size(), 3);
-				for (int i = 0; i < int(tris.size()); ++i)
-					boundary_triangles.row(i) << std::get<0>(tris[i]), std::get<2>(tris[i]), std::get<1>(tris[i]);
-
-				if (boundary_triangles.rows() > 0)
-					igl::edges(boundary_triangles, boundary_edges);
-
-				if (const char *dump = getenv("POLYFEM_DUMP_COLLISION_PROXY"))
-					igl::write_triangle_mesh(dump, node_positions, boundary_triangles);
-
+				extract_boundary_mesh_nodal(mesh, n_bases, bases, total_local_boundary,
+											node_positions, boundary_edges, boundary_triangles, displacement_map_entries, report);
 				return;
 			}
 
@@ -962,7 +1126,12 @@ namespace polyfem::io
 
 						if (loc_nodes.size() != 4)
 						{
-							logger().trace("skipping element {} since it is not Q1", eid);
+							// RB-22: Q2+ (and serendipity) hex faces are not
+							// tessellated here; the contact builder refuses the
+							// incomplete surface unless a proxy type is selected
+							skip_face(rep, b, lb.element_id(), eid, fmt::format(
+								"hexahedral face of a Q{} element with {} owned nodes; this extraction tessellates only Q1 quad faces (the contact builder routes such meshes to the DOF-resolution proxy; select contact/collision_mesh/tessellation_type \"dof\" or \"max_order\" elsewhere)",
+								element_order(b), loc_nodes.size()));
 							continue;
 						}
 
@@ -1051,14 +1220,14 @@ namespace polyfem::io
 							}
 							else
 							{
-								logger().trace("skipping element {} since it is not linear, it has {} nodes", eid, loc_nodes.size());
+								skip_face(rep, b, lb.element_id(), eid, fmt::format("prism triangle face with {} owned nodes (supported: 3, 6, 10)", loc_nodes.size()));
 							}
 						}
 						else
 						{
 							if (loc_nodes.size() < 4 || loc_local_nodes.size() < 4)
 							{
-								logger().trace("skipping prism quad face {} since it has only {} complete nodes", eid, loc_nodes.size());
+								skip_face(rep, b, lb.element_id(), eid, fmt::format("prism quad face with only {} complete nodes", loc_nodes.size()));
 								continue;
 							}
 
@@ -1068,7 +1237,7 @@ namespace polyfem::io
 
 							if (p < 1 || p > 3 || q < 1 || q > 3 || (p == 3 && q == 3))
 							{
-								logger().trace("skipping prism quad face {} with unsupported p={}, q={}", eid, p, q);
+								skip_face(rep, b, lb.element_id(), eid, fmt::format("prism quad face with unsupported p={}, q={}", p, q));
 								continue;
 							}
 
@@ -1085,7 +1254,7 @@ namespace polyfem::io
 							const int expected_nodes = (u_order + 1) * (v_order + 1);
 							if (loc_nodes.size() != expected_nodes || edge_orders[0] != edge_orders[2] || edge_orders[1] != edge_orders[3])
 							{
-								logger().trace("skipping prism quad face {} with p={}, q={} and {} nodes", eid, p, q, loc_nodes.size());
+								skip_face(rep, b, lb.element_id(), eid, fmt::format("prism quad face with p={}, q={} and {} nodes", p, q, loc_nodes.size()));
 								continue;
 							}
 
@@ -1164,7 +1333,7 @@ namespace polyfem::io
 						const int p = b.bases.empty() ? -1 : b.bases.front().order();
 						if (p < 1 || p > 3)
 						{
-							logger().trace("skipping pyramid face {} with unsupported p={}", eid, p);
+							skip_face(rep, b, lb.element_id(), eid, fmt::format("pyramid face with unsupported p={}", p));
 							continue;
 						}
 
@@ -1173,7 +1342,7 @@ namespace polyfem::io
 							const int expected_nodes = (p + 1) * (p + 1);
 							if (loc_nodes.size() != expected_nodes || loc_local_nodes.size() != expected_nodes)
 							{
-								logger().trace("skipping pyramid quad face {} with p={} and {} nodes", eid, p, loc_nodes.size());
+								skip_face(rep, b, lb.element_id(), eid, fmt::format("pyramid quad face with p={} and {} nodes", p, loc_nodes.size()));
 								continue;
 							}
 
@@ -1197,21 +1366,26 @@ namespace polyfem::io
 								const int j = int(std::lround(p * rel.dot(v_axis) / v_axis.squaredNorm()));
 								if (i < 0 || i > p || j < 0 || j > p)
 								{
-									logger().trace("skipping pyramid quad face {} with invalid local grid coordinate ({}, {})", eid, i, j);
+									skip_face(rep, b, lb.element_id(), eid, fmt::format("pyramid quad face with invalid local grid coordinate ({}, {})", i, j));
 									valid_grid = false;
 									break;
 								}
 								if (grid[grid_index(i, j)] >= 0)
 								{
-									logger().trace("skipping pyramid quad face {} with duplicate local grid coordinate ({}, {})", eid, i, j);
+									skip_face(rep, b, lb.element_id(), eid, fmt::format("pyramid quad face with duplicate local grid coordinate ({}, {})", i, j));
 									valid_grid = false;
 									break;
 								}
 								grid[grid_index(i, j)] = loc_nodes[n];
 							}
 
-							if (!valid_grid || !std::all_of(grid.begin(), grid.end(), [](const int n) { return n >= 0; }))
+							if (!valid_grid)
 								continue;
+							if (!std::all_of(grid.begin(), grid.end(), [](const int n) { return n >= 0; }))
+							{
+								skip_face(rep, b, lb.element_id(), eid, "pyramid quad face with an incomplete local grid");
+								continue;
+							}
 
 							for (int j = 0; j < p; ++j)
 							{
@@ -1252,7 +1426,7 @@ namespace polyfem::io
 						}
 						else
 						{
-							logger().trace("skipping pyramid tri face {} with p={} and {} nodes", eid, p, loc_nodes.size());
+							skip_face(rep, b, lb.element_id(), eid, fmt::format("pyramid triangle face with p={} and {} nodes", p, loc_nodes.size()));
 							continue;
 						}
 
@@ -1261,7 +1435,7 @@ namespace polyfem::io
 
 					if (!mesh.is_simplex(lb.element_id()))
 					{
-						logger().trace("skipping element {} since it is not a simplex or hex", eid);
+						skip_face(rep, b, lb.element_id(), eid, "element is neither a simplex, a hexahedron, a prism nor a pyramid");
 						continue;
 					}
 
@@ -1345,7 +1519,7 @@ namespace polyfem::io
 					else
 					{
 						print_warning << loc_nodes.size() << " ";
-						// assert(false);
+						skip_face(rep, b, lb.element_id(), eid, fmt::format("simplex face with {} owned nodes (boundary export supported up to P4)", loc_nodes.size()));
 					}
 
 					if (!is_simplicial)
@@ -1387,6 +1561,8 @@ namespace polyfem::io
 
 			if (const char *dump = getenv("POLYFEM_DUMP_COLLISION_PROXY"))
 				igl::write_triangle_mesh(dump, node_positions, boundary_triangles);
+
+			warn_if_incomplete(rep, "the default boundary extraction");
 		}
 		else
 		{
