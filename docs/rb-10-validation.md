@@ -358,7 +358,7 @@ tooltips and the follow/1 round-trip. Published as `f10f9c8` on
   diagnostic field, `input-spec` entry, `tests/test_friction_lag.cpp`,
   `tools/rb10/`); Stage 5 binary (defaults flipped): `PolyFEM_bin`
   `6f1dcfa1…`, `unit_tests` `cc05edcc…`.
-- Committed files / remote / commit: `7cb267f18` on `sdast9/polyfem:main`
+- Committed files / remote / commit: Stage 5 defaults `756070f44` on `sdast9/polyfem:main`; Stages 1–4 `7cb267f18` on `sdast9/polyfem:main`
   (docs/rb-10-validation.md, docs/robustness-plan.md, json-specs/input-spec.json,
   src/polyfem/solver/forms/{BarrierContactForm,FrictionForm}.{hpp,cpp},
   tests/CMakeLists.txt, tests/test_friction_lag.cpp, tools/rb10/), tested as
@@ -429,3 +429,6 @@ Append-only. Newest entry last.
   smokes, HDA rebuilt in the publication clone with the *Friction Lag* control
   (13/13 tests, `f10f9c8` pushed). RB-02 probe found stale at its
   feature-transition check (pre-RB-21 expectation; flagged, not changed).
+- **2026-09-13 01:45Z** — Published `756070f44` on `sdast9/polyfem:main` (the
+  adopted defaults, regressions, notes); HDA `f10f9c8` published earlier in
+  the same stage. Status validated within stated scope.
