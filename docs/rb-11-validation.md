@@ -267,15 +267,15 @@ the staged patch (sha256 `693e5704…`), `PolyFEM_bin` `27e0eb3d…`,
 
 ## Publication and reproducibility
 
-- Rebuilt targets: `PolyFEM_bin`, `unit_tests` from the working tree at
-  `a5aa87ea0` plus the RB-11 changes (30 source files, `tests/test_input_validation.cpp`,
-  `tools/rb11/`).
-- Committed files and remote/branch/commit: **nothing committed yet** (as of
-  2026-09-13 15:15 local the changes are staged in the `polyfem/` working
-  tree: 30 source files, `tests/test_input_validation.cpp`,
+- Rebuilt targets: `PolyFEM_bin` `27e0eb3d…` and `unit_tests` `e9b105fe…`
+  from `a327e2932` plus the RB-11 patch (sha256 `693e5704…`), the frozen
+  candidate that every validation row above reports; the tree committed as
+  `75b4d284d` is that patch.
+- Committed files and remote/branch/commit: `75b4d284d` on
+  `sdast9/polyfem:main` (42 files: 35 source files, `tests/test_input_validation.cpp`,
   `tests/CMakeLists.txt`, `tests/test_assembler.cpp`, `tools/rb11/`, this
-  record, the plan, the RB-10 note). The commit hash is to be recorded here
-  and in the workspace README once the corrected build is re-validated.
+  record, the review guidance, the plan, the RB-10 note), on top of the
+  integrated remote `a327e2932`. This documentation commit follows.
 - Companion pins unchanged (IPC `bb795446`, PolySolve `ee5b296a6`); no HDA
   change, so no HDA publication.
 - Remaining working-tree changes: none after the commit.
@@ -369,7 +369,7 @@ Dated log (local time, 2026-09-13):
 - **18:45–19:32** — full suite on the frozen candidate: 323 cases, 320
   passed, 3 failed — all pre-existing and attributed (RB-10 friction default
   ×2, RB-22 named error) plus the known cube-on-floor golden; committed and
-  pushed (hash below).
+  pushed as `75b4d284d`.
 
 ## Next session handoff
 
