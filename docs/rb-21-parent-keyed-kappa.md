@@ -182,6 +182,7 @@ Change:
   parent-keyed law — 70/70, one memo key across the switch, energy jump
   ≤ ε·max|∂E/∂x| (measured exactly half), gradient jump ≤ 3ε·max‖H‖ — with
   the stencil identity kept as the control reproducing the historical jump:
-  **270/270** at `756070f44`, evidence `outputs/rb-02/20260913T054358Z`. No production change;
+  **270/270** at `756070f44`, evidence `outputs/rb-02/20260913T054358Z`;
+  published as `948014dbc`. No production change;
   the toolkit and this item's regression are untouched. Details and the
   measured table: [RB-02 record](rb-02-validation.md#regression-update-for-the-parent-keyed-law-2026-09-13).

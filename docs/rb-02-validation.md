@@ -329,9 +329,10 @@ clean). Probe source SHA-256 `f41b3c4c1da869a7efe114c250195532d7de06ca6fad775017
 same probe source had passed 270/270 against the same library while RB-10's
 flip was still uncommitted (`1809a705f` + working tree); the coefficient law
 is untouched by that flip and the probe pins `friction_lag` explicitly in its
-only friction fixture. Publication hash: see the progress note below.
+only friction fixture. Publication: `948014dbc` (see the progress note below).
 
-- **2026-09-13** — Probe updated and published on `sdast9/polyfem:main`
-  (`tools/rb02/coefficient_probe.cpp`, this record,
-  `docs/rb-21-parent-keyed-kappa.md`); the commit hash is recorded in a
-  documentation follow-up.
+- **2026-09-13 05:50Z** — Probe updated and published as `948014dbc` on
+  `sdast9/polyfem:main` (fast-forward from `e332b8b2c`;
+  `tools/rb02/coefficient_probe.cpp`, this record,
+  `docs/rb-21-parent-keyed-kappa.md`), tested as described above before the
+  commit; this hash note is a documentation follow-up.
