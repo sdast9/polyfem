@@ -11,6 +11,10 @@ PolyFEM is a polyvalent C++ FEM library.
 
 ### sdast9 fork
 
+For the September 13, 2026 GitHub failure diagnosis and the ordered macOS,
+Linux, and Windows repair work, see the **[CI portability plan](docs/ci-portability-plan.md)**
+and its [evidence record](docs/ci-portability-evidence-2026-09-13.md).
+
 As of September 8, 2026, the last implementation baseline is `97bd180a4`:
 PF-01 and PF-03–PF-07 corrections are implemented and the constraint-floor
 barrier deletion/projection has been removed. Old `constraint_floor` input values
