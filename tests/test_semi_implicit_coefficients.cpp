@@ -100,7 +100,7 @@ TEST_CASE("Semi-implicit batch median ignores zeros and applies a relative floor
 		CHECK(k[2] == Approx(100.));
 		f.solution_changed(x);
 		CHECK(f.value(x) > 0);
-		CHECK(f.diagnostic_state()["batch_median"] == 100.);
+		CHECK(f.diagnostic_state()["batch_median"].get<double>() == Approx(100.).epsilon(4 * std::numeric_limits<double>::epsilon()));
 		CHECK(f.diagnostic_state()["batch_floor"] == Approx(100. / 1e4));
 	}
 

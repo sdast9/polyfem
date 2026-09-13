@@ -389,14 +389,14 @@ TEST_CASE("max_order lattice proxy of Q2/Q3/serendipity hexahedra is closed", "[
 			++counts[t.row()];
 			single[t.row()] = t.value();
 		}
-		int exact = 0, near = 0;
+		int exact = 0, near_selector_count = 0;
 		for (int r = 0; r < V.rows(); ++r)
 		{
 			exact += counts[r] == 1 && single[r] == 1.;
-			near += counts[r] >= 1 && single[r] != 1. && std::abs(single[r] - 1.) < 1e-12 && counts[r] == 1;
+			near_selector_count += counts[r] >= 1 && single[r] != 1. && std::abs(single[r] - 1.) < 1e-12 && counts[r] == 1;
 		}
-		WARN("max_order Q3 rows: " << exact << " exact selectors, " << near << " single entries within 1e-12 of 1, " << V.rows() - exact - near << " other");
-		CHECK(exact + near <= int(V.rows()));
+		WARN("max_order Q3 rows: " << exact << " exact selectors, " << near_selector_count << " single entries within 1e-12 of 1, " << V.rows() - exact - near_selector_count << " other");
+		CHECK(exact + near_selector_count <= int(V.rows()));
 	}
 	SECTION("serendipity Q2: face centers are interpolated from the 8 face nodes")
 	{

@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 using namespace polyfem;
@@ -143,7 +144,9 @@ TEST_CASE("RB-20 force continuation carries endpoint coefficients", "[kappa_cont
 			const Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
 			f.start(x);
 			f.publish(x);
-			REQUIRE(f.scales() == std::vector<double>{100.});
+			const auto scales = f.scales();
+			REQUIRE(scales.size() == 1);
+			REQUIRE(scales[0] == Approx(100.).epsilon(4 * std::numeric_limits<double>::epsilon()));
 			f.driving *= 4;
 			f.publish(x);
 			CHECK(f.scales()[0] == Approx(enabled ? 100. : 400.));
@@ -176,7 +179,9 @@ TEST_CASE("RB-20 force continuation carries endpoint coefficients", "[kappa_cont
 		const Eigen::VectorXd apart = lift(2, 1, 1.5), together = Eigen::VectorXd::Zero(12);
 		f.start(apart);
 		f.publish(apart);
-		REQUIRE(f.scales() == std::vector<double>{100.});
+		const auto scales = f.scales();
+		REQUIRE(scales.size() == 1);
+		REQUIRE(scales[0] == Approx(100.).epsilon(4 * std::numeric_limits<double>::epsilon()));
 		CHECK(f.diagnostic_state()["continued_count"] == 1);
 		// The provider changes, but the snapshot that prices contacts born in
 		// this "solve" is the one frozen at its start: pair 1 appears at 100.
@@ -224,7 +229,9 @@ TEST_CASE("RB-20 force continuation carries endpoint coefficients", "[kappa_cont
 		const Eigen::VectorXd apart = lift(2, 1, 1.5), together = Eigen::VectorXd::Zero(12);
 		f.start(apart);
 		f.publish(apart);
-		REQUIRE(f.scales() == std::vector<double>{100.});
+		const auto scales = f.scales();
+		REQUIRE(scales.size() == 1);
+		REQUIRE(scales[0] == Approx(100.).epsilon(4 * std::numeric_limits<double>::epsilon()));
 		// The new contact's fresh block is 1e4x stiffer: at a mid-solve
 		// refresh (birth) the fresh batch median is 1e6, floor 5e5, cap 2e6
 		// -- which must not raise the continued 100 (RB-18 F1 would have).
@@ -440,5 +447,5 @@ TEST_CASE("RB-21 parent coefficient assignment checks weighted arithmetic", "[ka
 	Probe f(mesh);
 	f.driving = 1e308 * Eigen::MatrixXd::Identity(8, 8);
 	REQUIRE_THROWS_WITH(f.start(Eigen::VectorXd::Zero(8)),
-		Catch::Matchers::ContainsSubstring("overflowing weighted collision coefficient"));
+						Catch::Matchers::ContainsSubstring("overflowing weighted collision coefficient"));
 }

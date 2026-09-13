@@ -4,7 +4,9 @@ Audit date: **2026-09-13**. Source snapshot: **`3eecd190396ff07cb5ba4857beee23f8
 
 **The pushes reach GitHub successfully. The checks fail for several independent reasons:** a GCC compilation error, a Windows macro collision, overly strict floating-point assertions, formatting violations, and scene regressions or changed scene requirements. Fixing compilation will expose tests that currently cannot run. A successful local macOS build does not validate the Linux or Windows configurations.
 
-This document records the investigation and work still required. **No solver, test, dependency, workflow, or production-default fix was applied by this audit.** The [evidence record](ci-portability-evidence-2026-09-13.md) contains dated run/job links, measurements, verification scope, and the local evidence location. Source line numbers below refer to the audited revision.
+This document records the investigation and work still required. **No solver, test, dependency, workflow, or production-default fix was applied by the original audit.** The [evidence record](ci-portability-evidence-2026-09-13.md) contains dated run/job links, measurements, verification scope, and the local evidence location. Source line numbers below refer to the audited revision.
+
+**Implementation update, 2026-09-13:** the bounded CI-01 and CI-02 source/test/formatting repairs have now been implemented without changing solver behavior or production defaults. An isolated AppleClang build and the three affected CTest cases pass, and the pinned clang-format 21.1.8 check passes over the full tracked C/C++/CUDA-family tree. Native GCC/MSVC and all-platform focused-test acceptance remain pending the GitHub run triggered by publication.
 
 ## 1. Verified state
 
@@ -26,7 +28,7 @@ At the 13:54 UTC metadata snapshot, the most recent 100 PolyFEM workflow runs co
 
 ## 2. Recommended work order
 
-Every item is **open**. IDs are specific to this CI plan and do not rename the existing RB work.
+CI-01 and CI-02 are **implemented with local validation; native CI validation is pending**. CI-03 through CI-09 remain **open**. IDs are specific to this CI plan and do not rename the existing RB work.
 
 | Order / ID | Work | Completion evidence |
 | --- | --- | --- |
@@ -40,11 +42,13 @@ Every item is **open**. IDs are specific to this CI plan and do not rename the e
 | 4 / CI-08 | Package and test the actual solver executable | Relocatable packages run on clean target machines |
 | 4 / CI-09 | Validate the Houdini front-end on each OS | Export, launch, output import, failure handling, and paths with spaces pass |
 
-CI-01 and CI-02 can form one mechanical repair commit. The scene items should remain separate, bounded changes with their own evidence and applicable RB records. Reaching green CI is an intermediate milestone; it does not establish a usable downloadable package or general physical accuracy.
+CI-01 and CI-02 are one mechanical repair changeset. The scene items should remain separate, bounded changes with their own evidence and applicable RB records. Reaching green CI is an intermediate milestone; it does not establish a usable downloadable package or general physical accuracy.
 
 ## 3. Immediate compilation and test repairs
 
 ### CI-01 — GCC initializer and Windows macro collision
+
+**Implemented:** the `std::array` now uses explicit nested braces, and the test-local `near` identifier is now `near_selector_count` everywhere in that test case. Local warning-policy and empty-`near`-macro syntax probes pass. Native GCC and MSVC builds remain the completion evidence.
 
 **Linux: confirmed compiler failure.** In [BarrierContactForm.cpp](../src/polyfem/solver/forms/BarrierContactForm.cpp), `interpolated_stiffness()` initializes:
 
@@ -59,6 +63,8 @@ std::array<int, 4> slot = {-1, -1, -1, -1};
 A small isolated Apple-Clang syntax probe with the SDK's empty `near` macro fails with the old identifier and passes with the proposed identifier. This verifies the mechanism, not the full Windows build. Native MSVC compilation and the `[rb22]` tests remain the acceptance check.
 
 ### CI-02 — Floating-point expectations and formatting
+
+**Implemented:** the three vector assertions retain exact cardinality checks and compare the single analytical value using `Approx(100.).epsilon(4 * std::numeric_limits<double>::epsilon())`. The JSON median is extracted as `double` and uses the same bound. This relative tolerance is about `8.88e-16`, covers the observed `2.84e-16` relative discrepancy, and remains specific to these well-conditioned synthetic calculations. clang-format 21.1.8 was applied to all four files identified by the audit and rechecked over the tracked tree.
 
 **Confirmed on earlier native Linux and Windows runs; currently masked by CI-01.** At `ca5a7965`, both platforms compute `99.99999999999997158` where these tests demand literal `100.0`:
 
@@ -180,10 +186,10 @@ Add tests for each supported Houdini/Python version and OS: load the published H
 
 ## 6. Acceptance and next session
 
-Start the implementation with **CI-01 and CI-02**. Refresh the audited file locations, preserve ongoing shared work, use an isolated checkout/build, apply the small repairs, rebuild, and run the native matrix. A useful focused selection after compilation is:
+The first implementation pass covers **CI-01 and CI-02** in an isolated checkout/build. Native matrix validation remains the final acceptance gate. The focused local selection was:
 
 ```sh
-ctest --test-dir build --output-on-failure -R '^(RB-20 force continuation carries endpoint coefficients|Semi-implicit batch median ignores zeros and applies a relative floor)$'
+ctest --test-dir build --output-on-failure -R '^(RB-20 force continuation carries endpoint coefficients|Semi-implicit batch median ignores zeros and applies a relative floor|max_order lattice proxy of Q2/Q3/serendipity hexahedra is closed)$'
 ```
 
 For each scene repair, reproduce the named failure first with the same data pin and effective policy. Save failures as well as successful runs. Then run the affected test group and the common public integration subset; finish with the relevant full supported matrix. The test data includes cases that intentionally exercise failure, so assess expected outcomes rather than searching logs for the word `error` alone.

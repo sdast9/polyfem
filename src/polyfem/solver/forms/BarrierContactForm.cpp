@@ -801,7 +801,7 @@ namespace polyfem::solver
 		};
 		std::vector<long> parents;
 		std::vector<std::vector<std::pair<int, double>>> rows(n_verts);
-		std::array<int, 4> slot = {-1, -1, -1, -1};
+		std::array<int, 4> slot = {{-1, -1, -1, -1}};
 		int n_kept = 0;
 		for (int a = 0; a < n_verts; ++a)
 		{

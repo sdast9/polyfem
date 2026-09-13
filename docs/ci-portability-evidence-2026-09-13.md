@@ -145,3 +145,23 @@ gh api --allow-escape-sequences repos/sdast9/polyfem/actions/jobs/103723329836/l
 The log-output option is needed by the installed GitHub CLI because compiler logs contain terminal formatting. Original job conclusions, not search hits for `Failed` in CMake capability probes, determine whether configure/build/test stages failed.
 
 Documentation validation: reconcile every reported failing fixture with its job output; compare culprit code against the pinned revision; verify relative Markdown links and the scoped Git diff. No new claim of full native build success, numerical correctness, or package/Houdini usability follows from this audit.
+
+## Easy-fix implementation follow-up
+
+On 2026-09-13, CI-01 and CI-02 were implemented in the isolated checkout based on documentation head `0465e3a28a4eb6d301cb2ba7a38ba4df774571fb`:
+
+- `BarrierContactForm.cpp` uses the GCC-safe nested aggregate initializer.
+- The Windows-sensitive test variable is named `near_selector_count`.
+- The four analytical `100.0` expectations retain exact container cardinality and use a relative tolerance of four double-precision machine epsilons; the JSON value is explicitly extracted as `double`.
+- clang-format 21.1.8 was applied to the four files identified by the audit. No solver formula, scene reference, workflow, dependency pin, or production default changed.
+
+Local validation used an isolated copy-on-write build and dependency cache; the active developer checkout/build remained untouched. CMake configured RelWithDebInfo with AppleClang 21.0.0.21000101 and TBB. The complete `unit_tests` target rebuilt successfully. The focused CTest command then passed all three selected tests:
+
+```text
+max_order lattice proxy of Q2/Q3/serendipity hexahedra is closed ........ Passed
+RB-20 force continuation carries endpoint coefficients .................. Passed
+Semi-implicit batch median ignores zeros and applies a relative floor ... Passed
+100% tests passed, 0 tests failed out of 3
+```
+
+The pinned formatter's `--dry-run --Werror` check also exits 0 over every tracked C/C++/CUDA-family file. Small AppleClang probes exit 0 with `-Werror=missing-braces` on the new initializer and with an empty `near` macro on the renamed identifier. These probes verify the mechanisms but do not replace native GCC/MSVC compilation. The publication-triggered GitHub matrix is the acceptance check for those platforms and may expose later failures that the former first blockers had masked.

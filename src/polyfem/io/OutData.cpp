@@ -1129,9 +1129,7 @@ namespace polyfem::io
 							// RB-22: Q2+ (and serendipity) hex faces are not
 							// tessellated here; the contact builder refuses the
 							// incomplete surface unless a proxy type is selected
-							skip_face(rep, b, lb.element_id(), eid, fmt::format(
-								"hexahedral face of a Q{} element with {} owned nodes; this extraction tessellates only Q1 quad faces (the contact builder routes such meshes to the DOF-resolution proxy; select contact/collision_mesh/tessellation_type \"dof\" or \"max_order\" elsewhere)",
-								element_order(b), loc_nodes.size()));
+							skip_face(rep, b, lb.element_id(), eid, fmt::format("hexahedral face of a Q{} element with {} owned nodes; this extraction tessellates only Q1 quad faces (the contact builder routes such meshes to the DOF-resolution proxy; select contact/collision_mesh/tessellation_type \"dof\" or \"max_order\" elsewhere)", element_order(b), loc_nodes.size()));
 							continue;
 						}
 
