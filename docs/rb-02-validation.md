@@ -2,6 +2,8 @@
 
 **Review follow-up, 2026-09-12:** The six closure claims below apply to their recorded counterexamples. The later closed-item review found additional overflow paths in the RB-18 global fallback and the RB-21 parent mean, plus a restart-progress bug. These bounded repairs are tracked in the [2026-09-12 follow-up](rb-review-followup-20260912.md); the closure is not an exhaustive certification of floating-point arithmetic.
 
+**Regression update, 2026-09-13:** the probe's feature-transition expectation still encoded the stencil-keyed 70/55 coefficient jump that RB-21 removed, so it failed at check 93 against the current default; the block now asserts the parent-keyed law (coefficient and objective continuous across the switch) with the stencil identity as the control, 270/270 at `756070f44`. See [the update](#regression-update-for-the-parent-keyed-law-2026-09-13). No production change.
+
 Date: 2026-09-08 (audit); closed 2026-09-11
 Status: **closed — characterized, limits documented; production law retained** (see [Closure](#closure-2026-09-11); the audit finished as characterized—decision pending and its record below is unchanged)
 Selected stage: RB-02 stages 1–4, bounded characterization and model alternatives.
@@ -228,9 +230,108 @@ Disposition of the six decisions in the [contract's final table](rb-02-contract.
 The RB-02 probe (`tools/rb02/`) now carries the repaired expectations and is
 the regression for this law: 243/243 checks at RB-18's final state
 (`final-probe-f7/`), with the pre-fix 257-check run retained as the defect
-baseline. Retained, not closed here: RB-03 interpolation curvature (its own
+baseline. (Updated 2026-09-13: that run predates the RB-21 default flip and
+its feature-transition check encoded the stencil-keyed jump; 270/270 on the
+current law, see [the regression update](#regression-update-for-the-parent-keyed-law-2026-09-13).) Retained, not closed here: RB-03 interpolation curvature (its own
 item), physical certification of the retained law (RB-09/RB-10 references;
 the RB-20 friction endpoint move of 1.6e-2 on the public smoke is where a
 reference comparison belongs), and the private-scene/Ballburst/Teseo runs this
 audit never made. Closing this item records a decision, not a physical
 validation of the contact model.
+
+## Regression update for the parent-keyed law (2026-09-13)
+
+**Status: closed (unchanged); the probe is again the regression for the
+repaired law — 270/270 checks at `756070f44`.** No production code, default,
+public input or unrelated probe check changed.
+
+The closure above cites the probe's 243/243 pass at RB-18's final state
+(`576b1d3d0`, `outputs/rb-18/20260911T164356Z/final-probe-f7/`). That run
+predates the RB-20/RB-21 default flip (`beb6ef641`): the probe's
+feature-transition check still encoded the *stencil-keyed* coefficient jump —
+`close(l["scales"][0], 70) && close(r["scales"][0], 55)`, "feature coefficient
+change" — that [RB-21](rb-21-parent-keyed-kappa.md) deliberately removed, so
+the regression claim was stale from that commit on. The RB-10 session's
+2026-09-13 run reproduced it: exit 1 at check 93 of 243
+(`outputs/rb-10/20260912T232617Z/rb02-probe-new-defaults/`, library
+`1809a705f` plus RB-10's then-uncommitted default flip); the 92 checks before
+it pass.
+
+### What the parent-keyed law produces at the switch
+
+Same fixture as the audit (edge `(v0, v1)` on the x-axis, point `v2` at gap
+.2 above `x = 0`, frozen driving Hessian 10 on the edge vertices and 100 on
+the point, one snapshot at the center, `line_search_begin` frozen trials with
+the point at `x = 1 ∓ ε`). Under the default `coefficient_identity: "parent"`
+the edge–vertex collision left of the endpoint and the vertex–vertex collision
+right of it are built from the same candidate `(e0, v2)`, so both carry that
+parent's memoized snapshot value and the memo gains no key at the switch; the
+distance to the whole edge is C¹ at a positive gap with a zero tangential
+derivative at the endpoint, so the frozen objective is C¹ across it. Measured
+(`outputs/rb-02/20260913T054358Z/probe-results.json`, `feature_transition`):
+
+| ε | parent κ (EV / VV) | ΔE = E(1+ε) − E(1−ε) | bound ε·max\|∂E/∂x\| (+ 32 ε_mach \|E\|, visible at 1e-7) | ‖∇E(1+ε) − ∇E(1−ε)‖ | bound 3ε·max‖H‖ | stencil κ (EV / VV) | stencil ΔE | stencil E ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1e-3 | 70 / 70 | −2.0454e-3 | 4.0907e-3 | 5.8128 | 32.332 | 70 / 55 | −44.4993 | .7857065 |
+| 1e-5 | 70 / 70 | −2.0454e-7 | 4.0908e-7 | 5.8142e-2 | .32333 | 70 / 55 | −44.4977 | .7857143 |
+| 1e-7 | 70 / 70 | −2.0464e-11 | 4.2384e-11 | 5.8142e-4 | 3.2333e-3 | 70 / 55 | −44.4977 | .7857143 |
+
+The parent-law jump is exactly half its bound at every ε, as the fixture
+predicts: with the toolkit's squared-distance barrier `B(d) = b(d², d̂²)`,
+`B′(.2) = −11.69` and `ΔE = ½ κ B′(d)/d · ε² = −2045 ε²`; the tangential
+force at `1+ε` is `κ B′(d) ε/d = −4091 ε` (measured −4.0907 at ε=1e-3) and
+zero at `1−ε`. The stencil-law ratio converges to 55/70 = .7857142857: the
+historical jump is the coefficient ratio, the distance itself being
+continuous. The stencil values are the audit's original measurements
+(−44.4993465, −44.4977396, −44.4977394 in the findings table).
+
+### Probe changes (`tools/rb02/coefficient_probe.cpp`, feature-transition block only)
+
+Replaced the stencil-keyed expectation with the current law and made the
+recorded-only energy jump an assertion; per ε the block now checks:
+
+| Check | Assertion |
+| --- | --- |
+| `parent feature trial order repeatability` | unchanged A/B/A comparison of evaluated scales, energy, gradient and Hessian norms |
+| `feature coefficient continuity` | `l.scales[0] == 70 && r.scales[0] == 70` (was 70 / 55) |
+| `feature switch adds no coefficient key` | the memo holds one key on both sides |
+| `feature energy continuity` | `\|ΔE\| ≤ ε·max(\|∂E/∂x\|_l, \|∂E/∂x\|_r) + 32 ε_mach \|E_l\|` — the monotone-force bound above |
+| `feature gradient continuity` | `‖∇E_r − ∇E_l‖ ≤ 3ε·max(‖H_l‖_F, ‖H_r‖_F) + 32 ε_mach ‖∇E_l‖` — path length 2ε times the Hessian along it, with margin for its variation |
+| `stencil feature trial order repeatability` | the same A/B/A comparison on a second form with `coefficient_identity: "stencil"` |
+| `stencil identity feature coefficient change` | the retired expectation verbatim, `70 / 55`, as the control for the repaired defect |
+| `stencil identity energy jump is the coefficient ratio` | `E_r/E_l == 55/70` to 1e-4 |
+
+Fifteen checks became forty-two; every other check is untouched (243 − 15 +
+42 = 270). Tolerances of unrelated checks were not changed. The JSON
+`feature_transition` entries now hold `parent` and `stencil` sub-records
+(samples, jumps, bounds, tangential forces). The friction section's explicit
+`friction_lag: "follow_stiffness"` is RB-10's `756070f44` change (the F6
+behaviour is opt-in since that commit) and is untouched here. The
+measurement pass that preceded the assertions (all checks removed at the
+switch, both identities recorded) passed 246/246 including every later
+section; that scratch run is not retained as evidence.
+
+### Validation
+
+| Check | Result | Exit |
+| --- | --- | --- |
+| `python3 tools/rb02/run_probe.py --build build --output outputs/rb-02/20260913T054358Z` | **270 checks**, `passed: true` | 0 |
+| clang-format (`.clang-format`) on the probe | identical | — |
+| Unit tests, smokes, HDA | not rerun: no production source changed (as for the 2026-09-08 audit) | — |
+
+Tested revision: PolyFEM `756070f44` — RB-10's defaults commit; HEAD at run
+time was its documentation hash note `e332b8b2c` (`provenance.json:
+polyfem_head`), the tracked tree was clean and no tracked source was newer
+than the shared `polyfem/build/libpolyfem.a` (2026-09-13 01:26 EDT), which the runner
+links; local source overrides IPC toolkit `bb795446` (= the pin,
+`ipc-toolkit-fork` clean) and PolySolve `ee5b296a` (`polysolve-merged`
+clean). Probe source SHA-256 `f41b3c4c1da869a7efe114c250195532d7de06ca6fad7750174080747063cb08`, executable `3a9e08b01e7ddd2f6b89315e76fa2a67094e939b1690077af37f5c0c68a809d7`. The
+same probe source had passed 270/270 against the same library while RB-10's
+flip was still uncommitted (`1809a705f` + working tree); the coefficient law
+is untouched by that flip and the probe pins `friction_lag` explicitly in its
+only friction fixture. Publication hash: see the progress note below.
+
+- **2026-09-13** — Probe updated and published on `sdast9/polyfem:main`
+  (`tools/rb02/coefficient_probe.cpp`, this record,
+  `docs/rb-21-parent-keyed-kappa.md`); the commit hash is recorded in a
+  documentation follow-up.

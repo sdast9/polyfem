@@ -310,7 +310,18 @@ int main()
 			out["frozen_trials"].push_back({{"initial_gap", initial_gap}, {"first", first}, {"other", other}, {"finite_differences", fd}, {"before_refresh", before}, {"after_refresh", after}});
 		}
 		// Geometry-only refresh and a nearest-feature transition with one frozen
-		// snapshot: an edge-vertex key and a vertex-vertex key need not share k.
+		// snapshot. RB-21 (parent-keyed kappa, the default coefficient_identity
+		// "parent"): the coefficient is keyed on the candidate primitive pair that
+		// built the collision, so the edge-vertex collision left of the endpoint
+		// and the vertex-vertex collision right of it share the one parent (e0,
+		// v2) and its snapshot value 70. The distance to the whole edge is C^1 at
+		// a positive gap with a zero tangential derivative at the endpoint, so the
+		// frozen objective is C^1 across the switch: |E(1+eps) - E(1-eps)| is at
+		// most eps times the tangential force (exactly half of it here) and the
+		// gradient moves by O(eps). The historical stencil identity re-estimated
+		// the new VV stencil from the frozen Hessian (55, a -44.5 energy jump);
+		// it remains available as `coefficient_identity: "stencil"` and is
+		// reproduced below as the control for the repaired defect.
 		{
 			auto m = mesh();
 			Probe f(m);
@@ -328,24 +339,75 @@ int main()
 			// Return to the center snapshot before the feature-boundary sweep.
 			f.solution_changed(z);
 			f.refresh_semi_implicit_stiffness(z, false);
+			Probe stencil(m, 1, {{"coefficient_identity", "stencil"}});
+			stencil.driving = f.driving;
+			stencil.start(z);
+			auto gradient = [](Probe &g, const V &x) {
+				g.solution_changed(x);
+				V grad;
+				g.first_derivative(x, grad);
+				return grad;
+			};
+			const double roundoff = 32 * std::numeric_limits<double>::epsilon();
 			for (double epsilon : {1e-3, 1e-5, 1e-7})
 			{
 				V left = z, right = z;
 				left[4] = 1 - epsilon;
 				right[4] = 1 + epsilon;
-				f.line_search_begin(z, right);
-				auto l = sample(f, left);
-				auto r = sample(f, right);
-				auto again = sample(f, left);
-				// A new key grows the memoization map; compare the evaluated
-				// objective, not the diagnostic list of all memoized keys.
-				check(l["scales"] == again["scales"] && close(l["energy"], again["energy"])
-						  && close(l["gradient_norm"], again["gradient_norm"])
-						  && close(l["hessian_norm"], again["hessian_norm"]),
-					  "feature trial order repeatability");
-				check(close(l["scales"][0], 70) && close(r["scales"][0], 55), "feature coefficient change");
-				out["feature_transition"].push_back({{"epsilon", epsilon}, {"left", l}, {"right", r}, {"energy_jump", double(r["energy"]) - double(l["energy"])}});
-				f.line_search_end();
+				json record = {{"epsilon", epsilon}};
+				for (Probe *probe : {&f, &stencil})
+				{
+					Probe &g = *probe;
+					const bool parent = probe == &f;
+					const std::string law = parent ? "parent" : "stencil";
+					g.line_search_begin(z, right);
+					auto l = sample(g, left);
+					auto r = sample(g, right);
+					auto again = sample(g, left);
+					// A new key may grow the memoization map (it does under the
+					// stencil identity): compare the evaluated objective, not the
+					// diagnostic list of all memoized keys.
+					check(l["scales"] == again["scales"] && close(l["energy"], again["energy"])
+							  && close(l["gradient_norm"], again["gradient_norm"])
+							  && close(l["hessian_norm"], again["hessian_norm"]),
+						  law + " feature trial order repeatability");
+					const double energy_jump = double(r["energy"]) - double(l["energy"]);
+					json measured = {{"left", l}, {"right", r}, {"energy_jump", energy_jump}};
+					if (parent)
+					{
+						// One parent, one memoized coefficient on both sides of the
+						// switch; the VV collision adds no key of its own.
+						check(close(l["scales"][0], 70) && close(r["scales"][0], 70), "feature coefficient continuity");
+						check(l["cached_pre_cap"].size() == 1 && r["cached_pre_cap"].size() == 1, "feature switch adds no coefficient key");
+						// C^1 objective: on the left the tangential force is zero and
+						// the energy is constant in x; on the right |dE/dx| grows with
+						// the distance from the endpoint, so the jump is bounded by
+						// eps times the larger tangential force. The gradient moves by
+						// at most the path length (2 eps) times the Hessian along it,
+						// bounded here by the larger endpoint Hessian norm with margin.
+						const V gl = gradient(g, left), gr = gradient(g, right);
+						const double energy_bound = epsilon * std::max(std::abs(gl[4]), std::abs(gr[4])) + roundoff * std::abs(double(l["energy"]));
+						const double gradient_bound = 3 * epsilon * std::max(double(l["hessian_norm"]), double(r["hessian_norm"])) + roundoff * gl.norm();
+						check(std::abs(energy_jump) <= energy_bound, "feature energy continuity");
+						check((gr - gl).norm() <= gradient_bound, "feature gradient continuity");
+						measured["tangential_force"] = {{"left", gl[4]}, {"right", gr[4]}};
+						measured["energy_jump_bound"] = energy_bound;
+						measured["gradient_jump"] = (gr - gl).norm();
+						measured["gradient_jump_bound"] = gradient_bound;
+					}
+					else
+					{
+						// Historical control: the VV stencil is re-estimated from the
+						// frozen Hessian and the objective jumps by the coefficient
+						// ratio (the distance itself is continuous).
+						check(close(l["scales"][0], 70) && close(r["scales"][0], 55), "stencil identity feature coefficient change");
+						check(close(double(r["energy"]) / double(l["energy"]), 55. / 70, 1e-4), "stencil identity energy jump is the coefficient ratio");
+						measured["energy_ratio"] = double(r["energy"]) / double(l["energy"]);
+					}
+					g.line_search_end();
+					record[law] = measured;
+				}
+				out["feature_transition"].push_back(record);
 			}
 		}
 		// Converted length L and objective Q: H'=Q/L^2 H; k'=Q/L^4 k.

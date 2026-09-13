@@ -119,6 +119,7 @@ Change:
 | Ball-on-plate (8 steps) | complete | see RB-20 (656 iterations on, 628 off) |
 | HDA E2E | pass | pass |
 | RB-04 candidate probe (`tools/rb04/candidate_probe.cpp`) | — | **not converted**: the probe drives the toolkit's stencil potential directly with hand-set coefficients; the equivalent statement (single- and two-parent seam continuity on the real form, with the historical jump reproduced under stencil identity) is the `[kappa_continuity][parent]` regression instead |
+| RB-02 coefficient probe (`tools/rb02/coefficient_probe.cpp`) | the audit's EV↔VV fixture: coefficient continuous and objective C¹ under parent identity; the historical 70/55 jump under `coefficient_identity: "stencil"` | **270/270** (2026-09-13, library `756070f44`, `outputs/rb-02/20260913T054358Z`) — the probe's stencil-keyed expectation (70/55 at check 93) had been stale since the default flip and was updated to this law, not the law to it; measured jump −2.045e-3·(ε/1e-3)², exactly ½ ε·\|∂E/∂x\|, gradient jump 5.8·(ε/1e-3); see the [RB-02 record](rb-02-validation.md#regression-update-for-the-parent-keyed-law-2026-09-13) |
 
 ## Publication
 
@@ -173,3 +174,14 @@ Change:
   PolyFEM pin bumped in `cmake/recipes/ipc_toolkit.cmake`. The RB-04
   candidate probe was not converted (see the table); the seam regression on
   the real form replaces it. Done.
+
+- **2026-09-13** — The RB-02 probe, last run at RB-18's final state
+  (243/243), still asserted the stencil-keyed 70/55 coefficient jump at the
+  EV↔VV switch and failed at check 93 against this item's default (found by
+  the RB-10 session's run). Its feature-transition block now asserts the
+  parent-keyed law — 70/70, one memo key across the switch, energy jump
+  ≤ ε·max|∂E/∂x| (measured exactly half), gradient jump ≤ 3ε·max‖H‖ — with
+  the stencil identity kept as the control reproducing the historical jump:
+  **270/270** at `756070f44`, evidence `outputs/rb-02/20260913T054358Z`. No production change;
+  the toolkit and this item's regression are untouched. Details and the
+  measured table: [RB-02 record](rb-02-validation.md#regression-update-for-the-parent-keyed-law-2026-09-13).
