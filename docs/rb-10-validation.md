@@ -306,8 +306,12 @@ budget-1 value of either mode. Neither endpoint is certified.
   changes (`FrictionForm` realized-lag mode, `BarrierContactForm` option and
   diagnostic field, `input-spec` entry, `tests/test_friction_lag.cpp`,
   `tools/rb10/`).
-- Committed files / remote / commit: recorded in the progress log at
-  publication.
+- Committed files / remote / commit: `7cb267f18` on `sdast9/polyfem:main`
+  (docs/rb-10-validation.md, docs/robustness-plan.md, json-specs/input-spec.json,
+  src/polyfem/solver/forms/{BarrierContactForm,FrictionForm}.{hpp,cpp},
+  tests/CMakeLists.txt, tests/test_friction_lag.cpp, tools/rb10/), tested as
+  described above before the commit; this hash note is a documentation
+  follow-up.
 - Companion pins unchanged (IPC `bb795446`, PolySolve `ee5b296a` as pinned by
   `91c7ff8ac`). No HDA source change (the new option is not exposed pending the
   default decision).
@@ -365,3 +369,6 @@ Append-only. Newest entry last.
   assertions, Stage 4 A/B (20 runs), affected suite 71 cases / 4,313
   assertions, five smokes, HDA E2E all pass. Record written; status
   characterized—decision pending.
+- **2026-09-13 01:10Z** — Published `7cb267f18` on `sdast9/polyfem:main`
+  (fast-forward from `91c7ff8ac`). Pending user decisions listed in the
+  handoff; no HDA change.
