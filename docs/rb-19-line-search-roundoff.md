@@ -1,5 +1,7 @@
 # RB-19 — Line-search roundoff fallback, step-1 stall diagnosis, cube-on-floor NaN
 
+**Review follow-up, 2026-09-12 (validated):** The small-gradient acceptance branch was corrected after a nonconvex counterexample reached a strict local maximum with a smaller gradient and a resolvable energy increase. The fallback now retains a finite energy-change bound using the existing characteristic energy scale near stationarity. Implementation and successful fresh validation are recorded in the [2026-09-12 follow-up](rb-review-followup-20260912.md); the original investigation below is historical evidence.
+
 Date: 2026-09-11
 Status: **done — implemented in PolySolve, validated on the public fixtures, published** (PolySolve `5afe3b5d4` on `sdast9/polysolve:iteration-callback`; PolyFEM pin bump and this record on `sdast9/polyfem:main`). The `contact_2d` observation at the end is recorded as measured.
 
@@ -104,7 +106,7 @@ chase. The cube-on-floor `err_h1` gap itself (0.35% vs a 1e-5 margin) remains
 as recorded in the sync memory; see the `contact_2d` observation below for what
 the line-search change does to it.
 
-## The change (PolySolve `5afe3b5d4`)
+## The original change (PolySolve `5afe3b5d4`, energy gate superseded 2026-09-12)
 
 Files: `src/polysolve/nonlinear/line_search/Armijo.{hpp,cpp}`,
 `RobustArmijo.cpp`, `nonlinear-solver-spec.json`, `tests/test_nonlinear_solver.cpp`.
@@ -129,8 +131,9 @@ else reject
   there; the ε gate covers the complementary regime where |E| is large and the
   decrease is below one ULP of it. The acceptance is deliberately *not* "any
   ΔE within roundoff": it additionally requires the gradient norm to fall,
-  which is the "does not mask genuine non-descent" property the user asked
-  for and the regression checks.
+  but that check only covered gradient growth on a floored convex quadratic.
+  It did not establish descent for nonconvex objectives; the 2026-09-12
+  counterexample and bounded-energy correction are in the follow-up record.
 - `Backtracking::criteria` (which already used the gradient when flagged) is
   unchanged. `ResidualBacktracking` is unaffected.
 - A trace-level line `ls it: N energy at roundoff; accepted on gradient norm
@@ -220,7 +223,7 @@ open and was not investigated further in this item.
 
 - **Behavior change to be aware of:** any `Armijo`/`RobustArmijo` solve that
   previously rejected a step in the near-convergence regime
-  (‖∇f‖ < `use_grad_norm_tol` × scale, or |ΔE| ≤ ε(1+|E|)) can now accept
+  (the original gate was ‖∇f‖ < `use_grad_norm_tol` × scale, or |ΔE| ≤ ε(1+|E|); the 2026-09-12 follow-up bounds both regimes) could accept
   it when the gradient norm falls. Solves that never hit such a rejection are
   bit-identical (the five public smokes are). Any golden recorded from a run
   that *did* stall in that regime will differ. Turn the fallback off per scene

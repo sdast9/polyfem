@@ -223,8 +223,12 @@ Conventions carried over from the selector contract:
   direction
   `|w_K|⁴ (wᵀ B H_PP Bᵀ w) / (wᵀ B Bᵀ w)²`
   — the energy along `u = Bᵀ w` scaled so that the stencil's own motion
-  along `w` is unit; it equals `wᵀ H w` for selectors and the condensed value
-  for a single interpolated vertex, and never needs an inverse. Its result
+  along `w` is unit; it equals `wᵀ H w` for selectors and never needs an
+  inverse. It does not generally equal the condensed value even for one
+  interpolated vertex: with `B = [.5, .5]`, `H_PP = diag(100, 400)` and unit
+  direction, condensation gives `320` and this fallback gives `500`. Equality
+  requires additional structure, such as identical independent parent
+  stiffnesses. The chosen fallback remains unchanged. Its result
   then enters the same RB-18 chain (previous κ → |·| → max|H|/d̂² → batch
   floor/cap) as any other raw curvature.
 - The quadratic forms are evaluated by the toolkit's own

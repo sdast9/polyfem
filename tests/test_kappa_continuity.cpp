@@ -14,6 +14,7 @@
 // mapping (as tools/rb02/coefficient_probe.cpp). Not a physical-accuracy test.
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 
 #include <algorithm>
@@ -407,4 +408,37 @@ TEST_CASE("RB-21 parent-keyed coefficients are continuous across closest-feature
 			}
 		}
 	}
+}
+
+TEST_CASE("RB-21 parent coefficient assignment checks weighted arithmetic", "[kappa_continuity][parent_identity]")
+{
+	// Both edge candidates reduce to the same VV collision. Each parent's
+	// coefficient and its weighted total are representable in these controls.
+	for (const double h : {1e307, 8e307})
+	{
+		CAPTURE(h);
+		auto mesh = make_corner(true, .01, .99);
+		Probe f(mesh);
+		f.driving = h * Eigen::MatrixXd::Identity(8, 8);
+		const Eigen::VectorXd x = Eigen::VectorXd::Zero(8);
+		REQUIRE_NOTHROW(f.start(x));
+		REQUIRE(f.collisions().size() == 1);
+		REQUIRE(f.collisions()[0].parents.size() == 2);
+		REQUIRE(f.scales().size() == 1);
+		CHECK(std::isfinite(f.scales()[0]));
+		CHECK(f.scales()[0] / h == Approx(1.));
+		const double energy = f.value(x);
+		CHECK(std::isfinite(energy));
+		CHECK(energy / h == Approx(1.5680538752965535e-05).epsilon(1e-8));
+	}
+
+	// The correct mean is 1e308, but IPC first forms weight * scale = 2e308
+	// before multiplying by the small potential/derivatives. Reject that
+	// unsupported intermediate explicitly even though the exact energy at
+	// this gap could be represented; never install a silently infinite scale.
+	auto mesh = make_corner(true, .01, .99);
+	Probe f(mesh);
+	f.driving = 1e308 * Eigen::MatrixXd::Identity(8, 8);
+	REQUIRE_THROWS_WITH(f.start(Eigen::VectorXd::Zero(8)),
+		Catch::Matchers::ContainsSubstring("overflowing weighted collision coefficient"));
 }

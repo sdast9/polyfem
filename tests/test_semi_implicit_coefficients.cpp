@@ -348,3 +348,44 @@ TEST_CASE("Semi-implicit lagged friction follows the trim", "[semi_implicit_coef
 		CHECK(fd == Approx(g[i]).margin(1e-6 * (1 + std::abs(g[i]))));
 	}
 }
+
+TEST_CASE("Semi-implicit global fallback preserves overflow for batch resolution", "[semi_implicit_coefficients]")
+{
+	SECTION("without a reference overflow is an error, not a zero barrier")
+	{
+		auto mesh = make_mesh(.1);
+		Probe f(mesh, .1);
+		f.driving.setZero();
+		for (int i = 0; i < 6; i += 2)
+			f.driving(i, i) = 1e308;
+		REQUIRE_THROWS_WITH(f.start(Eigen::VectorXd::Zero(6)), ContainsSubstring("overflowing local curvature"));
+	}
+
+	SECTION("a finite batch reference caps the overflowing global fallback")
+	{
+		auto mesh = make_mesh(.1, .2, 3);
+		Probe f(mesh, .1, {{"kappa_spread", 2}});
+		f.driving.block(12, 12, 6, 6).setZero();
+		for (int i = 12; i < 18; i += 2)
+			f.driving(i, i) = 1e308;
+		const Eigen::VectorXd x = Eigen::VectorXd::Zero(18);
+		REQUIRE_NOTHROW(f.start(x));
+		const auto k = f.scales();
+		REQUIRE(k.size() == 3);
+		CHECK(k[0] == Approx(1e4));
+		CHECK(k[1] == Approx(1e4));
+		CHECK(k[2] == Approx(2e4));
+		CHECK(std::isfinite(f.value(x)));
+		CHECK(f.value(x) > 0);
+	}
+
+	SECTION("positive global curvature cannot underflow silently to zero")
+	{
+		auto mesh = make_mesh();
+		Probe f(mesh, 1, json::object(), 1e100);
+		f.driving.setZero();
+		for (int i = 0; i < 6; i += 2)
+			f.driving(i, i) = 1e-300;
+		REQUIRE_THROWS_WITH(f.start(Eigen::VectorXd::Zero(6)), ContainsSubstring("underflowing global curvature fallback"));
+	}
+}

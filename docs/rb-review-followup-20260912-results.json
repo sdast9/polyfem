@@ -1,0 +1,393 @@
+{
+  "date": "2026-09-12",
+  "polyfem_baseline": "d842f4f06bc6a54ef1e2490a92414ce81bd65a34",
+  "polysolve_baseline": "5afe3b5d45c7f73a399e12ec9d4c2c359886e4a2",
+  "polysolve_commit": "ee5b296a690ce225fb34f6f375d27f9ea2a16027",
+  "ipc_commit": "e3c8d3fe653d5de46c6aa34c400f79119af719f7",
+  "binary_sha256": {
+    "PolyFEM_bin": "d7e098d9ad01163ab051590269ef22f65c158f47ddd85947d554bd09193a9ac1",
+    "tests/unit_tests": "34f7139b169207589754efcd042c74130ddd3b8c5aa78a4a2d5c3b338e192a3e"
+  },
+  "source_sha256": {
+    "polyfem/src/polyfem/solver/ALSolver.cpp": "cee75635775e316aa5a445a7e4f4a73661825448f29a6b9014cb61d5c31c0e6e",
+    "polyfem/src/polyfem/solver/forms/BarrierContactForm.cpp": "985ce24a96fe59ff4c18896af3d909ca29626ef026ad69d64a10015029e20505",
+    "polyfem/tests/test_al_solver.cpp": "492a99f89b56c94e6b89f948d9e1b63b7c0baf0c16746aaeaed4fef28f92426a",
+    "polyfem/tests/test_kappa_continuity.cpp": "286fe4a69b761d173c560e88fa42414e316d4cd5f726fe975ed2d541b066e14c",
+    "polyfem/tests/test_semi_implicit_coefficients.cpp": "66eb445bc4081ef3d655e780c7d431278bd0d100407192509a0a9ec1f06651c7",
+    "polysolve-merged/src/polysolve/nonlinear/line_search/Armijo.cpp": "a8b94f2136e4a0253e884faadf9f512cb4bfeb9cf1efe6ee7961eaf8f8a06681",
+    "polysolve-merged/src/polysolve/nonlinear/line_search/Armijo.hpp": "8575758aee2d3025c1c86ddd31e87404eb990ccec1361445d58bafca152359c5",
+    "polysolve-merged/src/polysolve/nonlinear/line_search/RobustArmijo.cpp": "b4d3a0daa8088b95af6a3d97aa2b25e7ffa249e5c0ca72b698dced6a5b9237a2",
+    "polysolve-merged/nonlinear-solver-spec.json": "5fb37d8bb34502a4b8e9e9da4e4e9074d32812081a8c56a549f63d575563dab7",
+    "polysolve-merged/tests/test_nonlinear_solver.cpp": "dc407eb27ab97b4ad4824fe851cf62dcce46f75a2f8047c09b79eea9ceef1717"
+  },
+  "tests": {
+    "polyfem": {
+      "cases": 63,
+      "assertions": 4229,
+      "exit": 0
+    },
+    "polysolve_related": {
+      "cases": 4,
+      "assertions": 534,
+      "exit": 0
+    },
+    "polysolve_line_search_subset": {
+      "cases": 2,
+      "assertions": 49,
+      "exit": 0
+    },
+    "hda_e2e": {
+      "exit": 0
+    }
+  },
+  "smokes": {
+    "quasistatic-adaptive": {
+      "baseline_exit": 0,
+      "final_exit": 0,
+      "saved_states": 5,
+      "error_lines": 0,
+      "max_abs_endpoint_delta": 1.0408340855860843e-16,
+      "baseline_solution_sha256": "3aa365c1fccca2fa4cfad02b93b2743710c66241d58742e9b14e13273241af26",
+      "final_solution_sha256": "9cb69de29771dda8cc135c24de0e9682b1d73f17e91a13a559769038e520cc71",
+      "final_stall_restarts": 0
+    },
+    "quasistatic-semi": {
+      "baseline_exit": 0,
+      "final_exit": 0,
+      "saved_states": 5,
+      "error_lines": 0,
+      "max_abs_endpoint_delta": 2.220446049250313e-16,
+      "baseline_solution_sha256": "52e6787f0e756462bb45bc029f89448117225e9b03b0f0e01a505fb16803b1fa",
+      "final_solution_sha256": "da76497fb67e4e14c7eda82287610516eac86f8d38e1bef99a311bf807fe7177",
+      "final_stall_restarts": 0
+    },
+    "quasistatic-semi-alhess": {
+      "baseline_exit": 0,
+      "final_exit": 0,
+      "saved_states": 5,
+      "error_lines": 0,
+      "max_abs_endpoint_delta": 3.191891195797325e-16,
+      "baseline_solution_sha256": "8960f97fd95ac8b9b58aa3970c2246078ac6816be92633cd96c7c5a31964b548",
+      "final_solution_sha256": "c701da80121ef6ac69ffd3422ba40a1a0753ff663a021830084321ce592152e6",
+      "final_stall_restarts": 0
+    },
+    "quasistatic-semi-friction": {
+      "baseline_exit": 0,
+      "final_exit": 0,
+      "saved_states": 5,
+      "error_lines": 0,
+      "max_abs_endpoint_delta": 7.294512216482474e-16,
+      "baseline_solution_sha256": "7533fcca2995ef6110f52ad410409d3bbf3086989445c802ad62ebdfa4506bb3",
+      "final_solution_sha256": "7fb7e1486667470871e0280ac2affddb5bfaff9894067d2905179d3c74705f65",
+      "final_stall_restarts": 0
+    },
+    "transient-semi": {
+      "baseline_exit": 0,
+      "final_exit": 0,
+      "saved_states": 5,
+      "error_lines": 0,
+      "max_abs_endpoint_delta": 9.71445146547012e-17,
+      "baseline_solution_sha256": "f14de4fae652cef616aae5583af75fc7fa626e7a0f798d51ca4f7df7a310b3d7",
+      "final_solution_sha256": "935543babbf99930fe8a668636262c681edb0bb8df4135d1267976a7a2fda308",
+      "final_stall_restarts": 0
+    }
+  },
+  "adaptive_single_thread": {
+    "same_length": true,
+    "max_abs_delta": 0.0,
+    "identical": true
+  },
+  "step1_repeats": [
+    {
+      "index": 0,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 9,
+      "saved_steps": 17
+    },
+    {
+      "index": 1,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 8,
+      "saved_steps": 17
+    },
+    {
+      "index": 2,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 5,
+      "saved_steps": 17
+    },
+    {
+      "index": 3,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 7,
+      "saved_steps": 17
+    },
+    {
+      "index": 4,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 7,
+      "saved_steps": 17
+    },
+    {
+      "index": 5,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 6,
+      "saved_steps": 17
+    },
+    {
+      "index": 6,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 8,
+      "saved_steps": 17
+    },
+    {
+      "index": 7,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 7,
+      "saved_steps": 17
+    },
+    {
+      "index": 8,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 8,
+      "saved_steps": 17
+    },
+    {
+      "index": 9,
+      "threads": "default",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 7,
+      "saved_steps": 17
+    },
+    {
+      "index": 10,
+      "threads": "1",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 10,
+      "saved_steps": 17
+    },
+    {
+      "index": 11,
+      "threads": "1",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 10,
+      "saved_steps": 17
+    },
+    {
+      "index": 12,
+      "threads": "1",
+      "exit": 0,
+      "restarts": 0,
+      "fallback_accepts": 10,
+      "saved_steps": 17
+    }
+  ],
+  "counterexamples": {
+    "published": {
+      "line_search": [
+        {
+          "method": "Armijo",
+          "use_grad_norm_tol": 0.0,
+          "alpha": 0.125,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 6.985744628906252e-11
+        },
+        {
+          "method": "Armijo",
+          "use_grad_norm_tol": 1e-06,
+          "alpha": 1.0,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 1.6666666666666667e-08
+        },
+        {
+          "method": "RobustArmijo",
+          "use_grad_norm_tol": 0.0,
+          "alpha": 0.125,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 6.985744628906252e-11
+        },
+        {
+          "method": "RobustArmijo",
+          "use_grad_norm_tol": 1e-06,
+          "alpha": 1.0,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 1.6666666666666667e-08
+        }
+      ],
+      "restart": {
+        "honest_unchanged_coefficients_callback": {
+          "threw": true,
+          "solution": 10.0,
+          "callbacks": 2,
+          "outcome": "interrupted",
+          "unchanged_restarts": 2
+        },
+        "same_problem_true_callback_control": {
+          "threw": false,
+          "solution": 7.822642576269849e-05,
+          "callbacks": 14,
+          "outcome": "converged",
+          "unchanged_restarts": 0
+        }
+      },
+      "global_fallback": [
+        {
+          "hessian_max": 100.0,
+          "threw": false,
+          "error": null,
+          "scales": [
+            9999.999999999998
+          ],
+          "energy": 2.9665159601985356
+        },
+        {
+          "hessian_max": 1e+308,
+          "threw": false,
+          "error": null,
+          "scales": [
+            0.0
+          ],
+          "energy": 0.0
+        }
+      ],
+      "parent_mean": [
+        {
+          "hessian_scale": 1e+307,
+          "threw": false,
+          "error": null,
+          "scales": [
+            1e+307
+          ],
+          "energy": 1.5680538752965534e+302
+        },
+        {
+          "hessian_scale": 1e+308,
+          "threw": false,
+          "error": null,
+          "scales": [
+            null
+          ],
+          "energy": null
+        }
+      ]
+    },
+    "fixed": {
+      "line_search": [
+        {
+          "method": "Armijo",
+          "use_grad_norm_tol": 0.0,
+          "alpha": 0.125,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 6.985744628906252e-11
+        },
+        {
+          "method": "Armijo",
+          "use_grad_norm_tol": 1e-06,
+          "alpha": 0.125,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 6.985744628906252e-11
+        },
+        {
+          "method": "RobustArmijo",
+          "use_grad_norm_tol": 0.0,
+          "alpha": 0.125,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 6.985744628906252e-11
+        },
+        {
+          "method": "RobustArmijo",
+          "use_grad_norm_tol": 1e-06,
+          "alpha": 0.125,
+          "energy_before": 5.454333333333334e-10,
+          "energy_after": 6.985744628906252e-11
+        }
+      ],
+      "restart": {
+        "honest_unchanged_coefficients_callback": {
+          "threw": false,
+          "solution": 7.822642576269849e-05,
+          "callbacks": 14,
+          "outcome": "converged",
+          "unchanged_restarts": 0
+        },
+        "same_problem_true_callback_control": {
+          "threw": false,
+          "solution": 7.822642576269849e-05,
+          "callbacks": 14,
+          "outcome": "converged",
+          "unchanged_restarts": 0
+        }
+      },
+      "global_fallback": [
+        {
+          "hessian_max": 100.0,
+          "threw": false,
+          "error": null,
+          "scales": [
+            9999.999999999998
+          ],
+          "energy": 2.9665159601985356
+        },
+        {
+          "hessian_max": 1e+308,
+          "threw": true,
+          "error": "Semi-implicit barrier stiffness: overflowing local curvature with no previous value and no batch cap to fall back on",
+          "scales": null,
+          "energy": null
+        }
+      ],
+      "parent_mean": [
+        {
+          "hessian_scale": 1e+307,
+          "threw": false,
+          "error": null,
+          "scales": [
+            1e+307
+          ],
+          "energy": 1.5680538752965534e+302
+        },
+        {
+          "hessian_scale": 1e+308,
+          "threw": true,
+          "error": "Semi-implicit barrier stiffness: overflowing weighted collision coefficient",
+          "scales": null,
+          "energy": null
+        }
+      ]
+    }
+  },
+  "retained_initial_failures": {
+    "affected_suite": {
+      "cases": 61,
+      "assertions": 4024,
+      "failed_cases": 1,
+      "failed_assertions": 2,
+      "cause": "IPC weight * scale still overflowed after mean repair; final patch reports a named boundary error"
+    },
+    "hda_startup": {
+      "exit": -6,
+      "cause": "Sandboxed Houdini Qt processor check reported missing neon before test startup; final outside-sandbox run passed"
+    }
+  }
+}

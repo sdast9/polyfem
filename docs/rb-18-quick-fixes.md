@@ -1,5 +1,7 @@
 # RB-18 — Quick-block robustness fixes (coefficient law, stall loop, friction lag)
 
+**Review follow-up, 2026-09-12 (validated):** RB-18 F5/F7 were corrected after the closed-item review: progressing soft restarts were mistaken for identical solves, and global-fallback overflow could silently become zero. The bounded fixes, counterexamples and current validation are tracked in the [2026-09-12 follow-up](rb-review-followup-20260912.md). The earlier results below remain dated evidence.
+
 Date: 2026-09-11
 Status: **done — implemented, validated on the public fixtures, published** (`e3fa362e0`, `576b1d3d0`, `4a0df80a1` on `sdast9/polyfem:main`). See the [progress log](#progress-log) at the bottom.
 Selected stage: all six fixes below, as one bounded implementation item.

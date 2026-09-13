@@ -1,5 +1,7 @@
 # RB-02 — Per-contact coefficient and lifecycle audit
 
+**Review follow-up, 2026-09-12:** The six closure claims below apply to their recorded counterexamples. The later closed-item review found additional overflow paths in the RB-18 global fallback and the RB-21 parent mean, plus a restart-progress bug. These bounded repairs are tracked in the [2026-09-12 follow-up](rb-review-followup-20260912.md); the closure is not an exhaustive certification of floating-point arithmetic.
+
 Date: 2026-09-08 (audit); closed 2026-09-11
 Status: **closed — characterized, limits documented; production law retained** (see [Closure](#closure-2026-09-11); the audit finished as characterized—decision pending and its record below is unchanged)
 Selected stage: RB-02 stages 1–4, bounded characterization and model alternatives.
@@ -221,7 +223,7 @@ Disposition of the six decisions in the [contract's final table](rb-02-contract.
 | Stencil-switch (EV/VV, FV/EV) jump | Repaired — [RB-21](rb-21-parent-keyed-kappa.md): coefficient keyed on the candidate primitive pair and weight-averaged over parent contributions; seams exactly C⁰ in the default formulation (`[kappa_continuity][parent]` regression) |
 | Controller unit dependence | Repaired — [RB-18 F3](rb-18-quick-fixes.md#the-six-fixes): `conditioning_cap` normalized by d̂², so the first-contact trim is equal across converted length scales |
 | Retune and history/friction mismatch | Repaired within the retained lifecycle — [RB-18 F6](rb-18-quick-fixes.md#the-six-fixes) (lagged friction follows the trim), [RB-18 F5](rb-18-quick-fixes.md#the-six-fixes) (no repeated unchanged stall restarts) and [RB-20](rb-20-force-continuation.md) (persisting contacts keep their realized coefficient across refreshes; post-publication drift 17–53 % → ~1e-16). Remaining documented limits: a retune inside a solve still does not reset quasi-Newton history (stage 4; no convergence failure measured; the one allowed restart of F5 rebuilds the solver), and the friction lag follows the trim but not per-contact κ assignment for contacts born mid-step |
-| Invalid arithmetic | Repaired — [RB-18 F4](rb-18-quick-fixes.md#the-six-fixes): NaN curvature, overflow with no reference and zero/subnormal weights are errors naming the stencil; finite overflow uses the cap; the check runs after the weight division and cap multiplication |
+| Invalid arithmetic | Repaired — [RB-18 F4](rb-18-quick-fixes.md#the-six-fixes): NaN curvature, overflow with no reference and zero/subnormal weights are errors naming the stencil; finite overflow uses the cap; the original checks run after weight division and cap multiplication; the 2026-09-12 follow-up also checks global-fallback arithmetic and the final parent mean/weighted collision coefficient |
 
 The RB-02 probe (`tools/rb02/`) now carries the repaired expectations and is
 the regression for this law: 243/243 checks at RB-18's final state

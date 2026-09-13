@@ -55,6 +55,7 @@ namespace polyfem::solver
 		int restarts = 0;
 		while (true)
 		{
+			const Eigen::VectorXd attempt_initial_sol = detect_stalls ? tmp_sol : Eigen::VectorXd();
 			bool stalled = false;
 			int stall_count = 0;
 
@@ -169,15 +170,11 @@ namespace polyfem::solver
 			// CURRENT iterate is wedged; after the first retune fails to
 			// free it, revert to the subsolve's initial solution and let the
 			// accumulated stiffness prevent the collapse from re-forming.
-			bool iterate_changed = false;
 			if (hard_stall && ++hard_stalls > 1)
 			{
 				logger().warn(
 					"Hard stall persists at the current iterate; reverting to the subsolve's initial solution (restart {}/{})",
 					restarts, stall_opts.max_restarts);
-				// Reverting only changes something if the iterate had moved.
-				iterate_changed = tmp_sol.size() != subsolve_initial_sol.size()
-								  || (tmp_sol.array() != subsolve_initial_sol.array()).any();
 				tmp_sol = subsolve_initial_sol;
 			}
 
@@ -191,6 +188,12 @@ namespace polyfem::solver
 			// full_sol (the update_barrier_stiffness callback may capture a
 			// stale solution vector, so it is NOT called here).
 			const bool retuned = on_stall(full_sol);
+			// Compare the next restart with this attempt's starting point,
+			// after any hard-stall rollback. Soft interruptions may have made
+			// useful progress without a retune; repeating a failed trajectory
+			// that rolls back to the same start has made no restart progress.
+			const bool iterate_changed = tmp_sol.size() != attempt_initial_sol.size()
+										 || (tmp_sol.array() != attempt_initial_sol.array()).any();
 			if (retuned || iterate_changed)
 			{
 				consecutive_unchanged = 0;

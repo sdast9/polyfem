@@ -741,13 +741,15 @@ namespace polyfem::solver
 				// normalization as the conditioning cap). Zero only when the
 				// system Hessian is identically zero.
 				kappa = kappa_hessian_max_ / (dhat_ * dhat_ * weight_);
+				if (std::isnan(kappa) || (kappa == 0 && kappa_hessian_max_ > 0))
+					log_and_throw_error(
+						"Semi-implicit barrier stiffness: invalid or underflowing global curvature fallback");
 				if (kappa > 0 && std::isfinite(kappa))
 					++kappa_global_fallback_count_;
 				else
-				{
-					kappa = 0.0;
+					// Keep +inf for the existing batch-cap/error resolution. An
+					// overflowing fallback must never silently delete the barrier.
 					++kappa_fallback_count_;
-				}
 			}
 			else
 			{
@@ -949,13 +951,48 @@ namespace polyfem::solver
 			// stencil itself), so that weight * scale * b(d) is the sum of
 			// each parent's own potential. With every coefficient equal to
 			// one this is exactly the unkeyed potential.
+			const auto keys = coefficient_keys(collision_set, i);
 			double numerator = 0.0, denominator = 0.0;
-			for (const auto &[key, w] : coefficient_keys(collision_set, i))
+			double max_weight = 0.0, max_kappa = 0.0;
+			for (const auto &[key, w] : keys)
 			{
-				numerator += w * memoized_stiffness(collision_set, i, key);
+				if (!(w > 0) || !std::isfinite(w))
+					log_and_throw_error("Semi-implicit barrier stiffness: invalid parent contribution weight");
+				const double k = memoized_stiffness(collision_set, i, key);
+				numerator += w * k;
 				denominator += w;
+				max_weight = std::max(max_weight, w);
+				max_kappa = std::max(max_kappa, k);
 			}
-			collision_set[i].stiffness_scale = numerator / denominator;
+			double mean = numerator / denominator;
+			if ((!std::isfinite(numerator) || !std::isfinite(denominator))
+				&& max_weight > 0 && std::isfinite(max_kappa))
+			{
+				// The weighted sum can overflow even when its mean is finite.
+				// Normalize both factors, retaining ordinary arithmetic above
+				// when it is representable. Re-resolve cached values without a
+				// second memoized call (which could repeat a continuation pull).
+				double scaled_numerator = 0.0, scaled_denominator = 0.0;
+				for (const auto &[key, w] : keys)
+				{
+					const double k = resolve_stiffness(kappa_cache_.at(key), is_continued(key));
+					const double scaled_weight = w / max_weight;
+					scaled_numerator += max_kappa > 0 ? scaled_weight * (k / max_kappa) : 0.0;
+					scaled_denominator += scaled_weight;
+				}
+				// A positive weighted mean cannot exceed its largest value;
+				// clamp only the rounding error at that endpoint.
+				mean = max_kappa * std::min(1.0, scaled_numerator / scaled_denominator);
+			}
+			// The uncapped first pass may carry +inf sentinels until the batch
+			// statistics exist. Every installed final coefficient must be finite.
+			if (!batch_first_pass_ && (!std::isfinite(mean) || (mean == 0 && max_kappa > 0)))
+				log_and_throw_error("Semi-implicit barrier stiffness: invalid or underflowing parent coefficient mean");
+			// IPC's potential and derivatives first multiply weight by scale.
+			// A finite mean alone does not make that intermediate representable.
+			if (!batch_first_pass_ && !std::isfinite(collision_set[i].weight * mean))
+				log_and_throw_error("Semi-implicit barrier stiffness: overflowing weighted collision coefficient");
+			collision_set[i].stiffness_scale = mean;
 		}
 	}
 

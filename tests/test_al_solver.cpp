@@ -125,23 +125,29 @@ TEST_CASE("AL final solve rejects other nonstationary stops", "[al_solver]")
 // subsolve instead of burning the whole restart budget on identical solves.
 TEST_CASE("AL stops repeating unchanged stall restarts", "[al_solver]")
 {
-	SECTION("soft stalls with nothing to retune")
+	SECTION("progressing soft stalls converge with nothing to retune")
 	{
 		QuarticProblem problem;
 		int retunes = 0;
-		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(20), [&](const auto &) { ++retunes; return false; });
+		double previous = 10;
+		bool made_progress = true;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(40), [&](const auto &x) {
+			++retunes;
+			made_progress = made_progress && std::abs(x[0]) < previous;
+			previous = std::abs(x[0]);
+			return false; });
 		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
-		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
-		CHECK(sol(0, 0) == 10);
-		CHECK(retunes == 2);
-		CHECK(solver.info()["outcome"] == "interrupted");
-		CHECK(solver.info()["termination_reason"] == "stall persisted with no retunable contact state");
-		CHECK(solver.info()["unchanged_restarts"] == 2);
+		REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, parameters(), linear, 1));
+		CHECK(std::abs(std::pow(sol(0, 0), 3)) < 1e-12);
+		CHECK(retunes > 2);
+		CHECK(made_progress);
+		CHECK(solver.info()["outcome"] == "converged");
 	}
 
 	SECTION("a retune that changes something resets the counter")
 	{
 		QuarticProblem problem;
+		problem.block_steps = true; // keep the iterate fixed to isolate the retune signal
 		int retunes = 0;
 		// no, yes, no, no -> interrupted at the fourth (second consecutive no)
 		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(20), [&](const auto &) { return (++retunes) == 2; });

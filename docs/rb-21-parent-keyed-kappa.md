@@ -1,7 +1,9 @@
 # RB-21 — Parent-keyed κ (coefficient identity carried through the toolkit builder)
 
+**Review follow-up, 2026-09-12 (validated):** The assignment arithmetic was corrected after two finite parent coefficients overflowed their weighted sum even though their mean was representable. The parent-identity decision is retained; the bounded arithmetic repair and fresh validation are tracked in the [2026-09-12 follow-up](rb-review-followup-20260912.md).
+
 Date: 2026-09-11
-Status: **done — toolkit `e3c8d3fe` and PolyFEM parent-keyed assignment implemented, regression-tested, validated with RB-20, published**. See the [progress log](#progress-log). See the [progress log](#progress-log).
+Status: **done — toolkit `e3c8d3fe` and PolyFEM parent-keyed assignment implemented, regression-tested, validated with RB-20, published**. See the [progress log](#progress-log).
 
 Companion of [RB-20 force-continuation κ](rb-20-force-continuation.md), which
 holds the shared authorization and the sequencing decision (D8: RB-20 first).

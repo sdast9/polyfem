@@ -1,5 +1,7 @@
 # RB-03 — Collision/FEM coordinate mapping
 
+**Review follow-up, 2026-09-12:** A wording error in the [mapping contract](rb-03-contract.md) was corrected on 2026-09-12: the gap-normalized direction fallback need not equal condensation for one interpolated vertex with unequal parent stiffnesses (320 versus 500 in the supplied scalar example). The selected interpolation model and code are unchanged. See the [closed-item follow-up](rb-review-followup-20260912.md).
+
 Date: 2026-09-08 (characterization, indexing repair); 2026-09-11 (interpolated stiffness)
 Status: **closed 2026-09-11 — validated within stated scope**: exact selector indexing (2026-09-08) and the selected interpolated-stencil stiffness (2026-09-11, see the [last stage](#interpolated-stencil-stiffness--2026-09-11)); no decision pending — the interpolation curvature choice this item was held open for was made and implemented, not left unselected
 
