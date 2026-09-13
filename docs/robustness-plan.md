@@ -182,7 +182,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | not started |
 | RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | not started |
-| RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | not started |
+| RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [characterized—decision pending 2026-09-13 — lagged friction validated within stated scope (Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on 1,141 steps, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity); the RB-18 F6 trim-following changes the friction capacity by the trim ratio after an in-solve bump — opt-in `semi_implicit/friction_lag: realized_force` implemented for the A/B, default unchanged; user decides the default and the lag budget](rb-10-validation.md) |
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [closed 2026-09-11 — characterized, limits documented; production law retained, no K_eff law adopted; units used by RB-18 F3, algebra by RB-03](rb-13-validation.md#closure-2026-09-11) |
@@ -600,6 +600,17 @@ A completed study with sensitivity or unresolved stalls is `characterized—limi
 Bounds on supported accuracy must state tested parameter ranges and uncertainty.
 
 ## RB-10 — Friction coupling and dissipation
+
+**Status 2026-09-13: characterized—decision pending.** Stages 1–4 are in the
+[record](rb-10-validation.md): the frozen-lag constitutive response, the
+normal-force transfer through every retuning path (exact under the defaults;
+stale only with `force_continuation: false`), fourteen coupled fixtures
+(zero friction, sliding ±x, reversal, separation/recontact, moving obstacle,
+corner) in quasistatic and transient form, the budget {1,2,4,8} and `epsv`
+{1e-3 … 1} sweeps, and the A/B of the opt-in `semi_implicit/friction_lag:
+realized_force` against the RB-18 F6 default. Pending: the `friction_lag`
+default (the smoke endpoint differs by 2.1e-2 on .25 between the modes at
+budget 1, 5.7e-4 at budget 2) and whether the default budget stays 1.
 
 **Revised integration scope:** use RB-04 pre-/post-lag pairs to identify the force
 state actually solved. Cross normal-coefficient updates with slip reversal and

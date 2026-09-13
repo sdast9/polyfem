@@ -258,6 +258,13 @@ namespace polyfem::solver
 					parent_keyed_ = false;
 				else
 					log_and_throw_error("Semi-implicit barrier stiffness: coefficient_identity must be \"parent\" or \"stencil\" (got \"{}\")", identity);
+				const std::string friction_lag = semi_implicit_opts.value("friction_lag", std::string("follow_stiffness"));
+				if (friction_lag == "follow_stiffness")
+					friction_lag_realized_ = false;
+				else if (friction_lag == "realized_force")
+					friction_lag_realized_ = true;
+				else
+					log_and_throw_error("Semi-implicit barrier stiffness: friction_lag must be \"follow_stiffness\" or \"realized_force\" (got \"{}\")", friction_lag);
 			}
 			if (continuation_max_ratio_ != 0.0 && !(continuation_max_ratio_ > 1.0))
 				log_and_throw_error("Semi-implicit barrier stiffness: continuation_max_ratio must be 0 (pure continuation) or > 1!");
@@ -1295,6 +1302,7 @@ namespace polyfem::solver
 		result["continued_count"] = kappa_continued_count_;
 		result["fresh_count"] = kappa_fresh_count_;
 		result["coefficient_identity"] = parent_keyed_ ? "parent" : "stencil";
+		result["friction_lag"] = friction_lag_realized_ ? "realized_force" : "follow_stiffness";
 		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
 														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
 		// The swept cache is cleared at line_search_end, so an endpoint sees

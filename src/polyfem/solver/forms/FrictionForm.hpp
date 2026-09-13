@@ -61,7 +61,13 @@ namespace polyfem::solver
 	public:
 		/// @brief Initialize lagged fields
 		/// @param x Current solution
-		void init_lagging(const Eigen::VectorXd &x) override { update_lagging(x, 0); }
+		void init_lagging(const Eigen::VectorXd &x) override;
+
+		/// @brief RB-10 realized-force lag: between steps the accepted
+		///        endpoint is reached before the barrier's between-steps
+		///        refresh, so the lag built here carries the normal force
+		///        that acted at that endpoint. No-op in the default mode.
+		void update_quantities(const double t, const Eigen::VectorXd &x) override;
 
 		/// @brief Update lagged fields
 		/// @param x Current solution
@@ -95,6 +101,9 @@ namespace polyfem::solver
 		///        so value/gradient/Hessian are rescaled by the trim ratio to
 		///        stay consistent with the barrier. 1 in every other mode.
 		double trim_scale() const;
+		/// @brief RB-10: does this form lag the realized normal force (no trim
+		///        following, lag built before the between-steps refresh)?
+		bool realized_lag() const;
 		const ipc::FrictionPotential &friction_potential() const { return friction_potential_; }
 
 	private:
@@ -111,6 +120,7 @@ namespace polyfem::solver
 
 		ipc::TangentialCollisions friction_collision_set_; ///< Lagged friction constraint set
 		double lagged_trim_ = 1;                           ///< Contact trim baked into the lagged normal forces
+		Eigen::VectorXd lag_x_;                            ///< Coordinates the current lag was built at (realized mode)
 
 		const ContactForm &contact_form_; ///< necessary to have the barrier stiffnes, maybe clean me
 

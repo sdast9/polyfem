@@ -79,6 +79,13 @@ namespace polyfem::solver
 		/// @brief Is the semi-implicit per-contact stiffness mode active?
 		bool uses_semi_implicit_stiffness() const { return stiffness_mode_ == BarrierStiffnessMode::SemiImplicit; }
 
+		/// @brief RB-10 `semi_implicit/friction_lag`: "realized_force" lags the
+		///        friction on the normal force that acted at the lag
+		///        coordinates (built before the between-steps refresh, no
+		///        in-solve trim following); "follow_stiffness" (default) is
+		///        the RB-18 F6 behaviour: the current trim at the lag gap.
+		bool friction_lag_realized() const { return friction_lag_realized_; }
+
 		/// @brief Opt into sequential clamping only in semi-implicit mode, where
 		///        the trial steps that make it worthwhile actually occur.
 		bool wants_sequential_step_clamping() const override
@@ -355,5 +362,9 @@ namespace polyfem::solver
 		/// @brief RB-21: key coefficients on the builder's parent candidates
 		///        (true, default) or on the built stencil (false, historical).
 		bool parent_keyed_ = true;
+		/// RB-10: whether the lagged friction carries the normal force that
+		/// acted at the lag coordinates (no trim following) instead of the
+		/// current trim at the lag gap (RB-18 F6). Opt-in comparison mode.
+		bool friction_lag_realized_ = false;
 	};
 } // namespace polyfem::solver

@@ -1524,6 +1524,7 @@
             "force_continuation",
             "continuation_max_ratio",
             "coefficient_identity",
+            "friction_lag",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1613,6 +1614,16 @@
         "type": "string",
         "options": ["parent", "stencil"],
         "doc": "RB-21: what a per-contact coefficient is keyed on. \"parent\" (default): the candidate primitive pair that built the collision (point/edge in 2D, point/triangle or edge/edge in 3D), estimated on the parent's stencil with the closest point on the whole primitive; a built collision's scale is the contribution-weighted mean of its parents, so a coefficient survives closest-feature switches (EV<->VV, FV<->EV) and force continuation carries across them. \"stencil\": the historical key on the built subfeature stencil."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/friction_lag",
+        "default": "follow_stiffness",
+        "type": "string",
+        "options": [
+            "follow_stiffness",
+            "realized_force"
+        ],
+        "doc": "RB-10: which normal force the lagged friction carries. \"follow_stiffness\" (default, RB-18 F6): the lag is built with the current trim at the lag gap and follows every in-solve trim action by the trim ratio, so friction stays consistent with the barrier at fixed coordinates. \"realized_force\": the lag is built at the accepted endpoint before the between-steps refresh and is not scaled by later trim actions, so friction carries the normal force that actually acted there (the equilibrium contact pressure); a trim change is then absorbed by the gap, as it is for the barrier itself. Opt-in comparison mode; see docs/rb-10-validation.md."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",

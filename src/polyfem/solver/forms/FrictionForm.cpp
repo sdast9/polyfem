@@ -56,10 +56,34 @@ namespace polyfem::solver
 		return time_integrator_ != nullptr ? time_integrator_->dv_dx() : 1;
 	}
 
+	bool FrictionForm::realized_lag() const
+	{
+		const auto barrier_contact = dynamic_cast<const BarrierContactForm *>(&contact_form_);
+		return barrier_contact != nullptr && barrier_contact->uses_semi_implicit_stiffness() && barrier_contact->friction_lag_realized();
+	}
+
+	void FrictionForm::init_lagging(const Eigen::VectorXd &x)
+	{
+		// Realized mode: the lag built by update_quantities at these same
+		// coordinates (before the between-steps refresh moved the trim) is
+		// the one that carries the force that acted there; keep it.
+		if (realized_lag() && lag_x_.size() == x.size() && lag_x_ == x)
+			return;
+		update_lagging(x, 0);
+	}
+
+	void FrictionForm::update_quantities(const double t, const Eigen::VectorXd &x)
+	{
+		if (realized_lag())
+			update_lagging(x, 0);
+	}
+
 	double FrictionForm::trim_scale() const
 	{
 		const auto barrier_contact = dynamic_cast<const BarrierContactForm *>(&contact_form_);
 		if (barrier_contact == nullptr || !barrier_contact->uses_semi_implicit_stiffness())
+			return 1;
+		if (barrier_contact->friction_lag_realized())
 			return 1;
 		if (!(lagged_trim_ > 0) || !std::isfinite(lagged_trim_))
 			return 1;
@@ -101,6 +125,7 @@ namespace polyfem::solver
 
 	void FrictionForm::update_lagging(const Eigen::VectorXd &x, const int iter_num)
 	{
+		lag_x_ = x;
 		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
 
 		auto broad_phase = ipc::create_broad_phase(broad_phase_method_);
