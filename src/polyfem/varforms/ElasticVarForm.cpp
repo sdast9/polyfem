@@ -322,7 +322,10 @@ namespace polyfem::varform
 		logger().info("average mass {}", avg_mass_);
 
 		if (args["solver"]["advanced"]["lump_mass_matrix"])
+		{
+			utils::check_lumped_mass(mass_);
 			mass_ = utils::lump_matrix(mass_);
+		}
 
 		timer.stop();
 		timings.assembling_mass_mat_time = timer.getElapsedTime();

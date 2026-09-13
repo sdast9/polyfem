@@ -1,5 +1,8 @@
 #include "Assembler.hpp"
 #include "MatParams.hpp"
+#include "MultiModel.hpp"
+
+#include <polyfem/mesh/Mesh.hpp>
 
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MaybeParallelFor.hpp>
@@ -9,6 +12,8 @@
 #include <ipc/utils/eigen_ext.hpp>
 
 #include <algorithm>
+#include <set>
+#include <cctype>
 #include <cmath>
 
 namespace polyfem::assembler
@@ -180,9 +185,15 @@ namespace polyfem::assembler
 	void Assembler::set_materials(const std::vector<int> &body_ids, const json &body_params, const Units &units, const std::string &root_path, const std::shared_ptr<utils::MaterialFileCache> &snapshot)
 	{
 		const utils::MaterialFileCacheScope cache_scope(snapshot);
+		const long n_elements = long(body_ids.size());
 		if (!body_params.is_array())
 		{
-			this->add_multimaterial(0, body_params, units, root_path);
+			// One material for every element: per-element value lists/files are
+			// indexed by the global element id and must have one row per element.
+			json params = body_params;
+			if (params.is_object())
+				params[MATERIAL_ELEMENT_COUNTS] = {n_elements, n_elements};
+			this->add_multimaterial(0, params, units, root_path);
 			return;
 		}
 
@@ -214,25 +225,270 @@ namespace polyfem::assembler
 			eid_to_eid_in_body[e] = body_element_count[bid]++;
 		}
 
+		// RB-11: an element without a material used to get a warning and then
+		// either the constructor's placeholder parameters or an out-of-range
+		// read of the parameter vectors (a segfault in the first assembly).
+		for (int e = 0; e < body_ids.size(); ++e)
+			if (materials.find(body_ids[e]) == materials.end())
+				missing.insert(body_ids[e]);
+		if (!missing.empty())
+		{
+			long n_missing = 0;
+			for (const int bid : missing)
+				n_missing += body_element_count[bid];
+			std::vector<int> given;
+			for (const auto &[bid, _] : materials)
+				given.push_back(bid);
+			log_and_throw_error(
+				"No material for body id{} [{}] ({} of {} elements): \"materials\" has entries for id{} [{}] only. Every element needs a material; check the volume_selection / body ids of the mesh against the material ids",
+				missing.size() == 1 ? "" : "s", fmt::format("{}", fmt::join(missing, ", ")), n_missing, n_elements,
+				given.size() == 1 ? "" : "s", fmt::format("{}", fmt::join(given, ", ")));
+		}
+		{
+			std::vector<int> present;
+			for (const auto &[b, _] : body_element_count)
+				present.push_back(b);
+			for (const auto &[bid, _] : materials)
+				if (body_element_count.find(bid) == body_element_count.end())
+					logger().warn("Material entry for id {} matches no element of the mesh (body ids present: [{}])", bid, fmt::join(present, ", "));
+		}
+
 		for (int e = 0; e < body_ids.size(); ++e)
 		{
 			const int bid = body_ids[e];
-			const auto it = materials.find(bid);
-			if (it == materials.end())
-			{
-				missing.insert(bid);
-				continue;
-			}
-
-			json tmp = it->second;
+			json tmp = materials.at(bid);
 			tmp[MATERIAL_ELEMENT_INDEX] = eid_to_eid_in_body[e];
+			tmp[MATERIAL_ELEMENT_COUNTS] = {long(body_element_count[bid]), n_elements};
 			this->add_multimaterial(e, tmp, units, root_path);
 		}
+	}
 
-		for (int bid : missing)
+	namespace
+	{
+		// RB-11 material-validation contract. The rules are keyed by the
+		// constitutive law (the assembler's name, or the child/model name in
+		// front of a composite or multi-body parameter) and by the parameter's
+		// exported name; anything not listed is checked for finiteness only.
+		enum class LawKind
 		{
-			logger().warn("Missing material parameters for body {}", bid);
+			LameCompressible, // uses lambda and mu (E, nu given or derived)
+			ShearOnly,        // uses mu only: the incompressible limit nu = 1/2 is valid
+			HGO,              // k1 >= 0, k2 > 0 (+ kappa in [0, 1/d] for the dispersion law), fibre nonzero
+			ActiveFibre,      // fibre nonzero
+			Density,          // rho >= 0
+			Other
+		};
+
+		LawKind law_kind(const std::string &type)
+		{
+			static const std::set<std::string> lame = {
+				"NeoHookean", "NeoHookeanAutodiff", "LinearElasticity", "HookeLinearElasticity", "SaintVenant",
+				"FixedCorotational", "InversionBarrier", "AMIPS", "AMIPSAutodiff"};
+			if (lame.count(type))
+				return LawKind::LameCompressible;
+			if (type == "IsochoricNeoHookean" || type.rfind("IncompressibleLinearElasticity", 0) == 0)
+				return LawKind::ShearOnly;
+			if (type == "HGOFiber" || type == "HGODispersion")
+				return LawKind::HGO;
+			if (type == "ActiveFiber")
+				return LawKind::ActiveFibre;
+			if (type == "Mass" || type == "HRZMass" || type == "ThermalMass")
+				return LawKind::Density;
+			return LawKind::Other;
 		}
+	} // namespace
+
+	void validate_material_parameters(
+		const Assembler &assembler,
+		const mesh::Mesh &mesh,
+		const double t,
+		const bool time_dependent,
+		const std::string &what)
+	{
+		const auto params = assembler.parameters();
+		if (params.empty() || mesh.n_elements() == 0)
+			return;
+
+		const int dim = mesh.dimension();
+		Eigen::MatrixXd barycenters;
+		mesh.compute_element_barycenters(barycenters);
+		const RowVectorNd uv = RowVectorNd::Zero(dim);
+
+		const auto *multi_model = dynamic_cast<const MultiModel *>(&assembler);
+
+		struct Offence
+		{
+			std::string parameter;
+			double value;
+			int element;
+			std::string rule;
+		};
+		std::vector<Offence> offences;
+		long n_offences = 0;
+		long n_zero_density = 0;
+		const auto offend = [&](const std::string &name, const double value, const int e, const std::string &rule) {
+			if (offences.size() < 3)
+				offences.push_back({name, value, e, rule});
+			++n_offences;
+		};
+
+		// "<model>/<name>" for composite and multi-body materials (SumModel
+		// numbers repeated children "Type_k"); a plain material reports bare
+		// names and its own type.
+		const std::string own_name = assembler.name();
+		const auto split = [&](const std::string &name, std::string &model, std::string &base) {
+			const auto slash = name.rfind('/');
+			if (slash == std::string::npos)
+			{
+				model = own_name;
+				base = name;
+				return;
+			}
+			base = name.substr(slash + 1);
+			const auto start = name.rfind('/', slash - 1);
+			model = name.substr(start == std::string::npos ? 0 : start + 1, slash - (start == std::string::npos ? 0 : start + 1));
+			const auto underscore = model.rfind('_');
+			if (underscore != std::string::npos && underscore + 1 < model.size() && std::all_of(model.begin() + underscore + 1, model.end(), ::isdigit))
+				model.erase(underscore);
+		};
+		const auto model_prefix = [](const std::string &name) {
+			const auto slash = name.find('/');
+			return slash == std::string::npos ? std::string() : name.substr(0, slash);
+		};
+
+		for (int e = 0; e < mesh.n_elements(); ++e)
+		{
+			const std::string element_model = multi_model && e < int(multi_model->element_models().size()) ? multi_model->element_models()[e] : std::string();
+			// values grouped by the law they belong to, so lambda/mu and the
+			// fibre components are paired within one child of a composite
+			std::map<std::string, std::map<std::string, std::pair<std::string, double>>> by_model; // model group -> base -> (full name, value)
+			for (const auto &[name, func] : params)
+			{
+				if (multi_model && !element_model.empty() && model_prefix(name) != element_model)
+					continue;
+				std::string model, base;
+				split(name, model, base);
+				const auto slash = name.rfind('/');
+				const std::string group = slash == std::string::npos ? own_name : name.substr(0, slash);
+				const double value = func(uv, barycenters.row(e), t, e);
+				by_model[group][base] = {name, value};
+			}
+
+			for (const auto &[group, values] : by_model)
+			{
+				std::string model, unused;
+				split(group + "/x", model, unused);
+				const LawKind kind = law_kind(model);
+				const auto get = [&](const char *base) -> const std::pair<std::string, double> * {
+					const auto it = values.find(base);
+					return it == values.end() ? nullptr : &it->second;
+				};
+
+				for (const auto &[base, nv] : values)
+				{
+					const auto &[name, value] = nv;
+					// the back-computed E and nu of a shear-only law are not finite
+					// at the incompressible limit and are not used by the law
+					if (kind == LawKind::ShearOnly && (base == "E" || base == "nu" || base == "lambda"))
+						continue;
+					if (!std::isfinite(value))
+						offend(name, value, e, "must be finite");
+				}
+
+				switch (kind)
+				{
+				case LawKind::LameCompressible:
+				case LawKind::ShearOnly:
+				{
+					const auto *mu = get("mu");
+					if (mu && std::isfinite(mu->second) && mu->second <= 0)
+						offend(mu->first, mu->second, e, "the shear modulus must be positive");
+					if (kind == LawKind::ShearOnly)
+						break;
+					const auto *E = get("E");
+					if (E && std::isfinite(E->second) && E->second <= 0)
+						offend(E->first, E->second, e, "Young's modulus must be positive");
+					const auto *nu = get("nu");
+					if (nu && std::isfinite(nu->second) && (nu->second <= -1 || nu->second >= (dim == 3 ? 0.5 : 1.0)))
+						offend(nu->first, nu->second, e, dim == 3 ? "Poisson's ratio must lie in (-1, 1/2)" : "Poisson's ratio must lie in (-1, 1)");
+					const auto *lambda = get("lambda");
+					if (lambda && mu && std::isfinite(lambda->second) && std::isfinite(mu->second))
+					{
+						const double bulk = lambda->second + 2.0 * mu->second / dim;
+						if (bulk <= 0)
+							offend(group + "/lambda + 2 mu / " + std::to_string(dim), bulk, e, "the bulk modulus must be positive (nu >= 1/2 or nu <= -1 gives a nonpositive one)");
+					}
+					break;
+				}
+				case LawKind::HGO:
+				{
+					const auto *k1 = get("k1");
+					if (k1 && std::isfinite(k1->second) && k1->second < 0)
+						offend(k1->first, k1->second, e, "the fibre stiffness k1 must be nonnegative");
+					const auto *k2 = get("k2");
+					if (k2 && std::isfinite(k2->second) && k2->second <= 0)
+						offend(k2->first, k2->second, e, "the fibre exponent k2 must be positive");
+					const auto *kappa = get("kappa");
+					if (kappa && std::isfinite(kappa->second) && (kappa->second < 0 || kappa->second > 1.0 / dim))
+						offend(kappa->first, kappa->second, e, fmt::format("the dispersion parameter kappa must lie in [0, 1/{}] (the law uses E4 = kappa I1 + (1 - {} kappa) I4 - 1)", dim, dim));
+					break;
+				}
+				case LawKind::Density:
+				{
+					const auto *rho = get("rho");
+					if (rho && std::isfinite(rho->second))
+					{
+						if (rho->second < 0)
+							offend(rho->first, rho->second, e, "density must be nonnegative");
+						else if (rho->second == 0 && time_dependent)
+							++n_zero_density;
+					}
+					break;
+				}
+				default:
+					break;
+				}
+
+				// fibre laws: the direction must be a nonzero finite vector of
+				// the mesh dimension (constants and expressions reach here;
+				// per-element files are normalised and checked at load)
+				if (kind == LawKind::HGO || kind == LawKind::ActiveFibre)
+				{
+					const auto *fx = get("fiber_direction_x");
+					const auto *fy = get("fiber_direction_y");
+					const auto *fz = get("fiber_direction_z");
+					if (fx && fy)
+					{
+						const double x = fx->second, y = fy->second, z = fz ? fz->second : 0.0;
+						const double norm = std::sqrt(x * x + y * y + z * z);
+						if (std::isfinite(norm) && norm < 1e-12)
+							offend(group + "/fiber_direction", norm, e, "the fibre direction is a zero vector; give a nonzero direction (HGODispersion normalises it, HGOFiber and ActiveFiber use its length as given)");
+						else if (dim == 3 && !fz)
+							offend(group + "/fiber_direction", norm, e, "a 3D fibre direction needs three components");
+					}
+				}
+			}
+		}
+
+		if (n_zero_density > 0)
+			logger().warn(
+				"{}: the density is zero on {} of {} elements at t = {}; the inertia term vanishes there and the transient problem is quasi-static on those elements",
+				what, n_zero_density, mesh.n_elements(), t);
+
+		if (n_offences == 0)
+			return;
+
+		std::string listing;
+		for (const auto &o : offences)
+		{
+			const RowVectorNd p = barycenters.row(o.element);
+			listing += fmt::format(
+				"\n  {} = {} on element {} (body id {}, barycenter [{}]): {}",
+				o.parameter, o.value, o.element, mesh.get_body_id(o.element), fmt::format("{}", fmt::join(p.data(), p.data() + p.size(), ", ")), o.rule);
+		}
+		log_and_throw_error(
+			"Invalid material parameters ({}): {} offending value{} at t = {} evaluated at the element barycenters; the first {}:{}",
+			what, n_offences, n_offences == 1 ? "" : "s", t, offences.size(), listing);
 	}
 
 	LinearAssembler::LinearAssembler()

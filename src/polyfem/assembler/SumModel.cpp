@@ -38,8 +38,7 @@ namespace polyfem::assembler
 		for (size_t i = 0; i < assemblers_.size(); ++i)
 		{
 			json model = models[i];
-			if (params.contains(MATERIAL_ELEMENT_INDEX))
-				model[MATERIAL_ELEMENT_INDEX] = params[MATERIAL_ELEMENT_INDEX];
+			copy_material_element_binding(params, model);
 			assemblers_[i]->add_multimaterial(index, model, units, root_path);
 		}
 	}

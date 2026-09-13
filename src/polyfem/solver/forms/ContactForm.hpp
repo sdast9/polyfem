@@ -26,6 +26,10 @@ namespace ipc
 		 {ipc::BroadPhaseMethod::LBVH, "bvh"},
 		 {ipc::BroadPhaseMethod::LBVH, "BVH"},
 		 {ipc::BroadPhaseMethod::LBVH, "LBVH"},
+		 // RB-11: the input spec offered sweep_and_prune/SAP without an entry
+		 // here, so the name silently became the map's first entry (hash_grid).
+		 {ipc::BroadPhaseMethod::SWEEP_AND_PRUNE, "sweep_and_prune"},
+		 {ipc::BroadPhaseMethod::SWEEP_AND_PRUNE, "SAP"},
 		 {ipc::BroadPhaseMethod::SWEEP_AND_TINIEST_QUEUE, "sweep_and_tiniest_queue"},
 		 {ipc::BroadPhaseMethod::SWEEP_AND_TINIEST_QUEUE, "STQ"}})
 } // namespace ipc
@@ -176,6 +180,12 @@ namespace polyfem::solver
 		///        items and up, uniform sweeps 1e7 emissions and up.
 		static constexpr size_t default_max_cell_items = 100000000;
 		static constexpr size_t default_max_candidate_emissions = 50000000;
+
+		/// @brief RB-11: the broad-phase names the JSON enum map above accepts.
+		///        NLOHMANN_JSON_SERIALIZE_ENUM maps any unknown string to the
+		///        first entry, so callers must validate the name explicitly.
+		static const std::vector<std::string> &broad_phase_names();
+		static bool is_known_broad_phase_name(const std::string &name);
 
 		/// @brief Resolve the written limits (see ResourceLimits) against this
 		///        form's broad phase and apply them: automatic bounds become

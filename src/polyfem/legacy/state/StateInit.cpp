@@ -3,6 +3,7 @@
 #include <polyfem/problem/ProblemFactory.hpp>
 #include <polyfem/assembler/GenericProblem.hpp>
 #include <polyfem/assembler/Mass.hpp>
+#include <polyfem/assembler/MatParams.hpp>
 
 #include <polyfem/autogen/auto_p_bases.hpp>
 #include <polyfem/autogen/auto_q_bases.hpp>
@@ -236,6 +237,18 @@ namespace polyfem::legacy
 		has_dhat = args_in["contact"].contains("dhat");
 
 		init_time();
+
+		// RB-11: remeshing re-binds materials on local patches by patch-local
+		// element ids; a per-element value/fibre file cannot be carried through
+		// that (the previous behaviour was a silent misindexing).
+		if (args.value("/space/remesh/enabled"_json_pointer, false) && is_param_valid(args, "materials"))
+		{
+			std::string where;
+			if (assembler::materials_use_per_element_files(args["materials"], root_path(), where))
+				log_and_throw_error(
+					"space.remesh is enabled and {} is a per-element material file: remeshing rebuilds the material on local patches by patch-local element ids and cannot transfer per-element data, so this combination is not supported. Use constant or expression-valued parameters with remeshing, or disable remeshing.",
+					where);
+		}
 
 		if (is_contact_enabled())
 		{

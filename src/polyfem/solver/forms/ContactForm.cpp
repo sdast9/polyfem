@@ -20,6 +20,21 @@
 
 namespace polyfem::solver
 {
+	const std::vector<std::string> &ContactForm::broad_phase_names()
+	{
+		static const std::vector<std::string> names = {
+			"hash_grid", "HG", "brute_force", "BF", "spatial_hash", "SH",
+			"bvh", "BVH", "LBVH", "sweep_and_prune", "SAP",
+			"sweep_and_tiniest_queue", "STQ"};
+		return names;
+	}
+
+	bool ContactForm::is_known_broad_phase_name(const std::string &name)
+	{
+		const auto &names = broad_phase_names();
+		return std::find(names.begin(), names.end(), name) != names.end();
+	}
+
 	ResourceLimits resource_limits_from_args(const json &ccd_args)
 	{
 		ResourceLimits limits;

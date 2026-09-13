@@ -3,6 +3,7 @@
 #include <polyfem/mesh/remesh/Remesher.hpp>
 #include <polyfem/mesh/remesh/WildRemesher.hpp>
 #include <polyfem/assembler/Mass.hpp>
+#include <polyfem/assembler/MatParams.hpp>
 #include <polyfem/solver/forms/ContactForm.hpp>
 #include <polyfem/solver/forms/lagrangian/BCLagrangianForm.hpp>
 #include <polyfem/solver/forms/ContactForm.hpp>
@@ -149,6 +150,17 @@ namespace polyfem::mesh
 	{
 		POLYFEM_REMESHER_SCOPED_TIMER("LocalRelaxationData::init_assembler");
 		assert(utils::is_param_valid(state.args, "materials"));
+
+		// RB-11: per-element material files are bound by (global or body-local)
+		// element ids of the mesh they describe; this patch is neither, so
+		// refuse instead of binding the patch's ids into the file.
+		{
+			std::string where;
+			if (assembler::materials_use_per_element_files(state.args["materials"], state.root_path(), where))
+				log_and_throw_error(
+					"Remeshing cannot rebuild {} on a local relaxation patch: per-element material files are indexed by the elements of the original mesh. Use constant or expression-valued parameters with remeshing.",
+					where);
+		}
 
 		assembler = assembler::AssemblerUtils::make_assembler(state.formulation());
 		assert(assembler->name() == state.formulation());

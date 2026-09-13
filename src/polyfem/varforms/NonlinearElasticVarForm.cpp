@@ -675,6 +675,16 @@ namespace polyfem::varform
 		const int n_fe_bases = space_.n_bases;
 		space_.n_bases += obstacle.n_vertices();
 
+		// RB-11 (RB-09 unit observation): the nonlinear stopping tolerance is
+		// grad_norm * F0 * L^1.5 with the SI default F0 = 1e4 -- declared
+		// non-SI base units keep that number, so the force tolerance changes
+		// with the unit system unless F0 is set explicitly.
+		if (!(units.length() == "m" && units.mass() == "kg" && units.time() == "s")
+			&& args["solver"]["advanced"]["characteristic_force_density"].get<double>() == 10000.0)
+			logger().warn(
+				"units are {} / {} / {} but solver.advanced.characteristic_force_density is the SI default 1e4: the nonlinear stopping tolerance is scaled by F0 (L2 norm: F0 * L^1.5 in 3D, F0 * L in 2D; Linf: F0; NLProblem::grad_norm_rescaling), so it is not the same force tolerance as in SI units; set characteristic_force_density for this unit system (RB-09: a 3D L2 length rescaling by s needs F0 * s^-1.5)",
+				units.length(), units.mass(), units.time());
+
 		if (is_contact_enabled())
 		{
 			logger().info("Building collision mesh...");
@@ -725,6 +735,29 @@ namespace polyfem::varform
 		}
 
 		args["contact"]["dhat"] = dhat;
+
+		// RB-11 (RB-09 unit observation): the toolkit's Tight-Inclusion CCD
+		// (ipc/ccd/tight_inclusion_ccd.cpp, unchanged upstream code) truncates
+		// a colliding trial step so that the separation stays at least
+		// d_min + min((1 - c) * (d_0 - d_min), 1e-4 length units), with c the
+		// conservative rescaling and d_0 the distance at the start of the
+		// step: the 1e-4 is a cap on the extra clearance of one step, not a
+		// floor on the gap (later steps start closer and can approach further).
+		// Because the cap is an absolute length, the same scene in another
+		// length unit takes a different first-contact iterate; RB-09 measured
+		// the consequence (a x256 emergency trim bump in a millimetre run with
+		// 1e-4/dhat = 1e-4 against x7.6 in metres with 0.1). Reported, not
+		// changed: CCD and the trial-displacement cap stay as they are.
+		{
+			constexpr double ccd_clearance_cap = 1e-4;
+			const double ratio = ccd_clearance_cap / dhat;
+			if (ratio < 1e-2)
+				logger().warn(
+					"Tight-Inclusion CCD caps the per-step clearance at 1e-4 length units = {:.2g} dhat (dhat = {} {}); RB-09 measured a different first-contact iterate and barrier-stiffness history than the same scene in metres (unit systems are not equivalent under this absolute cap). Measured limit, not a prescription.",
+					ratio, dhat, units.length());
+			else
+				logger().info("Tight-Inclusion CCD per-step clearance cap 1e-4 length units = {:.2g} dhat", ratio);
+		}
 	}
 
 	void NonlinearElasticVarForm::build_rhs_assembler()

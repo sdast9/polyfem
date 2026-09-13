@@ -125,6 +125,16 @@ namespace polyfem::io
 			}
 		}
 
+		// RB-11: a node tag that no node carries (or tag 0, which Gmsh never
+		// assigns) used to pass an assert compiled out of release builds and
+		// reach the mesh builder as index -1 or garbage.
+		const auto node_index_of = [&](const long long tag, int &index) {
+			if (tag < 0 || tag >= static_cast<long long>(tag_to_index.size()))
+				return false;
+			index = tag_to_index[tag];
+			return index >= 0 && index < n_vertices;
+		};
+
 		int cells_cols = -1;
 		int num_els = 0;
 		for (const auto &e : els.entity_blocks)
@@ -204,9 +214,11 @@ namespace polyfem::io
 				for (int j = 0; j < n_corners; ++j)
 				{
 					const int node_tag = e.data[i + j + 1];
-					assert(node_tag >= 0 && node_tag < tag_to_index.size());
-					corners[j] = tag_to_index[node_tag];
-					assert(corners[j] >= 0 && corners[j] < n_vertices);
+					if (!node_index_of(node_tag, corners[j]))
+					{
+						logger().error("MSH file {}: tagged side element {} references node tag {}, which is not a node of the file", path, e.data[i], node_tag);
+						return false;
+					}
 				}
 				boundary_elements.emplace_back(std::move(corners));
 				boundary_ids.push_back(physical_tag->second);
@@ -247,15 +259,23 @@ namespace polyfem::io
 					int index = 0;
 					for (int j = i + 1; j <= i + local_cells_cols; ++j)
 					{
-						const int v_index = tag_to_index[e.data[j]];
-						assert(v_index < n_vertices);
+						int v_index = -1;
+						if (!node_index_of(e.data[j], v_index))
+						{
+							logger().error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
+							return false;
+						}
 						cells(cell_index, index++) = v_index;
 					}
 
 					for (int j = i + 1; j < i + 1 + n_nodes; ++j)
 					{
-						const int v_index = tag_to_index[e.data[j]];
-						assert(v_index < n_vertices);
+						int v_index = -1;
+						if (!node_index_of(e.data[j], v_index))
+						{
+							logger().error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
+							return false;
+						}
 						elements[cell_index].push_back(v_index);
 					}
 

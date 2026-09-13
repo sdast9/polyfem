@@ -180,10 +180,10 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | [validated within stated scope 2026-09-12 — stale swept-cache containment, pre-build sweep diagnostics, `solver/contact/CCD/resource_limits` enforced by the toolkit before allocation (hash grid, brute force), **on by default (automatic: 1e8 items / 5e7 emissions; user decision 2026-09-12)**, exit status 3 for a resource failure / 1 for any named failure, HDA controls with novice tooltips; retry is RB-08](rb-05-validation.md) |
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
-| RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | not started |
+| RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | **closed — retry stays off (user decision 2026-09-13)**; a failed step reports failure and stops, no automatic subdivision |
 | RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | [characterized—limits documented 2026-09-13 — analytical block, spring/contact and same-mesh hard-contact references; the semi-implicit model error is the realized gap (`e_R = c·ḡ/H`, .35–.6 % at `d̂` 1e-3, rate ≈ 1 in `d̂`), solver error 1.4e-5, discretisation of the public 4×4×4 smoke 11 % (order 1.5); realized gap .62–.99 `d̂` across sweeps; raw m → mm conversion differs by 1e-3 (upstream absolute CCD clearance, `F0·L^1.5` tolerance); classic/Fixed 1e-6 at 2× the cost; acceptance decided the same day: `physical_balance_pass` = force residual at 1e-6 of the peak external force (record version 3), gap statistics reported](rb-09-validation.md) |
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [validated within stated scope 2026-09-13 — Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on every accepted step, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity; the RB-18 F6 trim-following (a doubled friction capacity after an in-solve bump at constant load) was reproduced and, by the user's decision, `semi_implicit/friction_lag: realized_force` and `friction_iterations: 2` are the defaults (F6 kept as `follow_stiffness`, budget 1 explicit); HDA *Friction Lag* control `f10f9c8`](rb-10-validation.md) |
-| RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
+| RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | [validated within stated scope 2026-09-13 (input-validation stage; the independent review's four defect groups corrected — `kappa ∈ [0, 1/d]`, zero constant/expression fibres, the CCD notice, a real T-junction fixture and a contract-enforcing runner — and the frozen candidate passes the 93-case matrix in verify mode, the affected/assembler/cache/derivative selection, smokes, HDA tests and the full suite with only the three pre-existing failures) — 73-case public probe matrix (`tools/rb11/`) reproduced 5 segfaults, 2 hangs, 16 silent acceptances, 6 late context-free failures and a per-element scalar file misbound on every non-first body since upstream #333; all now named early failures without output, or the documented notice; per-element lists/files bind by length (global rows = mesh elements, body-local rows = body elements, anything else refused); `sweep_and_prune` mapped instead of aliasing to the hash grid; RB-09 unit observations announced at startup; `[input_validation]` 14 cases; smokes bit-identical single-threaded. **Pending stage:** physical envelope characterisation (locking/conditioning/resolution of nearly incompressible, anisotropic, thin, distorted elements; constitutive derivatives and rigid-motion invariance) and an HDA test for a scalar on a non-first subdomain](rb-11-validation.md) |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [closed 2026-09-11 — characterized, limits documented; production law retained, no K_eff law adopted; units used by RB-18 F3, algebra by RB-03](rb-13-validation.md#closure-2026-09-11) |
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [closed 2026-09-11 — characterized, limits documented; no estimator or protection policy adopted (RB-18 law for new contacts, RB-20 continuation for persisting ones)](rb-14-validation.md#closure-2026-09-11) |
@@ -202,14 +202,17 @@ RB-04 and RB-05 are validated within their scope (2026-09-12), RB-10 on
 2026-09-13. RB-09 is characterized with its limits documented (2026-09-13):
 the accuracy envelope on public fixtures is measured and the
 `physical_balance_pass` threshold was selected and implemented (record
-version 3); its two unit-dependence observations belong to RB-11/RB-12. Remaining
+version 3); its two unit-dependence observations are announced by RB-11's
+startup notices (2026-09-13) and remain RB-12 manifest items. RB-11's
+input-validation stage is validated within stated scope and published
+(2026-09-13); its physical envelope stage is pending. Remaining
 order: RB-23 (Q3+ hexahedral basis) is
 independently eligible and is the prerequisite for Q3+ hex contact. RB-06–RB-08 remain the resource/recovery track
 (RB-05's `aborted` attempt row and discarded swept interval are the state RB-06
 starts from; a resource failure is now a distinct, non-retried exception type
 for RB-08 to build a policy on); select them when needed. The default resource
 limits and the exit statuses were decided on 2026-09-12 (RB-05 follow-up):
-named failures exit 1, resource failures 3, an abort signal is a real crash. RB-11 input auditing and RB-12 provenance can be
+named failures exit 1, resource failures 3, an abort signal is a real crash. RB-11's envelope stage and RB-12 provenance can be
 selected at any time. A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
 
@@ -230,8 +233,8 @@ work. It does **not** preselect any of these remaining decisions:
 | Local stiffness definition for a nonidentity map | RB-03 / RB-13–RB-15 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient. **Decided 2026-09-11:** local condensation of the parent block onto the stencil, `(B H_PP⁻¹ Bᵀ)⁻¹`, with the gap-normalized force direction as fallback; implemented and validated in RB-03 |
 | New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping. **Decided 2026-09-13 (RB-09):** `physical_balance_pass` is the endpoint force residual in physical units — free-residual norm (updated friction lag) and global external-force balance on the body, both ≤ `output.physical_balance_tolerance` (1e-6) × the run's peak total absolute external force (record version 3); the contact-model gap error is reported (`contact.gap_statistics`, rule `mean gap / compression ≤ d̂ / compression`), not gated; engineering accuracy needs a mesh comparison. Observational: it does not stop or change the solve |
 | Enabled production resource or AL budgets | RB-05 / RB-07 | Measure overhead/failure behavior and state proposed limits; user selects defaults; opt-in disabled-by-default mechanisms may be tested first |
-| Automatic timestep/load retry policy | RB-08 | User approves the concrete policy or specified opt-in prototype before implementation |
-| Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair. **Decided 2026-09-13 (RB-10):** the lagged friction carries the realized normal force (`semi_implicit/friction_lag: realized_force`) and the lag budget defaults to 2; the F6 trim-following and budget 1 stay available explicitly. Material, element and quadrature defaults remain open (RB-11) |
+| Automatic timestep/load retry policy | RB-08 | **Decided 2026-09-13: retry off.** No automatic subdivision or re-attempt; reopening requires a new explicit user decision |
+| Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair. **Decided 2026-09-13 (RB-10):** the lagged friction carries the realized normal force (`semi_implicit/friction_lag: realized_force`) and the lag budget defaults to 2; the F6 trim-following and budget 1 stay available explicitly. Material, element and quadrature defaults remain open; RB-11 (2026-09-13) changed none of them — it only refuses parameter values the laws cannot use (`E ≤ 0`, `μ ≤ 0`, nonpositive bulk modulus, `ν ∉ (−1, ½)`, `ρ < 0`, `k2 ≤ 0`, `κ ∉ [0, ⅓]`, nonfinite) |
 | Upstream/dependency upgrade or release promotion | RB-12 | Separate user instruction and applicable publication/validation procedure |
 
 A new physical model is not a “routine implementation detail.” Conversely, a
@@ -539,8 +542,15 @@ recompute the integrator-dependent inertia contribution and motion predictor at
 the actual substep; do not reuse a dt-dependent k estimate blindly. Retune-at-same-
 time and advance-at-smaller-dt remain separately logged operations.
 
-**This is a policy decision, not yet approved production behavior.** Selecting
-RB-08 first authorizes a concrete design/comparison. Implementation may begin
+**Decision (2026-09-13): retry stays off.** The user chose not to adopt
+automatic timestep/load-increment retry. A failed step reports a named failure
+and stops (RB-05 exit statuses); the user re-runs with a smaller step or load
+increment themselves. No design/comparison document or opt-in prototype is
+authorized. The specification below is retained only so a future explicit
+decision can reopen the item; nothing in it is production behavior.
+
+*Original gate:* this was a policy decision, not approved production behavior.
+Selecting RB-08 first authorizes a concrete design/comparison. Implementation may begin
 only after the user chooses the retry policy, or explicitly authorizes the
 specified opt-in prototype. No elapsed waiting period substitutes for a choice.
 
@@ -662,6 +672,14 @@ agreement. Do not certify impacts/stick–slip from steady sliding alone.
 
 ## RB-11 — Geometry, material and input validation
 
+**Independent review (2026-09-13):** read
+[the RB-11 continuation guidance](rb-11-review-guidance.md) before resuming.
+The staged input-validation work has useful reproduced repairs, but also a
+valid 2D material rejection, an unhandled zero constant fibre, an incorrect CCD
+notice and validation gaps. Correct those before implementation publication;
+the remaining work is more than a final rebuild. The physical-envelope stage
+remains open.
+
 **Revised integration scope:** record the applicability of RB-13 assumptions:
 positive/stable tangent, prescribed/free modes, anisotropy, near-incompressibility,
 material softening, multiple coupled contacts and collision/FEM mapping. Distinguish
@@ -694,6 +712,40 @@ context and no accepted output; valid cases remain accepted; per-element values
 and reported units match source inputs. Label unsupported configurations and
 unmeasured constitutive/element regimes explicitly. HDA changes require all HDA
 tests, rebuilt assets and publication under HDA instructions.
+
+**Status 2026-09-13 — input-validation stage validated within stated scope
+and published** ([record](rb-11-validation.md), with the procedure log, the
+independent review's corrections ([review guidance](rb-11-review-guidance.md)),
+the full-suite attribution and the judgment calls open to the user). `tools/rb11/` generates a 73-case public
+matrix (invalid indices, degenerate/inverted/duplicate rest elements,
+duplicate/degenerate/out-of-range obstacle topology, initial intersections,
+unit mismatches, nonfinite and out-of-range parameters, missing and misbound
+materials, per-element scalar/fibre files of every length contract,
+conflicting prescribed motion, aliasing settings, each with a valid control)
+and classifies the outcome against each case's contract (expected error
+phrase, step count, per-element transfer by centroid, notices; `--verify`,
+`--self-test`); the baseline binary behaved as required on 40/73 of the
+original cases, the frozen candidate on 93/93 after the review additions
+(2D `kappa` domain, fibre representations, unique-value transfer, a
+permuted-file oracle control). Repairs are refusals at the point of
+interpretation — mesh readers, `Mesh::create`, obstacle surfaces, material
+binding and range validation at the element barycenters, Dirichlet
+parsing/sampling, `State::init` — with no coefficient, tolerance, default or
+numerical path changed; an indefinite row-sum lumped mass (quadratic corners)
+is a warning, since upstream lumps quadratic bodies in every contact example;
+remeshing with per-element material files is refused with a named diagnosis
+(the local patches re-bind by patch-local ids; no transfer exists). Contract fixed: per-element value lists
+and fibre files bind by length (mesh-length → global element id, the Houdini
+export contract; body-length → body-local index, upstream #333; other → named
+error). Notices only for the RB-09 unit observations (SI-default
+`characteristic_force_density`, IPC's absolute 1e-4 CCD clearance) and for a
+zero density in a transient run. **Not done in this stage:** the physical
+envelope characterisation asked for above (locking/conditioning
+of nearly incompressible, anisotropic, thin, distorted elements; constitutive
+derivative and rigid-motion checks) — a separate characterisation stage with
+no production change implied; an HDA regression for a per-element scalar on
+a non-first subdomain (publication procedure); listing the primitives of an
+initial intersection; conflict detection under the `lsq` boundary method.
 
 ## RB-12 — Repeatability, provenance and release discipline
 

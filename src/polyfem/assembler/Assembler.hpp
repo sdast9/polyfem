@@ -206,6 +206,37 @@ namespace polyfem::assembler
 		int size_ = -1;
 	};
 
+	/// @brief RB-11: evaluate every parameter the assembler reports (its
+	///        parameters() map) at each element's barycenter at time t and stop
+	///        with a named error when a value is not finite or outside the
+	///        domain of the law it belongs to. Rules are keyed by law (the
+	///        assembler's name, or the child/model name of a composite or
+	///        multi-body parameter) and are the documented contract:
+	///        Lame-based laws (NeoHookean, LinearElasticity, HookeLinearElasticity,
+	///        SaintVenant, FixedCorotational, InversionBarrier, AMIPS): E > 0,
+	///        mu > 0, lambda + 2 mu / d > 0, -1 < nu < 1/2 (3D) or < 1 (2D);
+	///        shear-only laws (IsochoricNeoHookean, IncompressibleLinearElasticity*):
+	///        mu > 0 only, the incompressible limit nu = 1/2 is valid;
+	///        HGOFiber/HGODispersion: k1 >= 0, k2 > 0, 0 <= kappa <= 1/d, and
+	///        with ActiveFiber a nonzero fibre direction of the mesh dimension;
+	///        Mass: rho >= 0 (zero in a time-dependent problem is a warning).
+	///        Every other law and parameter is checked for finiteness only.
+	///        Elements of a MultiModel are checked against their own model.
+	///        These are sampled startup checks: a position- or time-dependent
+	///        expression is evaluated at the barycenters at t only, not at the
+	///        quadrature points or later times.
+	/// @param assembler       the assembler whose materials were set
+	/// @param mesh            the FE mesh (element barycenters and body ids)
+	/// @param t               the time to evaluate at (the initial time)
+	/// @param time_dependent  whether the problem has inertia
+	/// @param what            the assembler's role, for the error message
+	void validate_material_parameters(
+		const Assembler &assembler,
+		const mesh::Mesh &mesh,
+		const double t,
+		const bool time_dependent,
+		const std::string &what);
+
 	class MixedNLAssembler : virtual public Assembler
 	{
 	public:

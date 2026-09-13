@@ -14,6 +14,7 @@
 
 #include <polyfem/varforms/VarForm.hpp>
 #include <polyfem/varforms/VarFormFactory.hpp>
+#include <polyfem/solver/forms/ContactForm.hpp>
 
 #include <jse/jse.h>
 #include <polyfem/embedded_spec/polyfem.hpp>
@@ -102,6 +103,23 @@ namespace polyfem
 			const int num_valid = is_param_valid(args["time"], "tend")
 								  + is_param_valid(args["time"], "dt")
 								  + is_param_valid(args["time"], "time_steps");
+			// RB-11: these used to be asserts, which the RelWithDebInfo build
+			// compiles out -- dt = 0 then hung in an unbounded step loop and
+			// tend < t0 ran the schedule backwards with a negative dt.
+			const auto require_positive_dt = [&](const double value) {
+				if (!std::isfinite(value) || value <= 0)
+					log_and_throw_error("time.dt must be a positive finite time step; got {}", value);
+			};
+			const auto require_positive_steps = [&](const int value) {
+				if (value <= 0)
+					log_and_throw_error("time.time_steps must be a positive number of steps; got {}", value);
+			};
+			const auto require_tend_after_t0 = [&](const double value) {
+				if (!std::isfinite(value) || value <= t0)
+					log_and_throw_error("time.tend must be a finite time after time.t0; got tend = {} with t0 = {}", value, t0);
+			};
+			if (!std::isfinite(t0))
+				log_and_throw_error("time.t0 must be finite; got {}", t0);
 			if (num_valid < 2)
 			{
 				log_and_throw_error("Exactly two of (tend, dt, time_steps) must be specified");
@@ -111,20 +129,20 @@ namespace polyfem
 				if (is_param_valid(args["time"], "tend"))
 				{
 					tend = Units::convert(args["time"]["tend"], units.time());
-					assert(tend > t0);
+					require_tend_after_t0(tend);
 					if (is_param_valid(args["time"], "dt"))
 					{
 						dt = Units::convert(args["time"]["dt"], units.time());
-						assert(dt > 0);
+						require_positive_dt(dt);
 						time_steps = int(std::ceil((tend - t0) / dt));
-						assert(time_steps > 0);
+						require_positive_steps(time_steps);
 					}
 					else if (is_param_valid(args["time"], "time_steps"))
 					{
 						time_steps = args["time"]["time_steps"];
-						assert(time_steps > 0);
+						require_positive_steps(time_steps);
 						dt = (tend - t0) / time_steps;
-						assert(dt > 0);
+						require_positive_dt(dt);
 					}
 					else
 					{
@@ -136,10 +154,10 @@ namespace polyfem
 					assert(is_param_valid(args["time"], "time_steps"));
 
 					dt = Units::convert(args["time"]["dt"], units.time());
-					assert(dt > 0);
+					require_positive_dt(dt);
 
 					time_steps = args["time"]["time_steps"];
-					assert(time_steps > 0);
+					require_positive_steps(time_steps);
 
 					tend = t0 + time_steps * dt;
 				}
@@ -153,6 +171,9 @@ namespace polyfem
 				tend = Units::convert(args["time"]["tend"], units.time());
 				dt = Units::convert(args["time"]["dt"], units.time());
 				time_steps = args["time"]["time_steps"];
+				require_positive_dt(dt);
+				require_positive_steps(time_steps);
+				require_tend_after_t0(tend);
 
 				if (std::abs(t0 + dt * time_steps - tend) > 1e-12)
 					log_and_throw_error("Exactly two of (tend, dt, time_steps) must be specified");
@@ -331,6 +352,24 @@ namespace polyfem
 
 		if (contact_enabled(args))
 		{
+			// RB-11: dhat = 0 (accepted by the spec's inclusive minimum) has no
+			// barrier band at all -- the semi-implicit trial cap divides by it
+			// and the solve stalls through every restart instead of stopping.
+			{
+				const double dhat = Units::convert(args["contact"]["dhat"], units.length());
+				if (!std::isfinite(dhat) || dhat <= 0)
+					log_and_throw_error("contact.dhat must be a positive finite distance when contact is enabled; got {}", dhat);
+			}
+			// The broad-phase name is converted through an enum map whose
+			// unknown strings silently become its first entry (hash_grid).
+			{
+				const std::string broad_phase = args["solver"]["contact"]["CCD"]["broad_phase"];
+				if (!solver::ContactForm::is_known_broad_phase_name(broad_phase))
+					log_and_throw_error(
+						"solver.contact.CCD.broad_phase \"{}\" is not a known broad phase; use one of {}",
+						broad_phase, fmt::format("{}", fmt::join(solver::ContactForm::broad_phase_names(), ", ")));
+			}
+
 			if (args["solver"]["contact"]["friction_iterations"] == 0)
 			{
 				logger().info("specified friction_iterations is 0; disabling friction");

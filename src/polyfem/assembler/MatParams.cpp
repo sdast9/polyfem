@@ -4,6 +4,8 @@
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/StringUtils.hpp> // utils::resolve_path
+#include <filesystem>
+#include <functional>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -57,8 +59,17 @@ namespace polyfem::assembler
 					for (int i = 0; i < n_cell_data; ++i)
 					{
 						if (!(in >> out[i].x() >> out[i].y() >> out[i].z()))
+						{
+							if (in.eof())
+								log_and_throw_error(fmt::format(
+									"Fiber VTK '{}' ended early: expected {} vectors, found {}", path, n_cell_data, i));
+							// RB-11: a nan/inf or non-numeric token fails the extraction
 							log_and_throw_error(fmt::format(
-								"Fiber VTK '{}' ended early: expected {} vectors", path, n_cell_data));
+								"Fiber VTK '{}': vector {} of '{}' is not three finite numbers", path, i, field_name));
+						}
+						if (!out[i].allFinite())
+							log_and_throw_error(fmt::format(
+								"Fiber VTK '{}': vector {} of '{}' is not finite ({}, {}, {})", path, i, field_name, out[i].x(), out[i].y(), out[i].z()));
 					}
 					found = true;
 					break;
@@ -76,6 +87,69 @@ namespace polyfem::assembler
 		}
 	} // namespace
 
+	void copy_material_element_binding(const json &from, json &to)
+	{
+		if (from.contains(MATERIAL_ELEMENT_INDEX))
+			to[MATERIAL_ELEMENT_INDEX] = from[MATERIAL_ELEMENT_INDEX];
+		if (from.contains(MATERIAL_ELEMENT_COUNTS))
+			to[MATERIAL_ELEMENT_COUNTS] = from[MATERIAL_ELEMENT_COUNTS];
+	}
+
+	void bind_material_value(utils::ExpressionValue &value, const json &params, const std::string &what)
+	{
+		const int local = params.contains(MATERIAL_ELEMENT_INDEX) ? params[MATERIAL_ELEMENT_INDEX].get<int>() : -1;
+		if (params.contains(MATERIAL_ELEMENT_COUNTS))
+		{
+			const auto &counts = params[MATERIAL_ELEMENT_COUNTS];
+			value.bind_per_element(local, counts[0].get<Eigen::Index>(), counts[1].get<Eigen::Index>(), what);
+		}
+		else if (local >= 0)
+		{
+			value.set_index(local);
+		}
+	}
+
+	bool materials_use_per_element_files(const json &materials, const std::string &root_path, std::string &where)
+	{
+		std::function<bool(const json &, const std::string &)> scan = [&](const json &mat, const std::string &prefix) {
+			if (mat.is_array())
+			{
+				for (size_t i = 0; i < mat.size(); ++i)
+					if (scan(mat[i], prefix + "[" + std::to_string(i) + "]"))
+						return true;
+				return false;
+			}
+			if (!mat.is_object())
+				return false;
+			for (const auto &[key, value] : mat.items())
+			{
+				const std::string path = prefix.empty() ? key : prefix + "/" + key;
+				if (key == "models" && value.is_array())
+				{
+					if (scan(value, path))
+						return true;
+					continue;
+				}
+				if (key == "fiber_direction" && value.is_object() && value.value("type", std::string()) == "per_element_file")
+				{
+					where = path;
+					return true;
+				}
+				if (value.is_string() && key != "type" && key != "id")
+				{
+					std::error_code ec;
+					if (std::filesystem::is_regular_file(utils::resolve_path(value.get<std::string>(), root_path), ec))
+					{
+						where = path;
+						return true;
+					}
+				}
+			}
+			return false;
+		};
+		return scan(materials, "materials");
+	}
+
 	GenericMatParam::GenericMatParam(const std::string &param_name)
 		: param_name_(param_name)
 	{
@@ -92,8 +166,7 @@ namespace polyfem::assembler
 		if (params.count(param_name_))
 		{
 			param_[index].init(params[param_name_], root_path);
-			if (params.contains(MATERIAL_ELEMENT_INDEX))
-				param_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
+			bind_material_value(param_[index], params, param_name_);
 		}
 	}
 
@@ -141,8 +214,7 @@ namespace polyfem::assembler
 			}
 
 			params_.at(i).param_[index].init(params_array[i], root_path);
-			if (params.contains(MATERIAL_ELEMENT_INDEX))
-				params_.at(i).param_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
+			bind_material_value(params_.at(i).param_[index], params, params_.at(i).param_name_);
 		}
 	}
 
@@ -490,11 +562,8 @@ namespace polyfem::assembler
 			is_lambda_mu_ = true;
 		}
 
-		if (params.contains(MATERIAL_ELEMENT_INDEX))
-		{
-			lambda_or_E_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
-			mu_or_nu_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
-		}
+		bind_material_value(lambda_or_E_[index], params, is_lambda_mu_ ? "lambda" : "E");
+		bind_material_value(mu_or_nu_[index], params, is_lambda_mu_ ? "mu" : "nu");
 	}
 
 	void LameParameters::set_e_nu(const int index, const json &E, const json &nu, const std::string &stress_unit, const std::string &root_path)
@@ -541,8 +610,7 @@ namespace polyfem::assembler
 		{
 			rho_[index].init(params["density"], root_path);
 		}
-		if (params.contains(MATERIAL_ELEMENT_INDEX))
-			rho_[index].set_index(params[MATERIAL_ELEMENT_INDEX]);
+		bind_material_value(rho_[index], params, "rho");
 
 		rho_[index].set_unit_type(density_unit);
 	}
@@ -606,13 +674,21 @@ namespace polyfem::assembler
 		// column vector so downstream is_a_vector logic is unchanged.
 		if (use_per_element_file_)
 		{
-			if (el_id < 0 || el_id >= static_cast<int>(per_el_fibers_->size()))
+			int row = el_id;
+			if (!per_el_rows_global_)
+			{
+				if (el_id < 0 || el_id >= static_cast<int>(per_el_local_index_.size()) || per_el_local_index_[el_id] < 0)
+					log_and_throw_error(fmt::format(
+						"Fiber file rows are body-local but element {} has no body-local index", el_id));
+				row = per_el_local_index_[el_id];
+			}
+			if (row < 0 || row >= static_cast<int>(per_el_fibers_->size()))
 				log_and_throw_error(fmt::format(
-					"Fiber el_id {} out of range [0,{})", el_id, per_el_fibers_->size()));
+					"Fiber el_id {} out of range [0,{})", row, per_el_fibers_->size()));
 			Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 3, 3> res;
 			res.resize(size_, 1);
 			for (int i = 0; i < size_; ++i)
-				res(i, 0) = (*per_el_fibers_)[el_id](i);
+				res(i, 0) = (*per_el_fibers_)[row](i);
 			return res;
 		}
 
@@ -670,7 +746,7 @@ namespace polyfem::assembler
 		return res;
 	}
 
-	void FiberDirection::add_multimaterial(const int index, const json &dir, const std::string &unit, const std::string &root_path)
+	void FiberDirection::add_multimaterial(const int index, const json &dir, const std::string &unit, const std::string &root_path, const json &binding)
 	{
 		// Per-element fiber file:
 		//   { "type": "per_element_file", "path": "...vtk", "field": "FIB_DIR1" }
@@ -688,6 +764,35 @@ namespace polyfem::assembler
 			// cache re-reads and re-stores the whole file per element (O(n^2) in
 			// time and memory). Load once per (path, field) per input snapshot.
 			const auto snapshot = utils::MaterialFileCacheScope::current();
+			// RB-11: rows are global element ids when the file has one row per
+			// element of the mesh, body-local indices when it has one row per
+			// element of the body the material is given for; any other length
+			// does not describe this mesh. Without binding keys (callers other
+			// than Assembler::set_materials) rows stay global.
+			const auto bind_rows = [&]() {
+				if (!binding.contains(MATERIAL_ELEMENT_COUNTS))
+					return;
+				const auto &counts = binding[MATERIAL_ELEMENT_COUNTS];
+				const long n_body = counts[0].get<long>(), n_global = counts[1].get<long>();
+				const long rows = long(per_el_fibers_->size());
+				if (rows == n_global)
+					per_el_rows_global_ = true;
+				else if (rows == n_body)
+				{
+					per_el_rows_global_ = false;
+					const int local = binding.value(MATERIAL_ELEMENT_INDEX, -1);
+					if (local < 0)
+						log_and_throw_error("Per-element fiber file '{}' has {} rows but no body-local element index is available", p, rows);
+					if (per_el_local_index_.size() < size_t(n_global))
+						per_el_local_index_.resize(n_global, -1);
+					per_el_local_index_[index] = local;
+				}
+				else
+					log_and_throw_error(
+						"Per-element fiber file '{}' (field '{}') has {} vectors, but it needs one per element of the FE mesh ({}) or per element of the body it is given for ({}); the file does not describe this mesh",
+						p, field, rows, n_global, n_body);
+			};
+
 			if (use_per_element_file_)
 			{
 				if (key != per_el_key_)
@@ -696,7 +801,10 @@ namespace polyfem::assembler
 						"All bodies sharing a material model must name the same file/field.",
 						per_el_key_.substr(0, per_el_key_.find('\n')), p));
 				if (per_el_snapshot_.lock() == snapshot)
+				{
+					bind_rows();
 					return; // already loaded within this snapshot
+				}
 			}
 
 			per_el_fibers_ = snapshot->fibers(p, field, [&]() {
@@ -716,7 +824,8 @@ namespace polyfem::assembler
 			per_el_snapshot_ = snapshot;
 			use_per_element_file_ = true;
 			has_rotation_ = false; // a direction vector, not a rotation matrix
-			return;                // dir_ left empty; operator() short-circuits
+			bind_rows();
+			return; // dir_ left empty; operator() short-circuits
 		}
 
 		for (int i = dir_.size(); i <= index; ++i)
@@ -729,7 +838,28 @@ namespace polyfem::assembler
 			const int size = dir.size();
 			const int other_size = dir[0].is_array() ? size : 1;
 
-			assert(size == size_);
+			// RB-11: the dimension check was an assert (compiled out); a
+			// constant zero vector went through unnormalised and silently
+			// removed the fibre term. Expressions are checked at the element
+			// barycentres by validate_material_parameters.
+			if (size_ > 0 && size != size_)
+				log_and_throw_error(fmt::format("Fiber direction has {} components but the problem is {}D: {}", size, size_, dir.dump()));
+			if (other_size == 1)
+			{
+				bool all_numbers = true;
+				double norm2 = 0;
+				for (int i = 0; i < size; ++i)
+				{
+					if (!dir[i].is_number())
+						all_numbers = false;
+					else
+						norm2 += dir[i].get<double>() * dir[i].get<double>();
+				}
+				if (all_numbers && !(norm2 > 1e-24))
+					log_and_throw_error(fmt::format("Fiber direction {} is a zero vector; give a nonzero direction (HGODispersion normalises it, HGOFiber and ActiveFiber use its length as given)", dir.dump()));
+				if (all_numbers && !std::isfinite(norm2))
+					log_and_throw_error(fmt::format("Fiber direction {} is not finite", dir.dump()));
+			}
 			dir_[index].resize(size, other_size);
 			for (int i = 0; i < size; ++i)
 			{
@@ -758,7 +888,8 @@ namespace polyfem::assembler
 		else if (dir.size() == 9 || dir.size() == 4)
 		{
 			const int size = dir.size() == 9 ? 3 : 2;
-			assert(size == size_);
+			if (size_ > 0 && size != size_)
+				log_and_throw_error(fmt::format("Fiber rotation matrix has {} entries ({}x{}) but the problem is {}D", dir.size(), size, size, size_));
 			dir_[index].resize(size, size);
 			for (int i = 0; i < size; ++i)
 			{

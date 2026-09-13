@@ -529,7 +529,10 @@ namespace polyfem::varform
 			}
 		avg_mass_ /= std::max(1, int(mass_.rows()));
 		if (args["solver"]["advanced"]["lump_mass_matrix"])
+		{
+			utils::check_lumped_mass(mass_);
 			mass_ = utils::lump_matrix(mass_);
+		}
 		timer.stop();
 		timings.assembling_mass_mat_time = timer.getElapsedTime();
 		logger().info(" took {}s", timings.assembling_mass_mat_time);

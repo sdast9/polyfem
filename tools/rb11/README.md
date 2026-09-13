@@ -1,0 +1,70 @@
+# RB-11 geometry, material and input validation: probe matrix
+
+Fixture generator and runner behind [docs/rb-11-validation.md](../../docs/rb-11-validation.md).
+Everything is synthetic and public: a 2×2×2 tetrahedralised unit cube (48 tets,
+Gmsh 4.1 ASCII or MEDIT), an open two-triangle slab obstacle, and scene JSON
+built by `fixtures.py`. `cases.py` perturbs them into the invalid variants the
+plan requires (invalid indices, degenerate/inverted/duplicate rest elements,
+duplicate/nonmanifold/degenerate collision topology, initial intersections,
+unit mismatches, nonfinite and out-of-range material parameters, misbound
+per-element scalar and fibre files, missing materials, conflicting prescribed
+motion, aliasing solver settings) and keeps a valid control next to each.
+
+```sh
+python3 tools/rb11/run_matrix.py --binary build/PolyFEM_bin --output /absolute/fresh/dir \
+    [--cases g1-missing-mesh-file ...] [--groups geometry material ...] [--timeout 120] [--verify]
+python3 tools/rb11/run_matrix.py --binary x --output y --list
+python3 tools/rb11/run_matrix.py --binary x --output y --self-test
+```
+
+`--verify` makes the runner exit 1 on any mismatch (or when no case is
+selected); without it the run is an investigation that reports every
+mismatch and exits 0. `--self-test` feeds hollow records to the oracle
+(an accepted run without saved steps, a notice case without its notice, a
+named failure with an unrelated error) and fails if any is accepted.
+
+Every case runs single-threaded from its own directory and is classified as
+`named_failure` (exit 1, `PolyFEM stopped:`), `resource_failure` (exit 3),
+`crash` (signal / exit ≥ 128), `completed`, `timeout` or `other_exit`.
+`summary.json` / `summary.md` record per case the first error line, the
+`PolyFEM stopped` line, warnings, the last log phase reached, whether any VTU
+was written (an invalid input must not leave accepted output), the wall time
+and, where `check.json` asks for it, whether the exported material field at
+the top/bottom vertices matches the source file (`E`, `fiber_direction`) or
+whether the log carries required/forbidden lines. `expect_match` compares the
+run with the case's declared contract: a `named_failure` must exit 1 with a
+`PolyFEM stopped:` line, write no VTU and carry the case's `expect_error`
+phrase in its log; an `accepted` run must complete with the intended number
+of saved steps and pass its `check.json` (per-element transfer by centroid
+matching, top/bottom field values, obstacle edge incidence, required log
+lines); an `accepted_with_notice` run also needs its notice. A case may
+declare `expected_status: fail` for its check — `g3-E-file-permuted-oracle`
+does, to document that the transfer oracle detects a permuted file.
+
+Expectations encode the plan's acceptance: genuinely invalid inputs fail early
+with element/material/path context and no accepted output; valid inputs
+(controls, open and codimensional obstacles, a T-junction shelf, a pinched FE
+mesh, a massless quasistatic body, auxetic ν, per-body value files) stay
+accepted; envelope-limited inputs (declared millimetre units, zero density in a
+transient run, row-sum lumping of quadratic elements) complete with the
+documented notice.
+
+Per-element value contract exercised by `g3-E-file-two-bodies-*` and
+`g4-fiber-file-two-bodies-global`: a list/file with one row per element of
+the whole FE mesh binds by the global element id (the Houdini export
+contract); one with one row per element of the body it is given for binds by
+the body-local index (upstream `#333`); any other length is refused at load.
+The Gmsh writer emits one element block per body, so the global order is body
+1's elements followed by body 2's.
+
+Review additions (2026-09-13): 2D `HGODispersion` cases at `kappa` 0.4 / 0.5
+(valid, the law's domain is `[0, 1/d]`) and 0.6 (refused), plain and
+composite; fibre representations (constant zero, expression zero, non-unit
+under the normalising `HGODispersion`, unit-length expression, wrong
+dimension); per-element transfer with unique values on one body, unequal
+bodies (8 + 40 tets), two geometry meshes and body-local files, plus the
+permuted-file oracle control; a real three-face edge for the T-junction
+obstacle, asserted from the written OBJ.
+
+The Catch regression `[input_validation]` (`tests/test_input_validation.cpp`)
+covers the same checks at the API level.

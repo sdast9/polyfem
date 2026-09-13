@@ -73,7 +73,16 @@ namespace polyfem::mesh
 		if (j_mesh["extract"].get<std::string>() != "volume")
 			log_and_throw_error("Only volumetric elements are implemented for FEM meshes!");
 
-		std::unique_ptr<Mesh> mesh = Mesh::create(resolve_path(j_mesh["mesh"], root_path), non_conforming);
+		const std::string mesh_path = resolve_path(j_mesh["mesh"], root_path);
+		std::unique_ptr<Mesh> mesh = Mesh::create(mesh_path, non_conforming);
+
+		// RB-11: Mesh::create logs and returns null for a missing or unreadable
+		// file; dereferencing it below was a segfault, not a named failure.
+		if (mesh == nullptr)
+			log_and_throw_error(
+				"Unable to load the FE mesh \"{}\" (geometry entry with mesh \"{}\"): the file is missing or could not be read (see the error above)",
+				mesh_path, j_mesh["mesh"].get<std::string>());
+		validate_rest_elements(*mesh, mesh_path);
 
 		// --------------------------------------------------------------------
 
@@ -420,6 +429,10 @@ namespace polyfem::mesh
 			// error already logged in read_surface_mesh()
 			throw std::runtime_error(fmt::format("Unable to read mesh: {}", mesh_path));
 
+		// RB-11: an out-of-range face index reached the collision mesh as a
+		// garbage vertex; duplicate or zero-area primitives were accepted.
+		validate_surface_mesh(mesh_path, vertices, codim_vertices, codim_edges, faces);
+
 		const int prev_dim = vertices.cols();
 		vertices.conservativeResize(vertices.rows(), dim);
 		if (prev_dim < dim)
@@ -621,48 +634,46 @@ namespace polyfem::mesh
 						log_and_throw_error("Invalid surface_selection for obstacle, needs to be an integer!");
 
 					const int id = geometry["surface_selection"];
+					const auto matches_explicitly = [&](const json &disp) {
+						if (disp["id"].is_number_integer() && disp["id"].get<int>() == id)
+							return true;
+						if (disp["id"].is_array())
+							for (const json &disp_id : disp["id"])
+								if (disp_id.is_number_integer() && disp_id.get<int>() == id)
+									return true;
+						return false;
+					};
+					const auto matches = [&](const json &disp) {
+						return (disp["id"].is_string() && disp["id"].get<std::string>() == "all") || matches_explicitly(disp);
+					};
+					// obstacle_displacements takes precedence over dirichlet_boundary
+					// (an "all" Dirichlet entry is the FE mesh's default, not a
+					// prescription for the obstacle). RB-11: the same id named
+					// explicitly in both lists with different values used to take
+					// the obstacle_displacements entry silently.
+					const json *from_dirichlet = nullptr;
 					for (const json &disp : dirichlets)
-					{
-						if ((disp["id"].is_string() && disp["id"].get<std::string>() == "all")
-							|| (disp["id"].is_number_integer() && disp["id"].get<int>() == id))
+						if (matches(disp))
 						{
-							displacement = disp;
+							from_dirichlet = &disp;
 							break;
 						}
-						else if (disp["id"].is_array())
-						{
-							for (const json &disp_id : disp["id"])
-							{
-								assert(disp_id.is_number_integer());
-								if (disp_id.get<int>() == id)
-								{
-									displacement = disp;
-									break;
-								}
-							}
-						}
-					}
+					const json *from_displacements = nullptr;
 					for (const json &disp : displacements)
-					{
-						if ((disp["id"].is_string() && disp["id"].get<std::string>() == "all")
-							|| (disp["id"].is_number_integer() && disp["id"].get<int>() == id))
+						if (matches(disp))
 						{
-							displacement = disp;
+							from_displacements = &disp;
 							break;
 						}
-						else if (disp["id"].is_array())
-						{
-							for (const json &disp_id : disp["id"])
-							{
-								assert(disp_id.is_number_integer());
-								if (disp_id.get<int>() == id)
-								{
-									displacement = disp;
-									break;
-								}
-							}
-						}
-					}
+					if (from_dirichlet && from_displacements && matches_explicitly(*from_dirichlet) && matches_explicitly(*from_displacements)
+						&& (*from_dirichlet)["value"] != (*from_displacements)["value"])
+						log_and_throw_error(
+							"Obstacle surface id {} is prescribed twice with different values: dirichlet_boundary gives {} and obstacle_displacements gives {}; keep one of them",
+							id, (*from_dirichlet)["value"].dump(), (*from_displacements)["value"].dump());
+					if (from_displacements)
+						displacement = *from_displacements;
+					else if (from_dirichlet)
+						displacement = *from_dirichlet;
 				}
 
 				obstacle.append_mesh(

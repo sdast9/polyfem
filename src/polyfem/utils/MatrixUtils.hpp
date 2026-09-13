@@ -100,6 +100,25 @@ namespace polyfem
 		/// @return Lumped matrix.
 		Eigen::SparseMatrix<double> lump_matrix(const Eigen::SparseMatrix<double> &M);
 
+	/// @brief RB-11: report row-sum lumping of a mass matrix that gives a DOF
+	///        carrying mass (a row with a nonzero entry) a nonpositive nodal
+	///        mass, counted as negative, zero and nonfinite row sums (some
+	///        higher-order bases lump their corner nodes to zero -- P2
+	///        triangles -- or negative -- P2 tetrahedra, Q2 hexahedra -- masses,
+	///        an indefinite inertia term). All-zero rows (obstacle vertices
+	///        appended to the space, codimensional points) carry no mass by
+	///        construction and are reported separately, not counted. A
+	///        warning, not an error: the upstream contact examples lump every
+	///        scene (`contact/examples/common.json`), quadratic bodies
+	///        included, and match their goldens that way -- which shows
+	///        compatibility, not physical validity of the indefinite operator;
+	///        the RB-22 Q2 hexahedral impact that failed under lumping is the
+	///        documented consequence and the regime stays outside the measured
+	///        physical envelope.
+	/// @param M the consistent mass matrix, before lumping
+	/// @return the number of mass-carrying DOFs with a nonpositive lumped mass
+	long check_lumped_mass(const Eigen::SparseMatrix<double> &M);
+
 		/// @brief Lump a (mass) matrix HRZ-style: keep the diagonal, scaled by a
 		/// common factor so the total (sum of all entries) is preserved.  Unlike
 		/// row-sum lumping this is positive for bases of any order (diagonal

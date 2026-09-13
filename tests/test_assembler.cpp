@@ -21,6 +21,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <iostream>
 #include <algorithm>
@@ -1479,7 +1480,14 @@ TEST_CASE("assembler material dispatch", "[assembler]")
 	assembler.root_paths.clear();
 	const json materials = json::array({{{"id", json::array({7, 9})}, {"value", 70}},
 										{{"id", 8}, {"value", 80}}});
-	assembler.set_materials({7, 8, 9, 10}, materials, units, "/materials");
+	// RB-11: a body without a material entry is a named error (it used to be
+	// a warning followed by placeholder parameters or an out-of-range read)
+	REQUIRE_THROWS_WITH(assembler.set_materials({7, 8, 9, 10}, materials, units, "/materials"),
+						Catch::Matchers::ContainsSubstring("No material for body id [10]"));
+	assembler.indices.clear();
+	assembler.materials.clear();
+	assembler.root_paths.clear();
+	assembler.set_materials({7, 8, 9}, materials, units, "/materials");
 	REQUIRE(assembler.indices == std::vector<int>{0, 1, 2});
 	REQUIRE(assembler.materials[0]["value"] == 70);
 	REQUIRE(assembler.materials[1]["value"] == 80);

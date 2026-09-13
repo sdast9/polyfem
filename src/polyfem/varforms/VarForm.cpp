@@ -880,6 +880,14 @@ namespace polyfem::varform
 			body_ids[i] = mesh_->get_body_id(i);
 
 		assembler.set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
+
+		// RB-11: refuse nonfinite or out-of-range parameters here, with the
+		// element and body named, instead of a nan energy or a failed line
+		// search deep in the first solve (after the initial output was written).
+		const bool has_time = utils::is_param_valid(args, "time");
+		const double t0 = has_time && args["time"].contains("t0") ? Units::convert(args["time"]["t0"], units.time()) : 0.0;
+		const bool time_dependent = has_time && !args["time"].value("quasistatic", false);
+		assembler::validate_material_parameters(assembler, *mesh_, t0, time_dependent, assembler.name() + " materials");
 	}
 
 	void VarForm::ensure_output_sampler() const

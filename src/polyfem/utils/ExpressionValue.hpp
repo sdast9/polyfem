@@ -41,6 +41,23 @@ namespace polyfem
 			void set_t(const json &t);
 			void set_index(const int index) { index_ = index; }
 
+			/// @brief RB-11: bind a per-element value list/file to the mesh.
+			///        A list with one entry per element of the whole mesh
+			///        (n_global rows) is indexed by the global element id; one
+			///        with one entry per element of the body it is given for
+			///        (n_body rows) by the body-local index; any other length does
+			///        not describe this mesh and is a named error. Constants and
+			///        expressions are untouched.
+			/// @param local_index  the element's index within its body (-1 when
+			///                     the material is not given per body)
+			/// @param n_body       elements of the body this value belongs to
+			/// @param n_global     elements of the whole FE mesh
+			/// @param what         parameter name for the error message
+			void bind_per_element(const int local_index, const Eigen::Index n_body, const Eigen::Index n_global, const std::string &what);
+			/// @brief True when the value is a per-element list/file indexed by
+			///        the global element id (after bind_per_element).
+			bool is_per_element_global() const { return mat_size() > 1 && index_ < 0 && t_index_.empty(); }
+
 			double operator()(double x, double y, double z = 0, double t = 0, int index = -1) const;
 
 			void clear();

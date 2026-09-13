@@ -199,6 +199,26 @@ namespace polyfem
 		///
 		bool read_surface_mesh(const std::string &mesh_path, Eigen::MatrixXd &vertices, Eigen::VectorXi &codim_vertices, Eigen::MatrixXi &codim_edges, Eigen::MatrixXi &faces);
 
+		/// @brief RB-11: refuse a rest mesh whose elements cannot be simulated:
+		///        an element listing a vertex twice, or two elements on the same
+		///        vertex set (the material would be assembled twice on that
+		///        region). Throws a named error naming the elements.
+		/// @param[in] mesh    the loaded FE mesh
+		/// @param[in] source  what to call the mesh in the error (its path)
+		void validate_rest_elements(const Mesh &mesh, const std::string &source);
+
+		/// @brief RB-11: refuse an obstacle surface with an out-of-range index,
+		///        a repeated primitive (a duplicated face doubles the contact
+		///        force on it) or a degenerate primitive (a zero-area face has no
+		///        normal and poisons every distance it enters). Throws a named
+		///        error with the primitive index and vertex positions.
+		void validate_surface_mesh(
+			const std::string &source,
+			const Eigen::MatrixXd &vertices,
+			const Eigen::VectorXi &codim_vertices,
+			const Eigen::MatrixXi &codim_edges,
+			const Eigen::MatrixXi &faces);
+
 		/// Determine if the given mesh is planar (2D or tiny z-range).
 		bool is_planar(const GEO::Mesh &M, const double tol = 1e-5);
 

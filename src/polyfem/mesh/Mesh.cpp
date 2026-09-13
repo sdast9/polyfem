@@ -11,6 +11,7 @@
 
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
+#include <polyfem/utils/HashUtils.hpp>
 
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_geometry.h>
@@ -22,6 +23,7 @@
 #include <igl/edges.h>
 
 #include <filesystem>
+#include <unordered_map>
 #include <unordered_set>
 #include <set>
 #include <type_traits>
@@ -329,6 +331,44 @@ namespace polyfem::mesh
 		const Eigen::MatrixXd &vertices, const Eigen::MatrixXi &cells, const bool non_conforming)
 	{
 		const int dim = vertices.cols();
+
+		// RB-11: an out-of-range or repeated vertex index used to be an assert,
+		// compiled out of the RelWithDebInfo build, and reached geogram as a
+		// garbage index (a segfault while building the basis).
+		{
+			const int min_corners = dim == 2 ? 3 : 4;
+			std::unordered_map<std::vector<int>, int, HashVector> seen;
+			seen.reserve(cells.rows());
+			for (int c = 0; c < cells.rows(); ++c)
+			{
+				int n_corners = 0;
+				for (; n_corners < cells.cols(); ++n_corners)
+					if (cells(c, n_corners) == -1)
+						break;
+				if (n_corners < min_corners)
+					log_and_throw_error("Element {} lists only {} vertices; a {}D element needs at least {}", c, n_corners, dim, min_corners);
+				for (int k = n_corners; k < cells.cols(); ++k)
+					if (cells(c, k) != -1)
+						log_and_throw_error("Element {} has a vertex index after its -1 padding (column {})", c, k);
+				std::vector<int> sorted(n_corners);
+				for (int k = 0; k < n_corners; ++k)
+				{
+					const int v = cells(c, k);
+					if (v < 0 || v >= vertices.rows())
+						log_and_throw_error("Element {} references vertex {} but the mesh has {} vertices (indices are 0-based)", c, v, vertices.rows());
+					for (int l = 0; l < k; ++l)
+						if (cells(c, l) == v)
+							log_and_throw_error("Element {} lists vertex {} twice (corners {} and {}); a degenerate element cannot be simulated", c, v, l, k);
+					sorted[k] = v;
+				}
+				std::sort(sorted.begin(), sorted.end());
+				const auto [it, inserted] = seen.emplace(sorted, c);
+				if (!inserted)
+					log_and_throw_error(
+						"Elements {} and {} are the same element (vertices [{}]); a duplicated element assembles its material twice on that region -- remove the duplicate",
+						it->second, c, fmt::format("{}", fmt::join(sorted, ", ")));
+			}
+		}
 
 		std::unique_ptr<Mesh> mesh = create(dim, non_conforming);
 

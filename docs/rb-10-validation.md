@@ -432,3 +432,14 @@ Append-only. Newest entry last.
 - **2026-09-13 01:45Z** — Published `756070f44` on `sdast9/polyfem:main` (the
   adopted defaults, regressions, notes); HDA `f10f9c8` published earlier in
   the same stage. Status validated within stated scope.
+- **2026-09-13 14:30Z (from the RB-11 session)** — The full `unit_tests`
+  run of RB-11 shows a consequence of the adopted defaults: the upstream
+  `contact_2d` golden `contact/examples/2D/large-ratios/large-mass-ratio.json`
+  (classic adaptive barrier, μ = 0.1) fails its stored errors by 0.5 % on the
+  `a5aa87ea0` baseline binary as much as on RB-11's; with
+  `solver/contact/friction_iterations: 1` the same binary reproduces the
+  stored `err_l2` to 5e-12 (`outputs/rb-11/20260913T140845Z/golden-check/`).
+  The golden was recorded under the historical budget-1 lag. Nothing was
+  regenerated; deciding between rerecording the upstream friction goldens
+  under the new defaults and pinning the historical setting inside those test
+  scenes is an RB-10/RB-12 follow-up for the user.
