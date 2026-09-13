@@ -159,7 +159,7 @@ may override the current defaults above.
 | `quasistatic-semi.json` | Quasistatic semi-implicit contact |
 | `quasistatic-adaptive.json` | Classic adaptive baseline |
 | `transient-semi.json` | Transient semi-implicit contact |
-| `quasistatic-semi-friction.json` | Friction coupling |
+| `quasistatic-semi-friction.json` | Friction coupling (since RB-10, 2026-09-13, at the new defaults `friction_iterations: 2`, `semi_implicit/friction_lag: realized_force`; the pre-RB-10 endpoint needs both historical settings written explicitly) |
 | `quasistatic-semi-alhess.json` | Hessian-scaled AL weight |
 
 From the PolyFEM repository root:

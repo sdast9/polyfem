@@ -79,12 +79,13 @@ namespace
 		return c.weight * c.normal_force_magnitude * fr.trim_scale();
 	}
 	constexpr double mu = .3, eps = 1e-3;
+	const json follow = {{"friction_lag", "follow_stiffness"}};
 } // namespace
 
 TEST_CASE("lagged friction constitutive response", "[friction_lag][friction_form]")
 {
 	auto m = make_mesh();
-	Probe f(m);
+	Probe f(m, follow); // the trim-scale FD below needs the F6 mode; the rest is mode-independent
 	const Eigen::VectorXd z = Eigen::VectorXd::Zero(6);
 	f.start(z);
 	FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
@@ -113,14 +114,14 @@ TEST_CASE("lagged friction constitutive response", "[friction_lag][friction_form
 	}
 }
 
-TEST_CASE("lagged friction follows every semi-implicit retuning path", "[friction_lag][friction_form]")
+TEST_CASE("lagged friction follows every semi-implicit retuning path (follow_stiffness)", "[friction_lag][friction_form]")
 {
 	auto m = make_mesh();
 	const Eigen::VectorXd z = Eigen::VectorXd::Zero(6);
 
 	SECTION("trim bumps and calibration (RB-18 F6)")
 	{
-		Probe f(m);
+		Probe f(m, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -134,7 +135,7 @@ TEST_CASE("lagged friction follows every semi-implicit retuning path", "[frictio
 	}
 	SECTION("mid-solve refresh: continuation keeps the lagged stencil's coefficient")
 	{
-		Probe f(m);
+		Probe f(m, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -147,7 +148,7 @@ TEST_CASE("lagged friction follows every semi-implicit retuning path", "[frictio
 	}
 	SECTION("mid-solve refresh without continuation leaves the lag stale (documented)")
 	{
-		Probe f(m, {{"force_continuation", false}});
+		Probe f(m, {{"force_continuation", false}, {"friction_lag", "follow_stiffness"}});
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -160,7 +161,7 @@ TEST_CASE("lagged friction follows every semi-implicit retuning path", "[frictio
 	}
 	SECTION("stall retune")
 	{
-		Probe f(m);
+		Probe f(m, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -172,7 +173,7 @@ TEST_CASE("lagged friction follows every semi-implicit retuning path", "[frictio
 	}
 	SECTION("between-steps refresh at a new endpoint, then the next solve's init_lagging")
 	{
-		Probe f(m);
+		Probe f(m, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -186,6 +187,57 @@ TEST_CASE("lagged friction follows every semi-implicit retuning path", "[frictio
 		CHECK(f.kappa0() == Approx(kappa_solve).epsilon(1e-12));
 		fr.init_lagging(x1);
 		CHECK(lagged_normal_force(fr) == Approx(barrier_normal_force(f, x1)).epsilon(1e-12));
+	}
+}
+
+TEST_CASE("realized-force lag (default): the friction carries the force that acted", "[friction_lag][friction_form]")
+{
+	auto m = make_mesh();
+	const Eigen::VectorXd z = Eigen::VectorXd::Zero(6);
+	Probe f(m); // default options: friction_lag = realized_force
+	f.start(z);
+	REQUIRE(f.friction_lag_realized());
+	FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
+	REQUIRE(fr.realized_lag());
+	fr.init_lagging(z);
+	const double acted = barrier_normal_force(f, z);
+	CHECK(lagged_normal_force(fr) == Approx(acted).epsilon(1e-12));
+
+	SECTION("an in-solve trim bump does not change the lagged friction")
+	{
+		f.bump_trim(2);
+		CHECK(barrier_normal_force(f, z) == Approx(2 * acted).epsilon(1e-12)); // the barrier at fixed x doubles
+		CHECK(fr.trim_scale() == 1);
+		CHECK(lagged_normal_force(fr) == Approx(acted).epsilon(1e-12)); // the lag keeps what acted
+		Eigen::VectorXd x = z, g;
+		x[4] = 4 * eps;
+		fr.first_derivative(x, g);
+		CHECK(g[4] == Approx(mu * acted).epsilon(1e-12));
+	}
+	SECTION("between steps: update_quantities builds the lag before the refresh, init_lagging keeps it")
+	{
+		Eigen::VectorXd x1 = z;
+		x1[4] = .05;
+		x1[5] = -.05;
+		f.solution_changed(x1);
+		const double acted_x1 = barrier_normal_force(f, x1);
+		fr.update_quantities(1, x1); // the time loop's order: update_quantities, then update_barrier_stiffness
+		CHECK(lagged_normal_force(fr) == Approx(acted_x1).epsilon(1e-12));
+		f.bump_trim(4); // stands in for a trim step of the between-steps refresh
+		fr.init_lagging(x1);
+		CHECK(lagged_normal_force(fr) == Approx(acted_x1).epsilon(1e-12));
+		CHECK(barrier_normal_force(f, x1) == Approx(4 * acted_x1).epsilon(1e-12));
+		// different coordinates rebuild with the acting stiffness
+		Eigen::VectorXd x2 = x1;
+		x2[4] = .06;
+		fr.init_lagging(x2);
+		CHECK(lagged_normal_force(fr) == Approx(barrier_normal_force(f, x2)).epsilon(1e-12));
+	}
+	SECTION("the explicit lag update at a returned solution uses the acting stiffness")
+	{
+		f.bump_trim(2);
+		fr.update_lagging(z, 1);
+		CHECK(lagged_normal_force(fr) == Approx(barrier_normal_force(f, z)).epsilon(1e-12));
 	}
 }
 

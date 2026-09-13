@@ -164,13 +164,16 @@ int main(int argc, char **argv)
 	out["fixture"] = "2D point above a floor edge; dhat = 1, gap .2, driving Hessian 100 I, form weight 1, trim 1; mu .3, epsv 1e-3 (probe units)";
 	const double mu = .3, eps = 1e-3;
 	const V z = V::Zero(6);
+	// The F6 trim-following sections run in the explicit follow_stiffness
+	// mode (the default is realized_force since RB-10's decision).
+	const json follow = {{"friction_lag", "follow_stiffness"}};
 
 	// ----------------------------------------------------------------------
 	// P1: frozen-lag constitutive sweep (no time integrator: quasistatic, so
 	// the potential's "velocity" is the total displacement x).
 	section(out, "P1_constitutive", [&](json &r) {
 		auto m = mesh();
-		Probe f(m);
+		Probe f(m, BarrierStiffnessMode::SemiImplicit, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -221,7 +224,7 @@ int main(int argc, char **argv)
 	// P2: normal-force transfer through every retuning path.
 	section(out, "P2a_trim_actions", [&](json &r) {
 		auto m = mesh();
-		Probe f(m);
+		Probe f(m, BarrierStiffnessMode::SemiImplicit, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -243,7 +246,7 @@ int main(int argc, char **argv)
 	{
 		section(out, continuation ? "P2b_midsolve_refresh_continuation_on" : "P2b_midsolve_refresh_continuation_off", [&](json &r) {
 			auto m = mesh();
-			Probe f(m, BarrierStiffnessMode::SemiImplicit, {{"force_continuation", continuation}});
+			Probe f(m, BarrierStiffnessMode::SemiImplicit, {{"force_continuation", continuation}, {"friction_lag", "follow_stiffness"}});
 			f.start(z);
 			FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 			fr.init_lagging(z);
@@ -261,7 +264,7 @@ int main(int argc, char **argv)
 	// (c) stall retune (refresh + trim action) with continuation.
 	section(out, "P2c_stall_retune_continuation_on", [&](json &r) {
 		auto m = mesh();
-		Probe f(m);
+		Probe f(m, BarrierStiffnessMode::SemiImplicit, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);
@@ -275,7 +278,7 @@ int main(int argc, char **argv)
 	// solve's init_lagging re-bases.
 	section(out, "P2d_between_steps_refresh", [&](json &r) {
 		auto m = mesh();
-		Probe f(m);
+		Probe f(m, BarrierStiffnessMode::SemiImplicit, follow);
 		f.start(z);
 		FrictionForm fr(m, nullptr, eps, mu, ipc::BroadPhaseMethod::HASH_GRID, f, 1);
 		fr.init_lagging(z);

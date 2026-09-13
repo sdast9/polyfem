@@ -258,7 +258,7 @@ namespace polyfem::solver
 					parent_keyed_ = false;
 				else
 					log_and_throw_error("Semi-implicit barrier stiffness: coefficient_identity must be \"parent\" or \"stencil\" (got \"{}\")", identity);
-				const std::string friction_lag = semi_implicit_opts.value("friction_lag", std::string("follow_stiffness"));
+				const std::string friction_lag = semi_implicit_opts.value("friction_lag", std::string("realized_force"));
 				if (friction_lag == "follow_stiffness")
 					friction_lag_realized_ = false;
 				else if (friction_lag == "realized_force")

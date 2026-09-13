@@ -56,8 +56,9 @@ def analyze_run(run_dir):
     dt = scene['time']['dt']
     path = run_dir / 'output' / 'physical-diagnostics.jsonl'
     result = {'name': run_dir.name, 'configured_name': meta['name'], 'fixture': meta['fixture'], 'model': meta['model'], 'mu': mu, 'epsv': epsv,
-              'budget': meta['budget'], 'barrier': meta['barrier'], 'status': meta.get('status'), 'exit_status': meta.get('exit_status'),
-              'frames': [], 'failed_attempts': []}
+              'budget': scene['solver']['contact'].get('friction_iterations', 'solver default'), 'barrier': meta['barrier'],
+              'friction_lag': scene['solver']['contact'].get('semi_implicit', {}).get('friction_lag', 'solver default'),
+              'status': meta.get('status'), 'exit_status': meta.get('exit_status'), 'frames': [], 'failed_attempts': []}
     if not path.exists():
         result['unavailable_reason'] = 'no physical-diagnostics.jsonl'
         return result
@@ -92,6 +93,7 @@ def analyze_run(run_dir):
                  'free_residual_norm_solved_lag': val(r.get('free_residual_norm_with_pre_update_friction')),
                  'active_contacts': r.get('contact', {}).get('active_count'), 'min_gap': val(r.get('contact', {}).get('min_gap')),
                  'trim': r.get('contact', {}).get('trim_or_global_stiffness'),
+                 'friction_lag_recorded': r.get('contact', {}).get('friction_lag') if isinstance(r.get('contact'), dict) else None,
                  'elastic_energy': val(r.get('elastic_energy')), 'barrier_energy': val(r.get('barrier_energy')), 'kinetic_energy': val(r.get('kinetic_energy')),
                  'support_work_increment': val(r.get('support_work_increment')),
                  'frictional_dissipation_increment': val(r.get('frictional_dissipation_increment')),
@@ -206,7 +208,9 @@ def analyze_run(run_dir):
             'restarts_total': sum(f['restarts'] or 0 for f in frames),
             'min_det_F': min(f['min_det_F'] for f in frames if f['min_det_F'] is not None) if any(f['min_det_F'] is not None for f in frames) else None,
             'trim_history': [f['trim'] for f in frames],
-            'friction_lag_mode': meta.get('friction_lag', 'follow_stiffness'),
+            # the mode the solver actually used (diagnostic_state), and the budget it reached
+            'friction_lag_mode': next((f['friction_lag_recorded'] for f in frames if f.get('friction_lag_recorded')), result['friction_lag']),
+            'max_lagging_iterations_reached': max((f['lagging_iterations'] or 0) for f in frames),
         }
     return result
 

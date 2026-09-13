@@ -207,7 +207,15 @@ budget 20 must stop after 2 restarts with the new reason; existing cases with
 
 ### F6 — Lagged friction follows the trim
 
-**Status:** done (validated; committed in `e3fa362e0`).
+**Status:** done (validated; committed in `e3fa362e0`). **Default reversed by
+RB-10 (2026-09-13, user decision):** the trim-following is now the explicit
+`semi_implicit/friction_lag: "follow_stiffness"`; the default
+`"realized_force"` lags the normal force that acted at the endpoint, because
+the equilibrium normal force does not follow the trim (the gap does) and F6
+doubled the friction capacity for the rest of a step after a collapse bump
+at constant load ([RB-10 record](rb-10-validation.md#stage-4--friction_lag-ab-opt-in-realized_force-vs-the-f6-default)).
+The fixed-coordinate consistency this fix established still holds in the
+explicit mode and is still regression-tested.
 
 **Defect (RB-02, RB-04 H6):** `FrictionForm::update_lagging` bakes
 `barrier_stiffness()` (the trim) and per-contact `stiffness_scale` into the

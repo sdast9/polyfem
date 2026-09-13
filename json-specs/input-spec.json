@@ -1617,13 +1617,13 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/friction_lag",
-        "default": "follow_stiffness",
+        "default": "realized_force",
         "type": "string",
         "options": [
-            "follow_stiffness",
-            "realized_force"
+            "realized_force",
+            "follow_stiffness"
         ],
-        "doc": "RB-10: which normal force the lagged friction carries. \"follow_stiffness\" (default, RB-18 F6): the lag is built with the current trim at the lag gap and follows every in-solve trim action by the trim ratio, so friction stays consistent with the barrier at fixed coordinates. \"realized_force\": the lag is built at the accepted endpoint before the between-steps refresh and is not scaled by later trim actions, so friction carries the normal force that actually acted there (the equilibrium contact pressure); a trim change is then absorbed by the gap, as it is for the barrier itself. Opt-in comparison mode; see docs/rb-10-validation.md."
+        "doc": "RB-10: which normal force the lagged friction carries. \"realized_force\" (default since 2026-09-13): the lag is built at the accepted endpoint before the between-steps refresh and is not scaled by later trim actions, so friction carries the normal force that actually acted there (the equilibrium contact pressure); a trim change is absorbed by the gap, as it is for the barrier itself. \"follow_stiffness\" (the RB-18 F6 behaviour, default until RB-10): the lag is built with the current trim at the lag gap and follows every in-solve trim action by the trim ratio, so friction stays consistent with the barrier at fixed coordinates -- after a collapse bump at constant load that doubles the friction capacity for the rest of the step. See docs/rb-10-validation.md."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",
@@ -1762,9 +1762,9 @@
     },
     {
         "pointer": "/solver/contact/friction_iterations",
-        "default": 1,
+        "default": 2,
         "type": "int",
-        "doc": "Maximum number of update iterations for lagged friction formulation (see IPC paper)."
+        "doc": "Maximum number of lagged-friction iterations per step (IPC lagging): the first solve carries the friction lag from the previous endpoint; every further iteration rebuilds the lag at the returned coordinates and re-solves until the updated-lag residual meets friction_convergence_tol. RB-10 (2026-09-13): the default is 2 (one correction) because the single-solve lag underestimated the frictional dissipation by 2-3 % on steady sliding and by about 50 % on the compression smoke, at +22-32 % Newton iterations; 1 restores the classic IPC policy, -1 iterates to the tolerance, 0 disables friction."
     },
     {
         "pointer": "/solver/contact/tangential_adhesion_iterations",

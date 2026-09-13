@@ -481,10 +481,11 @@ int main()
 		}
 		// RB-18 F6: lagged friction follows the trim immediately (the potential
 		// is linear in the lagged normal force); the explicit lagging update
-		// then re-bases at the new trim and gives the same value.
+		// then re-bases at the new trim and gives the same value. Since RB-10
+		// this is the opt-in `friction_lag: "follow_stiffness"` behaviour.
 		{
 			auto m = mesh();
-			Probe f(m);
+			Probe f(m, 1, {{"friction_lag", "follow_stiffness"}});
 			f.start(z);
 			FrictionForm friction(m, nullptr, .01, .5, ipc::BroadPhaseMethod::HASH_GRID, f, 2);
 			friction.init_lagging(z);

@@ -17,6 +17,8 @@ python3 tools/rb10/run_scenes.py --binary build/PolyFEM_bin --output /absolute/f
 # classic-adaptive observation (2 runs), and the friction_lag A/B incl. the public smoke (20 runs)
 python3 tools/rb10/run_scenes.py --binary build/PolyFEM_bin --output /absolute/fresh/dir/stage3-classic --stage classic
 python3 tools/rb10/run_scenes.py --binary build/PolyFEM_bin --output /absolute/fresh/dir/stage4-friction-lag-ab --stage ab
+# Stage 5: the fixtures and the smoke at the solver's current defaults (no friction key written; 15 runs)
+python3 tools/rb10/run_scenes.py --binary build/PolyFEM_bin --output /absolute/fresh/dir/stage5-new-defaults --stage defaults
 
 # Per-endpoint analysis of any run directory (writes endpoints.json next to the runs)
 python3 tools/rb10/analyze_endpoints.py --runs /absolute/fresh/dir/stage2-fixtures
@@ -34,6 +36,12 @@ normal-force transfer through trim bumps, calibration, mid-solve refresh
 refresh; the classic-adaptive rule (observation only); and the slip
 convention with no integrator (static: total displacement), ImplicitEuler and
 BDF2. The invariant parts are also the `[friction_lag]` Catch2 regression.
+
+Stages 2, 3 and classic were run before the RB-10 decision at the then
+defaults (budget 1, RB-18 F6 trim following); the runner now writes those
+settings explicitly (`friction_iterations: 1`,
+`semi_implicit/friction_lag: "follow_stiffness"`) so that evidence stays
+reproducible, and the `defaults` stage writes neither key.
 
 `run_scenes.py` writes isolated scenes on the public unit cube pressed onto
 the slab (top face prescribed: press .05 by t = .2, then the fixture's

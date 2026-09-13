@@ -63,10 +63,11 @@ namespace polyfem::solver
 		/// @param x Current solution
 		void init_lagging(const Eigen::VectorXd &x) override;
 
-		/// @brief RB-10 realized-force lag: between steps the accepted
-		///        endpoint is reached before the barrier's between-steps
-		///        refresh, so the lag built here carries the normal force
-		///        that acted at that endpoint. No-op in the default mode.
+		/// @brief RB-10 realized-force lag (default): between steps the
+		///        accepted endpoint is reached before the barrier's
+		///        between-steps refresh, so the lag built here carries the
+		///        normal force that acted at that endpoint. No-op with
+		///        `friction_lag: "follow_stiffness"`.
 		void update_quantities(const double t, const Eigen::VectorXd &x) override;
 
 		/// @brief Update lagged fields
@@ -94,12 +95,14 @@ namespace polyfem::solver
 		double mu() const { return mu_; }
 		double epsv() const { return epsv_; }
 		const ipc::TangentialCollisions &friction_collision_set() const { return friction_collision_set_; }
-		/// @brief RB-18 F6: the lagged normal-force magnitudes were built with
-		///        the contact trim at lag time. In semi-implicit mode the
-		///        in-solve controller can move the trim before the next lag
-		///        update; the friction potential is linear in the normal force,
-		///        so value/gradient/Hessian are rescaled by the trim ratio to
-		///        stay consistent with the barrier. 1 in every other mode.
+		/// @brief RB-18 F6 (`friction_lag: "follow_stiffness"` only): the
+		///        lagged normal-force magnitudes were built with the contact
+		///        trim at lag time; when the in-solve controller moves the
+		///        trim, value/gradient/Hessian are rescaled by the trim ratio
+		///        to stay consistent with the barrier at fixed coordinates.
+		///        1 in the default realized-force mode and every other mode
+		///        (RB-10: the equilibrium normal force does not follow the
+		///        trim, the gap does).
 		double trim_scale() const;
 		/// @brief RB-10: does this form lag the realized normal force (no trim
 		///        following, lag built before the between-steps refresh)?

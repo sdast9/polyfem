@@ -56,7 +56,7 @@ def main():
     parser.add_argument('--out', type=Path, default=None)
     args = parser.parse_args()
     out = {'evidence': str(args.evidence), 'stages': {}}
-    for stage in ['stage2-fixtures', 'stage3-sensitivity', 'stage3-classic', 'stage4-friction-lag-ab']:
+    for stage in ['stage2-fixtures', 'stage3-sensitivity', 'stage3-classic', 'stage4-friction-lag-ab', 'stage5-new-defaults']:
         runs = load(args.evidence, stage)
         if not runs:
             continue
@@ -68,7 +68,7 @@ def main():
             s = run.get('summary') or {}
             sl = sliding_stats(run)
             row = {'name': run['name'], 'fixture': run['fixture'], 'model': run['model'], 'mu': run['mu'], 'epsv': run['epsv'], 'budget': run['budget'], 'barrier': run['barrier'],
-                   'friction_lag': s.get('friction_lag_mode'), 'accepted': run.get('accepted'), 'status': run['status'], 'exit_status': run.get('exit_status'),
+                   'friction_lag': run.get('friction_lag'), 'friction_lag_used': s.get('friction_lag_mode'), 'lagging_iterations_max': s.get('max_lagging_iterations_reached'), 'accepted': run.get('accepted'), 'status': run['status'], 'exit_status': run.get('exit_status'),
                    'failed_attempts': run.get('failed_attempts'), 'sliding': sl, 'stick': stick_stats(run),
                    'dissipation_min': s.get('dissipation_min'), 'dissipation_negative_steps': s.get('dissipation_negative_steps'),
                    'dissipation_cumulative': s.get('dissipation_cumulative'), 'total_support_work': s.get('total_support_work'),
@@ -81,7 +81,7 @@ def main():
                                    'solved_lag_ratio': (f.get('friction_solved_lag') or {}).get('ratio_to_mu_N_endpoint'), 'updated_lag_ratio': (f.get('friction_updated_lag') or {}).get('ratio_to_mu_N_endpoint'),
                                    'solved_lag_force_x_y': [round(v, 3) for v in (f.get('friction_solved_lag') or {}).get('force_on_body', [])[:2]] or None,
                                    'interfaces': [{'obstacle': i['obstacle'], 'normal_force': round(i['normal_force'], 3), 'friction_tangential': round(i['friction_tangential'], 3), 'ratio_to_mu_N': i['ratio_to_mu_N']} for i in (f.get('friction_solved_lag') or {}).get('interfaces', [])] if run['fixture'] == 'corner_coupled' else None}
-                                for f in run['frames']] if stage in ('stage2-fixtures', 'stage4-friction-lag-ab') else None}
+                                for f in run['frames']] if stage in ('stage2-fixtures', 'stage4-friction-lag-ab', 'stage5-new-defaults') else None}
             rows.append(row)
             trims = sorted(set(t for t in (s.get('trim_history') or []) if t is not None))
             print(f"| {run['name']} | {run.get('accepted')} | {run['status']} | {fmt(sl['solved_lag_ratio_min_max'] if sl else None, 5)} / {fmt(sl['updated_lag_ratio_min_max'] if sl else None, 7)} | {fmt(sl['lag_error_max'] if sl else None, 2)} | {fmt(s.get('dissipation_min'), 2)} | {s.get('dissipation_negative_steps')} | {fmt(s.get('dissipation_cumulative'), 6)} | {fmt(s.get('total_support_work'), 6)} | {fmt(s.get('max_free_residual_solved_lag'), 2)} / {fmt(s.get('max_free_residual_updated_lag'), 3)} | {s.get('accepted_iterations_total_all_minimizes')} | {trims} |")

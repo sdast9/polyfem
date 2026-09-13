@@ -271,6 +271,18 @@ The next measurements are pre/post lag force pairs and a common-coefficient
 energy decomposition at physical endpoints. RB-04 and candidate selection remain
 in progress; no new production coefficient or friction policy is selected.
 
+## Friction defaults changed by RB-10 (note added 2026-09-13)
+
+Every friction number in this record (the `.0025` lag tolerance runs, the
+`state=not converged` endpoints, solved-lag friction work `C_f,right` 0, 2427.030,
+3383.977, 4500.354 — cumulative 10311.361 — and the paired-state results) was
+measured at `friction_iterations: 1` with the RB-18 F6 trim-following lag. Since
+[RB-10](rb-10-validation.md#stage-5--defaults-adopted-2026-09-13) the defaults
+are `friction_iterations: 2` and `semi_implicit/friction_lag: "realized_force"`;
+reproducing these measurements needs both historical settings written
+explicitly (the public smoke file is unchanged and now runs at the new
+defaults, cumulative solved-lag friction work 20742.7).
+
 ## Physical coefficient/friction-state pairs — 2026-09-09
 
 Starting clean source `798cd4bd6` and unchanged effective dependencies. Only

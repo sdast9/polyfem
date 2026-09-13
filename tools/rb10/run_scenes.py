@@ -28,11 +28,15 @@ SCENES = HERE.parents[1] / 'scenes' / 'semi-implicit'
 DT, TEND, T_PRESS, PRESS, RATE = 0.05, 1.0, 0.2, 0.05, 0.25
 BUDGETS = [1, 2, 4, 8]
 EPSVS = [1e-3, 1e-2, 1e-1, 1.0]
+# Stages 2/3/classic were run before the RB-10 decision at the then defaults
+# (budget 1, RB-18 F6 trim following); they write those settings explicitly
+# so the historical evidence stays reproducible after the default change.
+HISTORICAL_LAG = 'follow_stiffness'
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--binary', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--stage', default='2', choices=['2', '3', 'classic', 'ab', 'all'])
+parser.add_argument('--stage', default='2', choices=['2', '3', 'classic', 'ab', 'defaults', 'all'])
 parser.add_argument('--threads', type=int, default=1)
 parser.add_argument('--only', default='')
 parser.add_argument('--dry-run', action='store_true', help='write the scenes, run nothing')
@@ -75,6 +79,7 @@ def kinematics(name):
 
 
 def scene_json(kin, model, mu, epsv, budget, barrier='semi_implicit', friction_lag=None):
+    """budget None / friction_lag None: leave the key out (the solver's current default)."""
     geometry = [
         {'mesh': 'cube.mesh', 'surface_selection': [{'id': 2, 'axis': '+z', 'position': 0.99}]},
         {'mesh': 'slab.obj', 'is_obstacle': True},
@@ -92,22 +97,26 @@ def scene_json(kin, model, mu, epsv, budget, barrier='semi_implicit', friction_l
         'contact': {'enabled': True, 'dhat': 1e-3, 'friction_coefficient': mu, 'epsv': epsv},
         'boundary_conditions': bcs,
         'solver': {
-            'contact': {'barrier_stiffness': barrier, 'friction_iterations': budget},
+            'contact': {'barrier_stiffness': barrier},
             'linear': {'solver': 'Eigen::SimplicialLDLT'},
         },
         'output': {'log': {'level': 'debug'}, 'paraview': {'file_name': 'run.pvd'}, 'physical_diagnostics': True},
     }
+    if budget is not None:
+        scene['solver']['contact']['friction_iterations'] = budget
     if friction_lag is not None:
         scene['solver']['contact']['semi_implicit'] = {'friction_lag': friction_lag}
     return scene
 
 
 def smoke_json(friction_lag=None, budget=1):
+    """budget None / friction_lag None: leave the key out (the solver's current default)."""
     """Isolated copy of the public quasistatic-semi-friction smoke with the diagnostics on."""
     scene = json.loads((SCENES / 'quasistatic-semi-friction.json').read_text())
     scene['output']['physical_diagnostics'] = True
     scene['output']['paraview']['file_name'] = 'run.pvd'
-    scene['solver']['contact']['friction_iterations'] = budget
+    if budget is not None:
+        scene['solver']['contact']['friction_iterations'] = budget
     if friction_lag is not None:
         scene['solver']['contact']['semi_implicit'] = {'friction_lag': friction_lag}
     return scene
@@ -119,15 +128,15 @@ def configurations(stage):
         for name in ['zero_friction_slide', 'slide_plus', 'slide_minus', 'reversal', 'separation_recontact', 'moving_obstacle', 'corner_coupled']:
             for model in ['quasistatic', 'transient']:
                 kin = kinematics(name)
-                runs.append({'name': f'{name}-{model}', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': EPSVS[0], 'budget': BUDGETS[0], 'barrier': 'semi_implicit', 'stage': 2})
+                runs.append({'name': f'{name}-{model}', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': EPSVS[0], 'budget': BUDGETS[0], 'barrier': 'semi_implicit', 'friction_lag': HISTORICAL_LAG, 'stage': 2})
     if stage in ('3', 'all'):
         for name in ['slide_plus', 'reversal']:
             for model in ['quasistatic', 'transient']:
                 kin = kinematics(name)
                 for budget in BUDGETS[1:]:
-                    runs.append({'name': f'{name}-{model}-budget{budget}', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': EPSVS[0], 'budget': budget, 'barrier': 'semi_implicit', 'stage': 3})
+                    runs.append({'name': f'{name}-{model}-budget{budget}', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': EPSVS[0], 'budget': budget, 'barrier': 'semi_implicit', 'friction_lag': HISTORICAL_LAG, 'stage': 3})
                 for epsv in EPSVS[1:]:
-                    runs.append({'name': f'{name}-{model}-epsv{epsv:g}', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': epsv, 'budget': BUDGETS[0], 'barrier': 'semi_implicit', 'stage': 3})
+                    runs.append({'name': f'{name}-{model}-epsv{epsv:g}', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': epsv, 'budget': BUDGETS[0], 'barrier': 'semi_implicit', 'friction_lag': HISTORICAL_LAG, 'stage': 3})
     if stage in ('ab', 'all'):
         # RB-10 friction_lag A/B: the default (follow_stiffness, RB-18 F6) against
         # the opt-in realized_force lag, on the fixtures with in-solve trim
@@ -145,6 +154,14 @@ def configurations(stage):
         for model in ['quasistatic', 'transient']:
             kin = kinematics('slide_plus')
             runs.append({'name': f'slide_plus-{model}-classic-adaptive-budget2', 'fixture': 'slide_plus', 'model': model, 'mu': kin['mu'], 'epsv': EPSVS[0], 'budget': 2, 'barrier': 'adaptive', 'stage': 'classic'})
+    if stage in ('defaults', 'all'):
+        # The solver's current defaults (no friction_iterations / friction_lag
+        # key written): the validation of the RB-10 decision.
+        for name in ['zero_friction_slide', 'slide_plus', 'slide_minus', 'reversal', 'separation_recontact', 'moving_obstacle', 'corner_coupled']:
+            for model in ['quasistatic', 'transient']:
+                kin = kinematics(name)
+                runs.append({'name': f'{name}-{model}-defaults', 'fixture': name, 'model': model, 'mu': kin['mu'], 'epsv': EPSVS[0], 'budget': None, 'barrier': 'semi_implicit', 'friction_lag': None, 'stage': 'defaults'})
+        runs.append({'name': 'smoke-quasistatic-semi-friction-defaults', 'fixture': 'smoke', 'model': 'quasistatic', 'mu': 0.3, 'epsv': 1e-3, 'budget': None, 'barrier': 'semi_implicit', 'friction_lag': None, 'stage': 'defaults'})
     return runs
 
 

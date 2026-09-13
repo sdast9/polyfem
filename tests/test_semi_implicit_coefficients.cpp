@@ -301,9 +301,11 @@ TEST_CASE("Semi-implicit invalid curvature and weight are errors", "[semi_implic
 
 TEST_CASE("Semi-implicit lagged friction follows the trim", "[semi_implicit_coefficients]")
 {
+	// RB-18 F6 behaviour, kept behind `friction_lag: "follow_stiffness"` since
+	// RB-10 made the realized-force lag the default (docs/rb-10-validation.md).
 	const Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
 	auto mesh = make_mesh();
-	Probe contact(mesh);
+	Probe contact(mesh, 1, {{"friction_lag", "follow_stiffness"}});
 	contact.start(x);
 	FrictionForm friction(mesh, nullptr, .01, .5, ipc::BroadPhaseMethod::HASH_GRID, contact, 2);
 	friction.init_lagging(x);

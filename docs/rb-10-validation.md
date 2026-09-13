@@ -1,13 +1,14 @@
 # RB-10 — Friction coupling and dissipation
 
 Date: 2026-09-13 (session started 2026-09-12)
-Status: **characterized—decision pending** (the lagged-friction implementation
-is validated within the stated scope; one production choice — which normal
-force the lag carries after a trim action — is presented below and not taken)
-Selected stage: Stages 1–4 complete — code audit and unit-level reproduction,
-coupled trajectory fixtures, predeclared budget/smoothing sensitivity, and the
-A/B of the opt-in `friction_lag: realized_force` mode against the RB-18 F6
-default. See the [progress log](#progress-log).
+Status: **validated within stated scope** (2026-09-13). The lagged-friction
+implementation passes every acceptance item on the stated fixtures; the two
+production choices the characterization surfaced were taken by the user the
+same day — `semi_implicit/friction_lag` defaults to `realized_force` and
+`friction_iterations` to 2 — and are validated in [Stage 5](#stage-5--defaults-adopted-2026-09-13).
+Selected stages: 1–4 (audit, unit probe/regression, coupled fixtures,
+budget/smoothing sensitivity, `friction_lag` A/B), then 5 (the adopted
+defaults). See the [progress log](#progress-log).
 
 ## Contract and authorization
 
@@ -58,9 +59,16 @@ default. See the [progress log](#progress-log).
   or their semantics without the user's explicit agreement; no golden
   regeneration; no Teseo or private scene; no impact or stick–slip
   certification from steady sliding alone; no claim that a returned finite-lag
-  endpoint is a coupled equilibrium. The one implementation added here
-  (`semi_implicit/friction_lag`) is **opt-in with the default unchanged**; its
-  default is the pending decision.
+  endpoint is a coupled equilibrium. The implementation added by Stage 4
+  (`semi_implicit/friction_lag`) was opt-in with the default unchanged until
+  the user's decision (below).
+- **User decisions (2026-09-13, after Stages 1–4):** on the recommendation in
+  the handoff the user agreed to (a) make `friction_lag: "realized_force"` the
+  default, (b) make `friction_iterations: 2` the default, and (c) expose
+  *Friction Lag* in the Houdini node with the defaults aligned. Stage 5
+  implements and validates them; `"follow_stiffness"` and budget 1 remain
+  available as explicit settings (the RB-18 F6 behaviour and the classic IPC
+  single-solve policy).
 
 ## Baseline and reproduction
 
@@ -254,6 +262,45 @@ endpoint. **A second lag iteration removes most of both**: at budget 2 the
 smoke's modes agree to 5.7e-4 and both dissipate ≈ 21,000 — twice the
 budget-1 value of either mode. Neither endpoint is certified.
 
+### Stage 5 — defaults adopted (2026-09-13)
+
+Changes (`json-specs/input-spec.json`, `BarrierContactForm.{hpp,cpp}`,
+`FrictionForm.hpp` comments): `solver/contact/friction_iterations` default
+1 → **2**; `solver/contact/semi_implicit/friction_lag` default
+`follow_stiffness` → **`realized_force`**. The F6 regressions
+(`test_semi_implicit_coefficients` "lagged friction follows the trim",
+`test_friction_lag` retuning paths, the RB-02 and RB-10 probes' F6 sections)
+now construct their forms with the explicit `follow_stiffness` option and
+keep asserting that behaviour; `test_friction_lag` gained a default-mode case
+(an in-solve bump leaves the lag at the force that acted; `update_quantities`
+builds the lag before the refresh and `init_lagging` keeps it at the same
+coordinates and rebuilds at others; the explicit lag update uses the acting
+stiffness). `tools/rb10/run_scenes.py` writes the historical settings
+explicitly for stages 2/3/classic (so that evidence stays reproducible) and
+has a `defaults` stage that writes neither key.
+
+| Run set (new binary, no friction key written) | Result | Against the historical defaults (Stage 2: budget 1, F6) |
+| --- | --- | --- |
+| 14 fixtures, quasistatic + transient | all 20 steps, exit 0, D ≥ 0 at every step, `friction_lag` recorded as `realized_force`, 2 lag iterations per friction step | zero friction bit-identical; sliders: lag error .148 → .010, D +1.5 %, iterations +32 %; `slide_minus`: the step-18 hiccup is gone (solved-lag ratio max 1.000006 vs 1.303), lag error 1.06 → .019, iterations +18 %; reversal: lag error .245 → .118, D +3 %, iterations +58 %; separation: lift-off overestimate 107 → 1.12 (lag error 106 → .13), D +14 %, iterations +64 %; moving obstacle = slide_plus to 3e-6 in D; corner: lag error 1.44 → .037, D +30 %, iterations +64–78 % |
+| public friction smoke | 4 steps, exit 0; **bit-identical to Stage 4's explicit `realized_force` + budget 2 run** (0.0 at every step) | D 20,743 vs 10,311, support work 546,831 vs 551,226, iterations 62 vs 49; endpoint moves 5.3e-3, 5.1e-3, 4.8e-3, **1.0e-2** at steps 1–4 (on a .25 press) |
+| five public smokes (threaded `run-smoke.sh`) | all exit 0, 0 error lines, PVD times [0, .25, .5, .75, 1] | `adaptive`, `semi`, `semi-alhess`, `transient-semi` Linf identical to the previous run to all printed digits (frictionless: unaffected); `semi-friction` Linf .2426682784 → .2425088340 |
+
+The `frictional_dissipation_increment` stays ≥ 0 at all 296 accepted steps of
+the 15 runs. Reproducing the pre-decision numbers (RB-04's smoke `D_cum`
+10311.361, this record's Stages 2–4, RB-18/RB-20's friction endpoints) needs
+the explicit settings `solver/contact/friction_iterations: 1` and
+`solver/contact/semi_implicit/friction_lag: "follow_stiffness"`; the public
+`quasistatic-semi-friction.json` fixture is unchanged and therefore now runs
+at the new defaults.
+
+Houdini: the PolyFEM 2.0 node's *Friction Iterations* defaults to 2 and the
+Semi-Implicit Options tab gained *Friction Lag* (Realized Force / Follow
+Stiffness), exported as `semi_implicit/friction_lag` and restored on import,
+both with novice tooltips; `test_polyfem_hda.py` checks the defaults, the
+tooltips and the follow/1 round-trip. Published as `f10f9c8` on
+`sdast9/houdini-plugins:main`; installed and published asset hashes match
+(`09a8c5fd1848…` PolyFEM 2.0).
+
 ## Validation
 
 | Check | Input/configuration | Expected criterion | Measured result | Exit / pass / fail / not run |
@@ -269,7 +316,11 @@ budget-1 value of either mode. Neither endpoint is certified.
 | Stage 4 A/B | 20 runs (18 fixture pairs + smoke budget 2 pair) | complete; default bit-identical | 20/20 complete; 8 pairs identical to Stage 2 to 0.0 | pass |
 | Five public smokes | copied `run-smoke.sh`, final binary, threaded | four steps to t = 1, zero error lines | all 5 exit 0, PVD times [0, .25, .5, .75, 1], 0 error lines (`smokes/smokes.log`) | pass |
 | HDA end-to-end | Houdini 22.0.429 `hython tests/test_polyfem_hda.py`, final binary | pass | 7/7 PASS, exit 0 (`hda/test_polyfem_hda.log`; one pre-existing non-fatal descent-direction log line, also in the RB-05 log) | pass |
-| Formatting / diff / links | `git diff --check`, spec JSON parse, Python compile, local links | no introduced issue | checked before publication | pass |
+| Stage 5 regressions (new defaults) | `unit_tests "[friction_lag],[semi_implicit_coefficients]"` | F6 behaviour under the explicit option, realized-force default | **10 cases / 185 assertions** | pass |
+| Stage 5 affected suite | same selection as above, final binary (`6f1dcfa1…`) | no assertion failure | **72 cases / 4,339 assertions**, exit 0 (`unit-tests/affected-suite-new-defaults.log`) | pass |
+| Stage 5 probes | RB-10 probe (`stage1-probe-new-defaults/`), RB-02 probe (`rb02-probe-new-defaults/`) | pass | RB-10 probe 23 checks pass; RB-02 probe stops at its 93rd check "feature coefficient change" — a stencil-keyed expectation that predates RB-21 and is unrelated to friction (the F6 section it never reaches is updated); flagged as a separate task, not repaired here | pass / pre-existing failure retained |
+| Stage 5 fixtures, smokes, HDA | see the Stage 5 table; all 13 HDA tests | complete; defaults path = explicit run | 15/15 complete, 5/5 smokes, 13/13 HDA tests (`hda/all-tests/`) | pass |
+| Formatting / diff / links | `git diff --check`, clang-format, spec JSON parse, Python compile, local links | no introduced issue | checked before each publication | pass |
 
 - Numerical termination versus independently measured residual: every fixture
   step ends on the configured gradient criterion (solved-lag free residual ≤
@@ -305,7 +356,8 @@ budget-1 value of either mode. Neither endpoint is certified.
 - Rebuilt targets: `PolyFEM_bin` and `unit_tests` at `91c7ff8ac` + this item's
   changes (`FrictionForm` realized-lag mode, `BarrierContactForm` option and
   diagnostic field, `input-spec` entry, `tests/test_friction_lag.cpp`,
-  `tools/rb10/`).
+  `tools/rb10/`); Stage 5 binary (defaults flipped): `PolyFEM_bin`
+  `6f1dcfa1…`, `unit_tests` `cc05edcc…`.
 - Committed files / remote / commit: `7cb267f18` on `sdast9/polyfem:main`
   (docs/rb-10-validation.md, docs/robustness-plan.md, json-specs/input-spec.json,
   src/polyfem/solver/forms/{BarrierContactForm,FrictionForm}.{hpp,cpp},
@@ -313,29 +365,26 @@ budget-1 value of either mode. Neither endpoint is certified.
   described above before the commit; this hash note is a documentation
   follow-up.
 - Companion pins unchanged (IPC `bb795446`, PolySolve `ee5b296a` as pinned by
-  `91c7ff8ac`). No HDA source change (the new option is not exposed pending the
-  default decision).
+  `91c7ff8ac`). HDA: `f10f9c8` on `sdast9/houdini-plugins:main` (Stage 5),
+  built inside the publication clone, 13/13 tests, installed hashes match.
 - Working tree after publication: clean; evidence stays in
   `outputs/rb-10/20260912T232617Z/` (not distributed: 61 run directories with
   logs, records and VTU output, 2.2 GB).
 
 ## Next session handoff
 
-- Completed: Stages 1–4 (audit, unit probe/regression, fixture matrix, budget
-  and smoothing sensitivity, `friction_lag` A/B on the fixtures and the public
-  friction smoke).
-- Status **characterized—decision pending**: the acceptance items (1)–(5) are
-  measured and pass within the stated scope, but item (4) surfaced a production
-  choice — whether the lagged friction should carry the trim-scaled force at
-  fixed coordinates (RB-18 F6, current default) or the force that acted at the
-  lag coordinates (`realized_force`). Alternatives, units and consequences are
-  in Stage 4; the friction smoke's endpoint moves 2.1e-2 (on .25) between them
-  at the default budget and 5.7e-4 at budget 2.
-- Decisions for the user: (a) the `friction_lag` default; (b) whether the
-  default lag budget stays 1 (its dissipation deficit is 1.7–3.4 % on the
-  sliders and ≈ 50 % on the compression smoke, at 54–59 % of the budget-2 cost)
-  — the plan's invariant keeps it at 1 unless the user says otherwise; (c)
-  whether to expose `friction_lag` (and the RB-04 diagnostics) in the HDA.
+- Completed: Stages 1–5 (audit, unit probe/regression, fixture matrix, budget
+  and smoothing sensitivity, `friction_lag` A/B, the adopted defaults with
+  their validation and the HDA control).
+- Status **validated within stated scope**: acceptance items (1)–(5) pass on
+  the stated fixtures at the adopted defaults; the finite lag is still a lag
+  (one correction per step), and nothing here is a physical certification —
+  the stated limits below stand.
+- Decisions taken (user, 2026-09-13): `friction_lag: realized_force` and
+  `friction_iterations: 2` are the defaults; *Friction Lag* is exposed in the
+  HDA. Golden consequence: every friction result recorded before this date
+  (RB-04's smoke `D_cum`, RB-18/RB-20 friction endpoints, this record's Stages
+  2–4) reproduces only with the explicit historical settings.
 - Observations for other items: RB-11 — `epsv` is a displacement in a static
   solve and a velocity in time-stepped ones; the lag tolerance compares an
   objective gradient with a length; RB-04/RB-09 — the recorded reaction uses the
@@ -372,3 +421,11 @@ Append-only. Newest entry last.
 - **2026-09-13 01:10Z** — Published `7cb267f18` on `sdast9/polyfem:main`
   (fast-forward from `91c7ff8ac`). Pending user decisions listed in the
   handoff; no HDA change.
+- **2026-09-13 01:35Z** — User agreed with the recommendation (`realized_force`
+  default, budget 2, HDA exposure). Flipped both defaults, updated the F6
+  regressions to the explicit option, added the default-mode regression,
+  rebuilt (`build-logs/build-new-defaults.log`): `[friction_lag],[semi_implicit_coefficients]`
+  10 cases / 185 assertions; RB-10 probe 23 checks; Stage 5 runs (15/15), five
+  smokes, HDA rebuilt in the publication clone with the *Friction Lag* control
+  (13/13 tests, `f10f9c8` pushed). RB-02 probe found stale at its
+  feature-transition check (pre-RB-21 expectation; flagged, not changed).

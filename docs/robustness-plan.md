@@ -182,7 +182,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | not started |
 | RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | not started |
-| RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [characterized—decision pending 2026-09-13 — lagged friction validated within stated scope (Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on 1,141 steps, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity); the RB-18 F6 trim-following changes the friction capacity by the trim ratio after an in-solve bump — opt-in `semi_implicit/friction_lag: realized_force` implemented for the A/B, default unchanged; user decides the default and the lag budget](rb-10-validation.md) |
+| RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [validated within stated scope 2026-09-13 — Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on every accepted step, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity; the RB-18 F6 trim-following (a doubled friction capacity after an in-solve bump at constant load) was reproduced and, by the user's decision, `semi_implicit/friction_lag: realized_force` and `friction_iterations: 2` are the defaults (F6 kept as `follow_stiffness`, budget 1 explicit); HDA *Friction Lag* control `f10f9c8`](rb-10-validation.md) |
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [closed 2026-09-11 — characterized, limits documented; production law retained, no K_eff law adopted; units used by RB-18 F3, algebra by RB-03](rb-13-validation.md#closure-2026-09-11) |
@@ -228,7 +228,7 @@ work. It does **not** preselect any of these remaining decisions:
 | New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping |
 | Enabled production resource or AL budgets | RB-05 / RB-07 | Measure overhead/failure behavior and state proposed limits; user selects defaults; opt-in disabled-by-default mechanisms may be tested first |
 | Automatic timestep/load retry policy | RB-08 | User approves the concrete policy or specified opt-in prototype before implementation |
-| Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair |
+| Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair. **Decided 2026-09-13 (RB-10):** the lagged friction carries the realized normal force (`semi_implicit/friction_lag: realized_force`) and the lag budget defaults to 2; the F6 trim-following and budget 1 stay available explicitly. Material, element and quadrature defaults remain open (RB-11) |
 | Upstream/dependency upgrade or release promotion | RB-12 | Separate user instruction and applicable publication/validation procedure |
 
 A new physical model is not a “routine implementation detail.” Conversely, a
@@ -601,16 +601,18 @@ Bounds on supported accuracy must state tested parameter ranges and uncertainty.
 
 ## RB-10 — Friction coupling and dissipation
 
-**Status 2026-09-13: characterized—decision pending.** Stages 1–4 are in the
+**Status 2026-09-13: validated within stated scope.** Stages 1–5 are in the
 [record](rb-10-validation.md): the frozen-lag constitutive response, the
 normal-force transfer through every retuning path (exact under the defaults;
 stale only with `force_continuation: false`), fourteen coupled fixtures
 (zero friction, sliding ±x, reversal, separation/recontact, moving obstacle,
 corner) in quasistatic and transient form, the budget {1,2,4,8} and `epsv`
-{1e-3 … 1} sweeps, and the A/B of the opt-in `semi_implicit/friction_lag:
-realized_force` against the RB-18 F6 default. Pending: the `friction_lag`
-default (the smoke endpoint differs by 2.1e-2 on .25 between the modes at
-budget 1, 5.7e-4 at budget 2) and whether the default budget stays 1.
+{1e-3 … 1} sweeps, the A/B of `semi_implicit/friction_lag: realized_force`
+against the RB-18 F6 behaviour, and — by the user's decision of 2026-09-13 —
+the adopted defaults `realized_force` and `friction_iterations: 2` (the
+friction smoke endpoint moves 1.0e-2 on .25 against the previous defaults;
+frictionless scenes are unaffected). The lag remains a lag; RB-09 owns the
+reference comparison.
 
 **Revised integration scope:** use RB-04 pre-/post-lag pairs to identify the force
 state actually solved. Cross normal-coefficient updates with slip reversal and
