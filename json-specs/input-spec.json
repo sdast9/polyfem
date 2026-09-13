@@ -2592,7 +2592,8 @@
             "reference",
             "stats",
             "physical_diagnostics",
-            "physical_diagnostics_contact_path"
+            "physical_diagnostics_contact_path",
+            "physical_balance_tolerance"
         ],
         "doc": "output settings"
     },
@@ -2613,6 +2614,12 @@
         "type": "bool",
         "default": false,
         "doc": "With physical_diagnostics, sample frozen contact paths at 1025 points and refine detected feature transitions. Expensive observational research output only."
+    },
+    {
+        "pointer": "/output/physical_balance_tolerance",
+        "type": "float",
+        "default": 1e-6,
+        "doc": "With physical_diagnostics, the relative tolerance of the record's physical_balance_pass: the endpoint free-residual norm (updated friction lag) and the global external-force balance on the body, both against the run's peak total absolute external force (RB-09 decision 2026-09-13). Observational; it does not stop or change the solve."
     },
     {
         "pointer": "/output/stats",

@@ -153,4 +153,9 @@ python3 tools/rb04/check_solver_attempts.py /absolute/fresh/evidence --output /a
 ```
 
 Compact results of the 2026-09-12 validation: `results-20260912.json`.
-`physical_balance_pass` remains unavailable by decision (no threshold selected).
+Since 2026-09-13 (record version 3, RB-09 decision) `physical_balance_pass` is
+the endpoint force residual against the run's peak external force
+(`output.physical_balance_tolerance`, default 1e-6) and `contact.gap_statistics`
+reports the active-collision gaps; the runner expects the flag true on the
+frictionless public fixtures and false on the friction fixture (updated-lag
+residual = the finite-lag mismatch; its solved-lag ratio stays ≤ 1e-6).

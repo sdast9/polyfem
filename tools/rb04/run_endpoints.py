@@ -69,7 +69,7 @@ def main():
         cumulative = dict(external_work_increment=0., frictional_dissipation_increment=0., retuning_energy_change=0.)
         previous_barrier_energy = None
         for row in records:
-            assert row['outcome'] == 'accepted' and row['version'] == 2
+            assert row['outcome'] == 'accepted' and row['version'] == 3
             assert 'measurement_error' not in row, row.get('measurement_error')
             assert row['residual_complete']
             step = row['step']
@@ -122,7 +122,21 @@ def main():
             components = np.array([f['gradient_force_units']['value'] for f in row['forms']])
             assert np.linalg.norm(components.sum(axis=0)-row['full_residual']['value']) < 1e-8
             # Version 2 right-endpoint increments (docs/rb-04-work-convention.md).
-            assert row['physical_balance_pass']['value'] is None and row['physical_balance_pass']['unavailable_reason']
+            # Version 3 (RB-09 decision 2026-09-13): the flag is the endpoint force
+            # residual against the run's peak external force; the public fixtures
+            # converge on the SI tolerance, so every accepted step passes.
+            flag = row['physical_balance_pass']
+            assert flag['threshold'] == 1e-6 and flag['peak_external_force']['value'] > 0, flag
+            if 'friction' in name:
+                # The friction fixture is evaluated at the updated lag: the finite-lag
+                # mismatch is the residual, so the flag fails while the solved-lag
+                # residual stays at the frictionless level.
+                assert flag['value'] is False and flag['friction_lag_state'].startswith('Updated lag'), flag
+                assert flag['solved_lag_free_residual_ratio'] <= 1e-6, flag
+            else:
+                assert flag['value'] is True and flag['free_residual_ratio'] <= 1e-6 and flag['external_force_balance_ratio'] <= 1e-6, flag
+            gaps = row['contact']['gap_statistics']
+            assert gaps['count'] > 0 and 0 < gaps['mean'] < row['contact']['dhat'] and gaps['min'] <= gaps['mean'] <= gaps['max'], gaps
             dx = np.asarray(row['accepted_displacement']['value'])
             support = sum(np.dot(r['full_dof_vector']['value'], dx) for r in row['reactions'])
             assert abs(row['support_work_increment']['value']-support) < 1e-8*(1+abs(support))
@@ -185,7 +199,7 @@ def main():
     on, b = run('quasistatic-semi', True, True)
     assert a['exit'] != 0 and a['exit'] == b['exit']
     rows = [json.loads(line) for line in (on / 'output/physical-diagnostics.jsonl').read_text().splitlines()]
-    assert rows[-1]['outcome'] == 'failed_attempt' and rows[-1]['version'] == 2
+    assert rows[-1]['outcome'] == 'failed_attempt' and rows[-1]['version'] == 3
     assert rows[-1]['accepted_displacement']['value'] is None
     assert rows[-1]['error'] and rows[-1]['termination']['exception']
     assert rows[-1]['termination']['subsolve_state_at_failure']['restarts'] == 1

@@ -210,6 +210,36 @@ unavailable by decision: no physical acceptance threshold is authorized for
 RB-04, and the discrete budget terms are reported separately so that a later
 item can select one.
 
+### Version 3 (2026-09-13): `physical_balance_pass` selected by the RB-09 decision
+
+`version` is now 3; every version 2 field keeps its meaning. Under the user's
+decision recorded in [rb-09-validation.md](rb-09-validation.md#decision-2026-09-13--physical_balance_pass-selected),
+`physical_balance_pass` is the endpoint **force residual in physical units**,
+separate from the solver's scaled stopping criterion, on an accepted endpoint
+with a complete residual: `value` is true when both the free-residual norm
+(the record's `free_residual_norm`, i.e. the updated friction lag) and the
+norm of the global external-force balance on the body's DOFs — the
+non-elastic form forces (contact, friction, inertia, body, pressure) plus the
+support force on the prescribed DOFs — are at most
+`output.physical_balance_tolerance` (default 1e-6) times the run's peak
+total absolute external force (the running maximum over the run's accepted
+records of the L1 norms of the support force and of each non-elastic form
+force over the body's DOFs). The object carries the threshold, the
+normalization, `peak_external_force`, both ratios, the balance vector, the
+friction-lag state and, with friction, `solved_lag_free_residual_ratio`
+(the same ratio with the solved-lag friction, so a failure caused by the
+finite-lag mismatch alone is visible). It is unavailable with a reason when
+no external force has been recorded yet (normalization undefined), on a
+failed attempt, or with an unsupported active form. It is not an energy
+budget test (the right-endpoint work increments carry O(Δt) quadrature
+remainders) and it does not stop or change the solve.
+
+`contact.gap_statistics` reports, over the endpoint's active collisions
+(distance ≤ d̂, the controller's filter; per collision, not per node), the
+count, mean, rms (the controller's statistic), min, max and the ratios to
+d̂. RB-09's design rule: the contact-model error of a force quantity is about
+the mean gap divided by the imposed compression, and the mean gap is below d̂.
+
 ### Iteration observer and the solver-attempts stream
 
 `FullNLProblem` accepts a passive iteration observer. It is installed only

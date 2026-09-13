@@ -1,8 +1,8 @@
 # RB-09 — Reference benchmarks and refinement envelope
 
 Date: 2026-09-13
-Status: characterized—limits documented (stage 1: contracts, analytical references, separate sweeps, controller comparison, public-smoke refinement; no application acceptance selected)
-Selected stage: the plan's full RB-09 scope on public inputs (no RB-17 candidate: retired), all sweeps separate; the `physical_balance_pass` threshold is prepared as a proposal, not selected.
+Status: characterized—limits documented (contracts, analytical references, separate sweeps, controller comparison, public-smoke refinement; the `physical_balance_pass` decision was taken and implemented on 2026-09-13 — see the decision section; the gap sensitivity and the T7 unit-conversion failure keep the item short of `validated within stated scope`)
+Selected stage: the plan's full RB-09 scope on public inputs (no RB-17 candidate: retired), all sweeps separate; then the user's acceptance decision (1)–(3) below.
 
 The contract with the benchmark definitions, quantities of interest and the
 thresholds declared before the matrix ran is [rb-09-contract.md](rb-09-contract.md).
@@ -194,6 +194,49 @@ and flag the raw mm run's residual. Selecting it — and whether it is an
 application acceptance at all — is the user's decision under the plan's
 register; nothing is enabled.
 
+## Decision (2026-09-13) — `physical_balance_pass` selected
+
+The user confirmed the three recommendations:
+
+1. **`physical_balance_pass` is the endpoint force residual in physical
+   units**, not an energy budget: `free_residual_norm ≤ 1e-6 · peak` and
+   `|external-force balance| ≤ 1e-6 · peak`, with `peak` the run's peak total
+   absolute external force (L1 of the support force and of each non-elastic
+   form force over the body's DOFs, running maximum over accepted records)
+   and the residual at the updated friction lag. Threshold
+   `output.physical_balance_tolerance` (default 1e-6). Justification: the
+   converged SI runs of this record sit at 4e-15–1.6e-8, the mis-scaled
+   millimetre run at 1.2e-4–2.7e-3; the energy budget's right-endpoint
+   increments carry O(Δt) quadrature remainders (RB-04: 111 325 J at dt .25
+   on a 3e5 J energy) and cannot serve as a threshold.
+2. **The contact-model error is reported, not gated:** `contact.gap_statistics`
+   (count, mean, rms, min, max of the active-collision distances and the
+   ratios to `d̂`) is in every record; the design rule is
+   `relative model error ≈ mean gap / imposed compression ≤ d̂ / compression`.
+3. **Engineering accuracy stays outside the flag** (a mesh comparison; the
+   public 4×4×4 smoke is 11 % from its Richardson limit).
+
+Implementation (record version 3, observational, no solver change):
+`NonlinearElasticVarForm::write_physical_diagnostics` (the flag object with
+threshold, normalization, `peak_external_force`, both ratios, the balance
+vector, the friction-lag state and `solved_lag_free_residual_ratio`),
+`BarrierContactForm::gap_statistics`, the spec option
+`output/physical_balance_tolerance`, the `[physical_diagnostics]` regression
+(gap statistics on the probe mesh, 3 cases / 64 assertions) and the RB-04
+runner's expectations. Contract note: [rb-04-contract.md](rb-04-contract.md#version-3-2026-09-13-physical_balance_pass-selected-by-the-rb-09-decision).
+
+| Check | Configuration | Result | Status |
+| --- | --- | --- | --- |
+| Affected selections | `[physical_diagnostics]` 64/3, `[coefficient_events]` 171/1, `[contact_cache]` 739/6, `[friction_lag]` 111/4, `semi-implicit*` 234/8 (assertions/cases) | all pass | pass |
+| RB-04 endpoint runner | three public four-step fixtures off/on + the deliberate failure (`decision/rb04-endpoints/`) | off/on endpoints identical to 1e-16; reconstructions intact; flag true on `quasistatic-semi`/`transient-semi` at every step (ratios 3e-14–4.9e-11); false on the friction fixture at every step (free-residual ratio 1.7e-3–3.3e-3, balance 3.4e-3–9.7e-3) with the solved-lag ratio ≤ 1.1e-12 — the finite-lag mismatch at budget 2 is 0.2–0.3 % of the peak force on the public friction smoke | pass (as designed) |
+| RB-09 cases rerun (`decision/block/`) | `block-base`, `block-units-mm`, `block-unload`, `block-stacked` | endpoints bit-identical to the earlier binary (max difference 0.0); flag true on base (≤ 3.2e-10), unload (all 8 steps, including the separated endpoint, normalized by the peak 3.009e6) and stacked (≤ 2.6e-11); false on the raw millimetre run at every step (2.1e-5–2.7e-3); per-collision mean gap .875 `d̂` at the base endpoint (46 collisions; the per-node mean of this record is .836) | pass (as designed) |
+| Five public smokes | `run-smoke.sh` | all exit 0, no error line | pass |
+| Formatting / diff / links | `git diff --check`, clang-format, spec JSON parse, Python compile, local links | no introduced issue | pass |
+
+Not performed: the full unit-test suite; other platforms; the HDA tests (no
+HDA change; the tolerance is not exposed in the Houdini node — a separate
+choice).
+
 ## Publication and reproducibility
 
 - Rebuilt targets: none (no C++ production change); the probe compiles
@@ -211,20 +254,25 @@ register; nothing is enabled.
 - Completed: contracts; Benchmark A (25 runs: `d̂`, mesh, increment,
   transient dt, material, density, speed, units ×3, controllers ×3, unload,
   stacked), Benchmark B (5 cases), Benchmark C (15 runs: 3 meshes with hard
-  references and 2 lift runs, increments, transient, `d̂`).
+  references and 2 lift runs, increments, transient, `d̂`); the acceptance
+  decision and its implementation (record version 3).
 - Status `characterized—limits documented`: T1–T6, T8–T14 pass as declared;
   T7 fails as declared with the cause traced to two upstream unit-dependent
   constants; the realized gap varies between .62 and .99 `d̂` across the
   sweeps (sensitivity documented). No application acceptance is selected, so
   the item cannot be `validated within stated scope` under the plan's rule.
-- Decisions/prerequisites: (1) whether to select a `physical_balance_pass`
-  threshold from the proposal above; (2) RB-11/RB-12 should carry the two
-  unit-dependence observations (`characteristic_force_density` scaling as
-  `s^-1.5`, IPC's absolute 1e-4 CCD clearance and its amplification by the
-  emergency controller); (3) whether the controller's first-contact response
-  to a CCD-truncated iterate (trim ramps to 65 536, gap pinned near `d̂`)
-  deserves its own item — it is a conditioning/cost issue, not an accuracy
-  one (the error stays below `c·d̂`).
+- Decisions taken (user, 2026-09-13): `physical_balance_pass` as the force
+  residual at 1e-6 of the peak external force (record version 3), the gap
+  statistics reported, engineering accuracy outside the flag. Remaining:
+  (1) RB-11/RB-12 should carry the two unit-dependence observations
+  (`characteristic_force_density` scaling as `s^-1.5`, IPC's absolute 1e-4
+  CCD clearance and its amplification by the emergency controller);
+  (2) whether the controller's first-contact response to a CCD-truncated
+  iterate (trim ramps to 65 536, gap pinned near `d̂`) deserves its own item
+  — a conditioning/cost issue, not an accuracy one (the error stays below
+  `c·d̂`); (3) whether the friction flag should get its own looser threshold
+  (every friction step reads false at 1e-6 through the 0.2–0.3 % finite-lag
+  mismatch; the solved-lag ratio is reported alongside).
 - Next: `python3 tools/rb09/run_matrix.py --stage all` reproduces the matrix
   (the `n_refs` 2 runs take ~3 min each); `run_probe.py` the probe. Eligible
   items: RB-23, RB-06/RB-08, RB-11 (with these observations), RB-12.
@@ -247,3 +295,9 @@ Append-only. Newest entry last.
   CCD clearance and PolyFEM's `F0·L^1.5` tolerance; two controlled mm
   variants added; clamped matrix 15 runs; Fixed control run; analyzer fixed
   for the stacked interface gap and the unloaded endpoint; summary written.
+- **2026-09-13 15:10Z** — Recommendation (1)–(3) for `physical_balance_pass`
+  confirmed by the user; implemented as record version 3 with
+  `contact.gap_statistics`, the spec tolerance and the regression; RB-04
+  runner, RB-09 reruns (bit-identical endpoints) and the five smokes pass;
+  the friction smoke's finite-lag mismatch measured at 0.2–0.3 % of the
+  peak force.

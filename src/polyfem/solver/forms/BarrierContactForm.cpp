@@ -1325,6 +1325,43 @@ namespace polyfem::solver
 		return result;
 	}
 
+	json BarrierContactForm::gap_statistics(const Eigen::MatrixXd &displaced_surface) const
+	{
+		assert(displaced_surface.rows() == collision_mesh_.num_vertices());
+		const Eigen::MatrixXi &edges = collision_mesh_.edges();
+		const Eigen::MatrixXi &faces = collision_mesh_.faces();
+		const double dhat_sq = dhat_ * dhat_;
+		size_t count = 0;
+		double sum = 0, sum_sq = 0, lo = std::numeric_limits<double>::infinity(), hi = 0;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const double d2 = collision_set_[i].compute_distance(collision_set_[i].dof(displaced_surface, edges, faces));
+			if (!(d2 <= dhat_sq)) // inactive or nonfinite: the controller ignores it too
+				continue;
+			const double d = std::sqrt(d2);
+			++count;
+			sum += d;
+			sum_sq += d2;
+			lo = std::min(lo, d);
+			hi = std::max(hi, d);
+		}
+		json result = {{"scope", "Active collisions (distance <= dhat) of the endpoint stencil set; distance per collision, not per node"}, {"count", count}};
+		if (count == 0)
+		{
+			result["mean"] = {{"value", nullptr}, {"unavailable_reason", "No active collision within dhat"}};
+			return result;
+		}
+		const double mean = sum / count, rms = std::sqrt(sum_sq / count);
+		result["mean"] = mean;
+		result["rms"] = rms;
+		result["min"] = lo;
+		result["max"] = hi;
+		result["mean_over_dhat"] = mean / dhat_;
+		result["rms_over_dhat"] = rms / dhat_;
+		result["rms_note"] = "rms = sqrt(mean squared distance), the statistic the trim controller compares with the band";
+		return result;
+	}
+
 	double BarrierContactForm::value_unweighted(const Eigen::VectorXd &x) const
 	{
 		return barrier_potential_(collision_set_, collision_mesh_, compute_displaced_surface(x));

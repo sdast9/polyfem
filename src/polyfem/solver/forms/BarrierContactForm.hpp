@@ -67,6 +67,12 @@ namespace polyfem::solver
 		/// Bounded observational path quadrature; never refreshes production coefficients.
 		json diagnostic_path(const Eigen::VectorXd &start, const Eigen::VectorXd &end) const;
 		json diagnostic_state() const;
+		/// Distances of the active collisions (within dhat, the same filter as
+		/// the controller's compute_avg_distance) at the given displaced
+		/// surface: count, mean, rms, min, max and the ratios to dhat. RB-09:
+		/// the contact-model error of a force quantity is about the mean gap
+		/// divided by the imposed compression, so the mean gap is reported.
+		json gap_statistics(const Eigen::MatrixXd &displaced_surface) const;
 		/// Observer for outer refresh/calibration/stall/post-step operations.
 		/// Callback failures cannot change solver behavior. Direct initialization
 		/// setters and coordinate-only feature transitions are outside this stream.

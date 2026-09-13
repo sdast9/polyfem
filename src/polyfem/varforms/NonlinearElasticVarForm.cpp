@@ -120,8 +120,12 @@ namespace polyfem::varform
 		// Version 2 (RB-04 remainder): attempt summary and last proposal from the
 		// iteration observer, the last internal iterate of a failed attempt,
 		// retained candidate counts, and right-endpoint discrete work increments
-		// under the declared convention. Version 1 fields keep their meaning.
-		json record = {{"schema", "polyfem.physical-diagnostics"}, {"version", 2}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"work", "internal energy; right-endpoint discrete estimates, not path integrals"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
+		// under the declared convention. Version 3 (RB-09 decision, 2026-09-13):
+		// physical_balance_pass is populated -- the endpoint force residual in
+		// physical units against the run's peak external force -- and the
+		// contact record carries the active-collision gap statistics. Every
+		// earlier field keeps its meaning.
+		json record = {{"schema", "polyfem.physical-diagnostics"}, {"version", 3}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"work", "internal energy; right-endpoint discrete estimates, not path integrals"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
 		record["time"] = args["time"].is_object() ? scalar(args["time"].value("t0", 0.) + step * args["time"].value("dt", 0.)) : missing("Static solve has no physical time");
 		record["accepted_displacement"] = outcome == "accepted" ? vector(x - start) : missing("Attempt did not return an accepted endpoint");
 		record["attempt_summary"] = observations.value("summary", json{{"unavailable_reason", "No attempt observation"}});
@@ -142,7 +146,7 @@ namespace polyfem::varform
 												  : missing("No accepted Newton iterate was observed before the failure");
 		}
 		record["work_convention"] = "Right-endpoint discrete increments: endpoint force dotted with the accepted displacement of this step, physical units; support force on the system sign; solved-lag friction; parameter-state energy change at the previous physical coordinates (docs/rb-04-work-convention.md). Not path integrals and not a physical balance.";
-		record["physical_balance_pass"] = missing("No physical acceptance threshold is authorized for RB-04; the discrete budget terms are reported separately");
+		record["physical_balance_pass"] = missing("Not evaluated: no complete endpoint measurement");
 		const size_t rss = getCurrentRSS(), peak = getPeakRSS();
 		record["current_rss_bytes"] = rss ? json{{"value", rss}} : missing("Platform RSS unavailable");
 		record["peak_rss_bytes"] = peak ? json{{"value", peak}} : missing("Platform peak RSS unavailable");
@@ -153,6 +157,9 @@ namespace polyfem::varform
 			if (!(scale > 0) || !std::isfinite(scale) || !x.allFinite())
 				throw std::runtime_error("Invalid endpoint or acceleration scaling");
 			Eigen::VectorXd residual = Eigen::VectorXd::Zero(x.size());
+			// Sum of the non-elastic form gradients: the external forces on the
+			// body (contact, friction, inertia, body, pressure) for the balance.
+			Eigen::VectorXd external = Eigen::VectorXd::Zero(x.size());
 			bool complete = true;
 			record["forms"] = json::array();
 			for (const auto &form : forms)
@@ -188,6 +195,7 @@ namespace polyfem::varform
 					const double d2 = snapshot.collision_set().compute_minimum_distance(collision_mesh_, snapshot.compute_displaced_surface(x));
 					record["contact"]["min_gap"] = std::isfinite(d2) ? scalar(std::sqrt(d2)) : missing("No active pair within dhat; global minimum not measured");
 					record["contact"]["gap_scope"] = "Minimum over endpoint active stencils only";
+					record["contact"]["gap_statistics"] = snapshot.gap_statistics(snapshot.compute_displaced_surface(x));
 				}
 				else if (form == solve_data_.elastic_form || form == solve_data_.body_form
 						 || form == solve_data_.inertia_form || form == solve_data_.friction_form
@@ -216,6 +224,8 @@ namespace polyfem::varform
 				row["objective_divided_by_acceleration_scaling"] = scalar(e / scale);
 				row["gradient_force_units"] = vector(g / scale);
 				residual += g / scale;
+				if (form != solve_data_.elastic_form)
+					external += g / scale;
 				record["forms"].push_back(row);
 			}
 			record["residual_complete"] = complete;
@@ -255,6 +265,77 @@ namespace polyfem::varform
 				record["bc_error_inf"] = missing("No simple Dirichlet selector constraint");
 			if (!record.contains("contact"))
 				record["contact"] = missing("No supported active barrier contact form");
+
+			// physical_balance_pass (RB-09 decision, 2026-09-13): the endpoint
+			// force residual in physical units, separate from the solver's
+			// scaled stopping criterion. Two conditions on the body's DOFs:
+			// (1) the free residual norm (updated friction lag) and (2) the
+			// global external-force identity -- non-elastic form forces on
+			// the body plus the support force on its prescribed DOFs -- both
+			// at most `tolerance` times the run's peak total absolute external
+			// force. Normalizing by the peak keeps unloaded steps comparable;
+			// with no external force recorded yet the flag is unavailable.
+			record["physical_balance_pass"] = missing("Not evaluated");
+			if (complete && outcome == "accepted")
+			{
+				const int n_body = (space_.n_bases - obstacle.n_vertices()) * mesh_->dimension();
+				const int dim = mesh_->dimension();
+				Eigen::VectorXd support = Eigen::VectorXd::Zero(x.size());
+				for (const auto &constraint : solve_data_.al_form)
+					if (dynamic_cast<const BCLagrangianForm *>(constraint.get()))
+					{
+						const auto &A = constraint->constraint_matrix();
+						support += A.transpose() * (A * residual);
+					}
+				double peak_here = support.head(n_body).lpNorm<1>();
+				for (const auto &form : forms)
+				{
+					if (!form->enabled() || form == solve_data_.elastic_form || dynamic_cast<const AugmentedLagrangianForm *>(form.get()))
+						continue;
+					for (const auto &row : record["forms"])
+						if (row["name"] == form->name() && row.contains("gradient_force_units") && row["gradient_force_units"]["value"].is_array())
+						{
+							const auto g = row["gradient_force_units"]["value"].get<std::vector<double>>();
+							double l1 = 0;
+							for (int i = 0; i < n_body && i < int(g.size()); ++i)
+								l1 += std::abs(g[i]);
+							peak_here = std::max(peak_here, l1);
+						}
+				}
+				diagnostic_peak_external_force_ = std::max(diagnostic_peak_external_force_, peak_here);
+				const double tolerance = args["output"].value("physical_balance_tolerance", 1e-6);
+				const double free_norm = solve_data_.nl_problem->full_to_reduced_grad(residual).norm();
+				Eigen::VectorXd balance = Eigen::VectorXd::Zero(dim);
+				for (int i = 0; i < n_body; ++i)
+					balance[i % dim] += support[i] - external[i]; // support on the system, minus the gradient = force on the body
+				json flag = {{"threshold", tolerance},
+							 {"normalization", "Peak over this run's accepted records of the total absolute external force on the body's DOFs (L1 of the support force and of each non-elastic form force)"},
+							 {"peak_external_force", scalar(diagnostic_peak_external_force_)},
+							 {"free_residual_norm", scalar(free_norm)},
+							 {"external_force_balance", vector(balance)},
+							 {"friction_lag_state", solve_data_.friction_form && solve_data_.friction_form->enabled() ? "Updated lag: the finite-lag mismatch is part of the residual" : "No friction"},
+							 {"criterion", "free_residual_norm <= threshold * peak and |external_force_balance| <= threshold * peak (docs/rb-09-validation.md, decision 2026-09-13)"}};
+				if (diagnostic_peak_external_force_ > 0 && std::isfinite(free_norm) && balance.allFinite())
+				{
+					flag["free_residual_ratio"] = free_norm / diagnostic_peak_external_force_;
+					// With friction the solved-lag residual shows how much of a
+					// failure is the finite-lag mismatch alone.
+					if (record["free_residual_norm_with_pre_update_friction"].contains("value") && record["free_residual_norm_with_pre_update_friction"]["value"].is_number())
+						flag["solved_lag_free_residual_ratio"] = record["free_residual_norm_with_pre_update_friction"]["value"].get<double>() / diagnostic_peak_external_force_;
+					flag["external_force_balance_ratio"] = balance.norm() / diagnostic_peak_external_force_;
+					flag["value"] = free_norm <= tolerance * diagnostic_peak_external_force_ && balance.norm() <= tolerance * diagnostic_peak_external_force_;
+				}
+				else
+				{
+					flag["value"] = nullptr;
+					flag["unavailable_reason"] = diagnostic_peak_external_force_ > 0 ? "Nonfinite residual or balance" : "No external force recorded yet in this run; the normalization is undefined";
+				}
+				record["physical_balance_pass"] = flag;
+			}
+			else if (!complete)
+				record["physical_balance_pass"] = missing("Unsupported active form; the residual is partial");
+			else
+				record["physical_balance_pass"] = missing("Attempt did not return an accepted endpoint");
 
 			// Right-endpoint discrete work increments of this accepted step
 			// (docs/rb-04-work-convention.md). These are the declared

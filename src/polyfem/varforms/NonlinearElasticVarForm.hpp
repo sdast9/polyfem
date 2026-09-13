@@ -113,6 +113,10 @@ namespace polyfem::varform
 		solver::SolveData solve_data_;
 		std::vector<std::shared_ptr<solver::Form>> forms;
 		std::string diagnostic_run_id_;
+		/// Running maximum over this run's accepted records of the total absolute
+		/// external force (support, contact, friction, inertia, body, pressure);
+		/// the normalization of physical_balance_pass (RB-09 decision, 2026-09-13).
+		double diagnostic_peak_external_force_ = 0;
 		void configure_coefficient_diagnostics(int step, const std::string &phase);
 		TrajectoryAccounting trajectory_accounting_;
 		bool contact_dhat_was_explicit_ = false;

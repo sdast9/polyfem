@@ -294,6 +294,37 @@ TEST_CASE("Physical diagnostic snapshots preserve contact state and frozen deriv
 	CHECK(form.candidate_statistics().builds == 0);
 }
 
+TEST_CASE("Endpoint records report the active-collision gap statistics", "[physical_diagnostics]")
+{
+	// RB-09 decision (2026-09-13): the record carries the mean gap of the
+	// active collisions; the contact-model error of a force quantity is about
+	// mean gap / imposed compression.
+	const auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	const auto at_rest = form.gap_statistics(form.compute_displaced_surface(zero));
+	CHECK(at_rest["count"].get<size_t>() == 1);
+	CHECK(at_rest["mean"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["rms"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["min"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["max"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["mean_over_dhat"].get<double>() == Catch::Approx(.2));
+	Eigen::VectorXd lifted = zero;
+	lifted[5] = .1; // gap .3 at the same stencil: a private snapshot measures it
+	const auto snapshot = form.diagnostic_snapshot(lifted);
+	CHECK(snapshot.gap_statistics(snapshot.compute_displaced_surface(lifted))["mean"].get<double>() == Catch::Approx(.3));
+	// The measurement never mutates the production form.
+	CHECK(form.gap_statistics(form.compute_displaced_surface(zero))["mean"].get<double>() == Catch::Approx(.2));
+	Eigen::VectorXd absent = zero;
+	absent[5] = 2; // outside the support: no active collision, no mean
+	const auto empty = form.diagnostic_snapshot(absent);
+	const auto none = empty.gap_statistics(empty.compute_displaced_surface(absent));
+	CHECK(none["count"].get<size_t>() == 0);
+	CHECK(none["mean"]["value"].is_null());
+	CHECK_FALSE(none["mean"]["unavailable_reason"].get<std::string>().empty());
+}
+
 TEST_CASE("Endpoint records retain the candidate counts of this solve's trial sweeps", "[physical_diagnostics][contact_cache]")
 {
 	const auto mesh = make_mesh();
