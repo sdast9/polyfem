@@ -389,5 +389,197 @@
       "exit": -6,
       "cause": "Sandboxed Houdini Qt processor check reported missing neon before test startup; final outside-sandbox run passed"
     }
+  },
+  "published_rb05_integration": {
+    "polyfem_baseline": "382c4c21ec93b9d202489a95499bf010dd61ace5",
+    "production_commit": "c93cdd9c52c68a52248c56660aaa355218c46eda",
+    "ipc_commit": "bb795446812a3d3c7b5358c4cdbf26c6bbe48a16",
+    "polysolve_commit": "ee5b296a690ce225fb34f6f375d27f9ea2a16027",
+    "binary_sha256": {
+      "PolyFEM_bin": "aba07856ef787508c0b5128d25d4153d8712215019281539dc694dcd95b7cd65",
+      "tests/unit_tests": "cf6a4b0bfe7faf7c662c0864ace739466b988b151766fb1201db7c60aa54ce1e"
+    },
+    "source_sha256": {
+      "polyfem/src/polyfem/solver/ALSolver.cpp": "cee75635775e316aa5a445a7e4f4a73661825448f29a6b9014cb61d5c31c0e6e",
+      "polyfem/src/polyfem/solver/forms/BarrierContactForm.cpp": "710cc35d4badb10954bfd470454c43a7908f589e6b95f567c822ed09241dd7a7",
+      "polyfem/tests/test_al_solver.cpp": "492a99f89b56c94e6b89f948d9e1b63b7c0baf0c16746aaeaed4fef28f92426a",
+      "polyfem/tests/test_kappa_continuity.cpp": "286fe4a69b761d173c560e88fa42414e316d4cd5f726fe975ed2d541b066e14c",
+      "polyfem/tests/test_semi_implicit_coefficients.cpp": "66eb445bc4081ef3d655e780c7d431278bd0d100407192509a0a9ec1f06651c7",
+      "polysolve-merged/src/polysolve/nonlinear/line_search/Armijo.cpp": "a8b94f2136e4a0253e884faadf9f512cb4bfeb9cf1efe6ee7961eaf8f8a06681",
+      "polysolve-merged/src/polysolve/nonlinear/line_search/Armijo.hpp": "8575758aee2d3025c1c86ddd31e87404eb990ccec1361445d58bafca152359c5",
+      "polysolve-merged/src/polysolve/nonlinear/line_search/RobustArmijo.cpp": "b4d3a0daa8088b95af6a3d97aa2b25e7ffa249e5c0ca72b698dced6a5b9237a2",
+      "polysolve-merged/nonlinear-solver-spec.json": "5fb37d8bb34502a4b8e9e9da4e4e9074d32812081a8c56a549f63d575563dab7",
+      "polysolve-merged/tests/test_nonlinear_solver.cpp": "dc407eb27ab97b4ad4824fe851cf62dcce46f75a2f8047c09b79eea9ceef1717"
+    },
+    "hda_inputs_sha256": {
+      "houdini_HDAs/tests/test_polyfem_hda.py": "e9589550be2afb40f5fc86bcdd52f2f5e80fca8c46d04c5880246a3edb137ee0",
+      "houdini_HDAs/object_stevenabramowitch.dev.PolyFEM.2.0.hdanc": "f0bc1ce278376751bf8e1f6f709af160b01e5edd9f03b16fba2cf883e75f2d15",
+      "houdini_HDAs/sop_MSH_Reader.3.0.hdanc": "646313432a6f5a948555b9a38001cf41cbf218b4b0ff7f226bd174b56440168a"
+    },
+    "tests": {
+      "polyfem": {
+        "cases": 65,
+        "assertions": 4315,
+        "exit": 0
+      },
+      "polysolve_related": {
+        "cases": 4,
+        "assertions": 534,
+        "exit": 0
+      },
+      "hda_e2e": {
+        "exit": 0
+      }
+    },
+    "smokes": {
+      "quasistatic-adaptive": {
+        "exit": 0,
+        "saved_states": 5,
+        "error_lines": 0,
+        "max_abs_endpoint_delta": 6.938893903907228e-17,
+        "baseline_solution_sha256": "41f8ad0a71b2c8d6b03fba12a3371f24b2faa1d062e29da04b129923bba2371c",
+        "final_solution_sha256": "d8a9e839600d6b628afe617623d6fac4265e800b44391c4b1f051e62cd8a6962"
+      },
+      "quasistatic-semi": {
+        "exit": 0,
+        "saved_states": 5,
+        "error_lines": 0,
+        "max_abs_endpoint_delta": 1.734723475976807e-16,
+        "baseline_solution_sha256": "2bbc00ba84baeedc4b0e290a681c7cb73620dacc26af3077ee67835d147ff350",
+        "final_solution_sha256": "3a974e9408ed31c0a24d2edb5781bd523d802c4a7e98ac8685cc4f72d2d23301"
+      },
+      "quasistatic-semi-alhess": {
+        "exit": 0,
+        "saved_states": 5,
+        "error_lines": 0,
+        "max_abs_endpoint_delta": 3.677613769070831e-16,
+        "baseline_solution_sha256": "638cf78409bbe3c27d33e8c8bdb07c37dbe63de36ea294bf2ebe37235c9df57d",
+        "final_solution_sha256": "3cda15a1e86092beb926919784bd3a22304c2c81f899bbb062caa2016604d8c0"
+      },
+      "quasistatic-semi-friction": {
+        "exit": 0,
+        "saved_states": 5,
+        "error_lines": 0,
+        "max_abs_endpoint_delta": 8.951173136040325e-16,
+        "baseline_solution_sha256": "79a37e824537e1a9be2562e73d8636d71f268c398d74af5a17f157be70df4061",
+        "final_solution_sha256": "207dbdadfeaf5a0fd4b1a59a814280a4c564a47c04e6809ce04a92a6f2f5e1c7"
+      },
+      "transient-semi": {
+        "exit": 0,
+        "saved_states": 5,
+        "error_lines": 0,
+        "max_abs_endpoint_delta": 2.949029909160572e-16,
+        "baseline_solution_sha256": "3cddbffce53ffd61098646f8964322216e80f70a96bb764871bd1025fd634404",
+        "final_solution_sha256": "04224c66e4d80ef82bbf5f0c18d70101afeb6033f7c987e8b445292e7cba8019"
+      }
+    },
+    "step1_repeats": [
+      {
+        "index": 0,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 9,
+        "saved_steps": 17
+      },
+      {
+        "index": 1,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 9,
+        "saved_steps": 17
+      },
+      {
+        "index": 2,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 9,
+        "saved_steps": 17
+      },
+      {
+        "index": 3,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 10,
+        "saved_steps": 17
+      },
+      {
+        "index": 4,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 8,
+        "saved_steps": 17
+      },
+      {
+        "index": 5,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 9,
+        "saved_steps": 17
+      },
+      {
+        "index": 6,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 7,
+        "saved_steps": 17
+      },
+      {
+        "index": 7,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 8,
+        "saved_steps": 17
+      },
+      {
+        "index": 8,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 8,
+        "saved_steps": 17
+      },
+      {
+        "index": 9,
+        "threads": "default",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 5,
+        "saved_steps": 17
+      },
+      {
+        "index": 10,
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 10,
+        "saved_steps": 17
+      },
+      {
+        "index": 11,
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 10,
+        "saved_steps": 17
+      },
+      {
+        "index": 12,
+        "threads": "1",
+        "exit": 0,
+        "restarts": 0,
+        "fallback_accepts": 10,
+        "saved_steps": 17
+      }
+    ],
+    "four_pre_post_counterexamples_confirmed": true,
+    "published_control_archives_stable": true
   }
 }
