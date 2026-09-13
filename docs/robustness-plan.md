@@ -181,7 +181,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
 | RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | not started |
-| RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | not started |
+| RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | [characterized—limits documented 2026-09-13 — analytical block, spring/contact and same-mesh hard-contact references; the semi-implicit model error is the realized gap (`e_R = c·ḡ/H`, .35–.6 % at `d̂` 1e-3, rate ≈ 1 in `d̂`), solver error 1.4e-5, discretisation of the public 4×4×4 smoke 11 % (order 1.5); realized gap .62–.99 `d̂` across sweeps; raw m → mm conversion differs by 1e-3 (upstream absolute CCD clearance, `F0·L^1.5` tolerance); classic/Fixed 1e-6 at 2× the cost; no acceptance threshold selected (proposal in the record)](rb-09-validation.md) |
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [validated within stated scope 2026-09-13 — Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on every accepted step, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity; the RB-18 F6 trim-following (a doubled friction capacity after an in-solve bump at constant load) was reproduced and, by the user's decision, `semi_implicit/friction_lag: realized_force` and `friction_iterations: 2` are the defaults (F6 kept as `follow_stiffness`, budget 1 explicit); HDA *Friction Lag* control `f10f9c8`](rb-10-validation.md) |
 | RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | not started |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
@@ -198,9 +198,12 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | not started — [section](#rb-23--q3-hexahedral-basis-node-bookkeeping) |
 
 The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22,
-RB-04 and RB-05 are validated within their scope (2026-09-12). Remaining
-order: RB-09 references and RB-10 friction (where the
-RB-20 friction endpoint move belongs); RB-23 (Q3+ hexahedral basis) is
+RB-04 and RB-05 are validated within their scope (2026-09-12), RB-10 on
+2026-09-13. RB-09 is characterized with its limits documented (2026-09-13):
+the accuracy envelope on public fixtures is measured and the
+`physical_balance_pass` threshold is prepared as a proposal for the user;
+its two unit-dependence observations belong to RB-11/RB-12. Remaining
+order: RB-23 (Q3+ hexahedral basis) is
 independently eligible and is the prerequisite for Q3+ hex contact. RB-06–RB-08 remain the resource/recovery track
 (RB-05's `aborted` attempt row and discarded swept interval are the state RB-06
 starts from; a resource failure is now a distinct, non-retried exception type
@@ -225,7 +228,7 @@ work. It does **not** preselect any of these remaining decisions:
 | --- | --- | --- |
 | New coefficient positivity/cap/retuning law | RB-02 evidence; RB-13–RB-17 | Compare alternatives with units, derivatives and force/work effects; obtain the user's model choice. **Decided 2026-09-11:** the production law is retained, as repaired by RB-18 (positive-only median, relative floor, curvature fallback, d̂²-normalized cap, nonfinite errors) and RB-20/RB-21 (continuation, parent identity); no new law is pending |
 | Local stiffness definition for a nonidentity map | RB-03 / RB-13–RB-15 | Derive the available mappings and compare candidate definitions; obtain a choice if the existing contract is insufficient. **Decided 2026-09-11:** local condensation of the parent block onto the stencil, `(B H_PP⁻¹ Bᵀ)⁻¹`, with the gap-normalized force direction as fallback; implemented and validated in RB-03 |
-| New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping |
+| New acceptance criterion based on physical diagnostics | RB-04 / RB-09 / RB-16–RB-17 | Define quantity, normalization and justified threshold; user selects application acceptance, separately from numerical stopping. **Prepared 2026-09-13 (RB-09):** endpoint force balance relative to the peak reaction (≤ 1.6e-8 measured on every SI run) and the contact-model gap error `c·ḡ/H` (≤ `c·d̂/H`; .35–.6 % at `d̂` 1e-3); selection pending |
 | Enabled production resource or AL budgets | RB-05 / RB-07 | Measure overhead/failure behavior and state proposed limits; user selects defaults; opt-in disabled-by-default mechanisms may be tested first |
 | Automatic timestep/load retry policy | RB-08 | User approves the concrete policy or specified opt-in prototype before implementation |
 | Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair. **Decided 2026-09-13 (RB-10):** the lagged friction carries the realized normal force (`semi_implicit/friction_lag: realized_force`) and the lag budget defaults to 2; the F6 trim-following and budget 1 stay available explicitly. Material, element and quadrature defaults remain open (RB-11) |
@@ -558,6 +561,18 @@ solution or proof of timestep independence. No retries for Teseo without its
 explicit authorization.
 
 ## RB-09 — Reference benchmarks and refinement envelope
+
+**Status 2026-09-13: characterized—limits documented.** Contracts, the
+analytical Neo-Hookean block reference, the spring/contact probe on the
+production form and the same-mesh hard-contact references of the public
+clamped smokes are in the [record](rb-09-validation.md) with the declared
+thresholds ([contract](rb-09-contract.md)): T1–T6 and T8–T14 pass; T7
+(raw unit conversion) fails as declared and is traced to upstream IPC's
+absolute 1e-4 CCD clearance amplified by the emergency controller and to the
+`F0·L^1.5` stopping-tolerance scaling (RB-11/RB-12 observations). No
+coefficient, controller, tolerance, CCD or default changed; no application
+acceptance selected — the record proposes the `physical_balance_pass`
+quantity/normalization/threshold for the user's decision.
 
 **Revised integration scope:** benchmark the RB-17 candidate only after its
 contract is selected; existing modes can be measured earlier. Compare current
