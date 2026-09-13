@@ -316,8 +316,8 @@ budget-1 value of either mode. Neither endpoint is certified.
   `91c7ff8ac`). No HDA source change (the new option is not exposed pending the
   default decision).
 - Working tree after publication: clean; evidence stays in
-  `outputs/rb-10/20260912T232617Z/` (not distributed: 60 run directories with
-  logs and records, ~200 MB).
+  `outputs/rb-10/20260912T232617Z/` (not distributed: 61 run directories with
+  logs, records and VTU output, 2.2 GB).
 
 ## Next session handoff
 
