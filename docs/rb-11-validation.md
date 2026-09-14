@@ -1,5 +1,11 @@
 # RB-11 — Geometry, material and input validation
 
+**Follow-up review (2026-09-14):** the published envelope matrix is reconciled
+and supported by the saved evidence. Stage 1 remains validated within scope.
+Two bounded implementation/reporting follow-ups remain open: BDF force-output
+normalization, and acceptance of missing Newton/determinant evidence. See the
+[follow-up review and completion instructions](rb-11-followup-review-20260914.md).
+
 **Latest continuation guidance (2026-09-13 evening):** read the
 [Stage 1 / Stage 2 review](rb-11-stage-review-20260913.md) before resuming.
 It supersedes the envelope handoff's run-completion claims and identifies

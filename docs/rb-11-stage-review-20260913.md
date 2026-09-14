@@ -1,5 +1,10 @@
 # RB-11 Stage 1 / Stage 2 review and completion handoff
 
+**2026-09-14 update:** this completion sequence was carried out. The
+[follow-up review](rb-11-followup-review-20260914.md) verifies the completed
+matrix and identifies two remaining bounded repairs. Continue from that
+review; retain the original findings below as historical evidence.
+
 Reviewed 2026-09-13, after the 20:30 envelope handoff. This is a review of
 published Stage 1 and the incoming, unpublished Stage 2 work on `ce7c88b4b`.
 It does not implement or approve the Stage 2 solver patch. Read this before
