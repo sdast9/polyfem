@@ -44,7 +44,7 @@ namespace
 		for (int i = 0; i <= nx; ++i)
 			for (int j = 0; j <= ny; ++j)
 				for (int k = 0; k <= nz; ++k)
-					V.push_back({double(i), double(j), double(k)});
+					V.push_back({{double(i), double(j), double(k)}});
 		const auto vid = [&](int i, int j, int k) { return (i * (ny + 1) + j) * (nz + 1) + k; };
 		const int perms[6][3] = {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}};
 		std::vector<std::array<int, 4>> T;
@@ -313,6 +313,13 @@ TEST_CASE("A run's manifest records identity, input hashes, steps and completion
 		CHECK(m["solver"]["model"]["value"].is_null());
 		CHECK(m["build"] == io::build_info());
 		CHECK(m["input"]["effective_sha256"] == io::RunManifest::canonical_sha256(state.args));
+		{
+			json portable = state.args;
+			portable.erase("root_path");
+			portable["output"].erase("directory");
+			CHECK(m["input"]["effective_sha256_without_paths"] == io::RunManifest::canonical_sha256(portable));
+			CHECK(m["input"]["effective_sha256_without_paths"] != m["input"]["effective_sha256"]);
+		}
 		CHECK(m["input"]["effective"] == state.args);
 		CHECK(m["input"]["effective"]["output"]["manifest"] == "manifest.json");
 		REQUIRE(m["input"]["referenced_files"].size() == 1);

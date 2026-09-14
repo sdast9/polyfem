@@ -195,6 +195,11 @@ namespace polyfem::mesh
 				assert(mesh->in_ordered_vertices_[2] == 2);
 				assert(mesh->in_ordered_vertices_[mesh->in_ordered_vertices_.size() - 1] == meshin.vertices.nb() - 1);
 
+				// A volume mesh read through geogram (MEDIT, the public smokes'
+				// cube.mesh) lists no edges and usually no facets; the node
+				// ordering then stays disabled (VarForm::build_node_mapping
+				// says so) -- a legitimate input, not an invariant violation,
+				// so no assert here (RB-12: the Debug lanes aborted on it).
 				mesh->in_ordered_edges_.resize(meshin.edges.nb(), 2);
 
 				for (int e = 0; e < (int)meshin.edges.nb(); ++e)
@@ -204,20 +209,23 @@ namespace polyfem::mesh
 						mesh->in_ordered_edges_(e, lv) = meshin.edges.vertex(e, lv);
 					}
 				}
-				assert(mesh->in_ordered_edges_.size() > 0);
 
-				mesh->in_ordered_faces_.resize(meshin.facets.nb(), meshin.facets.nb_vertices(0));
-
-				for (int f = 0; f < (int)meshin.edges.nb(); ++f)
+				if (meshin.facets.nb() > 0)
 				{
-					assert(mesh->in_ordered_faces_.cols() == meshin.facets.nb_vertices(f));
+					mesh->in_ordered_faces_.resize(meshin.facets.nb(), meshin.facets.nb_vertices(0));
 
-					for (int lv = 0; lv < mesh->in_ordered_faces_.cols(); ++lv)
+					for (int f = 0; f < (int)meshin.facets.nb(); ++f)
 					{
-						mesh->in_ordered_faces_(f, lv) = meshin.facets.vertex(f, lv);
+						assert(mesh->in_ordered_faces_.cols() == meshin.facets.nb_vertices(f));
+
+						for (int lv = 0; lv < mesh->in_ordered_faces_.cols(); ++lv)
+						{
+							mesh->in_ordered_faces_(f, lv) = meshin.facets.vertex(f, lv);
+						}
 					}
 				}
-				assert(mesh->in_ordered_faces_.size() > 0);
+				else
+					mesh->in_ordered_faces_.resize(0, 0);
 
 				return mesh;
 			}

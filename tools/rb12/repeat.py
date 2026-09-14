@@ -15,14 +15,15 @@ case that failed once and passed on its repeat). Thread settings are
 ``default`` (no ``--max_threads``) or an integer.
 
 Declared comparison rule (docs/rb-12-validation.md): repeats with an
-identical step history (same subsolve iteration counts, termination reasons,
-restarts, retunes, trim sequence) must agree on the last-step solution to
-``--roundoff`` (default 1e-12, |du|_inf, internal length) and on every
-scalar to the same relative amount; repeats whose histories differ are a
-*branch divergence* and are reported with their endpoint difference against
-the solver tolerance and the contact gap scale, never silently averaged.
-``--verify`` exits 1 when a same-history pair violates the roundoff rule or
-any run did not complete.
+identical solver path (same subsolve iteration counts, termination reasons,
+restarts, retunes, lagging state, trim and refresh sequence) must agree on
+the last-step solution to ``--roundoff`` (default 1e-12, |du|_inf, internal
+length) and on every endpoint scalar to the same amount relative to the
+run-level magnitude of that quantity; repeats whose paths differ are a
+*branch divergence* and are reported with their endpoint difference, never
+silently averaged; the roundoff-sensitive contact state is a per-step
+spread. ``--verify`` exits 1 when a same-path pair violates the rule or any
+run did not complete; ``--analyze-only`` recomputes an existing directory.
 
     python3 tools/rb12/repeat.py --binary build/PolyFEM_bin --output /abs/fresh \
         [--fixtures quasistatic-semi quasistatic-semi-friction quasistatic-semi@dt=0.0625] \
@@ -114,6 +115,7 @@ def summarize_run(run_dir, out_dir, returncode, wall, timed_out):
         result["run_id"] = m["run_id"]
         result["executable_sha256"] = m["process"]["executable"].get("sha256")
         result["effective_sha256"] = m["input"]["effective_sha256"]
+        result["effective_sha256_without_paths"] = m["input"].get("effective_sha256_without_paths")
         result["threads_effective"] = m["process"]["threads"]["effective"]
         result["status"] = m["completion"]["status"]
         result["peak_rss_mb"] = m["completion"]["peak_rss_mb"]
@@ -130,7 +132,7 @@ def summarize_run(run_dir, out_dir, returncode, wall, timed_out):
                 "restarts": s["termination"].get("restarts"), "unchanged_restarts": s["termination"].get("unchanged_restarts"),
                 "stall_retunes": s["stall_retunes"], "lagging": s["lagging"].get("state"),
                 "trim": contact.get("trim_or_global_stiffness"), "refresh_id": contact.get("refresh_id"),
-                "batch_median": contact.get("batch_median"),
+                "active_count": contact.get("active_count"), "batch_median": contact.get("batch_median"),
                 "fallbacks": [contact.get(k) for k in ("curvature_fallback_count", "curvature_abs_fallback_count", "curvature_global_fallback_count", "interpolated_direction_count")],
                 "continued": contact.get("continued_count"), "fresh": contact.get("fresh_count"),
                 "candidates_last": candidates.get("value"), "candidates_max": candidates.get("max"), "candidate_builds": candidates.get("builds"),
@@ -138,18 +140,33 @@ def summarize_run(run_dir, out_dir, returncode, wall, timed_out):
         result["history"] = history
     else:
         result["status"] = "no manifest"
+    output_json = out_dir / "output.json"
+    num_vertices = None
+    if output_json.is_file():
+        o = json.loads(output_json.read_text())
+        num_vertices = o.get("num_vertices")
+        result["output_json"] = {"num_threads": o.get("num_threads"), "peak_memory_mb": o.get("peak_memory"), "time_solving": o.get("time_solving"),
+                                 "num_dofs": o.get("num_dofs"), "num_bases": o.get("num_bases"), "num_vertices": num_vertices}
     diag = out_dir / "physical-diagnostics.jsonl"
     if diag.is_file():
         records = [json.loads(line) for line in diag.read_text().splitlines() if line.strip()]
         result["physical"] = []
         for r in records:
-            reaction = None
+            reaction, reaction_fe = None, None
             for entry in r.get("reactions", []):
                 vec = entry.get("full_dof_vector", {}).get("value")
                 if vec is not None:
                     v = np.asarray(vec, dtype=float)
                     dim = 3 if v.size % 3 == 0 else 2
-                    reaction = [float(x) for x in v.reshape(-1, dim).sum(axis=0)]
+                    rows = v.reshape(-1, dim)
+                    reaction = [float(x) for x in rows.sum(axis=0)]
+                    # The support force on the FE body alone: obstacle vertices
+                    # are appended after the FE nodes, and on the P1 public
+                    # fixtures the FE node count is the mesh vertex count. The
+                    # whole-vector sum cancels the obstacle's reaction against
+                    # the support's and is kept only as a balance check.
+                    if num_vertices is not None and num_vertices <= rows.shape[0]:
+                        reaction_fe = [float(x) for x in rows[:num_vertices].sum(axis=0)]
             pbp = r.get("physical_balance_pass") or {}
             result["physical"].append({
                 "step": r["step"], "outcome": r["outcome"],
@@ -158,14 +175,11 @@ def summarize_run(run_dir, out_dir, returncode, wall, timed_out):
                 "min_det_F": value(r, "min_det_F"), "support_work_increment": value(r, "support_work_increment"),
                 "external_work_increment": value(r, "external_work_increment"),
                 "frictional_dissipation_increment": value(r, "frictional_dissipation_increment"),
-                "reaction_sum": reaction, "physical_balance_pass": pbp.get("value"),
+                "reaction_sum": reaction, "reaction_fe_sum": reaction_fe, "physical_balance_pass": pbp.get("value"),
                 "free_residual_ratio": pbp.get("free_residual_ratio"),
+                "peak_external_force": value(pbp, "peak_external_force") if isinstance(pbp.get("peak_external_force"), dict) else pbp.get("peak_external_force"),
                 "peak_rss_bytes": value(r, "peak_rss_bytes"),
             })
-    output_json = out_dir / "output.json"
-    if output_json.is_file():
-        o = json.loads(output_json.read_text())
-        result["output_json"] = {"num_threads": o.get("num_threads"), "peak_memory_mb": o.get("peak_memory"), "time_solving": o.get("time_solving")}
     u = last_solution(out_dir)
     if u is not None:
         result["solution"] = {"n": int(u.size), "sum": float(u.sum()), "max_abs": float(np.abs(u).max()), "sha256": hashlib.sha256(u.tobytes()).hexdigest()}
@@ -178,8 +192,71 @@ def summarize_run(run_dir, out_dir, returncode, wall, timed_out):
     return result
 
 
+def scalar_differences(a, b):
+    """Largest difference per endpoint scalar over the steps of two runs, each
+    scaled by the run-level magnitude of that quantity (the largest |value|
+    over both runs' steps) so a step where the quantity is near zero cannot
+    inflate a roundoff difference into a relative one. The residual norm is
+    scaled by the peak external force (its RB-09 normalization); the reaction
+    is the FE body's summed support force."""
+    keys = ("elastic_energy", "barrier_energy", "kinetic_energy", "support_work_increment", "external_work_increment", "frictional_dissipation_increment")
+    pa_all, pb_all = a.get("physical", []), b.get("physical", [])
+    out = {}
+    for key in keys:
+        values = [p.get(key) for p in pa_all + pb_all if isinstance(p.get(key), (int, float))]
+        if not values:
+            continue
+        scale = max(max(abs(v) for v in values), 1e-300)
+        for pa, pb in zip(pa_all, pb_all):
+            va, vb = pa.get(key), pb.get(key)
+            if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+                out[key] = max(out.get(key, 0.0), abs(va - vb) / scale)
+    forces = [p.get("peak_external_force") for p in pa_all + pb_all if isinstance(p.get("peak_external_force"), (int, float))]
+    if forces:
+        scale = max(max(forces), 1e-300)
+        for pa, pb in zip(pa_all, pb_all):
+            va, vb = pa.get("free_residual_norm"), pb.get("free_residual_norm")
+            if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+                out["free_residual_norm_over_peak_force"] = max(out.get("free_residual_norm_over_peak_force", 0.0), abs(va - vb) / scale)
+    reactions = [np.asarray(p["reaction_fe_sum"]) for p in pa_all + pb_all if p.get("reaction_fe_sum")]
+    if reactions:
+        scale = max(max(float(np.abs(r).max()) for r in reactions), 1e-300)
+        for pa, pb in zip(pa_all, pb_all):
+            if pa.get("reaction_fe_sum") and pb.get("reaction_fe_sum"):
+                ra, rb = np.asarray(pa["reaction_fe_sum"]), np.asarray(pb["reaction_fe_sum"])
+                out["reaction_fe_sum"] = max(out.get("reaction_fe_sum", 0.0), float(np.abs(ra - rb).max()) / scale)
+    return out
+
+
+HISTORY_FIELDS = ("outcome", "iterations", "types", "reasons", "restarts", "stall_retunes", "lagging", "trim", "refresh_id")
+
+
 def history_key(result):
-    return json.dumps([{k: h[k] for k in ("outcome", "iterations", "types", "reasons", "restarts", "stall_retunes", "lagging", "trim", "refresh_id")} for h in result.get("history", [])], sort_keys=True)
+    """The solver path: what the solver decided, not the roundoff-sensitive
+    contact state (active count, continued count, batch median), which is
+    summarised separately as the discrete spread of a cell."""
+    return json.dumps([{k: h[k] for k in HISTORY_FIELDS} for h in result.get("history", [])], sort_keys=True)
+
+
+def discrete_spread(runs):
+    """Per step, the range over the completed repeats of the discrete contact
+    state (active collisions, continued / fresh coefficients, candidates) and
+    of the iteration count: which decisions roundoff can move."""
+    completed = [r for r in runs if r.get("status") == "completed" and r.get("history")]
+    if not completed:
+        return []
+    spread = []
+    for step in range(min(len(r["history"]) for r in completed)):
+        entry = {"step": completed[0]["history"][step]["step"]}
+        for key in ("active_count", "continued", "fresh", "candidates_last", "candidate_builds", "trim"):
+            values = [r["history"][step].get(key) for r in completed]
+            values = [v for v in values if isinstance(v, (int, float))]
+            if values:
+                entry[key] = [min(values), max(values)]
+        iterations = [sum(v for v in r["history"][step]["iterations"] if isinstance(v, int)) for r in completed]
+        entry["iterations_total"] = [min(iterations), max(iterations)]
+        spread.append(entry)
+    return spread
 
 
 def compare_group(runs, run_dirs, roundoff):
@@ -187,9 +264,10 @@ def compare_group(runs, run_dirs, roundoff):
     completed = [r for r in runs if r.get("status") == "completed"]
     out = {"runs": len(runs), "completed": len(completed), "distinct_histories": len({history_key(r) for r in completed}),
            "identical_executable": len({r.get("executable_sha256") for r in runs}) == 1,
-           "identical_effective_input": len({r.get("effective_sha256") for r in runs}) == 1,
+           "identical_effective_input": len({r.get("effective_sha256_without_paths") for r in runs}) == 1,
            "wall_seconds": [r["wall_seconds"] for r in runs], "peak_rss_mb": [r.get("peak_rss_mb") for r in runs],
-           "same_history_max_abs_du": 0.0, "branch_divergences": [], "violations": []}
+           "same_history_max_abs_du": 0.0, "branch_divergences": [], "violations": [],
+           "discrete_spread": discrete_spread(runs)}
     sols = {}
     for r, d in zip(runs, run_dirs):
         p = d / "last_solution.npy"
@@ -205,23 +283,15 @@ def compare_group(runs, run_dirs, roundoff):
                 continue
             du = float(np.abs(sols[names[i]] - sols[names[j]]).max())
             same = history_key(a) == history_key(b)
-            scalars = {}
-            for pa, pb in zip(a.get("physical", []), b.get("physical", [])):
-                for key in ("elastic_energy", "barrier_energy", "free_residual_norm", "support_work_increment"):
-                    va, vb = pa.get(key), pb.get(key)
-                    if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
-                        scale = max(abs(va), abs(vb), 1e-300)
-                        scalars[key] = max(scalars.get(key, 0.0), abs(va - vb) / scale)
-                if pa.get("reaction_sum") and pb.get("reaction_sum"):
-                    ra, rb = np.asarray(pa["reaction_sum"]), np.asarray(pb["reaction_sum"])
-                    scalars["reaction_sum"] = max(scalars.get("reaction_sum", 0.0), float(np.abs(ra - rb).max() / max(np.abs(ra).max(), np.abs(rb).max(), 1e-300)))
+            scalars = scalar_differences(a, b)
             pair = {"pair": [names[i], names[j]], "same_history": same, "max_abs_du": du, "max_rel_scalar_diff": scalars}
             if same:
                 out["same_history_max_abs_du"] = max(out["same_history_max_abs_du"], du)
                 if du > roundoff or any(v > roundoff for v in scalars.values()):
                     out["violations"].append(pair)
             else:
-                first = next((k for k, (ha, hb) in enumerate(zip(a["history"], b["history"])) if json.dumps(ha, sort_keys=True) != json.dumps(hb, sort_keys=True)), None)
+                first = next((k for k, (ha, hb) in enumerate(zip(a["history"], b["history"]))
+                              if any(ha.get(f) != hb.get(f) for f in HISTORY_FIELDS)), None)
                 pair["first_differing_step"] = a["history"][first]["step"] if first is not None else None
                 out["branch_divergences"].append(pair)
     return out
@@ -237,14 +307,23 @@ def main():
     parser.add_argument("--timeout", type=float, default=3600.0)
     parser.add_argument("--roundoff", type=float, default=1e-12)
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--analyze-only", action="store_true", help="recompute the summary of an existing output directory without running the solver")
     args = parser.parse_args()
 
     binary = args.binary.resolve()
     out = args.output.resolve()
-    if out.exists():
-        raise SystemExit(f"{out} exists; use a fresh directory")
-    out.mkdir(parents=True)
-    summary = {"binary": str(binary), "binary_sha256": sha256(binary), "repeats": args.repeats, "roundoff": args.roundoff,
+    if args.analyze_only:
+        if not (out / "summary.json").is_file():
+            raise SystemExit(f"{out} has no summary.json to re-analyze")
+        previous = json.loads((out / "summary.json").read_text())
+        args.fixtures, args.threads, args.repeats = previous["fixtures"], previous["threads"], previous["repeats"]
+        binary_sha = previous["binary_sha256"]
+    else:
+        if out.exists():
+            raise SystemExit(f"{out} exists; use a fresh directory")
+        out.mkdir(parents=True)
+        binary_sha = sha256(binary)
+    summary = {"binary": str(binary), "binary_sha256": binary_sha, "repeats": args.repeats, "roundoff": args.roundoff,
                "threads": args.threads, "fixtures": args.fixtures, "cells": {}}
     failures = 0
     for spec in args.fixtures:
@@ -256,21 +335,25 @@ def main():
             for i in range(args.repeats):
                 run_dir = out / cell / f"repeat-{i + 1}"
                 inp, out_dir = run_dir / "input", run_dir / "output"
-                params = prepare_input(name, overrides, inp)
-                out_dir.mkdir()
-                cmd = [str(binary), "--json", "params.json", "-o", str(out_dir), "--log_level", "debug"]
-                if threads != "default":
-                    cmd += ["--max_threads", str(threads)]
-                (run_dir / "command.txt").write_text(" ".join(cmd) + "\n")
-                start = time.monotonic()
-                timed_out = False
-                with (out_dir / "run.log").open("w") as log:
-                    try:
-                        completed = subprocess.run(cmd, cwd=inp, stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout)
-                        rc = completed.returncode
-                    except subprocess.TimeoutExpired:
-                        rc, timed_out = None, True
-                wall = time.monotonic() - start
+                if args.analyze_only:
+                    previous_result = json.loads((run_dir / "result.json").read_text())
+                    rc, wall, timed_out = previous_result["exit"], previous_result["wall_seconds"], previous_result["timed_out"]
+                else:
+                    params = prepare_input(name, overrides, inp)
+                    out_dir.mkdir()
+                    cmd = [str(binary), "--json", "params.json", "-o", str(out_dir), "--log_level", "debug"]
+                    if threads != "default":
+                        cmd += ["--max_threads", str(threads)]
+                    (run_dir / "command.txt").write_text(" ".join(cmd) + "\n")
+                    start = time.monotonic()
+                    timed_out = False
+                    with (out_dir / "run.log").open("w") as log:
+                        try:
+                            completed = subprocess.run(cmd, cwd=inp, stdout=log, stderr=subprocess.STDOUT, timeout=args.timeout)
+                            rc = completed.returncode
+                        except subprocess.TimeoutExpired:
+                            rc, timed_out = None, True
+                    wall = time.monotonic() - start
                 result = summarize_run(run_dir, out_dir, rc, wall, timed_out)
                 result["input_sha256"] = {p.name: sha256(p) for p in inp.iterdir()}
                 runs.append(result)
@@ -331,7 +414,13 @@ def write_markdown(summary, path):
         rss = [r for r in c["peak_rss_mb"] if r is not None]
         div = "; ".join(f"step {d['first_differing_step']}, {d['max_abs_du']:.2e}" for d in c["branch_divergences"]) or "none"
         lines.append(f"| {cell} | {c['completed']}/{c['runs']} | {c['distinct_histories']} | {c['same_history_max_abs_du']:.2e} | {div} | {len(c['violations'])} | {min(walls):.1f}–{max(walls):.1f} | {min(rss):.0f}–{max(rss):.0f} |" if walls and rss else f"| {cell} | {c['completed']}/{c['runs']} | – | – | – | – | – | – |")
-    lines += ["", "## Serial versus threaded", "", "| fixture | pairs | same-history pairs | max ‖du‖ same history | max ‖du‖ different history |", "| --- | --- | --- | --- | --- |"]
+    lines += ["", "## Discrete state spread across repeats (min–max per step)", "", "| cell | step | active | continued | candidates (last) | iterations | trim |", "| --- | --- | --- | --- | --- | --- | --- |"]
+    for cell, data in summary["cells"].items():
+        for e in data["comparison"].get("discrete_spread", []):
+            rng = lambda k: "–" if k not in e else (f"{e[k][0]:g}" if e[k][0] == e[k][1] else f"{e[k][0]:g}–{e[k][1]:g}")
+            if any(k in e and e[k][0] != e[k][1] for k in ("active_count", "continued", "candidates_last", "iterations_total", "trim")):
+                lines.append(f"| {cell} | {e['step']} | {rng('active_count')} | {rng('continued')} | {rng('candidates_last')} | {rng('iterations_total')} | {rng('trim')} |")
+    lines += ["", "(only steps where some repeat differs are listed)", "", "## Serial versus threaded", "", "| fixture | pairs | same-history pairs | max ‖du‖ same history | max ‖du‖ different history |", "| --- | --- | --- | --- | --- |"]
     for key, data in summary.get("cross_thread", {}).items():
         f = lambda v: "–" if v is None else f"{v:.2e}"
         lines.append(f"| {key} | {data['pairs']} | {data['same_history_pairs']} | {f(data['max_abs_du_same_history'])} | {f(data['max_abs_du_different_history'])} |")

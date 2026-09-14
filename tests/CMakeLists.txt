@@ -101,3 +101,17 @@ include(Catch)
 # Register tests
 set(PARSE_CATCH_TESTS_ADD_TO_CONFIGURE_DEPENDS ON)
 catch_discover_tests(unit_tests ADD_TAGS_AS_LABELS EXTRA_ARGS --rng-seed 1)
+
+# RB-12: the executable's contract end to end (build identity, a public
+# smoke with its run manifest, the exit statuses of a resource failure and of
+# a refused input), through the real PolyFEM_bin. Standard-library Python.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND AND TARGET PolyFEM_bin)
+  add_test(NAME cli_contract
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/rb12/cli_check.py"
+            --binary "$<TARGET_FILE:PolyFEM_bin>"
+            --output "${CMAKE_CURRENT_BINARY_DIR}/cli_contract" --keep)
+  set_tests_properties(cli_contract PROPERTIES LABELS "rb12;cli" TIMEOUT 1200)
+else()
+  message(STATUS "cli_contract test not registered (Python3 interpreter or PolyFEM_bin missing)")
+endif()

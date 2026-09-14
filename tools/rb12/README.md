@@ -31,13 +31,39 @@ free residual, min det F, support and external work increments, frictional
 dissipation, the summed support reaction, `physical_balance_pass`) and the
 last saved solution (`last_solution.npy`).
 
-Comparison rule (declared in the record): two repeats with an identical step
-history must agree on the last solution to `--roundoff` (`‖du‖∞`, internal
-length; default 1e-12) and on every endpoint scalar to the same relative
-amount — anything larger is a *violation*. Repeats whose histories differ
-(a different iteration count, termination reason, restart or trim decision)
-are a *branch divergence*: reported with the first differing step and the
-endpoint difference, never averaged away. The serial-versus-threaded table
-compares every completed pair across thread settings the same way.
-`--verify` exits 1 on any violation or any run that did not complete.
-`summary.json` / `summary.md` hold the matrix; every run directory is kept.
+Comparison rule (declared in the record): two repeats with an identical
+*solver path* (per step: subsolve iteration counts and termination reasons,
+restarts, stall retunes, lagging state, trim, refresh id) must agree on the
+last solution to `--roundoff` (`‖du‖∞`, internal length; default 1e-12) and
+on every endpoint scalar to the same amount relative to the run-level
+magnitude of that quantity (energies and work increments over the largest
+step value, the residual norm over the peak external force, the FE body's
+summed support reaction over its largest component) — anything larger is a
+*violation*. Repeats whose paths differ are a *branch divergence*: reported
+with the first differing step and the endpoint difference, never averaged
+away. The roundoff-sensitive contact state (active collisions, continued /
+fresh coefficients, candidate counts) is reported as a per-step spread. The
+serial-versus-threaded table compares every completed pair across thread
+settings the same way. `--verify` exits 1 on any violation or any run that
+did not complete; `--analyze-only` recomputes the summary of an existing
+directory. `summary.json` / `summary.md` hold the matrix; every run
+directory is kept.
+
+## `cli_check.py` — the executable's contract (stage 3, CTest `cli_contract`)
+
+```sh
+python3 tools/rb12/cli_check.py --binary build/PolyFEM_bin [--scene scenes/semi-implicit/quasistatic-semi.json] \
+    [--output /fresh/dir] [--keep]
+ctest --test-dir build -R cli_contract -V
+```
+
+Standard-library Python, registered with CTest when a Python 3 interpreter
+is found, so every CI platform runs the real `PolyFEM_bin`: `--build_info`
+prints valid identity JSON naming the three sources; the public smoke
+completes single-threaded with its saved steps and a `completed` manifest
+that names this binary, the input file and the meshes by hash and equals
+`--build_info`; a broad-phase resource limit exits 3 with a
+`resource_failure` manifest, the `PolyFEM stopped:` line and no accepted
+step; an input refused at init (`dhat = 0`) exits 1 with no output and no
+manifest; `output/manifest = ""` writes none. The first failed check ends
+the run with exit 1 and keeps the working directory.

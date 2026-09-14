@@ -12,8 +12,8 @@
 # POLYSOLVE_DECLARED_REPO, POLYSOLVE_DECLARED_PIN, POLYSOLVE_SOURCE_OVERRIDE,
 # DATA_DECLARED_PIN, CXX_COMPILER_ID, CXX_COMPILER_VERSION, CXX_COMPILER,
 # BUILD_TYPE, CXX_FLAGS, CXX_FLAGS_CONFIG, GENERATOR, CMAKE_VERSION_STRING,
-# SYSTEM_NAME, SYSTEM_PROCESSOR, HOST_SYSTEM, THREADING, OPTIONS (a list of
-# NAME=VALUE).
+# SYSTEM_NAME, SYSTEM_PROCESSOR, HOST_SYSTEM, THREADING, OPTIONS (comma-joined
+# NAME=VALUE entries).
 
 cmake_minimum_required(VERSION 3.25)
 
@@ -215,7 +215,8 @@ string(JSON build SET "${build}" "host_system" "${q}")
 _bi_quote(q "${THREADING}")
 string(JSON build SET "${build}" "threading" "${q}")
 set(options "{}")
-foreach(entry IN LISTS OPTIONS)
+string(REPLACE "," ";" option_entries "${OPTIONS}")
+foreach(entry IN LISTS option_entries)
     if(entry MATCHES "^([^=]+)=(.*)$")
         _bi_quote(q "${CMAKE_MATCH_2}")
         string(JSON options SET "${options}" "${CMAKE_MATCH_1}" "${q}")

@@ -1,11 +1,13 @@
 # RB-12 — Repeatability, provenance and release discipline
 
 Date: 2026-09-14
-Status: in progress — stage 1 (run identity) implemented—validation pending
-publication; stage 2 (controlled repeatability) and stage 3 (CI/release
-integration) not started
-Selected stage: stage 1, the run manifest, on the plan's own scope; no
-dependency upgrade, upstream merge, release tag or feature promotion.
+Status: stage 1 (run identity) validated within stated scope and published
+(`1f6f826fa`); stage 2 (controlled repeatability) characterized—limits
+documented; stage 3 (CI/release integration) in progress — the bounded
+checks are in, the native matrix outcome and the dependency forks' CI are
+recorded below as they arrive.
+Selected stage: all three, in order, on the plan's own scope; no dependency
+upgrade, upstream merge, release tag or feature promotion.
 
 ## Contract and authorization
 
@@ -162,20 +164,250 @@ run.
   the concurrent RB-11 session's files are theirs.
 - Evidence (local, not committed): `outputs/rb-12/20260914T133427Z-identity/`.
 
+## Stage 2 — controlled repeatability (2026-09-14)
+
+**Status: characterized—limits documented.** Runner `tools/rb12/repeat.py`
+(see its README); evidence `outputs/rb-12/20260914T141159Z-repeat/`
+(matrix A, binary `2c4658eb…`, re-analysed after the comparison rule was
+refined) and `outputs/rb-12/20260914T142106Z-repeat/` (matrix B, the
+stage-2 binary `4595aa53…`, which only adds `effective_sha256_without_paths`
+to the manifest). Fixtures: `quasistatic-semi` (the small public fixture,
+dt .25, 4 steps), `quasistatic-semi-friction` (the same with friction,
+because stage 1 had already seen it diverge), and `quasistatic-semi` at
+`dt = .0625` (16 steps: the PF-08 fine-load case whose first run exhausted
+20 restarts and whose repeat passed). Five repeats each at the default
+thread count (18 on this Mac) and at `--max_threads 1`, every run from its
+own directory with `output/json` and `physical_diagnostics` on. Every
+manifest names the same executable hash and the same path-independent
+input hash within a cell; peak RSS is the manifest's `completion.peak_rss_mb`.
+
+Declared comparison rule (both matrices, 0 violations): two repeats with an
+identical *solver path* — the manifest's per-step subsolve iteration counts,
+termination reasons, restarts, stall retunes, lagging state, trim and
+refresh id — must agree on the last saved solution to `‖du‖∞ ≤ 1e-12`
+(internal length) and on every endpoint scalar to 1e-12 relative to the
+run-level magnitude of that quantity (energies and work increments over the
+largest step value, the residual norm over the peak external force, the FE
+body's summed support reaction over its largest component). Repeats whose
+paths differ are *branch divergences*, reported with the first differing
+step and their endpoint difference, never averaged. The roundoff-sensitive
+contact state (active collisions, continued / fresh coefficients, candidate
+counts) is reported as a per-step spread, not as part of the path.
+
+| Cell (5 repeats) | Completed | Distinct paths | Same-path max ‖du‖ | Branch divergence | Peak RSS MB | Wall s |
+| --- | --- | --- | --- | --- | --- | --- |
+| `quasistatic-semi`, 18 threads | 5/5 (A) 5/5 (B) | 1 / 1 | 2.1e-16 / 2.0e-16 | none | 2079–2474 / 2330–2460 | 4.4–5.3 |
+| `quasistatic-semi`, 1 thread | 5/5 / 5/5 | 1 / 1 | **0** (bit-identical) | none | 222–226 | 5.3–6.2 |
+| `quasistatic-semi-friction`, 18 threads | 5/5 / 5/5 | **3** / **2** | 3.5e-15 / 2.3e-15 | at step 4: A 1.7e-4 (one run: 13 reduced iterations ending "Gradient vector norm too small", trim stays 8) and 3.9e-5 (two clusters at trim 16, 12 iterations); B 3.9e-5 (iteration totals 16–20, trim 16) | 2066–2417 | 4.7–5.4 |
+| `quasistatic-semi-friction`, 1 thread | 5/5 / 5/5 | 1 / 1 | **0** | none | 222 | 5.5–5.8 |
+| `quasistatic-semi` dt .0625, 18 threads | 5/5 / 5/5 | 2 / 2 | 6.5e-16 / 6.9e-16 | at step 11 (6 vs 7 iterations) with ‖du‖ ≤ 6.9e-16: a path difference at the roundoff floor, no endpoint effect | 2210–2546 | 5.4–5.6 |
+| `quasistatic-semi` dt .0625, 1 thread | 5/5 / 5/5 | 1 / 1 | **0** | none | 212 | 5.7–5.9 |
+
+Serial versus threaded (25 pairs per fixture): `quasistatic-semi` 2.9e-16
+(no pair shares a path — the serial run's step 3 takes 11 reduced
+iterations where the threaded runs take 6, both ending "Gradient vector
+norm too small", i.e. iterations at the roundoff floor, RB-19's regime);
+`quasistatic-semi-friction` 2.3e-15 for the 10 (A) / 20 (B) pairs that
+share the serial path, 1.7e-4 (A) / 3.9e-5 (B) otherwise;
+`quasistatic-semi` dt .0625 5.6e-16.
+
+Findings.
+
+- Single-threaded runs are bit-reproducible on this platform for all three
+  fixtures (15/15 runs per matrix identical to the last bit, including the
+  16-step fine-load case), with identical solver paths and contact states.
+- Threaded frictionless runs reach the same endpoint to roundoff
+  (≤ 6.9e-16) even when their paths differ by an iteration at the
+  tolerance floor and their active-collision counts differ by ±2 (contacts
+  within roundoff of the `d̂` band edge, gaps clustered near `.9–.99 d̂` as
+  RB-09 measured): the frictionless endpoint is a well-posed minimiser.
+- Threaded friction runs are reproducible only to the contact-model scale:
+  the endpoint spread over 10 threaded runs is up to 1.7e-4 (`d̂ = 1e-3`;
+  7e-4 of the .25 prescribed displacement; support reaction 7.9e-4
+  relative; frictional dissipation increment .5 %). The cause chain is
+  visible in the manifests, not inferred: evaluation-order roundoff moves
+  the last reduced solve of step 4 across its stopping criterion (12
+  iterations "Relative gradient vector too small" versus 13 "Gradient
+  vector norm too small"), the global trim controller then takes a
+  different decision (16 versus 8), and because the friction lag is not
+  converged after the default 2 lagging iterations (RB-10: every friction
+  step reads `physical_balance_pass` false, residual ratio 3.3e-3) the
+  endpoint depends on that path. Threading is the source of the roundoff
+  noise (the serial runs are exact), but the amplifier is the pair
+  "discrete controller decision + unconverged lag", which stage 2 records
+  and does not change (RB-10's defaults were a user decision; RB-16 closed
+  the controller question). The spread stays below the RB-09 realized-gap
+  model error (`c·ḡ ≈ d̂`), so it does not change any accuracy claim, but a
+  threaded friction run cannot serve as a golden.
+- The PF-08 first-run failure (exhausted restarts at dt .0625) did not
+  reproduce: 10/10 runs completed 16/16 steps with 0 restarts and 0
+  retunes; the RB-19 fallback and the RB-18 stall repairs have been in
+  production since. The original failure stays recorded in the PF-08 record;
+  it is not labelled a concurrency effect.
+- `physical_balance_pass` is true on every frictionless dt .25 step (max
+  residual ratio 4.9e-11) and false on the dt .0625 run's **step 1**
+  (ratio 1.1): the cube has not touched the slab yet, the peak external
+  force is ~1e-9 and the RB-09 normalisation is degenerate before first
+  contact. Observation for RB-09's record; nothing gated on it.
+- Peak RSS grows linearly with the thread count: 222 / 327 / 613 / 1081 /
+  2392 MB at 1 / 2 / 4 / 8 / 18 threads on the 384-tetrahedron smoke
+  (`rss-probe/` in matrix A), about 125 MB per thread independent of the
+  mesh, while the wall time only falls from 1.9 s to 1.0 s. A per-thread
+  fixed allocation (not measured further here); an RB-05-adjacent resource
+  observation for the user, recorded in the manifest of every threaded run.
+
+Limits: one platform (macOS 26.5 arm64, AppleClang 21, TBB), one build
+configuration, the public fixtures only, five repeats per cell (the 1.7e-4
+branch appeared once in ten threaded friction runs — the sampling is
+small); no cross-platform repeat comparison (the GitHub runners run the
+CLI contract, not this matrix).
+
+## Stage 3 — CI and release integration (2026-09-14)
+
+**Status: in progress.** Bounded additions, no workflow lane removed, no
+required check turned into a warning:
+
+- `PolyFEM_bin --build_info` prints the compiled-in identity as JSON.
+- CTest `cli_contract` (`tools/rb12/cli_check.py`, standard-library
+  Python, ~17 s): through the real executable on every platform —
+  `--build_info` is valid and names the three sources; the public
+  `quasistatic-semi` smoke completes single-threaded with its 4 saved
+  steps and a `completed` manifest that names this very binary, the input
+  file and the two meshes by hash and equals `--build_info`; a broad-phase
+  resource limit exits 3 with a `resource_failure` manifest, the
+  `PolyFEM stopped:` line and no accepted step (RB-05's contract); an input
+  refused at init (`dhat = 0`) exits 1 with no output and no manifest;
+  `output/manifest = ""` writes none. Registered when a Python 3
+  interpreter is found (the CI configurations find one).
+- `continuous.yml`: `LastTest.log`, `LastTestsFailed.log` and the CLI
+  contract's manifests/logs are uploaded `if: always()` on all three
+  platforms; the Windows sccache size is the documented
+  `SCCACHE_CACHE_SIZE=1G` instead of the rejected `--max-size` option.
+- Dependency forks: their `Build` workflows trigger on `main` only while
+  the maintained branches are `semi-implicit-stiffness` (IPC) and
+  `iteration-callback` (PolySolve); `sdast9/ipc-toolkit` has never run a
+  workflow (0 runs), `sdast9/polysolve` last ran on `main` on 2026-07-18.
+  The maintained branches are added to the triggers with a manual dispatch
+  (companion commits recorded below when published; the recipe pins then
+  move to those commits, whose sources are unchanged).
+
+CI outcome at `1f6f826fa` (stage 1 publication; logs in
+`outputs/rb-12/20260914T133427Z-identity/ci-stage1/`): pre-commit
+**passes** (run 34854316144, the first green formatter run since
+2026-09-13's `a327e2932`). Build run 34854316022, every lane still red:
+
+| Lane | Outcome | Cause |
+| --- | --- | --- |
+| Linux GCC Debug / Release | build fails at `tests/test_run_manifest.cpp:47` | `-Werror=missing-braces`: my own beam writer copied the unbraced `std::array` initializer — the very pattern this session had just repaired in RB-11's test. Fixed here (`{{…}}`). |
+| macOS Release | 336/340; the four known CI-03–CI-06 scene groups | unchanged baseline; **every `[run_manifest]` case passes on the Release lanes**, so the manifest, its hashing and the build-time identity generator compile and work under Ninja/AppleClang there |
+| Windows Release (MSVC 19.44, CPP threading) | 324/325; only RB-11's `elastic laws: finite-difference derivatives` | the manifest code compiles and passes on MSVC, `_getpid`/`GetModuleFileNameA` included |
+| macOS Debug | 299/308; `[run_manifest][run]` aborts plus the 8 RB-11 tests | `Mesh.cpp:207` `assert(in_ordered_edges_.size() > 0)` in `Mesh::create(GEO::Mesh &)` — see the Debug repairs below; the RB-11 `input_validation` aborts (Eigen resize, `MatParams.cpp:534`) are theirs |
+| Windows Debug | 296/306; `[run_manifest][run]` "Failed" plus 9 RB-11 tests | the same `Mesh.cpp:207` assertion (`Assertion failed: mesh->in_ordered_edges_.size() > 0`), which MSVC reports as a failed test rather than an abort |
+
+### Debug-lane repairs (2026-09-14, this publication)
+
+Reproduced in an isolated Debug build of the same sources
+(`polyfem/build-debug`, AppleClang 21, `-DCMAKE_BUILD_TYPE=Debug`, the
+same local dependency overrides; evidence
+`outputs/rb-12/20260914T142106Z-repeat/debug-build/`). Two Debug-only
+defects on the public inputs, both fixed as bounded repairs:
+
+1. `Mesh::create(GEO::Mesh &)` asserted `in_ordered_edges_.size() > 0` and
+   `in_ordered_faces_.size() > 0` for volume meshes read through geogram.
+   A MEDIT tetrahedral mesh — the smokes' `cube.mesh`, the RB-11 and RB-12
+   test beams — lists no edges and no facets; the only consumer
+   (`VarForm::build_node_mapping`) already handles the empty case by
+   disabling the node ordering with a warning, so the invariant was false
+   and the Release binary ran these inputs with empty connectivity all
+   along. The asserts are gone, the facet copy is guarded (it also read
+   `facets.nb_vertices(0)` of an empty facet store and looped over
+   `edges.nb()` instead of `facets.nb()`), Release behaviour is unchanged
+   (empty edges/faces stay empty). `[linear_elastic]` (111 assertions / 3
+   cases) and `[run_manifest]` (158 / 7) now pass in Debug; four of the
+   nine macOS-Debug failures at `1f6f826fa` were this.
+2. `ElasticVarForm::elastic_output_fields` appended the obstacle vertices'
+   rows of a sampled DOF field by slicing `obstacle->ndof()` values, which
+   is the right count only for vector fields; for the averaged scalar and
+   tensor fields (`von_mises_avg`, `*_stress_avg`) it sliced 12 values into
+   4 rows — an Eigen `DenseBase::resize` assertion in Debug (the CLI
+   contract's smoke aborted while saving `step_0.vtu`) and, in Release, a
+   silently wrong obstacle row: the slab's four vertices carried copied FE
+   von Mises values up to 2.9e6 in every smoke's VTU. The slice is now
+   `n_vertices × field_dim`; the obstacle rows read 0 (no element touches
+   them). Verified on `quasistatic-semi-friction --max_threads 1` before /
+   after: `solution` and every other field bit-identical, only
+   `von_mises_avg` rows 1536–1539 changed (`smokes-stage3/` vs
+   `smokes-stage3b/`). The CLI contract passes against the Debug executable
+   (5/5 checks, the Debug smoke in 42 s); the HDA end-to-end tests
+   (`test_polyfem_hda`, `test_readpvd_materials`, `test_polyfem_materials`)
+   pass with the repaired Release binary.
+
+After both repairs, with the Release binary `c56aa4c0…` (Debug `bcce1870…`) recorded in
+`binary-identity-stage3.txt`: five smokes within 7e-16 of the RB-11 Stage 1
+fingerprints, single-threaded friction bit-identical (`smokes-stage3b/`);
+`[run_manifest]` 158 / 7, the affected baseline selection 1,573 / 24,
+`[output],[rb22],[input_validation],[linear_elastic]` 992 / 30, CTest
+`cli_contract` passes (16 s); in Debug `[run_manifest],[linear_elastic],[output]`
+278 / 11.
+
+### Defaults table: historical, opt-in, selected
+
+The plan asks for one table that tells the three apart. Effective defaults
+of this fork at `1f6f826fa` (`json-specs/input-spec.json`; every value is
+also in a run's manifest under `input.effective`):
+
+| Setting | Historical behaviour | Opt-in / candidate | Explicitly selected production behaviour |
+| --- | --- | --- | --- |
+| `solver/contact/barrier_stiffness` | upstream adaptive IPC stiffness (Li 2020) or a fixed number | `"semi_implicit"` per-contact stiffness (Ando 2024) — selected per scene; the smokes and the Houdini asset select it | not a global default: the spec default stays the upstream adaptive mode |
+| Constraint floor (`semi_implicit/constraint_floor`) | positive floor with barrier deletion/projection (PF-02) | — | **retired** (2026-09-07); a positive value is ignored with a warning and cannot reactivate it |
+| Per-contact coefficient law | median with zeros, zero κ at nonpositive curvature, stencil-keyed | — | RB-18 law (positive-only median, relative floor `median/kappa_spread`, `|wᵀHw|` then `max|H|/d̂²` fallbacks, `d̂²`-normalised `conditioning_cap` 1e3), 2026-09-11 |
+| `semi_implicit/coefficient_identity` | `"stencil"` (EV/VV jump) | `"stencil"` remains selectable | `"parent"` (RB-21, 2026-09-12) |
+| `semi_implicit/force_continuation` | off (re-estimation at every refresh, 17–53 % drift) | `false` restores it; `continuation_max_ratio > 1` bounded pull | `true`, `continuation_max_ratio 0` (RB-20, 2026-09-11) |
+| `semi_implicit/friction_lag` | `"follow_stiffness"` (RB-18 F6: friction follows the in-solve trim) | `"follow_stiffness"` remains selectable | `"realized_force"` (RB-10 user decision 2026-09-13) |
+| `solver/contact/friction_iterations` | upstream 1 | explicit 1 for historical goldens (CI-03) | 2 (RB-10 user decision 2026-09-13) |
+| `semi_implicit/trial_displacement_cap` | uncapped trial sweeps | — | 50 barrier supports, semi-implicit mode only |
+| `semi_implicit/gap_floor` | — | experimental force saturation (`> 0`) | 0 (off) |
+| `solver/contact/CCD/resource_limits` | none (the kernel killed the process) | `0` disables; explicit custom limits | `-1` automatic: 1e8 hash-grid items / 5e7 emissions, enforced before allocation, exit 3 (RB-05 user decision 2026-09-12) |
+| Automatic timestep / load retry | none | — | **none** (RB-08 user decision 2026-09-13: a failed step reports and stops) |
+| Line-search roundoff fallback (`line_search/use_grad_norm_tol`, `Armijo/roundoff_tolerance`) | none (stalls at the energy floor) | `0` restores the previous behaviour | gradient-norm fallback at machine epsilon (RB-19) |
+| Q2+/serendipity hexahedral collision surface (`tessellation_type`) | faces silently skipped, crash or absent body | `"max_order"` lattice | `"dof"` proxy selected automatically for Q2+ hex boundaries; Q3+ blocked (RB-22 user decision 2026-09-12) |
+| Input validation | late context-free failures, silent acceptance | — | named early failures, exit 1, no output (RB-11, 2026-09-13); lumping warning; unit-system notice |
+| `output/physical_diagnostics`, `physical_balance_tolerance` | no endpoint record | the RB-04 streams (off by default) | `physical_balance_pass` = force residual at 1e-6 of the peak external force (RB-09 user decision 2026-09-13), observational |
+| `output/manifest` | no run identity | `""` disables | `run-manifest.json` for every `PolyFEM_bin` run (RB-12, 2026-09-14); library default off |
+| Exit statuses | abort on every uncaught failure | — | 0 / 1 named failure / 3 resource failure (RB-05 follow-up 2026-09-12) |
+
+A successful microfixture does not authorize promotion: nothing in this
+table was promoted by RB-12; the rows cite the decision that set them.
+
+### CI classification at the stage-1 publication
+
+| Lane | Known baseline failure (kept) | New regression at session start | Fixed by this session | Unavailable |
+| --- | --- | --- | --- | --- |
+| pre-commit | — | clang-format drift in four RB-11 files | yes (`1f6f826fa`, run 34854316144 green) | — |
+| Linux GCC 13 Debug/Release | — | `-Werror=missing-braces` in `test_linear_elastic_time.cpp` (build-blocking); then the same in `test_run_manifest.cpp` at `1f6f826fa` | yes (`1f6f826fa`, then this publication); the lanes' test outcome is first read from this publication's run | — |
+| macOS Release | CI-03–CI-06 scene groups (`contact_2d`, `triangle_data`, `standard`, `contact_3d`) | — | not in scope | — |
+| macOS Debug | — | 8 RB-11 tests abort on Debug assertions; `[run_manifest][run]` at `1f6f826fa` | partly: the `Mesh.cpp:207` assertion (4 RB-11 `linear_elastic` tests and the manifest run test) and the output-field assertion are repaired here; the RB-11 `input_validation` aborts (Eigen resize in the material validation, `MatParams.cpp:534`) belong to RB-11's follow-up (a concurrent session holds it) and are not touched | — |
+| Windows Debug / Release | — | 9 / 1 RB-11 test failures (fail-fast `0xc0000409`, `elastic laws` derivatives); `[run_manifest][run]` on Debug at `1f6f826fa` | the `Mesh.cpp:207` share (4 `linear_elastic` + the manifest run test) is repaired here; the rest has the same owner | — |
+| Cross-compiler repeatability matrix | — | — | — | needs another host; `cli_contract` is the portable check |
+
 ## Next session handoff
 
-- Completed: stage 1 implementation and local validation. Pending: the
-  GitHub matrix outcome for the new code (stage 3 reads it), stage 2
-  (five repeats of a small public fixture and of the PF-08 fine-load case
-  `quasistatic-semi` at `dt = .0625`, then the declared serial/threaded
-  comparison — convergence, restarts, reactions, energies, candidate counts,
-  peak memory), stage 3 (bounded CI checks, workflow verification, the
-  defaults table, README claims), the Houdini `provenance` block.
-- Status: `in progress` — stage 1 validated locally; the item's acceptance
-  (manifest identifies tested artifacts; repeat matrix and tolerances saved;
-  CI run and linked; README claims match) is not yet met.
-- Decision required: none for stage 1. For stage 3 the user will need to
-  choose the CI scope (which lanes are required, what to do with the RB-11
-  Debug/Windows failures and the four known scene groups).
-- Next command: `python3 tools/rb12/repeat.py …` (stage 2 runner, to be
-  written) on `quasistatic-semi` and the `dt = .0625` variant.
+- Completed: stage 1 (published `1f6f826fa`), stage 2 characterization,
+  the stage-3 checks (this publication). Pending: the GitHub matrix
+  results for both publications (read and recorded in a follow-up
+  documentation commit), the dependency forks' workflow triggers and pin
+  bump, the Houdini `provenance` block (HDA publication procedure), and
+  the user's decisions on the CI scope: which lanes are required, and
+  whether the RB-11 Debug/Windows failures gate anything before their
+  owner repairs them.
+- Status: `in progress`; acceptance so far: the manifest identifies the
+  tested artifacts (yes), the repeat matrix and its declared tolerances are
+  saved (yes, two matrices), appropriate CI is run and linked (partially:
+  runs exist and are linked; native outcomes pending), README claims match
+  the measured scope (updated with this stage).
+- Decision required from the user: the CI scope above; whether the
+  per-thread memory growth (~125 MB per thread) deserves its own item.
+- Next command: `ctest --test-dir build -R cli_contract -V` after any
+  change to `main.cpp`, the manifest or the exit statuses;
+  `python3 tools/rb12/repeat.py --binary build/PolyFEM_bin --output <fresh>`
+  for a new platform or build configuration.

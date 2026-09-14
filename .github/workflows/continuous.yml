@@ -78,6 +78,20 @@ jobs:
       - name: Tests
         run: OMP_NUM_THREADS=1 ctest --test-dir build --verbose --output-on-failure
 
+      # RB-12: keep the test logs and the CLI contract's manifests of every
+      # outcome, so a failure can be read without rerunning the job.
+      - name: Test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-${{ runner.os }}-${{ matrix.config }}-${{ matrix.threading }}
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/Testing/Temporary/LastTestsFailed.log
+            build/tests/cli_contract/**/run-manifest.json
+            build/tests/cli_contract/**/run.log
+          if-no-files-found: ignore
+
       # - name: Setup tmate session
       #   if: ${{ failure() }}
       #   uses: mxschmitt/action-tmate@v3
@@ -138,6 +152,20 @@ jobs:
       - name: Tests
         run: ctest --test-dir build --verbose --output-on-failure
 
+      # RB-12: keep the test logs and the CLI contract's manifests of every
+      # outcome, so a failure can be read without rerunning the job.
+      - name: Test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-${{ runner.os }}-${{ matrix.config }}-${{ matrix.threading }}
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/Testing/Temporary/LastTestsFailed.log
+            build/tests/cli_contract/**/run-manifest.json
+            build/tests/cli_contract/**/run.log
+          if-no-files-found: ignore
+
   ####################
   # Windows
   ####################
@@ -146,6 +174,7 @@ jobs:
     runs-on: windows-2022
     env:
       SCCACHE_IDLE_TIMEOUT: "12000"
+      SCCACHE_CACHE_SIZE: "1G"
       CMAKE_BUILD_PARALLEL_LEVEL: 4
       CTEST_PARALLEL_LEVEL: 4
     strategy:
@@ -173,8 +202,9 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ matrix.config }}-${{ matrix.threading }}-cache
 
       - name: Prepare sccache
+        # sccache 0.17 has no --max-size option; the size is the
+        # SCCACHE_CACHE_SIZE environment variable (job env above).
         run: |
-          sccache --max-size=1.0G
           sccache -V && sccache --show-stats && sccache --zero-stats
 
       - name: Configure
@@ -205,3 +235,17 @@ jobs:
 
       - name: Tests
         run: ctest --test-dir build --verbose --output-on-failure
+
+      # RB-12: keep the test logs and the CLI contract's manifests of every
+      # outcome, so a failure can be read without rerunning the job.
+      - name: Test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-${{ runner.os }}-${{ matrix.config }}-${{ matrix.threading }}
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/Testing/Temporary/LastTestsFailed.log
+            build/tests/cli_contract/**/run-manifest.json
+            build/tests/cli_contract/**/run.log
+          if-no-files-found: ignore

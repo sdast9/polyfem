@@ -45,6 +45,8 @@ function(polyfem_add_build_info target)
         set(polysolve_override "${CPM_polysolve_SOURCE}")
     endif()
 
+    # Comma-joined: a semicolon list would be split into separate arguments
+    # of the script command.
     set(options "")
     foreach(name
             POLYFEM_WITH_OPTIMIZATION POLYFEM_WITH_PYTHON POLYFEM_WITH_MMG POLYFEM_WITH_CLIPPER
@@ -52,6 +54,7 @@ function(polyfem_add_build_info target)
             POLYFEM_PORTABLE_BUILD POLYFEM_CODE_COVERAGE POLYFEM_WITH_TESTS)
         list(APPEND options "${name}=${${name}}")
     endforeach()
+    string(JOIN "," options ${options})
 
     set(cxx_flags_config "")
     set(build_type "${CMAKE_BUILD_TYPE}")

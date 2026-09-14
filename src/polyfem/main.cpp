@@ -10,6 +10,7 @@
 #include <polyfem/optimization/OptState.hpp>
 #endif
 
+#include <polyfem/io/BuildInfo.hpp>
 #include <polyfem/io/RunManifest.hpp>
 #include <polyfem/utils/ExitStatus.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
@@ -21,6 +22,7 @@
 #include <ipc/broad_phase/broad_phase.hpp>
 #include <ipc/utils/logger.hpp>
 
+#include <iostream>
 #include <new>
 
 using namespace polyfem;
@@ -168,6 +170,11 @@ static int run(int argc, char **argv)
 	unsigned max_threads = std::numeric_limits<unsigned>::max();
 	command_line.add_option("--max_threads", max_threads, "Maximum number of threads");
 
+	// RB-12: the build identity compiled into this executable (sources,
+	// pins, compiler, configuration), as JSON on stdout; nothing is run.
+	bool print_build_info = false;
+	command_line.add_flag("--build_info", print_build_info, "Print the build identity (polyfem.build-info JSON) and exit");
+
 	auto input = command_line.add_option_group("input");
 
 	std::string json_file = "";
@@ -179,7 +186,7 @@ static int run(int argc, char **argv)
 	std::string hdf5_file = "";
 	input->add_option("--hdf5", hdf5_file, "Simulation HDF5 file")->check(CLI::ExistingFile);
 
-	input->require_option(1);
+	input->require_option(0, 1);
 
 	std::string output_dir = "";
 	command_line.add_option("-o,--output_dir", output_dir, "Directory for output files")->check(CLI::ExistingDirectory | CLI::NonexistentPath);
@@ -204,6 +211,12 @@ static int run(int argc, char **argv)
 		->transform(CLI::CheckedTransformer(SPDLOG_LEVEL_NAMES_TO_LEVELS, CLI::ignore_case));
 
 	CLI11_PARSE(command_line, argc, argv);
+
+	if (print_build_info)
+	{
+		std::cout << io::build_info().dump(2) << std::endl;
+		return EXIT_SUCCESS;
+	}
 
 	json in_args = json({});
 

@@ -373,6 +373,16 @@ namespace polyfem::io
 		input["effective"] = args;
 		input["effective_sha256"] = canonical_sha256(args);
 		input["effective_scope"] = "The input after `common` expansion, defaults and the command-line overrides, as the solver used it; hashed as the compact sorted-key serialization";
+		{
+			// The same settings run from different directories (repeats, a
+			// matrix) must be recognisable as the same settings.
+			json portable = args;
+			portable.erase("root_path");
+			if (portable.contains("output") && portable["output"].is_object())
+				portable["output"].erase("directory");
+			input["effective_sha256_without_paths"] = canonical_sha256(portable);
+			input["effective_sha256_without_paths_scope"] = "The same hash with root_path and output/directory removed";
+		}
 		input["referenced_files"] = referenced_files(args, root_path);
 		if (args.contains("units"))
 			input["units"] = args["units"];
