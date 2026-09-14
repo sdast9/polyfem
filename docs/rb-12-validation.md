@@ -45,9 +45,9 @@ upgrade, upstream merge, release tag or feature promotion.
   inside `State::init` itself (invalid JSON, `dhat`, broad-phase name, time
   schedule) stops before the effective input is final and has no manifest —
   its record is the log's `PolyFEM stopped:` line and the exit status; every
-  later refusal (mesh, materials, collision surface, solve) has one; no HDA change yet
-  (the `provenance` input block is specified and consumed, the asset fills
-  it in a later publication).
+  later refusal (mesh, materials, collision surface, solve) has one. The
+  Houdini asset fills the `provenance` block since its publication
+  `6f5fcdc` (2026-09-14, see stage 3).
 
 ## Baseline and reproduction
 
@@ -399,16 +399,50 @@ table was promoted by RB-12; the rows cite the decision that set them.
 | Windows Debug / Release | — | 9 / 1 RB-11 test failures (fail-fast `0xc0000409`, `elastic laws` derivatives); `[run_manifest][run]` on Debug at `1f6f826fa` | the `Mesh.cpp:207` share (4 `linear_elastic` + the manifest run test) is repaired here; the rest has the same owner | — |
 | Cross-compiler repeatability matrix | — | — | — | needs another host; `cli_contract` is the portable check |
 
+### Houdini provenance (2026-09-14, `sdast9/houdini-plugins@6f5fcdc`)
+
+`build_params` appends the `provenance` block (producer `houdini`, the
+Houdini version, the asset type name and `.hdanc` file with its SHA-256,
+the asset version, the scene file, the export time); `read_params` treats
+the key as represented (it is regenerated at the next export); the
+end-to-end test `test_polyfem_hda.py` asserts the block and its round trip
+into the solver's manifest (`producer` equals the exported block, the
+manifest `completed`, the input file hashed). The export now needs PolyFEM
+`1f6f826fa` or later — an earlier strict build refuses the unknown key —
+which the HDA README states. Published through the separate checkout
+procedure (assets rebuilt inside the clone, installed copies verified equal
+to the published files, no `backup/`); the full HDA suite passes (13/13,
+`outputs/rb-12/20260914T142106Z-repeat/hda-publication/`).
+
+Found on the way, and a stage-3 finding in its own right:
+`test_readpvd_hda.py` compared a cached *minimal-fields* run from
+2026-07-17 with the *full* smoke run regenerated on 2026-09-13 by a later
+solver — 4.4e-4 of displacement apart after the RB-18/20/21 coefficient
+repairs — and failed its PK2 comparison (max error 1.2e4) on that staleness
+alone; it had passed on 2026-09-12 only because the full run was then the
+old one. The test now regenerates its derived runs when they are older
+than the full run or the binary (the manifest would make this exact —
+compare `process.executable.sha256` — but the pre-RB-12 full run has none).
+The rule the failure illustrates is RB-12's: a comparison is only as good
+as the identity of both sides.
+
+Rebased publication check: after rebasing onto the concurrent RB-11
+follow-up (`eaa624098`/`7aaf53f8e`), the combined Release selection passes
+(2,600 assertions / 55 cases: `[run_manifest],[linear_elastic],[output],[input_validation]`
+and the affected baseline), `cli_contract` passes, and the Debug selection
+`[run_manifest],[linear_elastic],[output]` passes (857 / 13) — RB-11's new
+BDF tests included.
+
 ## Next session handoff
 
 - Completed: stage 1 (published `1f6f826fa`), stage 2 characterization,
-  the stage-3 checks (this publication). Pending: the GitHub matrix
-  results for both publications (read and recorded in a follow-up
-  documentation commit), the dependency forks' workflow triggers and pin
-  bump, the Houdini `provenance` block (HDA publication procedure), and
-  the user's decisions on the CI scope: which lanes are required, and
-  whether the RB-11 Debug/Windows failures gate anything before their
-  owner repairs them.
+  the stage-3 checks (`f5f59db26`), the dependency forks' CI triggers and
+  the pin bump (`4f5acc773`), the Houdini provenance block (`6f5fcdc`).
+  Pending: the GitHub matrix results for `4f5acc773` and the two dependency
+  runs (read and recorded in a follow-up documentation commit), and the
+  user's decisions on the CI scope: which lanes are required, and whether
+  the RB-11 Debug/Windows failures gate anything before their owner repairs
+  them.
 - Status: `in progress`; acceptance so far: the manifest identifies the
   tested artifacts (yes), the repeat matrix and its declared tolerances are
   saved (yes, two matrices), appropriate CI is run and linked (partially:
