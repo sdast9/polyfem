@@ -608,10 +608,12 @@ TEST_CASE("Ogden term lists must pair up", "[input_validation][material]")
 		Eigen::MatrixXd V = two_tet_vertices();
 		Eigen::MatrixXi T = two_tets();
 		std::ofstream out(mesh_path);
-		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n" << V.rows() << "\n";
+		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n"
+			<< V.rows() << "\n";
 		for (int i = 0; i < V.rows(); ++i)
 			out << V(i, 0) << " " << V(i, 1) << " " << V(i, 2) << " 0\n";
-		out << "Tetrahedra\n" << T.rows() << "\n";
+		out << "Tetrahedra\n"
+			<< T.rows() << "\n";
 		for (int i = 0; i < T.rows(); ++i)
 			out << T(i, 0) + 1 << " " << T(i, 1) + 1 << " " << T(i, 2) + 1 << " " << T(i, 3) + 1 << " 0\n";
 		out << "End\n";

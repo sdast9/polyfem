@@ -42,6 +42,7 @@
 #include <limits>
 #include <fstream>
 #include <chrono>
+#include <polyfem/io/DiagnosticSchemas.hpp>
 #include <polyfem/utils/getRSS.h>
 #include <polyfem/solver/forms/InertiaForm.hpp>
 #include <polyfem/solver/forms/BodyForm.hpp>
@@ -51,6 +52,94 @@ namespace polyfem::varform
 {
 	using namespace solver;
 	using namespace time_integrator;
+
+	void NonlinearElasticVarForm::ensure_diagnostic_run_id()
+	{
+		if (!diagnostic_run_id_.empty())
+			return;
+		// One id for the manifest and the three RB-04 streams of a run.
+		diagnostic_run_id_ = run_manifest_ ? run_manifest_->run_id()
+										   : std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+	}
+
+	json NonlinearElasticVarForm::manifest_model_description() const
+	{
+		if (!solve_data_.contact_form)
+			return {{"contact", "disabled"}};
+		if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+			return barrier->model_description();
+		return {{"form", solve_data_.contact_form->name()}, {"dhat", solve_data_.contact_form->dhat()}, {"coefficient_law", {{"value", nullptr}, {"unavailable_reason", "Only the barrier contact form describes its coefficient law"}}}};
+	}
+
+	void NonlinearElasticVarForm::record_manifest_step(
+		const int step, const std::string &outcome, const std::string &phase,
+		const json &termination, const json &lagging, const int stall_retunes,
+		const double elapsed, const std::string &error) const
+	{
+		if (!run_manifest_)
+			return;
+		try
+		{
+			// Compact: the numbers that identify what the attempt did, not the
+			// RB-04 vectors. Every subsolve of this step from stats.solver_info.
+			json subsolves = json::array();
+			for (const auto &info : stats.solver_info)
+			{
+				if (!info.is_object() || info.value("t", -1) != step)
+					continue;
+				json entry = {{"type", info.value("type", std::string())}};
+				if (info.contains("lag_i"))
+					entry["lag_i"] = info["lag_i"];
+				if (info.contains("weight"))
+					entry["al_weight"] = info["weight"];
+				if (info.contains("info") && info["info"].is_object())
+				{
+					const json &detail = info["info"];
+					for (const char *key : {"iterations", "status", "outcome", "termination_reason", "restarts", "unchanged_restarts", "gradNorm", "energy"})
+						if (detail.contains(key))
+							entry[key] = detail[key];
+				}
+				subsolves.push_back(entry);
+			}
+			json compact_termination = json::object();
+			if (termination.is_object())
+				for (const char *key : {"outcome", "termination_reason", "restarts", "unchanged_restarts", "iterations", "status", "exception", "unavailable_reason"})
+					if (termination.contains(key))
+						compact_termination[key] = termination[key];
+			json compact_lagging = json::object();
+			if (lagging.is_object())
+				for (const char *key : {"state", "iteration", "updated_lag_residual_norm_objective", "tolerance"})
+					if (lagging.contains(key))
+						compact_lagging[key] = lagging[key];
+			json record = {
+				{"step", step},
+				{"time", args.contains("time") && args["time"].is_object() ? json(args["time"].value("t0", 0.) + step * args["time"].value("dt", 0.)) : json(nullptr)},
+				{"outcome", outcome},
+				{"phase", phase},
+				{"wall_seconds", elapsed},
+				{"termination", compact_termination},
+				{"subsolves", subsolves},
+				{"stall_retunes", stall_retunes},
+				{"lagging", compact_lagging},
+				{"error", error.empty() ? json(nullptr) : json(error)}};
+			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+			{
+				const json state = barrier->diagnostic_state();
+				json contact = json::object();
+				for (const char *key : {"active_count", "trim_or_global_stiffness", "refresh_id", "batch_median", "batch_floor", "batch_cap", "curvature_fallback_count", "curvature_abs_fallback_count", "curvature_global_fallback_count", "interpolated_condensed_count", "interpolated_direction_count", "continued_count", "fresh_count", "coefficient_zero_count", "coefficient_nonfinite_count", "coefficient_range", "candidate_count"})
+					if (state.contains(key))
+						contact[key] = state[key];
+				record["contact"] = contact;
+			}
+			else
+				record["contact"] = nullptr;
+			run_manifest_->record_step(record);
+		}
+		catch (const std::exception &e)
+		{
+			logger().warn("Run manifest step record failed: {}", e.what());
+		}
+	}
 
 	void NonlinearElasticVarForm::configure_coefficient_diagnostics(int step, const std::string &phase)
 	{
@@ -62,12 +151,11 @@ namespace polyfem::varform
 			barrier->set_coefficient_observer(nullptr);
 			return;
 		}
-		if (diagnostic_run_id_.empty())
-			diagnostic_run_id_ = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+		ensure_diagnostic_run_id();
 		barrier->set_coefficient_observer([this, step, phase](const json &event) {
 			json record = event;
-			record["schema"] = "polyfem.coefficient-event";
-			record["version"] = 1;
+			record["schema"] = io::schemas::COEFFICIENT_EVENT;
+			record["version"] = io::schemas::COEFFICIENT_EVENT_VERSION;
 			record["run_id"] = diagnostic_run_id_;
 			record["step"] = step;
 			record["phase"] = phase;
@@ -125,7 +213,7 @@ namespace polyfem::varform
 		// physical units against the run's peak external force -- and the
 		// contact record carries the active-collision gap statistics. Every
 		// earlier field keeps its meaning.
-		json record = {{"schema", "polyfem.physical-diagnostics"}, {"version", 3}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"work", "internal energy; right-endpoint discrete estimates, not path integrals"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
+		json record = {{"schema", io::schemas::PHYSICAL_DIAGNOSTICS}, {"version", io::schemas::PHYSICAL_DIAGNOSTICS_VERSION}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"work", "internal energy; right-endpoint discrete estimates, not path integrals"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
 		record["time"] = args["time"].is_object() ? scalar(args["time"].value("t0", 0.) + step * args["time"].value("dt", 0.)) : missing("Static solve has no physical time");
 		record["accepted_displacement"] = outcome == "accepted" ? vector(x - start) : missing("Attempt did not return an accepted endpoint");
 		record["attempt_summary"] = observations.value("summary", json{{"unavailable_reason", "No attempt observation"}});
@@ -1592,6 +1680,8 @@ namespace polyfem::varform
 		// Initialize nonlinear problems
 
 		init_forms(args, mesh_->dimension(), sol, t);
+		if (run_manifest_)
+			run_manifest_->record_model(manifest_model_description());
 
 		if (pure_mass_.size() == 0)
 			pure_mass_assembler_->assemble(mesh_->is_volume(), space_.n_bases, space_.basis_list(), space_.geometry_basis_list(), pure_mass_ass_vals_cache_, 0, pure_mass_, true);
@@ -1651,8 +1741,8 @@ namespace polyfem::varform
 		const auto diagnostic_start_time = std::chrono::steady_clock::now();
 		const bool diagnostics_enabled = args["output"].value("physical_diagnostics", false);
 		configure_coefficient_diagnostics(step, "initialization");
-		if (diagnostics_enabled && diagnostic_run_id_.empty())
-			diagnostic_run_id_ = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+		if (diagnostics_enabled)
+			ensure_diagnostic_run_id();
 		const Eigen::VectorXd diagnostic_start = diagnostics_enabled ? Eigen::VectorXd(sol) : Eigen::VectorXd();
 		std::string diagnostic_phase = "initialization";
 		json diagnostic_termination = {{"unavailable_reason", "No completed subsolve"}};
@@ -1721,7 +1811,7 @@ namespace polyfem::varform
 		const auto write_attempt = [&](const std::string &kind, int iteration, const json &trial, const json &accepted, double energy, double grad_norm) {
 			if (!attempts.stream.is_open())
 				return;
-			const json row = {{"schema", "polyfem.solver-attempt"}, {"version", 1}, {"run_id", diagnostic_run_id_}, {"step", step}, {"phase", diagnostic_phase}, {"minimize_index", attempts.minimize_index}, {"iteration", iteration}, {"kind", kind}, {"trial", trial}, {"accepted", accepted}, {"energy_objective_at_x0", finite_or_null(energy)}, {"gradient_norm_objective_at_x0", finite_or_null(grad_norm)}, {"units", "internal length; objective units at the iterate the proposal was computed from; Euclidean/Linf norms over full node-major DOFs"}};
+			const json row = {{"schema", io::schemas::SOLVER_ATTEMPT}, {"version", io::schemas::SOLVER_ATTEMPT_VERSION}, {"run_id", diagnostic_run_id_}, {"step", step}, {"phase", diagnostic_phase}, {"minimize_index", attempts.minimize_index}, {"iteration", iteration}, {"kind", kind}, {"trial", trial}, {"accepted", accepted}, {"energy_objective_at_x0", finite_or_null(energy)}, {"gradient_norm_objective_at_x0", finite_or_null(grad_norm)}, {"units", "internal length; objective units at the iterate the proposal was computed from; Euclidean/Linf norms over full node-major DOFs"}};
 			// Flushed per row: an uncaught solver exception terminates the
 			// process without unwinding, so a buffered stream would lose the
 			// failed attempt's history.
@@ -1866,6 +1956,11 @@ namespace polyfem::varform
 		} observer_guard{diagnostics_enabled ? solve_data_.nl_problem : nullptr};
 
 		const auto emit_diagnostics = [&](const std::string &outcome, const std::string &error = "") {
+			// RB-12: the manifest's step record, for every outcome, before the
+			// opt-in RB-04 record (which may be disabled).
+			record_manifest_step(step, outcome, diagnostic_phase, diagnostic_termination, diagnostic_lagging,
+								 attempts.stall_retunes,
+								 std::chrono::duration<double>(std::chrono::steady_clock::now() - diagnostic_start_time).count(), error);
 			try
 			{
 				flush_pending_proposal();

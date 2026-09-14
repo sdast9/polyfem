@@ -39,9 +39,9 @@ namespace
 	{
 		std::string name;
 		json params;
-		bool objective;    // energy invariant under a rigid rotation of the deformed body
-		bool stress_free;  // E(0) = 0 and grad E(0) = 0 at the reference configuration
-		bool anisotropic;  // has a fibre direction (frame-indifference check)
+		bool objective;   // energy invariant under a rigid rotation of the deformed body
+		bool stress_free; // E(0) = 0 and grad E(0) = 0 at the reference configuration
+		bool anisotropic; // has a fibre direction (frame-indifference check)
 	};
 
 	std::vector<Law> laws()
@@ -68,7 +68,9 @@ namespace
 			 {{"type", "MaterialSum"},
 			  {"models", json::array({json{{"type", "NeoHookean"}, {"E", 2e4}, {"nu", 0.3}},
 									  json{{"type", "HGODispersion"}, {"k1", 1e4}, {"k2", 2.0}, {"kappa", 0.1}, {"fiber_direction", fibre}}})}},
-			 true, true, true},
+			 true,
+			 true,
+			 true},
 		};
 	}
 

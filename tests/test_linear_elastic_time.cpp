@@ -49,7 +49,7 @@ namespace
 		for (int i = 0; i <= nx; ++i)
 			for (int j = 0; j <= ny; ++j)
 				for (int k = 0; k <= nz; ++k)
-					V.push_back({double(i), double(j), double(k)});
+					V.push_back({{double(i), double(j), double(k)}});
 		const auto vid = [&](int i, int j, int k) { return (i * (ny + 1) + j) * (nz + 1) + k; };
 		const int perms[6][3] = {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}};
 		std::vector<std::array<int, 4>> T;
@@ -59,7 +59,7 @@ namespace
 					for (int p = 0; p < 6; ++p)
 					{
 						int cur[3] = {0, 0, 0};
-						std::array<int, 4> t{vid(i, j, k), 0, 0, 0};
+						std::array<int, 4> t{{vid(i, j, k), 0, 0, 0}};
 						for (int s = 0; s < 3; ++s)
 						{
 							cur[perms[p][s]] = 1;
@@ -79,10 +79,12 @@ namespace
 					}
 		const auto path = dir / "beam.mesh";
 		std::ofstream out(path);
-		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n" << V.size() << "\n";
+		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n"
+			<< V.size() << "\n";
 		for (const auto &v : V)
 			out << v[0] << " " << v[1] << " " << v[2] << " 0\n";
-		out << "Tetrahedra\n" << T.size() << "\n";
+		out << "Tetrahedra\n"
+			<< T.size() << "\n";
 		for (const auto &t : T)
 			out << t[0] + 1 << " " << t[1] + 1 << " " << t[2] + 1 << " " << t[3] + 1 << " 0\n";
 		out << "End\n";
@@ -94,7 +96,7 @@ namespace
 		json args = json::object();
 		args["geometry"] = json::array({{{"mesh", mesh_path},
 										 {"surface_selection", json::array({{{"id", 1}, {"axis", "-x"}, {"position", 1e-6}},
-																			 {{"id", 2}, {"axis", "+x"}, {"position", 2.0 - 1e-6}}})}}});
+																			{{"id", 2}, {"axis", "+x"}, {"position", 2.0 - 1e-6}}})}}});
 		args["materials"] = {{"type", "LinearElasticity"}, {"E", 1e5}, {"nu", 0.3}, {"rho", 1000.0}};
 		args["boundary_conditions"] = {
 			{"dirichlet_boundary", json::array({{{"id", 1}, {"value", json::array({0, 0, 0})}}})},

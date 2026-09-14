@@ -67,6 +67,13 @@ namespace polyfem::solver
 		/// Bounded observational path quadrature; never refreshes production coefficients.
 		json diagnostic_path(const Eigen::VectorXd &start, const Eigen::VectorXd &end) const;
 		json diagnostic_state() const;
+		/// @brief RB-12: the model this form implements, for the run manifest --
+		///        stiffness mode, the coefficient law and its lineage, the
+		///        coefficient identity, continuation and friction-lag policies,
+		///        the gap convention and which fallbacks the run can take (their
+		///        counts are in diagnostic_state()). Constants of the build, so
+		///        the manifest names the law the binary actually carries.
+		json model_description() const;
 		/// Distances of the active collisions (within dhat, the same filter as
 		/// the controller's compute_avg_distance) at the given displaced
 		/// surface: count, mean, rms, min, max and the ratios to dhat. RB-09:

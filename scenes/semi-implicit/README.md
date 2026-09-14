@@ -129,6 +129,28 @@ re-estimating behavior (measured on the public smokes: ~1e-4 frictionless,
 ~1.6e-2 with friction, on a .25 displacement); `force_continuation: false`
 restores it.
 
+### Run manifest (RB-12)
+
+Every `PolyFEM_bin` run writes `run-manifest.json` into its output directory
+(`output/manifest`; `""` disables it, the library default is off) and rewrites
+it after every step and at completion, so a run that stops leaves its
+identity behind. Schema `polyfem.run-manifest` version 1:
+
+| record | content |
+| --- | --- |
+| `build` | compiled in before every build (`polyfem.build-info`): the effective PolyFEM / IPC Toolkit / PolySolve checkouts — commit, branch, dirty state, a SHA-256 of the uncommitted patch (tracked diff plus untracked file hashes) — next to the pins the recipes declare and whether the effective commit matches them (a local `CPM_<name>_SOURCE` override builds whatever is checked out there); compiler, configuration, generator, threading backend, options |
+| `process` | the executable's own SHA-256, size and mtime (binary identity, distinct from source identity), command line, working directory, pid, `uname`, hardware concurrency, requested / effective thread count |
+| `input` | the input file and every `common` file with their hashes, the effective input after defaults and command-line overrides (`effective`, hashed as its canonical serialization), every string of it that resolves to an existing file (meshes, per-element value files, selections, restart states — `referenced_files`, with hashes), the unit system and `characteristic_force_density` (setting and effective value, since the stopping tolerance scales with it — RB-09) |
+| `solver` | linear / nonlinear solver summary, the contact settings, and `model`: what the contact form implements (stiffness mode, the coefficient law and its lineage, coefficient identity, continuation, friction lag, controller constants, gap convention, model-selection status, the fallbacks the run can take) |
+| `diagnostics` | the opt-in RB-04 streams and the versions of every record schema this binary writes |
+| `steps` | one record per solve: outcome, phase reached, wall time, termination (restarts, iterations, reason), every subsolve, stall retunes, lagging state, and the contact form's state (active count, trim, refresh id, batch median / floor / cap, fallback and continuation counts, candidate counts) |
+| `completion` | `completed` / `failed` / `resource_failure`, exit status, message, wall time, peak RSS |
+| `producer` | the input's `provenance` block when it carries one (the Houdini asset: producer, version, asset name / version / SHA-256, scene, export time) |
+
+The RB-04 streams of the same run carry the manifest's `run_id`. Absent
+measurements are `null` with an `unavailable_reason`; the manifest never
+guesses. Documented in [docs/rb-12-validation.md](../../docs/rb-12-validation.md).
+
 ## Scope and limitations
 
 - Supports the standard clamped-log `BarrierContactForm` for static, quasistatic,

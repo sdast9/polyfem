@@ -113,6 +113,15 @@ namespace polyfem::varform
 		solver::SolveData solve_data_;
 		std::vector<std::shared_ptr<solver::Form>> forms;
 		std::string diagnostic_run_id_;
+		/// The RB-04 streams share the run manifest's run id when there is one.
+		void ensure_diagnostic_run_id();
+		/// RB-12: the contact/coefficient model description for the manifest.
+		json manifest_model_description() const;
+		/// RB-12: one step's attempt record for the manifest, from the
+		/// termination/lagging state at the recording boundary.
+		void record_manifest_step(int step, const std::string &outcome, const std::string &phase,
+								  const json &termination, const json &lagging, int stall_retunes,
+								  double elapsed, const std::string &error) const;
 		/// Running maximum over this run's accepted records of the total absolute
 		/// external force (support, contact, friction, inertia, body, pressure);
 		/// the normalization of physical_balance_pass (RB-09 decision, 2026-09-13).

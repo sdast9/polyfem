@@ -1325,6 +1325,41 @@ namespace polyfem::solver
 		return result;
 	}
 
+	json BarrierContactForm::model_description() const
+	{
+		const char *mode = stiffness_mode_ == BarrierStiffnessMode::SemiImplicit ? "semi_implicit"
+						   : stiffness_mode_ == BarrierStiffnessMode::Adaptive   ? "adaptive"
+																				 : "fixed";
+		json model = {
+			{"form", name()},
+			{"stiffness_mode", mode},
+			{"dhat", dhat_},
+			{"gap_convention", "Unsigned distance between collision primitives in internal length units; the barrier acts below dhat; the realized gap at the endpoint is the semi-implicit model error (docs/rb-09-contract.md); collision distances are the toolkit's point-triangle / edge-edge / point-edge / point-point distances"},
+			{"convergent_formulation", {{"area_weighting", use_area_weighting()}, {"improved_max_operator", use_improved_max_operator()}, {"physical_barrier", use_physical_barrier()}}},
+			{"model_selection_status", "Production adaptive-barrier law retained by the user's decision of 2026-09-11 (docs/robustness-plan.md, decision register); no candidate estimator or controller is active"},
+			{"uncertainty_method", {{"value", nullptr}, {"unavailable_reason", "No estimator: the per-contact coefficient is a deterministic function of the frozen system Hessian; measurement limits are documented in docs/rb-09-validation.md"}}}};
+		if (stiffness_mode_ == BarrierStiffnessMode::SemiImplicit)
+		{
+			model["coefficient_law"] = {
+				{"version", "RB-18/RB-20/RB-21 (2026-09-12)"},
+				{"estimate", "kappa = w^T H w on the frozen weighted system Hessian per stencil (Ando 2024), positive-only batch median, relative floor median/kappa_spread, cap kappa_spread * median, d^2-normalized conditioning cap (RB-18)"},
+				{"curvature_fallbacks", "nonpositive/nonfinite w^T H w -> |w^T H w| (RB-18 F7 B), then max|H| / dhat^2 (fallback E); counted per step as curvature_fallback_count / curvature_abs_fallback_count / curvature_global_fallback_count"},
+				{"interpolated_stencils", "parent block condensed onto the stencil, (B H_PP^-1 B^T)^-1 (RB-03); gap-normalized force direction as fallback, counted as interpolated_direction_count"},
+				{"coefficient_identity", parent_keyed_ ? "parent" : "stencil"},
+				{"force_continuation", force_continuation_},
+				{"continuation_max_ratio", continuation_max_ratio_},
+				{"friction_lag", friction_lag_realized_ ? "realized_force" : "follow_stiffness"},
+				{"controller", {{"kind", "global trim band on the realized mean gap (docs/rb-16-validation.md closure)"}, {"trim_lower", trim_lower_}, {"trim_upper", trim_upper_}, {"trim_factor", trim_factor_}, {"trim_min", trim_min_}, {"trim_max", trim_max_}, {"controller_interval", controller_interval_}, {"refresh_interval", refresh_interval_}, {"kappa_min", kappa_min_}, {"kappa_spread", kappa_spread_}, {"conditioning_cap", conditioning_cap_}, {"trial_displacement_cap", trial_displacement_cap_}}},
+				{"reference_state", "Coefficients are refreshed at solve starts, stall restarts and published endpoints; the sequence of refresh/retune/continuation events is the opt-in coefficient-events.jsonl stream (output/physical_diagnostics), summarised per step by refresh_id and the continued/fresh counts"},
+				{"constraint_floor", "retired (docs/pf-02-floor-removal.md); a positive setting is ignored"}};
+		}
+		else
+			model["coefficient_law"] = stiffness_mode_ == BarrierStiffnessMode::Adaptive
+										   ? "Classic IPC adaptive stiffness (Li et al. 2020)"
+										   : "User-provided fixed stiffness";
+		return model;
+	}
+
 	json BarrierContactForm::gap_statistics(const Eigen::MatrixXd &displaced_surface) const
 	{
 		assert(displaced_surface.rows() == collision_mesh_.num_vertices());

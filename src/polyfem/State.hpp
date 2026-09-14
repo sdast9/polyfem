@@ -23,6 +23,11 @@ namespace polyfem::varform
 	class VarForm;
 }
 
+namespace polyfem::io
+{
+	class RunManifest;
+}
+
 namespace polyfem
 {
 	/// VarForm-only simulation state.
@@ -48,6 +53,14 @@ namespace polyfem
 
 		/// active variational formulation
 		std::shared_ptr<varform::VarForm> variational_formulation;
+
+		/// RB-12 run manifest (output/manifest); nullptr when disabled
+		std::shared_ptr<io::RunManifest> run_manifest;
+
+		/// RB-12: the manifest file name used when the input (after its
+		/// `common` chain) does not set output/manifest; PolyFEM_bin sets
+		/// "run-manifest.json", the library default is "" (no manifest).
+		std::string default_manifest;
 
 		/// Optional UI progress callback.
 		std::function<void(int, int, double, double)> time_callback = nullptr;

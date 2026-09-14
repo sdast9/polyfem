@@ -14,7 +14,7 @@ namespace polyfem
 {
 	namespace utils
 	{
-		void apply_common_params(json &args)
+		void apply_common_params(json &args, std::vector<std::string> *chain)
 		{
 			if (!args.contains("common"))
 				return;
@@ -23,6 +23,8 @@ namespace polyfem
 
 			if (common_params_path.empty())
 				return;
+			if (chain)
+				chain->push_back(common_params_path);
 
 			std::ifstream file(common_params_path);
 			if (!file.is_open())
@@ -38,7 +40,7 @@ namespace polyfem
 				common_params["root_path"] = resolve_path(common_params["root_path"], common_params_path);
 			else
 				common_params["root_path"] = common_params_path;
-			apply_common_params(common_params);
+			apply_common_params(common_params, chain);
 
 			// If there is a root path in the common params, it overrides the one in the current params.
 			// This is somewhat backwards as normally current params override common params, but this is

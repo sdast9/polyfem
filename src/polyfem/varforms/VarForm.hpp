@@ -11,6 +11,7 @@
 #include <polyfem/io/OutputData.hpp>
 #include <polyfem/io/OutData.hpp>
 #include <polyfem/io/OutStatsData.hpp>
+#include <polyfem/io/RunManifest.hpp>
 #include <polyfem/utils/Types.hpp>
 #include <polyfem/varforms/FESpace.hpp>
 
@@ -90,6 +91,11 @@ namespace polyfem
 				const ForwardStepCallback &post_step = {});
 
 			void set_time_callback(const std::function<void(int, int, double, double)> &callback) { time_callback = callback; }
+
+			/// @brief RB-12: the run manifest this formulation appends its model
+			///        description and step history to (nullptr: no manifest).
+			void set_run_manifest(std::shared_ptr<io::RunManifest> manifest) { run_manifest_ = std::move(manifest); }
+			const std::shared_ptr<io::RunManifest> &run_manifest() const { return run_manifest_; }
 
 			/// @brief Get the problem dimension of the variational formulation, for output purposes
 			/// @return Problem dimension
@@ -230,6 +236,8 @@ namespace polyfem
 			std::unique_ptr<mesh::Mesh> mesh_;
 
 			std::function<void(int, int, double, double)> time_callback;
+
+			std::shared_ptr<io::RunManifest> run_manifest_;
 
 			mutable io::OutGeometryData output_geometry_;
 			mutable bool output_sampler_initialized_ = false;

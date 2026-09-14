@@ -398,6 +398,11 @@ target_link_libraries(polyfem PUBLIC PolyClipper::PolyClipper)
 include(polyfem_warnings)
 target_link_libraries(polyfem PRIVATE polyfem::warnings)
 
+# Build identity compiled into the library, refreshed before every build
+# (RB-12 run manifest); after every dependency so the effective sources are known.
+include(polyfem_build_info)
+polyfem_add_build_info(polyfem)
+
 ################################################################################
 # Polyfem binary
 ################################################################################

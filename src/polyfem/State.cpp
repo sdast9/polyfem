@@ -2,6 +2,7 @@
 
 #include <polyfem/Units.hpp>
 
+#include <polyfem/io/RunManifest.hpp>
 #include <polyfem/mesh/GeometryReader.hpp>
 #include <polyfem/mesh/mesh2D/Mesh2D.hpp>
 #include <polyfem/mesh/mesh3D/Mesh3D.hpp>
@@ -269,8 +270,14 @@ namespace polyfem
 	{
 		json args_in = p_args_in;
 		const bool contact_dhat_was_explicit = args_in.contains("/contact/dhat"_json_pointer);
+		// RB-12: the input file (root_path before `common` may override it)
+		// and the common chain, for the run manifest.
+		const std::string input_file = args_in.value("root_path", std::string());
+		std::vector<std::string> common_chain;
 
-		apply_common_params(args_in);
+		apply_common_params(args_in, &common_chain);
+		if (!default_manifest.empty() && !args_in.contains("/output/manifest"_json_pointer))
+			args_in["output"]["manifest"] = default_manifest;
 
 		json rules;
 		jse::JSE jse;
@@ -406,6 +413,15 @@ namespace polyfem
 		args["contact"]["_dhat_was_explicit"] = contact_dhat_was_explicit;
 		variational_formulation->init(formulation, units, args, output_dir);
 		args["contact"].erase("_dhat_was_explicit");
+
+		// RB-12: the run manifest, once the effective input is final and the
+		// output directory exists. Written here, before the mesh is read, so
+		// that a run which fails later still leaves its identity behind; the
+		// formulation appends the model description and the step history.
+		run_manifest = io::RunManifest::create(
+			args, resolve_output_path(output_dir, args["output"].value("manifest", std::string())),
+			input_file, common_chain);
+		variational_formulation->set_run_manifest(run_manifest);
 	}
 
 	void State::set_max_threads(const int max_threads)

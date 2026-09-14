@@ -10,6 +10,7 @@
 #include <polyfem/optimization/OptState.hpp>
 #endif
 
+#include <polyfem/io/RunManifest.hpp>
 #include <polyfem/utils/ExitStatus.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -88,6 +89,9 @@ int forward_simulation_with_varform_state(const std::vector<std::string> &names,
 										  const bool is_strict)
 {
 	State state;
+	// RB-12: every PolyFEM_bin run leaves a manifest unless the input says
+	// output/manifest = "" (a library user opts in instead).
+	state.default_manifest = "run-manifest.json";
 	state.init(in_args, is_strict);
 	state.load_mesh(/*non_conforming=*/false, names, cells, vertices);
 
@@ -102,6 +106,8 @@ int forward_simulation_with_varform_state(const std::vector<std::string> &names,
 	state.variational_formulation->save_json(sol);
 	state.variational_formulation->export_data(sol);
 
+	if (state.run_manifest)
+		state.run_manifest->finalize("completed", ExitStatus::Success, "");
 	return EXIT_SUCCESS;
 }
 
@@ -153,6 +159,7 @@ static int run(int argc, char **argv)
 	using namespace polyfem;
 
 	CLI::App command_line{"polyfem"};
+	io::RunManifest::set_command_line(argc, argv);
 
 	command_line.ignore_case();
 	command_line.ignore_underscore();
@@ -310,6 +317,9 @@ namespace
 	// refusal from a crash (ExitStatus.hpp).
 	int report_failure(const ExitStatus status, const std::string &what, const std::string &advice)
 	{
+		// The run manifest, if the run got far enough to have one, records
+		// the failure before the log does (RB-12).
+		io::RunManifest::finalize_active(status == ExitStatus::ResourceLimit ? "resource_failure" : "failed", status, what);
 		logger().critical("PolyFEM stopped: {}", what);
 		if (!advice.empty())
 			logger().critical("{}", advice);

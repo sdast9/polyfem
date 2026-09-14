@@ -50,6 +50,8 @@ set(SOURCES
 	CubicHermiteSplineParametrization.hpp
 	Selection.cpp
 	Selection.hpp
+	Sha256.cpp
+	Sha256.hpp
 	StringUtils.cpp
 	StringUtils.hpp
 	Timer.hpp

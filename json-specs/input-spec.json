@@ -20,9 +20,67 @@
             "constraints",
             "output",
             "input",
-            "tests"
+            "tests",
+            "provenance"
         ],
         "doc": "Root of the configuration file."
+    },
+    {
+        "pointer": "/provenance",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "producer",
+            "producer_version",
+            "asset",
+            "asset_version",
+            "asset_sha256",
+            "scene",
+            "exported_at"
+        ],
+        "doc": "Who produced this input (RB-12): copied verbatim into the run manifest's `producer` record and otherwise ignored by the solver. The Houdini asset fills it with its definition and hash."
+    },
+    {
+        "pointer": "/provenance/producer",
+        "default": "",
+        "type": "string",
+        "doc": "The program that wrote the input, e.g. houdini."
+    },
+    {
+        "pointer": "/provenance/producer_version",
+        "default": "",
+        "type": "string",
+        "doc": "Its version, e.g. the Houdini release."
+    },
+    {
+        "pointer": "/provenance/asset",
+        "default": "",
+        "type": "string",
+        "doc": "The asset or script that generated the input, e.g. the HDA type name and library file."
+    },
+    {
+        "pointer": "/provenance/asset_version",
+        "default": "",
+        "type": "string",
+        "doc": "Its declared version."
+    },
+    {
+        "pointer": "/provenance/asset_sha256",
+        "default": "",
+        "type": "string",
+        "doc": "SHA-256 of the asset definition file, so the exact exporter can be identified."
+    },
+    {
+        "pointer": "/provenance/scene",
+        "default": "",
+        "type": "string",
+        "doc": "The scene or document the input was exported from."
+    },
+    {
+        "pointer": "/provenance/exported_at",
+        "default": "",
+        "type": "string",
+        "doc": "When the input was written (ISO 8601)."
     },
     {
         "pointer": "/common",
@@ -2593,9 +2651,16 @@
             "stats",
             "physical_diagnostics",
             "physical_diagnostics_contact_path",
-            "physical_balance_tolerance"
+            "physical_balance_tolerance",
+            "manifest"
         ],
         "doc": "output settings"
+    },
+    {
+        "pointer": "/output/manifest",
+        "default": "",
+        "type": "string",
+        "doc": "File name (in the output directory) of the RB-12 run manifest: the build identity (effective PolyFEM/IPC/PolySolve sources, compiler, configuration), the executable hash, platform and thread settings, the effective input with its hash and every referenced file's hash, the contact model description, the per-step attempt history and the completion status. Empty disables it; PolyFEM_bin defaults it to run-manifest.json."
     },
     {
         "pointer": "/output/directory",
