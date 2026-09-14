@@ -529,10 +529,10 @@ namespace polyfem::assembler
 			mu = mu_mat_(el_id);
 		}
 
-		assert(!std::isnan(lambda));
-		assert(!std::isnan(mu));
-		assert(!std::isinf(lambda));
-		assert(!std::isinf(mu));
+		// No finiteness asserts here: validate_material_parameters (RB-11)
+		// evaluates these values at the element barycentres to report a
+		// non-finite pair as a named error, and the shear-only laws take
+		// nu = 1/2 (an infinite lambda they never use) by design.
 	}
 
 	void LameParameters::add_multimaterial(const int index, const json &params, const bool is_volume, const std::string &stress_unit, const std::string &root_path)

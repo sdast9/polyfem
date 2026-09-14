@@ -147,8 +147,9 @@ TEST_CASE("duplicate rest elements are refused", "[input_validation][mesh]")
 	}
 	SECTION("a loaded mesh with a duplicated element")
 	{
-		// geogram-loaded meshes skip the matrix check; validate_rest_elements
-		// covers them from the built mesh
+		// geogram-loaded meshes get the same topological check before the
+		// connectivity is built (RB-12: geogram's adjacency assert fired
+		// first in Debug builds); validate_rest_elements covers geometry
 		GEO::Mesh M;
 		const Eigen::MatrixXd V = two_tet_vertices();
 		M.vertices.create_vertices(V.rows());
@@ -161,10 +162,7 @@ TEST_CASE("duplicate rest elements are refused", "[input_validation][mesh]")
 			0, 1, 2, 3;
 		for (int c = 0; c < T.rows(); ++c)
 			M.cells.create_tet(T(c, 0), T(c, 1), T(c, 2), T(c, 3));
-		const auto mesh = Mesh::create(M, false);
-		REQUIRE(mesh != nullptr);
-		REQUIRE(mesh->n_elements() == 3);
-		CHECK_THROWS_WITH(validate_rest_elements(*mesh, "dup"), ContainsSubstring("elements 0 and 2 are the same element"));
+		CHECK_THROWS_WITH(Mesh::create(M, false), ContainsSubstring("Elements 0 and 2 are the same element"));
 	}
 }
 

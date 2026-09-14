@@ -33,21 +33,29 @@ namespace polyfem::assembler
 
 		const auto &fiber_direction = this->fiber_direction_;
 
-		res["fiber_direction_x"] = [&fiber_direction](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
-			Eigen::Vector3d tmp = fiber_direction(p, p, t, e);
-			return tmp[0];
+		// The functor returns a size x 1 direction or a size x size structure
+		// tensor; read it at its own size (a fixed Vector3d asserted on the 2D
+		// direction in Debug builds and read past it in Release, RB-12).
+		const auto component = [&fiber_direction](const RowVectorNd &p, const double t, const int e, const int k) -> double {
+			const auto dir = fiber_direction(p, p, t, e);
+			if (dir.cols() == 1)
+				return k < dir.rows() ? dir(k, 0) : 0.0;
+			// the tensor form: the weight of axis k
+			return k < dir.rows() && k < dir.cols() ? dir(k, k) : 0.0;
 		};
 
-		res["fiber_direction_y"] = [&fiber_direction](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
-			Eigen::Vector3d tmp = fiber_direction(p, p, t, e);
-			return tmp[1];
+		res["fiber_direction_x"] = [component](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
+			return component(p, t, e, 0);
+		};
+
+		res["fiber_direction_y"] = [component](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
+			return component(p, t, e, 1);
 		};
 
 		if (this->size() == 3)
 		{
-			res["fiber_direction_z"] = [&fiber_direction](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
-				Eigen::Vector3d tmp = fiber_direction(p, p, t, e);
-				return tmp[2];
+			res["fiber_direction_z"] = [component](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
+				return component(p, t, e, 2);
 			};
 		}
 

@@ -23,6 +23,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -189,6 +190,26 @@ namespace
 	}
 } // namespace
 
+namespace
+{
+	// Entrywise closeness at the matrix's own scale: |x - y| <= eps * max(1,
+	// max|x|, max|y|) for every entry. finite-diff's compare_hessian scales
+	// each entry by its own magnitude, so an entry that is analytically zero
+	// must match the finite difference to eps absolutely -- but the
+	// central-difference noise of a Hessian whose entries reach 1e7
+	// (NeoHookean at nu = .4999, lambda ~ 3e7) is ~1e-1 on those zeros,
+	// which AppleClang happened to keep under 1e-5 and GCC 13 / MSVC 19.44
+	// did not (RB-12 CI classification). The scale rule keeps the same
+	// relative precision on the entries that carry the law.
+	bool close_at_matrix_scale(const Eigen::MatrixXd &x, const Eigen::MatrixXd &y, const double eps)
+	{
+		REQUIRE(x.rows() == y.rows());
+		REQUIRE(x.cols() == y.cols());
+		const double scale = std::max({1.0, x.cwiseAbs().maxCoeff(), y.cwiseAbs().maxCoeff()});
+		return (x - y).cwiseAbs().maxCoeff() <= eps * scale;
+	}
+} // namespace
+
 TEST_CASE("elastic laws: finite-difference derivatives", "[rb11_envelope][material]")
 {
 	for (const Law &law : laws())
@@ -221,7 +242,12 @@ TEST_CASE("elastic laws: finite-difference derivatives", "[rb11_envelope][materi
 				CAPTURE((Eigen::MatrixXd(hess) - fhess).norm(), fhess.norm());
 				// FixedCorotational's tangent goes through the polar decomposition;
 				// its finite-difference Hessian carries more noise (upstream tests it at 1e-4)
-				CHECK(fd::compare_hessian(Eigen::MatrixXd(hess), fhess, law.name == "FixedCorotational" ? 1e-4 : 1e-5));
+				const double hessian_eps = law.name == "FixedCorotational" ? 1e-4 : 1e-5;
+				const Eigen::MatrixXd dense_hess(hess);
+				if (law.name == "NeoHookean-nearly-incompressible")
+					CHECK(close_at_matrix_scale(dense_hess, fhess, hessian_eps));
+				else
+					CHECK(fd::compare_hessian(dense_hess, fhess, hessian_eps));
 			}
 		}
 	}

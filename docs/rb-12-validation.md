@@ -252,9 +252,17 @@ Findings.
 - Peak RSS grows linearly with the thread count: 222 / 327 / 613 / 1081 /
   2392 MB at 1 / 2 / 4 / 8 / 18 threads on the 384-tetrahedron smoke
   (`rss-probe/` in matrix A), about 125 MB per thread independent of the
-  mesh, while the wall time only falls from 1.9 s to 1.0 s. A per-thread
-  fixed allocation (not measured further here); an RB-05-adjacent resource
-  observation for the user, recorded in the manifest of every threaded run.
+  mesh, while the wall time only falls from 1.9 s to 1.0 s. A second probe
+  (`rss-probe-2/` in matrix B) locates it: with contact disabled the run
+  takes 37 MB at 1 thread and 43 MB at 18; with contact on, 222 MB at 1
+  thread and 2.3–2.7 GB at 18 whatever the stiffness law (classic adaptive
+  or semi-implicit) and whatever the broad phase (hash grid, BVH, brute
+  force). So the contact path carries a ~185 MB fixed cost plus ~125 MB per
+  thread on a 387-DOF system — not the coefficient machinery, not the broad
+  phase; the per-thread storage of the contact potential/Hessian assembly
+  (PolyFEM's or the toolkit's) is the first place to instrument. An
+  RB-05-adjacent resource item for the user; recorded in the manifest of
+  every threaded run.
 
 Limits: one platform (macOS 26.5 arm64, AppleClang 21, TBB), one build
 configuration, the public fixtures only, five repeats per cell (the 1.7e-4
@@ -295,10 +303,23 @@ required check turned into a warning:
   on `iteration-callback`; the IPC push started nothing (a fork with no run
   history), a manual dispatch did — Build run
   [34889554146](https://github.com/sdast9/ipc-toolkit/actions/runs/34889554146)
-  on `semi-implicit-stiffness`; both outcomes are recorded below when they
-  complete. PolyFEM's recipe pins follow the two commits (identical sources;
-  `--build_info` reports `matches_declared_pin: true` for both against the
-  local overrides), so the declared and effective sources agree again.
+  on `semi-implicit-stiffness`. Outcomes (`ci-stage3/*-jobs.txt`):
+  **PolySolve 6/6 green** (Linux, macOS, Windows × Debug, Release) — the
+  first native check of the fork's PF-06 and RB-19 changes on every
+  platform. **IPC Toolkit 4/6**: Linux and macOS Debug/Release green, so
+  the fork's `stiffness_scale`, parent contributions and broad-phase budget
+  compile and pass their tests there; the two Windows lanes fail on
+  **upstream** problems — Windows Debug cannot compile oneTBB under the
+  workflow's toolchain (`profiling.h:148: cannot convert 'const char*' to
+  'const wchar_t*'`, a dependency build error before any toolkit source),
+  Windows Release builds and passes 284/285 with the upstream `Smooth
+  barrier potential real sim 2D C^2` test segfaulting — a GCP/smooth-contact
+  test the fork does not touch. Recorded as known upstream lane failures,
+  not fork regressions; they were invisible before because the branch had
+  never been built by CI. PolyFEM's recipe pins follow the two commits
+  (identical sources; `--build_info` reports `matches_declared_pin: true`
+  for both against the local overrides), so the declared and effective
+  sources agree again.
 
 CI outcome at `1f6f826fa` (stage 1 publication; logs in
 `outputs/rb-12/20260914T133427Z-identity/ci-stage1/`): pre-commit
@@ -432,6 +453,44 @@ follow-up (`eaa624098`/`7aaf53f8e`), the combined Release selection passes
 and the affected baseline), `cli_contract` passes, and the Debug selection
 `[run_manifest],[linear_elastic],[output]` passes (857 / 13) — RB-11's new
 BDF tests included.
+
+### The RB-11 leftovers on the Debug and Windows lanes (2026-09-14, this publication)
+
+RB-11 is complete as an item; what its tests left on the CI lanes had no
+owner once its follow-up session finished, and they were the difference
+between "classified" and "green apart from the known scene groups", so
+they are repaired here as the bounded fix stage the plan provides for. All
+reproduced in the local Debug tree first (`debug-build/rb11-leftovers/`):
+
+| Failure (macOS/Windows/Linux Debug; Windows/Linux Release) | Cause | Repair |
+| --- | --- | --- |
+| `elastic parameters are validated at the element barycenters`, `shear-only laws accept the incompressible limit` — abort at `MatParams.cpp:534` | `LameParameters::lambda_mu` asserted finite λ/μ, but `validate_material_parameters` evaluates the parameters at the barycentres precisely to *report* a non-finite pair (ν = ½ → λ = ∞), and the shear-only laws accept ν = ½ by design | the asserts are removed; the validation is the authority (Release unchanged: the asserts were compiled out) |
+| `fibre directions: constant, expression and dimension`, `density, fibre and dispersion parameters are validated` — Eigen "Invalid sizes when resizing" | `GenericFiber::parameters()` copied the fibre functor's result into a fixed `Vector3d`: a 2-D direction (2×1) asserts in Debug and reads past its end in Release; the tensor form (size×size) likewise | the components are read at the functor's own size; for the tensor form the diagonal entry of each axis |
+| `duplicate rest elements are refused` — `assert(false)` at `CMesh3D.cpp:460` | a duplicated cell in a geogram-loaded mesh reached geogram's adjacency construction, whose `assert(false)` fired before `validate_rest_elements` could refuse it | the RB-11 topological cell check (`check_cells`) now runs on the geogram path before the connectivity is built, shared with the matrix path; the test expects the named error from `Mesh::create` |
+| `elastic laws: finite-difference derivatives` — GCC 13 and MSVC 19.44 Release, `NeoHookean-nearly-incompressible` Hessian | finite-diff's entrywise rule holds analytically-zero entries to 1e-5 absolutely, while the central-difference noise of a Hessian with 1e7 entries (ν = .4999, λ ≈ 3e7) is ~1e-1 on those zeros — under 1e-5 on AppleClang by luck, not on GCC/MSVC | that law's Hessian is compared entrywise at the matrix's scale (`|x − y| ≤ 1e-5 · max(1, max|x|, max|y|)`), the same relative precision on the entries that carry the law; every other law keeps finite-diff's rule |
+
+Validation: Release `[input_validation],[rb11_envelope],[linear_elastic],[run_manifest],[output]`
+1,461 assertions / 36 cases; the affected baseline plus
+`[assembler],[material_cache],[form_derivatives]` 4,771,486 / 83;
+`cli_contract`; five smokes within 3e-15 of the Stage 1 fingerprints,
+serial friction bit-identical (`smokes-stage3c/`); the 93-case RB-11 input
+matrix in verify mode (`rb11-matrix/`); Debug
+`[input_validation]` 168 / 18 and the full Debug selection
+(`debug-build/rb11-leftovers/debug-final.txt`). `von_mises_avg` and the
+other outputs are unchanged by these repairs.
+
+### User decisions (2026-09-14)
+
+- **CI scope:** the required set is pre-commit, Linux Release and macOS
+  Release; the four CI-03–CI-06 scene groups stay tracked exceptions with
+  owners; the Windows lanes are informational until every remaining
+  failure is repaired (after this publication the expected Windows state
+  is green — to be read from its run).
+- **Per-thread memory growth:** its own bounded item, **RB-24** (plan
+  section added), starting from `rss-probe-2/`; until then, a lower
+  *Max Threads* on large scenes is the workaround.
+- **`polyfem/build-debug`:** deleted once this stage's Debug validation is
+  complete (rebuild takes ~20 minutes when needed).
 
 ## Next session handoff
 
