@@ -667,7 +667,11 @@ checks are sampled, not exhaustive.
 The [follow-up review](rb-11-followup-review-20260914.md) (`73227670c`)
 independently reproduced the 270 checks and the 24-iteration miss and left
 two bounded items. Both are repaired on **candidate C**, an isolated
-worktree build of `73227670c` plus the changes below
+worktree build of `73227670c` plus the changes below, published as
+`eaa624098` on `sdast9/polyfem:main` (rebased onto RB-12's `1f6f826fa`,
+disjoint files; the rebased tree rebuilt in the same isolated build and
+passed `[linear_elastic],[input_validation],[rb11_envelope]`, 28 cases /
+1,284 assertions, `tests-rebased.log`)
 (`outputs/rb-11/20260914T134716Z-followup/`: `identity-candidate-C.txt`,
 `PolyFEM_bin-candidate-C` `f4c97879…`, `working-tree-candidate-C.diff`,
 `companions.txt`, `configure-command.txt`; the shared `polyfem/build` and
