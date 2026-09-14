@@ -1,5 +1,10 @@
 # RB-11 — Geometry, material and input validation
 
+**Latest continuation guidance (2026-09-13 evening):** read the
+[Stage 1 / Stage 2 review](rb-11-stage-review-20260913.md) before resuming.
+It supersedes the envelope handoff's run-completion claims and identifies
+the reproduced quasistatic force-output defect and bounded remaining work.
+
 > **Independent review, 2026-09-13:** [read the continuation guidance](rb-11-review-guidance.md)
 > before resuming. It reproduces a valid 2D material rejected by the new rule,
 > an unhandled zero constant fibre, a false CCD notice, and fixture/acceptance

@@ -1,5 +1,13 @@
 # RB-11 independent review and continuation guidance
 
+**Follow-up after Stage 1 publication (2026-09-13 evening):** the input-stage
+corrections below are implemented in `75b4d284d`. For the current unpublished
+physical-envelope work, read [the Stage 1 / Stage 2 review and completion
+handoff](rb-11-stage-review-20260913.md) first. It records a new quasistatic
+force-output defect, corrects the incomplete matrix inventory, and gives a
+bounded completion procedure. The verdict below is historical to the first
+staged input-validation patch; do not reapply it to the published correction.
+
 Date: 2026-09-13. Scope: review the staged implementation, procedures and saved
 results; guide the implementing session. This review does not change solver
 sources, rebuild the shared targets, or certify the pending implementation.

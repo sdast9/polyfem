@@ -674,11 +674,14 @@ agreement. Do not certify impacts/stick–slip from steady sliding alone.
 
 **Independent review (2026-09-13):** read
 [the RB-11 continuation guidance](rb-11-review-guidance.md) before resuming.
-The staged input-validation work has useful reproduced repairs, but also a
-valid 2D material rejection, an unhandled zero constant fibre, an incorrect CCD
-notice and validation gaps. Correct those before implementation publication;
-the remaining work is more than a final rebuild. The physical-envelope stage
-remains open.
+The input-stage review corrections are published in `75b4d284d`. The later
+[Stage 1 / Stage 2 review](rb-11-stage-review-20260913.md) finds Stage 1 sound
+within its documented scope and gives the current envelope handoff: correct
+the reproduced quasistatic force-output error, recover the actual matrix
+inventory (51 recorded runs, 19 unrecorded linear outputs, 39 without output),
+and qualify the fine references and characterization criteria before finishing.
+The physical-envelope stage remains in progress and unpublished; its existing
+work should be preserved and completed under that bounded guidance.
 
 **Revised integration scope:** record the applicability of RB-13 assumptions:
 positive/stable tangent, prescribed/free modes, anisotropy, near-incompressibility,
