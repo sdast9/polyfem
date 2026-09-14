@@ -425,7 +425,8 @@ addressed here one by one.
   before the output repair and the Ogden change); preserved untouched.
 - `identity-candidate-B.txt` + `PolyFEM_bin-candidate-B` (`a134f6c8…`) +
   `working-tree-candidate-B.diff` — **candidate B**, the final candidate:
-  the published sources of this stage.
+  the sources published as `ef5dffe80` on `sdast9/polyfem:main`
+  (2026-09-14; the review note itself is `c599ca99e`).
 - `matrix-attempt1-grad1e-10/` — protocol 1 (aborted, see tolerances);
   `floor-probe/` — the roundoff-floor probe; `matrix/` — candidate A's
   protocol-2 runs (51 recorded exit-0 runs reused, 19 linear outputs whose
