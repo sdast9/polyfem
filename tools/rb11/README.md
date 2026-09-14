@@ -99,4 +99,10 @@ pass / fail / not evaluated with value, threshold and cases
 reused only with exit 0, byte-identical regenerated inputs and a stated
 binary identity (`--reuse-binary-sha` for legacy records); every report row
 names its candidate. `--self-test` feeds the parser and the oracle their
-known failure modes.
+known failure modes, including synthetic case directories with a real
+endpoint VTU driven through parse → analyse → verify (missing / null /
+invalid / zero Newton counts, malformed step records, absent `F` arrays,
+an unconverged run): a nonlinear case without a recorded count or without
+determinant evidence fails C-R and leaves C-N not evaluated.
+`--report-dir` writes the report elsewhere than `--output`, keeping an
+earlier report intact.

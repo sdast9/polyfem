@@ -87,7 +87,8 @@ namespace polyfem::varform
 			const time_integrator::ImplicitTimeIntegrator *time_integrator,
 			const std::vector<std::pair<std::string, std::shared_ptr<solver::Form>>> &named_forms,
 			const solver::Form *elastic_form,
-			const solver::ContactForm *contact_form = nullptr) const;
+			const solver::ContactForm *contact_form = nullptr,
+			const double force_scale = -1.0) const;
 		void append_primary_output_fields(
 			std::vector<io::OutputField> &fields,
 			const io::OutputSample &sample,

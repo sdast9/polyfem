@@ -48,6 +48,10 @@ namespace polyfem::varform
 			Eigen::MatrixXd &sol);
 		/// true when a time schedule is present and `time/quasistatic` asks for static solves at each time
 		bool is_quasistatic() const;
+		/// acceleration scaling of the step most recently solved (1 for a static solve): the elastic/body
+		/// weights and the exported force normalisation use it, not the integrator's current value,
+		/// which BDF changes as its history grows (RB-11 follow-up)
+		double solved_step_scale_ = 1.0;
 		void solve_static_linear(Eigen::MatrixXd &sol, const ForwardStepCallback &post_step);
 		void solve_transient_linear(Eigen::MatrixXd &sol, const ForwardStepCallback &post_step);
 

@@ -46,8 +46,15 @@ sys.path.insert(0, str(HERE))
 import cases  # noqa: E402
 import fixtures  # noqa: E402
 
-WORKSPACE = HERE.parents[2]
-sys.path.insert(0, str(WORKSPACE / "houdini_HDAs" / "src" / "common"))
+# the VTU reader lives in the Houdini tree beside the polyfem checkout; a
+# worktree elsewhere finds it through the ancestors or POLYFEM_HDA_COMMON
+import os  # noqa: E402
+_HDA_COMMON = [Path(os.environ["POLYFEM_HDA_COMMON"])] if os.environ.get("POLYFEM_HDA_COMMON") else []
+_HDA_COMMON += [parent / "houdini_HDAs" / "src" / "common" for parent in HERE.parents]
+for _candidate in _HDA_COMMON:
+    if (_candidate / "vtu_parser.py").exists():
+        sys.path.insert(0, str(_candidate))
+        break
 try:
     import vtu_parser  # noqa: E402
 except Exception:  # pragma: no cover - the HDA tree is optional

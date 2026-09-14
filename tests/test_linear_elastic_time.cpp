@@ -10,10 +10,17 @@
 //  2. a quasistatic schedule reproduces the static solve of the same
 //     load/BC problem (nonzero prescribed values, several steps) with the
 //     same physical forces and a zero inertia force at any dt,
-//  3. a time-dependent load is exported at the saved step's time.
+//  3. a time-dependent load is exported at the saved step's time,
+//  4. (follow-up review 2026-09-14) the same for ImplicitNewmark, BDF2 and
+//     BDF3 at every startup step: BDF's acceleration scaling changes while
+//     its history grows, and the export must normalise by the scale of the
+//     step actually solved — checked through the after-solve output API
+//     against an independently replayed integrator (the saved fields go
+//     through the same path and are checked by the review's probe).
 
 #include <polyfem/State.hpp>
 #include <polyfem/io/OutputData.hpp>
+#include <polyfem/time_integrator/ImplicitTimeIntegrator.hpp>
 #include <polyfem/utils/Logger.hpp>
 
 #include "VarFormTestAccess.hpp"
@@ -287,5 +294,116 @@ TEST_CASE("linear elastic time-dependent load is exported at the saved step", "[
 	CHECK(body_full.cwiseAbs().maxCoeff() > 0);
 	CHECK((body_full - 2.0 * body_half).cwiseAbs().maxCoeff() <= 1e-12 * body_full.cwiseAbs().maxCoeff());
 	CHECK((full.sol - 2.0 * half.sol).cwiseAbs().maxCoeff() <= 1e-10 * full.sol.cwiseAbs().maxCoeff());
+	std::filesystem::remove_all(dir);
+}
+
+namespace
+{
+	const std::vector<std::string> kIntegrators = {"ImplicitEuler", "ImplicitNewmark", "BDF2", "BDF3"};
+
+	Eigen::VectorXd all_max_diff(const Eigen::VectorXd &a, const Eigen::VectorXd &b)
+	{
+		return (a - b).cwiseAbs();
+	}
+} // namespace
+
+TEST_CASE("linear elastic quasistatic schedule equals the static solve for every integrator", "[linear_elastic][time_int][rb11_envelope]")
+{
+	// loads proportional to t (prescribed end value and gravity): the solution at
+	// time T is T times the static solution at t = 1, for any number of steps
+	const auto dir = scratch_dir("rb11-linear-qs-integrators");
+	const std::string mesh = write_beam(dir);
+	const auto scaled_loads = [&](json args) {
+		args["boundary_conditions"]["rhs"] = json::array({"0", "9.81*t", "0"});
+		args["boundary_conditions"]["dirichlet_boundary"].push_back({{"id", 2}, {"value", json::array({"0.01*t", "0.02*t", "0"})}});
+		return args;
+	};
+	const Solved static_run = run(scaled_loads(base_args(mesh, dir / "static")), /*end_prescribed=*/true);
+	const Eigen::VectorXd static_elastic = force_field(static_run, "elastic_forces");
+	const Eigen::VectorXd static_body = force_field(static_run, "body_forces");
+	REQUIRE(static_run.sol.cwiseAbs().maxCoeff() > 1e-3);
+	REQUIRE(static_body.cwiseAbs().maxCoeff() > 0);
+
+	const double dt = 0.25;
+	for (const std::string &integrator : kIntegrators)
+		for (int steps = 1; steps <= 4; ++steps)
+		{
+			DYNAMIC_SECTION(integrator << ", " << steps << " step(s) of " << dt)
+			{
+				json args = scaled_loads(base_args(mesh, dir / (integrator + "-" + std::to_string(steps))));
+				args["time"] = {{"dt", dt}, {"time_steps", steps}, {"quasistatic", true}, {"integrator", integrator}};
+				const Solved qs = run(args, /*end_prescribed=*/true);
+				const double T = dt * steps;
+				CAPTURE((qs.sol - T * static_run.sol).cwiseAbs().maxCoeff());
+				CHECK((qs.sol - T * static_run.sol).cwiseAbs().maxCoeff() <= 1e-10 * static_run.sol.cwiseAbs().maxCoeff());
+
+				const Eigen::VectorXd elastic = force_field(qs, "elastic_forces");
+				const Eigen::VectorXd body = force_field(qs, "body_forces");
+				const Eigen::VectorXd inertia = force_field(qs, "inertia_forces");
+				// physical forces at the saved time, whatever the integrator's history scaling
+				CAPTURE(all_max_diff(elastic, T * static_elastic).maxCoeff(), all_max_diff(body, T * static_body).maxCoeff());
+				CHECK(all_max_diff(elastic, T * static_elastic).maxCoeff() <= 1e-9 * static_elastic.cwiseAbs().maxCoeff());
+				CHECK(all_max_diff(body, T * static_body).maxCoeff() <= 1e-12 * static_body.cwiseAbs().maxCoeff());
+				CHECK(inertia.cwiseAbs().maxCoeff() == 0.0);
+				CHECK(free_max(qs, elastic + body) <= 1e-9 * free_max(qs, elastic));
+			}
+		}
+	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("linear elastic transient forces follow the solved step for every integrator", "[linear_elastic][time_int][rb11_envelope]")
+{
+	// gravity from rest, dt = .05; after k steps the exported forces must be
+	// -K u_k, the physical load, and -M (u_k - x_tilde_k) / s_k with the
+	// predictor and scale of step k as an independently replayed integrator
+	// gives them (both individual forces and their sum on the free DOFs, since
+	// a common wrong scale would leave the residual zero)
+	const auto dir = scratch_dir("rb11-linear-dyn-integrators");
+	const std::string mesh = write_beam(dir);
+	const double dt = 0.05;
+	const Solved static_run = run(base_args(mesh, dir / "static"));
+	const Eigen::VectorXd load = force_field(static_run, "body_forces"); // constant gravity load
+	StiffnessMatrix K;
+	REQUIRE(test::VarFormTestAccess::build_stiffness_mat(*static_run.state->variational_formulation, K));
+
+	for (const std::string &integrator : kIntegrators)
+	{
+		DYNAMIC_SECTION(integrator)
+		{
+			std::vector<Eigen::VectorXd> history; // u_1 .. u_4 from runs of 1 .. 4 steps
+			for (int steps = 1; steps <= 4; ++steps)
+			{
+				json args = base_args(mesh, dir / (integrator + "-" + std::to_string(steps)));
+				args["time"] = {{"dt", dt}, {"time_steps", steps}, {"integrator", integrator}};
+				const Solved dyn = run(args);
+				const Eigen::VectorXd u = dyn.sol.col(0);
+				const StiffnessMatrix &M = test::VarFormTestAccess::mass_matrix(*dyn.state->variational_formulation);
+				REQUIRE(M.rows() == u.size());
+
+				// independent replay of the integrator through the previous solutions
+				auto replay = time_integrator::ImplicitTimeIntegrator::construct_time_integrator(integrator);
+				const Eigen::MatrixXd zero = Eigen::MatrixXd::Zero(u.size(), 1);
+				replay->init(zero, zero, zero, dt);
+				for (const Eigen::VectorXd &prev : history)
+					replay->update_quantities(prev);
+				const double s = replay->acceleration_scaling();
+				const Eigen::VectorXd x_tilde = replay->x_tilde();
+				history.push_back(u);
+
+				const Eigen::VectorXd elastic = force_field(dyn, "elastic_forces");
+				const Eigen::VectorXd inertia = force_field(dyn, "inertia_forces");
+				const Eigen::VectorXd body = force_field(dyn, "body_forces");
+				const Eigen::VectorXd Ku = K * u;
+				const Eigen::VectorXd expected_inertia = -(M * (u - x_tilde)) / s;
+				CAPTURE(steps, s, all_max_diff(elastic, -Ku).maxCoeff(), all_max_diff(inertia, expected_inertia).maxCoeff(), all_max_diff(body, load).maxCoeff());
+				CHECK(all_max_diff(elastic, -Ku).maxCoeff() <= 1e-9 * Ku.cwiseAbs().maxCoeff());
+				CHECK(all_max_diff(body, load).maxCoeff() <= 1e-12 * load.cwiseAbs().maxCoeff());
+				CHECK(expected_inertia.cwiseAbs().maxCoeff() > 0);
+				CHECK(all_max_diff(inertia, expected_inertia).maxCoeff() <= 1e-9 * expected_inertia.cwiseAbs().maxCoeff());
+				const double scale = std::max({free_max(dyn, elastic), free_max(dyn, inertia), free_max(dyn, body)});
+				CHECK(free_max(dyn, elastic + inertia + body) <= 1e-9 * scale);
+			}
+		}
+	}
 	std::filesystem::remove_all(dir);
 }

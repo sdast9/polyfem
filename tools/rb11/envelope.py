@@ -65,8 +65,14 @@ sys.path.insert(0, str(HERE.parent / "rb09"))
 import fixtures  # noqa: E402
 import reference as rb09_reference  # noqa: E402
 
-WORKSPACE = HERE.parents[2]
-sys.path.insert(0, str(WORKSPACE / "houdini_HDAs" / "src" / "common"))
+# the VTU reader lives in the Houdini tree beside the polyfem checkout; a
+# worktree elsewhere finds it through the ancestors or POLYFEM_HDA_COMMON
+_HDA_COMMON = [Path(os.environ["POLYFEM_HDA_COMMON"])] if os.environ.get("POLYFEM_HDA_COMMON") else []
+_HDA_COMMON += [parent / "houdini_HDAs" / "src" / "common" for parent in HERE.parents]
+for _candidate in _HDA_COMMON:
+    if (_candidate / "vtu_parser.py").exists():
+        sys.path.insert(0, str(_candidate))
+        break
 try:
     import vtu_parser  # noqa: E402
 except Exception:  # pragma: no cover - the HDA tree is optional
@@ -599,15 +605,43 @@ def parse_output(case_dir):
         parsed["time_solving"] = d.get("time_solving")
         info = d.get("solver_info")
         if isinstance(info, list):
-            steps = [s.get("info") for s in info if isinstance(s, dict) and isinstance(s.get("info"), dict)]
+            # every step record must carry an integer iteration count and an
+            # outcome; a missing, null or invalid count leaves the Newton count
+            # UNAVAILABLE (never zero: a recorded zero is a real measurement),
+            # and malformed entries are counted, not dropped (follow-up review
+            # 2026-09-14: `int(missing or 0)` had turned the real 24-iteration
+            # miss into a pass)
             parsed["solver_kind"] = "nonlinear"
-            parsed["newton_steps"] = len(steps)
-            parsed["newton_iterations"] = sum(int(st.get("iterations") or 0) for st in steps) if steps else None
-            parsed["newton_outcomes"] = [st.get("outcome") for st in steps]
-            parsed["termination_reasons"] = [st.get("termination_reason") for st in steps]
-            parsed["grad_norm"] = [st.get("gradNorm") for st in steps]
-            if not steps:
-                parsed["errors"].append("solver_info list carries no step info")
+            counts, outcomes, reasons, grads = [], [], [], []
+            malformed = []
+            for k, step in enumerate(info):
+                st = step.get("info") if isinstance(step, dict) else None
+                if not isinstance(st, dict):
+                    malformed.append("step %d: no info record" % k)
+                    continue
+                it = st.get("iterations")
+                if "iterations" not in st:
+                    malformed.append("step %d: iterations missing" % k)
+                elif isinstance(it, bool) or not isinstance(it, int) or it < 0:
+                    malformed.append("step %d: iterations %r is not a nonnegative integer" % (k, it))
+                elif not isinstance(st.get("outcome"), str):
+                    malformed.append("step %d: outcome %r is not a string" % (k, st.get("outcome")))
+                else:
+                    counts.append(it)
+                outcomes.append(st.get("outcome"))
+                reasons.append(st.get("termination_reason"))
+                grads.append(st.get("gradNorm"))
+            parsed["newton_steps"] = len(info)
+            parsed["malformed_steps"] = malformed
+            complete = bool(info) and not malformed
+            parsed["newton_count_status"] = "recorded" if complete else "unavailable"
+            parsed["newton_iterations"] = sum(counts) if complete else None
+            parsed["newton_outcomes"] = outcomes
+            parsed["termination_reasons"] = reasons
+            parsed["grad_norm"] = grads
+            if not info:
+                parsed["errors"].append("solver_info list carries no step record")
+            parsed["errors"].extend(malformed)
         elif isinstance(info, dict):
             parsed["solver_kind"] = "linear"
             parsed["linear_status"] = info.get("solver_info")
@@ -727,12 +761,13 @@ def geometry_checks(mesh, expect):
     sizes = {k: int(v.shape[0]) for k, v in pd.items()}
     g["arrays_match_points"] = all(n == P.shape[0] for n in sizes.values())
     g["all_finite"] = all(bool(np.isfinite(v).all()) for v in pd.values())
-    if all(k in pd for k in ("F_1", "F_2", "F_3")):
+    g["detF_available"] = all(k in pd for k in ("F_1", "F_2", "F_3"))
+    if g["detF_available"]:
         F = np.stack([pd["F_1"], pd["F_2"], pd["F_3"]], axis=1)
         detF = np.linalg.det(F)
         g["detF_min"] = float(detF.min())
         g["detF_max"] = float(detF.max())
-        g["detF_positive"] = bool(detF.min() > 0)
+        g["detF_positive"] = bool(np.isfinite(detF).all() and detF.min() > 0)
     if expect.get("kind") == "tip":
         _, dist, _ = tip_deflection(mesh, expect["tip"])
         g["tip_sample_distance"] = dist
@@ -855,12 +890,15 @@ def verify(entries, manifest):
         if not g.get("all_finite"):
             problems.append("nonfinite field")
         if e.get("solver_kind") == "nonlinear":
+            # applicable evidence is required, not merely checked when present
             if e.get("newton_iterations") is None:
-                problems.append("no Newton record")
+                problems.append("Newton count unavailable (%s)" % "; ".join(e["parse"].get("malformed_steps") or ["no step record"]))
             if not e.get("newton_outcomes") or any(o != "converged" for o in e["newton_outcomes"]):
                 problems.append("termination %s" % e.get("newton_outcomes"))
-            if "detF_positive" in g and not g["detF_positive"]:
-                problems.append("det(F) <= 0")
+            if not g.get("detF_available"):
+                problems.append("no det(F) evidence (F arrays absent)")
+            elif not g.get("detF_positive"):
+                problems.append("det(F) <= 0 or nonfinite")
         elif e.get("solver_kind") == "linear":
             if e["parse"].get("linear_status") != "Success":
                 problems.append("linear solve %s" % e["parse"].get("linear_status"))
@@ -1112,6 +1150,65 @@ def self_test():
     bad["newton_iterations"] = None
     checks = verify([bad], [bad["name"]])
     expect(any(c["id"] == "C-N" and c["status"] == "not evaluated" for c in checks.items), "missing iteration count treated as a pass")
+    # 8. parser -> analysis -> verifier on a synthetic case directory with a real
+    #    (tiny, ASCII) endpoint VTU: missing / null / invalid / zero Newton counts,
+    #    malformed step records and absent F arrays (follow-up review 2026-09-14)
+    def synthetic_case(name, iterations, with_F=True, extra_step=None, outcome="converged"):
+        cd = tmp / name
+        (cd / "out").mkdir(parents=True)
+        info = {"outcome": outcome, "termination_reason": "Gradient vector norm too small", "gradNorm": 1e-9}
+        if iterations != "absent":
+            info["iterations"] = iterations
+        steps = [{"info": info, "t": 1, "type": "rc"}]
+        if extra_step is not None:
+            steps.append(extra_step)
+        (cd / "out" / "out.json").write_text(json.dumps({"solver_info": steps, "num_dofs": 12, "num_elements": 1}))
+        (cd / "out" / "out.pvd").write_text('<VTKFile><Collection><DataSet timestep="0" file="step_0.vtm"/><DataSet timestep="1" file="step_1.vtm"/></Collection></VTKFile>')
+        pts = "0 0 0  1 0 0  0 1 0  0 0 1"
+        sol = " ".join("%g %g %g" % (0.03 * x, 0.03 * y, -0.1 * z) for x, y, z in ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)))
+        F_rows = {"F_1": "1.03 0 0 " * 4, "F_2": "0 1.03 0 " * 4, "F_3": "0 0 0.9 " * 4}
+        S_rows = {"cauchy_stess_1": "0 0 0 " * 4, "cauchy_stess_2": "0 0 0 " * 4, "cauchy_stess_3": "0 0 -100000 " * 4}
+        arrays = {"solution": sol}
+        arrays.update(S_rows)
+        if with_F:
+            arrays.update(F_rows)
+        da = "".join('<DataArray type="Float64" Name="%s" NumberOfComponents="3" format="ascii">%s</DataArray>' % (k, v) for k, v in arrays.items())
+        (cd / "out" / "step_1.vtu").write_text(
+            '<?xml version="1.0"?><VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian"><UnstructuredGrid>'
+            '<Piece NumberOfPoints="4" NumberOfCells="1"><Points><DataArray type="Float64" NumberOfComponents="3" format="ascii">%s</DataArray></Points>'
+            '<Cells><DataArray type="Int64" Name="connectivity" format="ascii">0 1 2 3</DataArray><DataArray type="Int64" Name="offsets" format="ascii">4</DataArray>'
+            '<DataArray type="UInt8" Name="types" format="ascii">10</DataArray></Cells><PointData>%s</PointData></Piece></UnstructuredGrid></VTKFile>' % (pts, da))
+        meta = {"name": name, "stage": "homogeneous", "reference": None, "note": "", "mesh_quality": {},
+                "expect": {"kind": "homogeneous", "nu": 0.3, "n": 2, "lz": 0.9, "exact": {"l": 1.03, "sigma_zz": -1e5, "J": 0.95},
+                           "sigma_ref": [[0, 0, 0], [0, 0, 0], [0, 0, -1e5]]}}
+        run = {"exit": 0, "binary_sha256": "test", "lineage": {"candidate": "selftest"}}
+        entry = analyze(cd, meta, run, parse_output(cd), {})
+        checks = verify([entry], [name])
+        return entry, {(c["id"], c["status"]): c for c in checks.items}
+
+    if vtu_parser is None:
+        failures.append("vtu_parser unavailable: the parser-to-verifier probes did not run")
+    else:
+        e, st = synthetic_case("full-evidence", 3)
+        expect(("C-R", "pass") in st and ("C-N", "pass") in st and st[("C-N", "pass")]["value"] == 3, "full evidence: %s %s" % (e.get("status"), sorted(st)))
+        e, st = synthetic_case("real-miss", 24)
+        expect(("C-R", "pass") in st and ("C-N", "fail") in st and st[("C-N", "fail")]["value"] == 24, "24-iteration miss not reported: %s" % sorted(st))
+        for label, value in (("absent", "absent"), ("null", None), ("string", "3"), ("negative", -1), ("bool", True)):
+            e, st = synthetic_case("count-" + label, value)
+            expect(e.get("newton_iterations") is None and e["parse"].get("newton_count_status") == "unavailable",
+                   "%s iteration count parsed as %r" % (label, e.get("newton_iterations")))
+            expect(("C-R", "fail") in st and "Newton count unavailable" in str(st[("C-R", "fail")]["value"]), "%s count: C-R %s" % (label, sorted(st)))
+            expect(("C-N", "not evaluated") in st, "%s count: C-N %s" % (label, sorted(st)))
+        e, st = synthetic_case("count-zero", 0)
+        expect(e.get("newton_iterations") == 0 and e["parse"].get("newton_count_status") == "recorded" and ("C-N", "pass") in st and st[("C-N", "pass")]["value"] == 0,
+               "a recorded zero count is not kept distinct from a missing one: %s" % sorted(st))
+        e, st = synthetic_case("malformed-step", 3, extra_step={"t": 2, "type": "rc"})
+        expect(e.get("newton_iterations") is None and ("C-R", "fail") in st and ("C-N", "not evaluated") in st, "malformed step record accepted: %s" % sorted(st))
+        e, st = synthetic_case("no-F", 3, with_F=False)
+        expect(("C-R", "fail") in st and "det(F) evidence" in str(st[("C-R", "fail")]["value"]), "absent F arrays accepted: %s" % sorted(st))
+        e, st = synthetic_case("unconverged", 3, outcome="max_iterations")
+        expect(("C-R", "fail") in st and "termination" in str(st[("C-R", "fail")]["value"]), "unconverged synthetic run accepted: %s" % sorted(st))
+
     import shutil
     shutil.rmtree(tmp, ignore_errors=True)
     if failures:
@@ -1119,7 +1216,7 @@ def self_test():
         for f in failures:
             print("  -", f)
         return 1
-    print("self-test passed (parser, manifest, hollow records, endpoint/termination gates)")
+    print("self-test passed (parser, manifest, hollow records, endpoint/termination gates, parser-to-verifier evidence probes)")
     return 0
 
 
@@ -1148,6 +1245,7 @@ def main():
     ap.add_argument("--reuse-binary-sha", default=None,
                     help="binary identity to attribute to legacy reused records that carry none (from that candidate's identity file)")
     ap.add_argument("--analyze-only", action="store_true", help="run no solver; parse and verify what exists")
+    ap.add_argument("--report-dir", default=None, help="write summary/verify files here instead of into --output (keeps an earlier report intact)")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--list", action="store_true")
@@ -1201,7 +1299,10 @@ def main():
         if chosen is None:
             cd = out_dir / c.name
             rec = load_record(cd)
-            if rec is not None and rec.get("exit") == 0 and inputs_match(cd, rendered) and rec.get("binary_sha256") == binary_sha:
+            # the output directory's own record is reused when it belongs to this
+            # binary (or when no solver runs at all: analysis of what exists)
+            same_binary = binary_sha is None or rec is not None and rec.get("binary_sha256") == binary_sha
+            if rec is not None and rec.get("exit") == 0 and inputs_match(cd, rendered) and same_binary:
                 rec = dict(rec, lineage={"candidate": out_dir.name, "dir": str(cd), "binary_sha256": rec.get("binary_sha256"),
                                          "record_version": rec.get("version", 1), "reused": True})
                 chosen = (cd, rec)
@@ -1263,8 +1364,10 @@ def main():
     checks = verify(ordered_entries, manifest)
     candidates = sorted({(e.get("lineage") or {}).get("candidate", "?") + ":" + str((e.get("lineage") or {}).get("binary_sha256", "?"))[:12] for e in ordered_entries})
     note = "Candidates (directory:binary sha prefix): " + ", ".join(candidates)
-    summarize(ordered_entries, checks, out_dir, note)
-    print(open(out_dir / "summary.md").read())
+    report_dir = Path(args.report_dir).resolve() if args.report_dir else out_dir
+    report_dir.mkdir(parents=True, exist_ok=True)
+    summarize(ordered_entries, checks, report_dir, note)
+    print(open(report_dir / "summary.md").read())
     n_missing = sum(1 for c in checks.items if c["id"] == "C-R" and c["status"] != "pass")
     if args.verify and (checks.failures() or n_missing):
         return 1

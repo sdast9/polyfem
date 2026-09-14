@@ -5,6 +5,8 @@ and supported by the saved evidence. Stage 1 remains validated within scope.
 Two bounded implementation/reporting follow-ups remain open: BDF force-output
 normalization, and acceptance of missing Newton/determinant evidence. See the
 [follow-up review and completion instructions](rb-11-followup-review-20260914.md).
+*(Both were completed the same day; see the
+[follow-up section](#follow-up-2026-09-14-bdf-force-normalisation-and-oracle-evidence).)*
 
 **Latest continuation guidance (2026-09-13 evening):** read the
 [Stage 1 / Stage 2 review](rb-11-stage-review-20260913.md) before resuming.
@@ -659,3 +661,92 @@ checks are sampled, not exhaustive.
   failure (C-N).
 - 03:35–04:00 — amendment 1 declared; four P3 refinements (72 s – 19 min);
   focused/affected/golden selections, input matrix, smokes, HDA tests on B.
+
+## Follow-up (2026-09-14): BDF force normalisation and oracle evidence
+
+The [follow-up review](rb-11-followup-review-20260914.md) (`73227670c`)
+independently reproduced the 270 checks and the 24-iteration miss and left
+two bounded items. Both are repaired on **candidate C**, an isolated
+worktree build of `73227670c` plus the changes below
+(`outputs/rb-11/20260914T134716Z-followup/`: `identity-candidate-C.txt`,
+`PolyFEM_bin-candidate-C` `f4c97879…`, `working-tree-candidate-C.diff`,
+`companions.txt`, `configure-command.txt`; the shared `polyfem/build` and
+the RB-12 continuation's uncommitted sources were not touched; a first
+Python-less isolated build, `83d6d89a…`, whose golden set could not run
+Python expressions, is kept as `*-python-off-superseded`).
+
+### 1. Exported forces follow the solved step for every integrator
+
+Reproduced (review, candidate B): a four-step quasistatic linear cantilever
+at `dt = .25` gives bit-identical displacements for ImplicitEuler,
+ImplicitNewmark, BDF2 and BDF3, but BDF2 elastic/body forces ×2.25 and BDF3
+×2.25 (step 1) / ×3.361 (steps 2–4). Cause: the linear forms' weights were
+set once at initialisation from the first step's acceleration scaling,
+while BDF's scaling changes as its history grows (`dt²` → `(2/3)² dt²` →
+`(6/11)² dt²`), the history advances before the save, and the export
+divided by the integrator's *current* scaling.
+
+Repair (`LinearElasticVarForm`, `ElasticVarForm::elastic_output_fields`):
+each step captures its own acceleration scaling and predictor before the
+solve, refreshes the elastic/body weights to that scale, updates the body
+load at the step's time and the inertia form's `x_tilde` before the history
+advances, and stores `solved_step_scale_`; the export normalises by that
+stored scale (a new `force_scale` argument of the shared export, ≤ 0 =
+the integrator's current value, the nonlinear path's unchanged behaviour),
+so both the saved fields and `output_fields()` after the solve describe the
+step actually solved. Saved velocity/acceleration and the restart history
+are untouched.
+
+Regressions (`tests/test_linear_elastic_time.cpp`, `[linear_elastic]`, now
+5 cases / 691 assertions): the three ImplicitEuler tests are kept; for
+ImplicitEuler, ImplicitNewmark, BDF2 and BDF3 and 1–4 steps of `dt = .25`
+with loads ∝ t (gravity and a nonzero prescribed end value), a quasistatic
+schedule reproduces `T ×` the static solution and forces with a zero
+inertia force at every startup and mature step; for the same four
+integrators and 1–4 steps of `dt = .05` from rest, the exported elastic
+force is `−K u`, the body force the physical load, the inertia force
+`−M (u − x̃_k)/s_k` with the predictor and scale of step k from an
+independently replayed integrator (nonzero), and their sum vanishes on the
+free DOFs — individual forces and the residual both, since a common wrong
+scale leaves the residual zero. Saved fields: the review's probe on
+candidate C (`integrator-probe/`) gives force ratios 1.0 at every step for
+every integrator, quasistatic inertia 0, and the saved dynamic forces
+(`dt = .25`, 4 steps) in equilibrium to 5e-14 at every step with nonzero
+inertia.
+
+### 2. The oracle requires the evidence it checks
+
+Reproduced (review): deleting `iterations` from a private copy of
+`homogeneous-nu0.49999-n4` turned the 24-iteration miss into a pass
+(`int(missing or 0)`), and deleting the `F` arrays left C-R passing
+(determinant checked only if present). Repair (`tools/rb11/envelope.py`):
+every nonlinear step record must carry a nonnegative integer `iterations`
+and a string `outcome`; a missing, null or invalid count (or a malformed
+step record, counted, not dropped) leaves the Newton count **unavailable**
+(`newton_count_status`), a recorded zero stays a real zero; C-R fails on an
+unavailable count or on absent `F` arrays for a nonlinear case, and C-N is
+*not evaluated* without a count. `--self-test` now drives synthetic case
+directories with a real endpoint VTU through parse → analyse → verify
+(missing/null/string/negative/boolean counts, a recorded zero, a malformed
+step, absent `F`, an unconverged run, the 24-iteration shape). The review's
+two counterexamples rerun against the repaired oracle
+(`adversarial/parser-adversarial-probes-repaired.json`): C-R fails with
+"Newton count unavailable" / "no det(F) evidence", C-N not evaluated /
+still 24. Re-analysis of the existing 113 cases (`reanalysis/`, no solver
+run): 51 candidate-A + 62 candidate-B rows, all 81 nonlinear records with a
+recorded count and det(F) evidence, **270 checks: 269 pass, 1 fail** — the
+real C-N miss preserved. A `--report-dir` option keeps an earlier report
+intact; the VTU reader is found from a worktree.
+
+### Validation of candidate C (`f4c97879…`, `unit_tests` `c171f2cd…`)
+
+- `unit_tests "[linear_elastic]"`: 5 cases / 691 assertions (`linear-elastic-tests.log`).
+- `unit_tests "[input_validation],[rb11_envelope],[linear_elastic],[time_integrator]"`: 33 cases / 1,500 assertions (`tests-candidate-C/focused.log`).
+- `unit_tests standard`: 67/68 assertions — the one failure is the pre-existing RB-22 named error on `multi-material/stretch-cubes.json` (`tests-candidate-C/golden-standard.log`).
+- `unit_tests "[assembler],[material_cache],[form_derivatives]"`: 61 cases / 4,770,073 assertions (`tests-candidate-C/affected.log`).
+- five public smokes: exit 0, 0 error lines, last-step solutions within 7e-16 of the Stage 1 fingerprints, friction smoke single-threaded bit-identical (`smokes-candidate-C/summary.json`).
+- 93/93 input matrix in verify mode (`input-matrix-candidate-C/`; `run_matrix.py` now finds the VTU reader from a worktree, as `envelope.py` does).
+- envelope `--self-test`, the re-analysis of the 113 cases and the adversarial probes as above; the review's integrator probe on C (`integrator-probe/`).
+The physical-envelope results, candidates A/B, thresholds and the retained
+C-N miss are unchanged; no default, tolerance, element or law changed. The
+full suite was not rerun for this follow-up.

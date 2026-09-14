@@ -474,7 +474,8 @@ namespace polyfem::varform
 		const time_integrator::ImplicitTimeIntegrator *time_integrator,
 		const std::vector<std::pair<std::string, std::shared_ptr<solver::Form>>> &named_forms,
 		const solver::Form *elastic_form,
-		const solver::ContactForm *contact_form) const
+		const solver::ContactForm *contact_form,
+		const double force_scale) const
 	{
 		std::vector<io::OutputField> fields;
 		if (!mesh_ || !problem || solution.size() <= 0)
@@ -994,7 +995,12 @@ namespace polyfem::varform
 
 		if (forces)
 		{
-			const double s = time_integrator ? time_integrator->acceleration_scaling() : 1;
+			// The forms carry the acceleration scaling of the step they were
+			// solved in; a caller whose integrator history has already advanced
+			// (BDF changes the scaling while its history grows) passes that
+			// step's scale explicitly (RB-11 follow-up), otherwise the
+			// integrator's current scaling is the solved step's.
+			const double s = force_scale > 0 ? force_scale : (time_integrator ? time_integrator->acceleration_scaling() : 1);
 			for (const auto &[name, form] : named_forms)
 			{
 				const std::string field_name = name + "_forces";
