@@ -1,6 +1,7 @@
 #include "OgdenElasticity.hpp"
 
 #include <polyfem/autogen/auto_eigs.hpp>
+#include <polyfem/utils/Logger.hpp>
 
 namespace polyfem::assembler
 {
@@ -11,12 +12,20 @@ namespace polyfem::assembler
 
 	void UnconstrainedOgdenElasticity::add_multimaterial(const int index, const json &params, const Units &units, const std::string &root_path)
 	{
-		// TODO check me
 		alphas_.add_multimaterial(index, params, "", root_path);
 		mus_.add_multimaterial(index, params, units.stress(), root_path);
 		Ds_.add_multimaterial(index, params, units.stress(), root_path);
-		assert(alphas_.size() == mus_.size());
-		assert(alphas_.size() == Ds_.size());
+		// RB-11: the energy loops over the alphas and reads mus[N] for each; a
+		// mismatch silently dropped terms or read out of range (the assert is dead
+		// in release builds). Checked only when this law is configured: under
+		// MultiModels every law sees every body's parameters.
+		const bool configured = params.contains("alphas") || params.contains("mus") || params.contains("Ds");
+		if (configured && alphas_.size() != mus_.size())
+			log_and_throw_error(
+				"UnconstrainedOgden: 'alphas' has {} term(s) but 'mus' has {}; every Ogden term needs one alpha and one mu",
+				alphas_.size(), mus_.size());
+		if (configured && Ds_.size() == 0)
+			log_and_throw_error("UnconstrainedOgden: 'Ds' needs at least one volumetric coefficient");
 	}
 
 	std::map<std::string, Assembler::ParamFunc> UnconstrainedOgdenElasticity::parameters() const
@@ -55,7 +64,10 @@ namespace polyfem::assembler
 		coefficients_.add_multimaterial(index, params, units.stress(), root_path);
 		expoenents_.add_multimaterial(index, params, "", root_path);
 		bulk_modulus_.add_multimaterial(index, params, units.stress(), root_path);
-		assert(coefficients_.size() == expoenents_.size());
+		if ((params.contains("c") || params.contains("m")) && coefficients_.size() != expoenents_.size())
+			log_and_throw_error(
+				"IncompressibleOgden: 'c' has {} term(s) but 'm' has {}; every Ogden term needs one coefficient and one exponent",
+				coefficients_.size(), expoenents_.size());
 	}
 
 	std::map<std::string, Assembler::ParamFunc> IncompressibleOgdenElasticity::parameters() const

@@ -46,6 +46,8 @@ namespace polyfem::varform
 			Eigen::VectorXd &b,
 			const bool compute_spectrum,
 			Eigen::MatrixXd &sol);
+		/// true when a time schedule is present and `time/quasistatic` asks for static solves at each time
+		bool is_quasistatic() const;
 		void solve_static_linear(Eigen::MatrixXd &sol, const ForwardStepCallback &post_step);
 		void solve_transient_linear(Eigen::MatrixXd &sol, const ForwardStepCallback &post_step);
 

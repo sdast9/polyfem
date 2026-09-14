@@ -633,6 +633,11 @@
         "doc": "Ogden alpha"
     },
     {
+        "pointer": "/alphas",
+        "type": "list",
+        "doc": "Ogden alphas, one per term (same count as mus)"
+    },
+    {
         "pointer": "/mus",
         "type": "list",
         "doc": "Ogden mu"

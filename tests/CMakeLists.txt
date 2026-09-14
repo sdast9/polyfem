@@ -13,6 +13,8 @@ set(test_sources
   test_friction_lag.cpp
   test_resource_containment.cpp
   test_input_validation.cpp
+  test_material_envelope.cpp
+  test_linear_elastic_time.cpp
   test_assembler.cpp
   test_bases.cpp
   test_clipping.cpp

@@ -4,6 +4,8 @@
 [Stage 1 / Stage 2 review](rb-11-stage-review-20260913.md) before resuming.
 It supersedes the envelope handoff's run-completion claims and identifies
 the reproduced quasistatic force-output defect and bounded remaining work.
+*(2026-09-14: its completion sequence was carried out; see the
+[envelope stage section](#envelope-stage--characterized-limits-documented-2026-09-14).)*
 
 > **Independent review, 2026-09-13:** [read the continuation guidance](rb-11-review-guidance.md)
 > before resuming. It reproduces a valid 2D material rejected by the new rule,
@@ -399,3 +401,254 @@ Dated log (local time, 2026-09-13):
   after any change to mesh import, material binding or BC sampling. Next
   items eligible: RB-23, RB-12, RB-06/RB-08, the RB-11 envelope stage.
 - Updated: the plan's RB-11 row and section, README.
+
+## Envelope stage — characterized, limits documented (2026-09-14)
+
+**Status: characterized within stated scope.** No element, quadrature,
+material, tolerance or contact default was changed. The stage produced two
+bounded production repairs on the time-dependent `LinearElasticity` path
+and one input correction (Ogden term lists), all with regressions, plus
+the sampled envelope below. Contract: [rb-11-envelope-contract.md](rb-11-envelope-contract.md)
+(declared before the runs; amendment 1 declared before the refinements).
+The independent [Stage 1 / Stage 2 review](rb-11-stage-review-20260913.md)
+of 2026-09-13 is retained as evidence of what needed correction: its
+findings (the quasistatic force-output defect, the incomplete run
+inventory, the vacuous verifier, the qualified reference claims) are
+addressed here one by one.
+
+### Evidence and candidates
+
+`outputs/rb-11/20260913T235827Z-envelope/`:
+
+- `identity.txt` + `PolyFEM_bin` — **candidate A** (`452e6244…`, built from
+  `ce7c88b4b` plus the transient crash fix and the quasistatic-mass fix,
+  before the output repair and the Ogden change); preserved untouched.
+- `identity-candidate-B.txt` + `PolyFEM_bin-candidate-B` (`a134f6c8…`) +
+  `working-tree-candidate-B.diff` — **candidate B**, the final candidate:
+  the published sources of this stage.
+- `matrix-attempt1-grad1e-10/` — protocol 1 (aborted, see tolerances);
+  `floor-probe/` — the roundoff-floor probe; `matrix/` — candidate A's
+  protocol-2 runs (51 recorded exit-0 runs reused, 19 linear outputs whose
+  process exit was never recorded — re-executed on B — and 39 cases that
+  never ran); `matrix-candidate-B/` — the reconciled **109/109** matrix plus
+  the 4 refinements (`summary.md`, `summary.json`, `verify.json`,
+  `candidate.json`; every entry names its candidate and binary sha);
+  `independence-check/` — candidate B reruns of three candidate-A nonlinear
+  cases, bit-identical solutions and iteration counts (`comparison.json`),
+  which with source inspection (the changes touch `LinearElasticVarForm`,
+  Ogden and the list-parameter binder only) justifies reusing A's
+  NeoHookean/MaterialSum results; `qs-output-probe-final/` — the review's
+  force-output reproduction on B; `tests-candidate-B/`,
+  `input-matrix-candidate-B/`, `smokes-candidate-B/`, `hda-candidate-B/`
+  — the validation runs listed at the end.
+
+### Defects found by the stage and repaired (candidate B)
+
+1. **Every time-dependent `LinearElasticity` run segfaulted** (transient or
+   quasistatic with a `time` block): `LinearElasticVarForm::init_linear_solve`
+   built the `InertiaForm` before `time_integrator->init`, and upstream
+   #508's constructor reads `x_tilde()` → `x_prev()` on an empty deque. The
+   golden `standard` scenes with `time` are preset analytical problems
+   (`is_time_dependent()` false), which is why the suite never saw it.
+2. **`time/quasistatic` was ignored by the linear formulation** — the mass
+   term and `x_tilde` were always solved. `is_quasistatic()` now solves
+   `K u = f(t)` per step.
+3. **Quasistatic force output** (reproduced by the review on the working
+   patch): exported elastic/body forces were divided by `dt²` although the
+   quasistatic forms carried no acceleration scaling, and a live
+   `InertiaForm` reported a force absent from the solved equations
+   (`dt = .5`: elastic/body ×4, inertia .93). Repair: the forms carry the
+   integrator's acceleration scaling in every time-dependent solve (the
+   nonlinear `SolveData::update_dt` convention, divided out by the export),
+   no inertia form in quasistatics (zero inertia force, like `SolveData`),
+   and per step the body force is updated at the step's time and the
+   inertia form's `x_tilde` refreshed before the history advances, so the
+   export describes the step just solved (the step-0 export carries the
+   load at `t0`). `qs-output-probe-final/`: `dt = 1` vs `.5` elastic/body
+   ratio 1.0, quasistatic inertia 0, dynamic run inertia .155.
+4. **`UnconstrainedOgden` accepted one term only**: the spec offered
+   `alphas` as a scalar (a list was "invalid input json") while `mus`/`Ds`
+   are lists; the energy loops over `alphas` and reads `mus[N]`, so a
+   longer `mus` was silently truncated and a shorter one read out of range
+   (dead asserts). Spec entry `/alphas` list added; named errors for
+   `alphas`/`mus` count mismatch, empty `Ds`, `IncompressibleOgden` `c`/`m`
+   mismatch (only when the law is configured — under `MultiModels` every
+   law sees every body's json) and, in `GenericMatParams`, a body giving a
+   different term count than the elements before it — reported as an
+   implementation limitation (one term list per law), not a material
+   restriction.
+
+Regressions: `tests/test_linear_elastic_time.cpp` (`[linear_elastic]`,
+also tagged `[rb11_envelope]`): a transient run at `dt = .05` (3 steps)
+completes and its exported forces satisfy `−K u + f − M(u − x̃)/dt² = 0` on
+the free DOFs to 1e-9 with `−K u` checked against the assembled stiffness;
+a quasistatic schedule with a nonzero growing prescribed end value and
+gravity reproduces the static solve at `dt = 1, .5, .25` (1, 2, 4 steps) to
+1e-10 with identical elastic/body forces and an exactly zero inertia force;
+a load `9.81·t` is exported at the saved step (two steps of `.5` = twice
+one step of `.5`). `tests/test_input_validation.cpp` "Ogden term lists must
+pair up" (scalar/list acceptance, three named refusals, the two-body
+mismatch, the spec accepting a list).
+
+### E1 — constitutive derivatives and rigid motion (`[rb11_envelope]`)
+
+`tests/test_material_envelope.cpp`, 5 cases / 423 assertions, on a 6-tet
+unit cube (P1) through the production `ElasticForm`, for 17 sampled
+configurations (every law of `AssemblerUtils::elastic_materials()` except
+AMIPS and MultiModels, plus NeoHookean at ν = .4999 and
+MaterialSum(NeoHookean, HGODispersion)). These are sampled 3D constitutive
+checks, not all-law/all-regime certification.
+
+| Check | Result |
+| --- | --- |
+| FD gradient / Hessian at 6 random states of amplitude .02 | all consistent at 1e-5 (FixedCorotational's Hessian at 1e-4, upstream's tolerance for its polar-decomposition tangent) |
+| translation invariance (energy, gradient, Hessian) | ≤ 1e-9 for every law |
+| objectivity `E(R(X+u)+t) = E(u)`, forces rotate, tangent `R H Rᵀ` | ≤ 1e-9 / 1e-8 / 1e-7 for every hyperelastic law |
+| linear laws (LinearElasticity, HookeLinearElasticity) | not objective: rotation energy `∝ θ⁴` (ratio 16 ± 2 % between θ = .01 and .02) — the documented small-strain limit |
+| stress-free reference `E(0) = 0`, `∇E(0) = 0` | every law except ActiveFiber (active stress by design; its affine energy is negative) |
+| fibre frame indifference `E(F; a) = E(QFQᵀ; Qa)` | HGOFiber, HGODispersion, ActiveFiber, MaterialSum ≤ 1e-9 |
+
+### E2 — the sampled envelope (109 cases + 4 refinements, all exit 0)
+
+All runs are public synthetic fixtures (Kuhn tetrahedralised beams and
+cubes), single-threaded, quasistatic, `E = 1e6`, `ρ = 1000`; the nonlinear
+runs stop at `grad_norm_tol 1e-8` (protocol 2, below). `r` is the tip ratio
+to the P2 `h = .125` reference of the same ν and load; κ(K) is the reduced
+stiffness condition number of the `LinearElasticity` twin (the
+stress-free tangent on that mesh, not the deformed or fibre-reinforced
+tangent).
+
+**Volumetric locking (cantilever 4×1×1, tip deflection ≈ 1e-3 L):**
+
+| ν | P1 h=.5 | P1 h=.25 | P2 h=.5 | P2 h=.25 | κ(K) P1 h=.5 | κ(K) P2 h=.5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| .3 | .526 | .795 | .987 | .997 | 1.6e4 | 1.1e5 |
+| .45 | .337 | .613 | .958 | .990 | 2.8e4 | 2.8e5 |
+| .49 | .162 | .327 | .928 | .983 | 6.1e4 | 1.2e6 |
+| .499 | .0885 | .117 | .909 | .977 | 3.0e5 | 1.1e7 |
+| .4999 | .0796 | .0828 | .907 | .976 | 2.7e6 | 1.1e8 |
+
+P1 tetrahedra lose half the deflection already at ν = .3 on `h = .5`
+(ordinary coarse bending error) and 92 % of it at ν = .4999 (volumetric
+locking on top); P2 stays within 2.4 % of the reference on `h = .25` at
+every ν. C-L1 (`r ≥ .95`, P2 `h = .25`) passes at every ν; C-L2 (monotone
+in ν) passes for the three sweeps — both are empirical targets on this
+fixture, not theorems (the review's counterexample on pointwise bounds
+stands). κ(K) grows ~`1/(1 − 2ν)`: ×170 (P1) and ×1050 (P2) from ν = .3 to
+.4999.
+
+**Thin sections (square section H, two cells across, ν = .3):**
+
+| H (aspect of the P1 elements) | P1 nx=8 | P1 nx=16 | P2 nx=8 | P2 nx=16 | κ(K) P2 nx=8 | reference vs Timoshenko |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 (1) | .526 | .587 | .987 | .993 | 1.1e5 | 2.1 % |
+| .25 (4) | .163 | .353 | .979 | .992 | 2.3e7 | .66 % |
+| .1 (10) | .034 | .114 | .975 | .990 | 8.9e8 | .38 % |
+
+P1 shear-locks on thin sections (3 % of the deflection at aspect 10); P2
+keeps 97–99 %. The references approach beam theory as `L/H` grows (C-A).
+
+**Distorted meshes (h = .5 beam, ν = .3):** interior jitter of .15 h / .30 h
+moves the P1 ratio from .526 to .526 / .516 and the P2 ratio from .987 to
+.987 / .987 (κ(K) 1.6e4 → 1.7e4, 1.1e5 → 1.5e5); stretched cells 2:1 / 4:1
+(4×2×2 and 2×2×2 cells — a combined aspect *and* resolution effect) give
+P1 .382 / .203 and P2 .968 / .912.
+
+**Homogeneous near-incompressibility (compressed cube, exact state in the
+space):** Cauchy stress and lateral stretch match the exact Neo-Hookean
+state to ≤ 1.03e-7 / ≤ 3e-12 at every ν up to .49999 (C-H); the stress is
+uniform to 1e-13. κ(K) of the `n = 2` twin grows from 50.8 (ν = .3) to
+5.7e5 (ν = .49999). Newton iterations to the protocol-2 stop: 4/5 (ν = .3,
+n = 2/4), 4/6, 5/14, 10/16, 8/14, 12/**24** — **C-N (≤ 20) fails at ν =
+.49999, n = 4 (24, converged)**: a measured cost-target miss retained as a
+performance observation, not evidence of physical error and not a reason
+for a new stopping or line-search policy.
+
+**Anisotropy:** the ten affine MaterialSum(NeoHookean, HGODispersion)
+cases (fibre x / 45° / z, κ 0, 1/6, 1/3) match the law's Cauchy stress to
+≤ 3.23e-10, uniform to 1e-13; a fibre of length 3 gives the unit fibre's
+stress (HGODispersion normalises). Fibre-reinforced bending (k1 = E along
+the axis): P1 .651 / .865 (h = .5 / .25), P2 .993 / .999 — no anisotropic
+conditioning measurement exists in this stage.
+
+**Reference accuracy (amendment 1, C-REF ≤ 1 %):** one P3 refinement on the
+reference mesh moved the tip by **.106 %** (ν = .3), **.996 %** (ν = .4999),
+**.108 %** (thin H = .1) and **.046 %** (fibre-reinforced). The ν = .4999
+reference therefore carries ≈ 1 % of remaining locking itself — the
+criterion is met at its edge, and the P2 `h = .25` space is 3.4 % below
+the P3 value there; the C-L1 verdict stands with that uncertainty stated.
+No further refinement was run (declared bound; the P3 runs cost 13–19 min
+at 182k DOF).
+
+**Tolerances.** Protocol 1 (`grad_norm_tol 1e-10`) never terminated on the
+56k-DOF ν = .4999 reference: the mass-weighted L2 gradient floors at
+5–6.5e-6 (relative 2e-7 to the initial gradient, `‖Δx‖` ~ 1e-16) from the
+third iteration on (`floor-probe/`), below that stop. Protocol 2 uses
+`grad_norm_tol 1e-8`, `rel_grad_norm_tol 1e-12` — still 1e3 below the
+production default, which is untouched. The review's paired comparison of
+the 41 outputs common to both protocols found a worst tip difference of
+2.76e-8 relative; the timed-out reference is not in that pair set.
+
+### Runner and verification (the review's §2–3)
+
+`tools/rb11/envelope.py` now separates input rendering, execution
+(`run.json` version 2 with command, binary sha, input hashes, exit/signal/
+timeout, wall time — written before any parsing), per-case parsing that
+never raises (nonlinear step lists, the linear `{'solver_info':
+'Success'}` dict that crashed the first run inside `pool.map`, missing and
+malformed output), analysis, and verification against an explicit manifest
+(unknown names refused, empty manifest refused; every check reports
+pass/fail/not evaluated with value, threshold and cases; missing partners
+are "not evaluated", never passed). Endpoints are taken from the PVD's last
+timestep and must sit at `t = 1`; nonlinear runs must report `converged`;
+fields must be finite with matching sizes, `det F > 0`, and the tip sample
+exact. Reuse of an earlier candidate's record requires exit 0, byte-identical
+regenerated inputs and a stated binary identity; stale records are moved
+aside, never overwritten. `--self-test` exercises these failure modes
+(string/dict/list/missing/malformed `solver_info`, empty manifest, hollow
+exit-0 record, unrecorded exit, wrong endpoint, unconverged run, missing
+iteration count).
+
+### Validation of candidate B (2026-09-14)
+
+- `unit_tests "[input_validation],[rb11_envelope],[linear_elastic],[time_integrator]"`: 31 cases / 920 assertions.
+- `unit_tests "[assembler],[material_cache],[form_derivatives]"`: 61 cases / 4,770,073 assertions.
+- `unit_tests standard` (golden scenes incl. `unconstrained_ogden`, `incompressible_ogden`, `multimodel`, `pyramid`): 67/68 assertions — the one failure is the pre-existing RB-22 named error on `multi-material/stretch-cubes.json` (documented in the Stage 1 record).
+- `tools/rb11/run_matrix.py --verify`: 93/93; `--self-test` pass.
+- five public smokes: exit 0, 0 error lines, last-step solutions within 8e-16 of the Stage 1 frozen-candidate fingerprints; the friction smoke single-threaded bit-identical (`smokes-candidate-B/summary.json`).
+- HDA: `test_polyfem_materials.py` (with the new non-first-subdomain per-element kappa check: 707/707 body-1002 elements carry the authored value, worst 1.6e-8, nothing leaks onto body 1), `test_polyfem_hda.py`, `test_remesh_hda.py` — see `hda-candidate-B/`.
+- Full suite: not rerun for this stage; the three pre-existing failures (RB-10 goldens ×2, RB-22 stretch-cubes) are unchanged in nature (the `standard` set reproduces the RB-22 one).
+
+### Supported sampled envelope and limits
+
+Supported by this stage's evidence: hyperelastic laws are objective and
+derivative-consistent on the sampled fixture; homogeneous and affine
+states are reproduced to roundoff at any ν up to .49999 and any sampled
+fibre/dispersion; P2 tetrahedra resolve bending within 2.4 % of a P2
+`h = .125` reference (itself within 1 % of P3) at ν ≤ .4999 on `h = .25`,
+within 3 % on thin sections down to aspect 10, and within 1.3 % under
+.30 h jitter. Limits: P1 tetrahedra lock volumetrically (ν ≥ .45) and in
+shear (aspect ≥ 4) — a resolution/order statement for users of the
+Houdini node, not a defect; the linear laws are not objective; near
+incompressibility raises κ(K) as `1/(1 − 2ν)` and the Newton count to the
+protocol-2 stop up to 24; no anisotropic conditioning, no large-strain
+bending, no contact and no dynamic envelope was measured; the constitutive
+checks are sampled, not exhaustive.
+
+### Procedure log (local time)
+
+- 2026-09-13 19:40–20:30 — contract, fixtures, E1 tests, transient crash
+  and quasistatic-mass fixes, protocol 1 aborted at the roundoff floor,
+  protocol 2 started, runner crashed inside `pool.map` on a linear twin's
+  `solver_info`; handoff written.
+- 2026-09-13 evening — independent review (`rb-11-stage-review-20260913.md`,
+  `c599ca99e`): quasistatic force-output defect reproduced, inventory
+  corrected (51 / 19 / 39), verifier gaps and reference claims qualified.
+- 2026-09-14 02:40–03:15 — runner rewritten and self-tested; force-output
+  repair with per-step form updates; `[linear_elastic]` regressions;
+  Ogden message reworded; candidate B frozen beside A.
+- 03:15–03:30 — independence check (bit-identical), the 58 missing/
+  re-executed cases on B (42 s), reconciled 109/109 matrix, one contract
+  failure (C-N).
+- 03:35–04:00 — amendment 1 declared; four P3 refinements (72 s – 19 min);
+  focused/affected/golden selections, input matrix, smokes, HDA tests on B.

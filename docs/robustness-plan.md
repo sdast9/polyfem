@@ -183,7 +183,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | **closed — retry stays off (user decision 2026-09-13)**; a failed step reports failure and stops, no automatic subdivision |
 | RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | [characterized—limits documented 2026-09-13 — analytical block, spring/contact and same-mesh hard-contact references; the semi-implicit model error is the realized gap (`e_R = c·ḡ/H`, .35–.6 % at `d̂` 1e-3, rate ≈ 1 in `d̂`), solver error 1.4e-5, discretisation of the public 4×4×4 smoke 11 % (order 1.5); realized gap .62–.99 `d̂` across sweeps; raw m → mm conversion differs by 1e-3 (upstream absolute CCD clearance, `F0·L^1.5` tolerance); classic/Fixed 1e-6 at 2× the cost; acceptance decided the same day: `physical_balance_pass` = force residual at 1e-6 of the peak external force (record version 3), gap statistics reported](rb-09-validation.md) |
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [validated within stated scope 2026-09-13 — Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on every accepted step, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity; the RB-18 F6 trim-following (a doubled friction capacity after an in-solve bump at constant load) was reproduced and, by the user's decision, `semi_implicit/friction_lag: realized_force` and `friction_iterations: 2` are the defaults (F6 kept as `follow_stiffness`, budget 1 explicit); HDA *Friction Lag* control `f10f9c8`](rb-10-validation.md) |
-| RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | [validated within stated scope 2026-09-13 (input-validation stage; the independent review's four defect groups corrected — `kappa ∈ [0, 1/d]`, zero constant/expression fibres, the CCD notice, a real T-junction fixture and a contract-enforcing runner — and the frozen candidate passes the 93-case matrix in verify mode, the affected/assembler/cache/derivative selection, smokes, HDA tests and the full suite with only the three pre-existing failures) — 73-case public probe matrix (`tools/rb11/`) reproduced 5 segfaults, 2 hangs, 16 silent acceptances, 6 late context-free failures and a per-element scalar file misbound on every non-first body since upstream #333; all now named early failures without output, or the documented notice; per-element lists/files bind by length (global rows = mesh elements, body-local rows = body elements, anything else refused); `sweep_and_prune` mapped instead of aliasing to the hash grid; RB-09 unit observations announced at startup; `[input_validation]` 14 cases; smokes bit-identical single-threaded. **Pending stage:** physical envelope characterisation (locking/conditioning/resolution of nearly incompressible, anisotropic, thin, distorted elements; constitutive derivatives and rigid-motion invariance) and an HDA test for a scalar on a non-first subdomain](rb-11-validation.md) |
+| RB-11 | Geometry/material/input validation envelope | none for audit; RB-09 for accuracy comparisons | [validated within stated scope 2026-09-13 (input-validation stage; the independent review's four defect groups corrected — `kappa ∈ [0, 1/d]`, zero constant/expression fibres, the CCD notice, a real T-junction fixture and a contract-enforcing runner — and the frozen candidate passes the 93-case matrix in verify mode, the affected/assembler/cache/derivative selection, smokes, HDA tests and the full suite with only the three pre-existing failures) — 73-case public probe matrix (`tools/rb11/`) reproduced 5 segfaults, 2 hangs, 16 silent acceptances, 6 late context-free failures and a per-element scalar file misbound on every non-first body since upstream #333; all now named early failures without output, or the documented notice; per-element lists/files bind by length (global rows = mesh elements, body-local rows = body elements, anything else refused); `sweep_and_prune` mapped instead of aliasing to the hash grid; RB-09 unit observations announced at startup; `[input_validation]` 14 cases; smokes bit-identical single-threaded. **Envelope stage characterized, limits documented (2026-09-14):** 17 sampled laws derivative-consistent, objective (linear laws θ⁴), fibre frame-indifferent; 109-case sampled envelope on candidates A/B with explicit lineage — P2 tets within 2.4 % of a P2 `h = .125` reference (itself within 1 % of P3) at ν ≤ .4999, P1 tets lock volumetrically (ν ≥ .45) and in shear (aspect ≥ 4), homogeneous/affine states to roundoff up to ν = .49999, κ(K) ~ 1/(1−2ν), one cost-target miss (24 Newton iterations at ν = .49999) retained; the stage repaired the time-dependent `LinearElasticity` crash, the ignored `time/quasistatic`, the quasistatic force export (review-reproduced) and the one-term-only `UnconstrainedOgden` spec; HDA non-first-subdomain per-element kappa check added and passing; the independent stage review (`rb-11-stage-review-20260913.md`) is retained as evidence](rb-11-validation.md#envelope-stage--characterized-limits-documented-2026-09-14) |
 | RB-12 | Repeatability, provenance and release checks | none for provenance; relevant RB checks for release | not started |
 | RB-13 | Mechanical coefficient estimate and conditional bounds | RB-02 units; RB-03 maps; RB-04 evidence | [closed 2026-09-11 — characterized, limits documented; production law retained, no K_eff law adopted; units used by RB-18 F3, algebra by RB-03](rb-13-validation.md#closure-2026-09-11) |
 | RB-14 | Practical compliance and force-demand estimators | RB-13 reference contract; RB-03 supported maps | [closed 2026-09-11 — characterized, limits documented; no estimator or protection policy adopted (RB-18 law for new contacts, RB-20 continuation for persisting ones)](rb-14-validation.md#closure-2026-09-11) |
@@ -680,8 +680,9 @@ within its documented scope and gives the current envelope handoff: correct
 the reproduced quasistatic force-output error, recover the actual matrix
 inventory (51 recorded runs, 19 unrecorded linear outputs, 39 without output),
 and qualify the fine references and characterization criteria before finishing.
-The physical-envelope stage remains in progress and unpublished; its existing
-work should be preserved and completed under that bounded guidance.
+That bounded guidance was carried out on 2026-09-14: the envelope stage is
+characterized with its limits documented and published (status below and
+in the [record](rb-11-validation.md#envelope-stage--characterized-limits-documented-2026-09-14)).
 
 **Revised integration scope:** record the applicability of RB-13 assumptions:
 positive/stable tangent, prescribed/free modes, anisotropy, near-incompressibility,
@@ -742,13 +743,28 @@ and fibre files bind by length (mesh-length → global element id, the Houdini
 export contract; body-length → body-local index, upstream #333; other → named
 error). Notices only for the RB-09 unit observations (SI-default
 `characteristic_force_density`, IPC's absolute 1e-4 CCD clearance) and for a
-zero density in a transient run. **Not done in this stage:** the physical
-envelope characterisation asked for above (locking/conditioning
-of nearly incompressible, anisotropic, thin, distorted elements; constitutive
-derivative and rigid-motion checks) — a separate characterisation stage with
-no production change implied; an HDA regression for a per-element scalar on
-a non-first subdomain (publication procedure); listing the primitives of an
+zero density in a transient run. **Not done in this stage:** listing the primitives of an
 initial intersection; conflict detection under the `lsq` boundary method.
+
+**Status 2026-09-14 — envelope stage characterized, limits documented**
+([record section](rb-11-validation.md#envelope-stage--characterized-limits-documented-2026-09-14),
+[contract](rb-11-envelope-contract.md), [independent stage review](rb-11-stage-review-20260913.md)).
+Constitutive derivative, translation/rotation and fibre frame-indifference
+checks on 17 sampled configurations (`[rb11_envelope]`); a 109-case public
+envelope (`tools/rb11/envelope.py`, manifest-verified, candidate lineage
+per case) with P3 refinements of four references (C-REF ≤ 1 %): P2
+tetrahedra stay within 2.4 % of the reference at ν ≤ .4999 on `h = .25` and
+within 3 % on sections down to aspect 10; P1 tetrahedra lock volumetrically
+and in shear; homogeneous and affine states reproduce to roundoff up to
+ν = .49999; κ(K) grows as 1/(1 − 2ν); the ν = .49999 cube needs 24 Newton
+iterations to the protocol stop (cost target 20 missed, retained). Bounded
+repairs with regressions: the time-dependent `LinearElasticity` segfault
+(upstream #508 order), `time/quasistatic` honoured by the linear
+formulation, physical quasistatic force export with per-step form updates
+(the review's reproduction), and `UnconstrainedOgden` term lists (spec +
+named term-count errors). No default, tolerance, element or law changed.
+Limits: sampled laws only, no anisotropic conditioning, no large-strain
+bending, contact or dynamic envelope; the linear laws are not objective.
 
 ## RB-12 — Repeatability, provenance and release discipline
 

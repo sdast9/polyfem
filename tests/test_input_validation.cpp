@@ -556,6 +556,73 @@ TEST_CASE("shear-only laws accept the incompressible limit", "[input_validation]
 	CHECK_NOTHROW(validate_material_parameters(*sum, *mesh, 0.0, false, "sum"));
 }
 
+TEST_CASE("Ogden term lists must pair up", "[input_validation][material]")
+{
+	// RB-11 envelope stage: the spec accepted only a scalar `alphas` (a list
+	// was refused) while the energy loops over the alphas and reads mus[N] for
+	// each; a mismatch silently dropped terms or read out of range.
+	Units units;
+	const auto mesh = two_tet_mesh();
+	REQUIRE(mesh != nullptr);
+	const std::vector<int> body_ids(mesh->n_elements(), 0);
+
+	const auto unconstrained = [&](const json &mat) {
+		const auto assembler = AssemblerUtils::make_assembler("UnconstrainedOgden");
+		assembler->set_size(3);
+		assembler->set_materials(body_ids, mat, units, "");
+	};
+	CHECK_NOTHROW(unconstrained({{"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}}));
+	CHECK_NOTHROW(unconstrained({{"alphas", 2.0}, {"mus", json::array({5e3})}, {"Ds", json::array({1e-4, 1e-5})}}));
+	CHECK_THROWS_WITH(unconstrained({{"alphas", 2.0}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}}),
+					  ContainsSubstring("'alphas' has 1 term(s) but 'mus' has 2"));
+	CHECK_THROWS_WITH(unconstrained({{"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3})}, {"Ds", json::array({1e-4})}}),
+					  ContainsSubstring("every Ogden term needs one alpha and one mu"));
+	CHECK_THROWS_WITH(unconstrained({{"alphas", 2.0}, {"mus", json::array({5e3})}, {"Ds", json::array()}}),
+					  ContainsSubstring("'Ds' needs at least one"));
+
+	const auto incompressible = [&](const json &mat) {
+		const auto assembler = AssemblerUtils::make_assembler("IncompressibleOgden");
+		assembler->set_size(3);
+		assembler->set_materials(body_ids, mat, units, "");
+	};
+	CHECK_NOTHROW(incompressible({{"c", json::array({5e3, 1e3})}, {"m", json::array({2.0, -2.0})}, {"k", 1e5}}));
+	CHECK_THROWS_WITH(incompressible({{"c", json::array({5e3, 1e3})}, {"m", 2.0}, {"k", 1e5}}),
+					  ContainsSubstring("'c' has 2 term(s) but 'm' has 1"));
+
+	// two bodies must give the same number of terms
+	std::vector<int> two_bodies = {0, 1};
+	const auto assembler = AssemblerUtils::make_assembler("UnconstrainedOgden");
+	assembler->set_size(3);
+	CHECK_THROWS_WITH(
+		assembler->set_materials(
+			two_bodies,
+			json::array({{{"id", 0}, {"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}},
+						 {{"id", 1}, {"alphas", json::array({2.0})}, {"mus", json::array({5e3})}, {"Ds", json::array({1e-4})}}}),
+			units, ""),
+		ContainsSubstring("has 1 term(s) on element 1 but 2 on the elements before it"));
+
+	// the spec accepts a list of alphas (it refused one before this stage)
+	const auto dir = scratch_dir("rb11-ogden");
+	const auto mesh_path = dir / "two.mesh";
+	{
+		Eigen::MatrixXd V = two_tet_vertices();
+		Eigen::MatrixXi T = two_tets();
+		std::ofstream out(mesh_path);
+		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n" << V.rows() << "\n";
+		for (int i = 0; i < V.rows(); ++i)
+			out << V(i, 0) << " " << V(i, 1) << " " << V(i, 2) << " 0\n";
+		out << "Tetrahedra\n" << T.rows() << "\n";
+		for (int i = 0; i < T.rows(); ++i)
+			out << T(i, 0) + 1 << " " << T(i, 1) + 1 << " " << T(i, 2) + 1 << " " << T(i, 3) + 1 << " 0\n";
+		out << "End\n";
+	}
+	json args = minimal_args(mesh_path.string());
+	args["materials"] = {{"type", "UnconstrainedOgden"}, {"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}, {"rho", 1000.0}};
+	State state;
+	CHECK_NOTHROW(state.init(args, true));
+	std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("multi-model materials are validated against their own model only", "[input_validation][material]")
 {
 	// body 0: NeoHookean; body 1: HGODispersion (whose E/nu are absent, not zero)

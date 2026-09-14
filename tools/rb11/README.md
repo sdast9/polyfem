@@ -68,3 +68,35 @@ obstacle, asserted from the written OBJ.
 
 The Catch regression `[input_validation]` (`tests/test_input_validation.cpp`)
 covers the same checks at the API level.
+
+## Envelope stage (`envelope.py`)
+
+```sh
+python3 tools/rb11/envelope.py --list [--stage locking thin distorted homogeneous anisotropic refine]
+python3 tools/rb11/envelope.py --binary <bin> --output /abs/candidate-dir [--reuse /abs/earlier-candidate ...] \
+    [--reuse-binary-sha <sha>] [--stage ...] [--only name ...] [--jobs 6] [--timeout 1800] [--verify]
+python3 tools/rb11/envelope.py --output /abs/candidate-dir --analyze-only   # no solver: parse + verify what exists
+python3 tools/rb11/envelope.py --self-test
+```
+
+The physical-envelope characterisation behind the record's envelope section
+and [docs/rb-11-envelope-contract.md](../../docs/rb-11-envelope-contract.md):
+Kuhn-tetrahedralised cantilevers (volumetric locking vs ν, thin sections,
+jittered/stretched cells, fibre-reinforced bending), the compressed cube
+(homogeneous near-incompressibility against the exact RB-09 state) and the
+affine cube (MaterialSum(NeoHookean, HGODispersion) against the law's stress
+by central differences), each with `LinearElasticity` twins whose reduced
+stiffness gives κ(K); the `refine` stage adds one P3 refinement of four
+references (contract amendment 1).
+
+Execution, parsing, analysis and verification are separate: `run.json`
+(version 2: command, binary sha, input hashes, exit/signal/timeout, wall)
+is written before any parsing; parsing never raises (nonlinear step lists,
+the linear `solver_info` dict, missing/malformed output are recorded per
+case); verification needs an explicit manifest and reports every check as
+pass / fail / not evaluated with value, threshold and cases
+(`verify.json`, `summary.md`). A record from a `--reuse` directory is
+reused only with exit 0, byte-identical regenerated inputs and a stated
+binary identity (`--reuse-binary-sha` for legacy records); every report row
+names its candidate. `--self-test` feeds the parser and the oracle their
+known failure modes.

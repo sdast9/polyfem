@@ -199,7 +199,12 @@ namespace polyfem::assembler
 			return;
 
 		std::vector<json> params_array = utils::json_as_array(params[param_name_]);
-		assert(params_array.size() == params_.size() || params_.empty());
+		// RB-11: every body must give the same number of terms; the assert was
+		// dead in release builds and a shorter list read past its end.
+		if (!params_.empty() && params_array.size() != params_.size())
+			log_and_throw_error(
+				"Material parameter '{}' has {} term(s) on element {} but {} on the elements before it; PolyFEM keeps one term list per law, so every body using this law must give the same number of terms (an implementation limitation, not a material restriction)",
+				param_name_, params_array.size(), index, params_.size());
 
 		if (params_.empty())
 			for (int i = 0; i < params_array.size(); ++i)
