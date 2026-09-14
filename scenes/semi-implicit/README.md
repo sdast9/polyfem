@@ -200,9 +200,12 @@ smoke scene.
 
 ## Companion revisions
 
-CMake pins `sdast9/ipc-toolkit@e3c8d3fe` (per-collision `stiffness_scale`,
-`compute_avg_distance`, and the RB-21 parent contributions on built
-collisions) and `sdast9/polysolve@5afe3b5d`. The latter carries the PF-06
-derivative correction and the RB-19 line-search fallback on top of `713220f`,
-the upstream merge of the iteration-callback work. Dependency
-feature branches and `main` branches are not interchangeable.
+CMake pins `sdast9/ipc-toolkit@c24d803e` (sources as of `bb795446`:
+per-collision `stiffness_scale`, `compute_avg_distance`, the RB-21 parent
+contributions on built collisions, the RB-05 broad-phase budget) and
+`sdast9/polysolve@bce32a39` (sources as of `ee5b296a`: the PF-06 derivative
+correction and the RB-19 line-search fallback with its finite energy bound on
+top of `713220f`, the upstream merge of the iteration-callback work); the two
+pinned commits only enable CI on the maintained branches (RB-12). Dependency
+feature branches and `main` branches are not interchangeable. A run's
+`run-manifest.json` records the effective checkouts next to these pins.

@@ -283,13 +283,22 @@ required check turned into a warning:
   contract's manifests/logs are uploaded `if: always()` on all three
   platforms; the Windows sccache size is the documented
   `SCCACHE_CACHE_SIZE=1G` instead of the rejected `--max-size` option.
-- Dependency forks: their `Build` workflows trigger on `main` only while
+- Dependency forks: their `Build` workflows triggered on `main` only while
   the maintained branches are `semi-implicit-stiffness` (IPC) and
-  `iteration-callback` (PolySolve); `sdast9/ipc-toolkit` has never run a
+  `iteration-callback` (PolySolve); `sdast9/ipc-toolkit` had never run a
   workflow (0 runs), `sdast9/polysolve` last ran on `main` on 2026-07-18.
-  The maintained branches are added to the triggers with a manual dispatch
-  (companion commits recorded below when published; the recipe pins then
-  move to those commits, whose sources are unchanged).
+  Companion commits (workflow files only, no source):
+  `sdast9/ipc-toolkit@c24d803e` and `sdast9/polysolve@bce32a39` add the
+  maintained branch and `workflow_dispatch` to the `Build` trigger. The
+  PolySolve push started Build run
+  [34889533898](https://github.com/sdast9/polysolve/actions/runs/34889533898)
+  on `iteration-callback`; the IPC push started nothing (a fork with no run
+  history), a manual dispatch did — Build run
+  [34889554146](https://github.com/sdast9/ipc-toolkit/actions/runs/34889554146)
+  on `semi-implicit-stiffness`; both outcomes are recorded below when they
+  complete. PolyFEM's recipe pins follow the two commits (identical sources;
+  `--build_info` reports `matches_declared_pin: true` for both against the
+  local overrides), so the declared and effective sources agree again.
 
 CI outcome at `1f6f826fa` (stage 1 publication; logs in
 `outputs/rb-12/20260914T133427Z-identity/ci-stage1/`): pre-commit
