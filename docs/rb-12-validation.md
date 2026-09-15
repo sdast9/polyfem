@@ -1,13 +1,16 @@
 # RB-12 — Repeatability, provenance and release discipline
 
-Date: 2026-09-14
-Status: stage 1 (run identity) validated within stated scope and published
-(`1f6f826fa`); stage 2 (controlled repeatability) characterized—limits
-documented; stage 3 (CI/release integration) in progress — the bounded
-checks are in, the native matrix outcome and the dependency forks' CI are
-recorded below as they arrive.
-Selected stage: all three, in order, on the plan's own scope; no dependency
-upgrade, upstream merge, release tag or feature promotion.
+Date: 2026-09-14 (closed 2026-09-15)
+Status: **validated within stated scope** — stage 1 (run identity)
+published `1f6f826fa`; stage 2 (controlled repeatability)
+characterized—limits documented; stage 3 (CI/release integration)
+published `f5f59db26`, `4f5acc773`, `fffc722b9`: the required lanes
+(pre-commit, Linux Release, macOS Release) are at their known baseline —
+green apart from the four CI-03–CI-06 scene groups, which stay tracked
+exceptions — the dependency forks' maintained branches are under CI, and
+the Houdini asset carries provenance. No dependency upgrade, upstream
+merge, release tag or feature promotion was made.
+Selected stage: all three, in order, on the plan's own scope.
 
 ## Contract and authorization
 
@@ -474,10 +477,35 @@ Validation: Release `[input_validation],[rb11_envelope],[linear_elastic],[run_ma
 `[assembler],[material_cache],[form_derivatives]` 4,771,486 / 83;
 `cli_contract`; five smokes within 3e-15 of the Stage 1 fingerprints,
 serial friction bit-identical (`smokes-stage3c/`); the 93-case RB-11 input
-matrix in verify mode (`rb11-matrix/`); Debug
-`[input_validation]` 168 / 18 and the full Debug selection
-(`debug-build/rb11-leftovers/debug-final.txt`). `von_mises_avg` and the
-other outputs are unchanged by these repairs.
+matrix in verify mode (`rb11-matrix/`, 93/93); Debug `[input_validation]`
+168 / 18 and the full Debug selection
+`[input_validation],[linear_elastic],[rb11_envelope],[run_manifest],[output]`
+1,461 / 36 (`debug-build/rb11-leftovers/debug-final.txt`). `von_mises_avg`
+and the other outputs are unchanged by these repairs. Published as
+`fffc722b9`; the isolated Debug tree was deleted afterwards (user decision).
+
+CI at `fffc722b9` (Build run 34903453744; pre-commit run 34903453923
+green; logs in `ci-stage3/polyfem-fffc722b9/`): **Linux GCC Release
+340/344 and macOS Release 339/343 — only the four known CI-03–CI-06
+scene groups** (`standard`, `contact_2d`, `contact_3d`, `triangle_data`);
+the derivative test now passes on GCC. The two required build lanes are
+therefore at their known baseline. **Linux Debug, macOS Debug and Windows
+Release: green** (every test, `[run_manifest]` and `cli_contract`
+included) — the first green Debug lanes since the RB-11 tests were added
+and the first green Windows lanes of the fork; **Windows Debug green as
+well**, so every lane is either green or at the four known scene groups. (At `20d7c360a` Linux Debug had exactly the six leftovers, macOS
+Debug the five aborts, Windows Release the one derivative failure; Windows
+Debug was cancelled by this push.)
+
+| Lane at `fffc722b9` | Result |
+| --- | --- |
+| pre-commit | green |
+| Linux GCC 13 Release | 340/344 — the four known scene groups |
+| Linux GCC 13 Debug | green (312/312) |
+| macOS AppleClang Release | 339/343 — the four known scene groups |
+| macOS AppleClang Debug | green (311/311) |
+| Windows MSVC 19.44 Release | green (328/328) |
+| Windows MSVC 19.44 Debug | green (309/309) |
 
 ### User decisions (2026-09-14)
 
@@ -494,22 +522,28 @@ other outputs are unchanged by these repairs.
 
 ## Next session handoff
 
-- Completed: stage 1 (published `1f6f826fa`), stage 2 characterization,
-  the stage-3 checks (`f5f59db26`), the dependency forks' CI triggers and
-  the pin bump (`4f5acc773`), the Houdini provenance block (`6f5fcdc`).
-  Pending: the GitHub matrix results for `4f5acc773` and the two dependency
-  runs (read and recorded in a follow-up documentation commit), and the
-  user's decisions on the CI scope: which lanes are required, and whether
-  the RB-11 Debug/Windows failures gate anything before their owner repairs
-  them.
-- Status: `in progress`; acceptance so far: the manifest identifies the
-  tested artifacts (yes), the repeat matrix and its declared tolerances are
-  saved (yes, two matrices), appropriate CI is run and linked (partially:
-  runs exist and are linked; native outcomes pending), README claims match
-  the measured scope (updated with this stage).
-- Decision required from the user: the CI scope above; whether the
-  per-thread memory growth (~125 MB per thread) deserves its own item.
+- Completed: stage 1 (`1f6f826fa`), stage 2 characterization, the stage-3
+  checks (`f5f59db26`), the dependency forks' CI triggers and the pin bump
+  (`4f5acc773`), the Houdini provenance block (`6f5fcdc`), the RB-11
+  leftovers on the Debug/Windows lanes (`fffc722b9`), the user's decisions
+  (required lanes, RB-24, Debug tree deleted). Every stage's GitHub run is
+  read and linked in the record.
+- Acceptance: the manifest identifies the tested artifacts (yes — every
+  evidence run's `run-manifest.json`, the `cli_contract` check on every
+  platform); the repeat matrix and its declared tolerances are saved (yes —
+  matrices A and B with the rule in `tools/rb12/README.md`); appropriate CI
+  is run and linked (yes — the required lanes at their known baseline, the
+  exceptions named with owners, the dependency forks' first native runs);
+  README claims match the measured scope (yes). Status `validated within
+  stated scope`; stage 2's findings are limits, not promises: threaded
+  friction runs reproduce only to the contact-model scale, one platform
+  and configuration were sampled.
+- Open, with owners: the four CI-03–CI-06 scene groups (the CI plan's
+  items, not RB-12's); RB-24 (per-thread memory, opened here); the IPC
+  fork's two upstream Windows lane failures (recorded, not the fork's
+  code); a cross-platform repeat matrix needs another host.
 - Next command: `ctest --test-dir build -R cli_contract -V` after any
   change to `main.cpp`, the manifest or the exit statuses;
   `python3 tools/rb12/repeat.py --binary build/PolyFEM_bin --output <fresh>`
-  for a new platform or build configuration.
+  for a new platform or build configuration. Next eligible items: RB-23,
+  RB-24, RB-06.
