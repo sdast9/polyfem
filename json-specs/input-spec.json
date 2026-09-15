@@ -1471,7 +1471,8 @@
             "max_weight",
             "eta",
             "lumping",
-            "nonlinear"
+            "nonlinear",
+            "budget"
         ],
         "doc": "Parameters for the AL for imposing Dirichlet BCs. If the bc are not imposable, we add $w\\|u - bc\\|^2$ to the energy ($u$ is the solution at the Dirichlet nodes and $bc$ are the Dirichlet values). After convergence, we try to impose bc again. The algorithm computes E + a/2*AL^2 - lambda AL, where E is the current energy (elastic, inertia, contact, etc.) and AL is the augmented Lagrangian energy. a starts at `initial_weight` and, in case DBC cannot be imposed, we update a as `a *= scaling` until `max_weight`. See IPC additional material"
     },
@@ -1539,6 +1540,54 @@
         "max": 1,
         "type": "float",
         "doc": "Tolerance for increasing the weight or updating the lagrangian"
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "max_passes",
+            "stagnation_window",
+            "progress_tolerance",
+            "snap_tolerance",
+            "drift_tolerance"
+        ],
+        "doc": "RB-07: opt-in bounds on the augmented-Lagrangian stage that prepares a geometrically safe snap to the prescribed Dirichlet values. Off by default (the loop is unbounded: a prescribed motion that can never be snapped -- a face driven through an obstacle, a body crushed to zero height -- runs forever, the multipliers growing at the weight ceiling until the subsolves degrade). When an exit fires the step ends with a named failure (exit status 1) whose record carries the pass history (weight, subsolve outcome, BC residual, the gate that blocked the snap, the collision-free fraction of the snap, the iterate's motion); the failed attempt is rolled back to the last accepted state (RB-06) and nothing of the step is published. Neither exit is a convergence criterion, an AL stationarity requirement or a gradient test, and neither changes the weights, the ceiling, the multiplier update or the snap checks; interrupted AL passes stay usable continuation iterates (PF-01)."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/max_passes",
+        "default": 0,
+        "min": 0,
+        "type": "int",
+        "doc": "Maximum number of AL passes (subsolves) per nonlinear solve; 0 = unbounded. Exhaustion is reported as 'pass_budget' with the last pass's state, so a residual that was still falling (budget too small for this step) can be told from one flat at the weight ceiling (the motion cannot be snapped from these states). Measured on the public cube-on-slab fixture (RB-07): a compatible 0.3 compression with a 1e4 initial weight and four-iteration interrupted passes needs 105 passes; an infeasible motion never snaps."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/stagnation_window",
+        "default": 0,
+        "min": 0,
+        "type": "int",
+        "doc": "Stagnation exit: end the stage when this many consecutive passes ran at the weight ceiling (no continuation left) and none of the progress signals moved over the window -- the BC residual did not fall by progress_tolerance, no snap gate (finite energy, validity, collision-free) turned from blocked to passing, the collision-free fraction of the snap did not rise by snap_tolerance and the iterate drifted by less than drift_tolerance of the largest constrained residual; 0 = never. The window is judged against the state before it (pass 0 is the state the stage started from). Measured on the public fixture (RB-07): the BC residual alone would have ended the compatible 105-pass continuation at every window of 3-20 passes, the geometric signals (a rising collision-free fraction, the iterate's drift) kept it running and it snapped; a bottom face driven into the slab stopped at pass 10 under a 3-pass window; a crushing motion keeps drifting and only the pass cap ends it. A continuation that converges slowly without moving these signals can still trip the exit, so choose the window from the run's own pass history (every manifest carries it); a false trigger costs the step, not the accepted state."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/progress_tolerance",
+        "default": 0.01,
+        "min": 0,
+        "type": "float",
+        "doc": "Relative decrease of the BC residual norm (sqrt of the summed squared constrained-DOF residuals, length units) over the stagnation window that counts as progress; dimensionless."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/snap_tolerance",
+        "default": 0.01,
+        "min": 0,
+        "type": "float",
+        "doc": "Increase of the collision-free fraction of the snap (the forms' step bound of the straight path from the current iterate to the prescribed values, 0..1) over the stagnation window that counts as progress."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/drift_tolerance",
+        "default": 0.01,
+        "min": 0,
+        "type": "float",
+        "doc": "Drift of the full-space iterate over the stagnation window (Linf norm), relative to the largest constrained-DOF residual at the window's ends, that counts as progress -- free coordinates still moving toward a feasible snap are progress the BC residual cannot see; with a zero constrained residual any drift counts. Dimensionless."
     },
     {
         "pointer": "/solver/contact",

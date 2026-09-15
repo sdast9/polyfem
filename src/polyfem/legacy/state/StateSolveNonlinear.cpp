@@ -441,6 +441,7 @@ namespace polyfem::legacy
 				this->solve_data.update_barrier_stiffness(sol);
 			},
 			stall_opts, on_stall);
+		al_solver.set_budget(ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(

@@ -98,6 +98,15 @@ namespace polyfem::varform
 					for (const char *key : {"iterations", "status", "outcome", "termination_reason", "restarts", "unchanged_restarts", "gradNorm", "energy"})
 						if (detail.contains(key))
 							entry[key] = detail[key];
+					// RB-07: what each AL pass left behind -- the BC residual
+					// (length units, sqrt of the summed squared constrained-DOF
+					// residuals), PF-07's relative progress, whether the weight
+					// was at its ceiling and the snap gate after the pass.
+					for (const char *key : {"al_pass", "al_at_ceiling", "al_bc_residual", "al_relative_progress", "al_rolled_back", "al_moved"})
+						if (detail.contains(key))
+							entry[key] = detail[key];
+					if (detail.contains("al_gate") && detail["al_gate"].is_object())
+						entry["al_gate"] = {{"blocked_by", detail["al_gate"].value("blocked_by", json(nullptr))}, {"ccd_fraction", detail["al_gate"].value("ccd_fraction", json(nullptr))}};
 				}
 				subsolves.push_back(entry);
 			}
@@ -106,6 +115,23 @@ namespace polyfem::varform
 				for (const char *key : {"outcome", "termination_reason", "restarts", "unchanged_restarts", "iterations", "status", "exception", "unavailable_reason"})
 					if (termination.contains(key))
 						compact_termination[key] = termination[key];
+			// RB-07: an AL stage that ended under its budget leaves its reason
+			// and pass history (al_stagnation) in the subsolve state at failure.
+			json al_stagnation = nullptr;
+			if (termination.is_object())
+			{
+				const json *source = &termination;
+				if (termination.contains("subsolve_state_at_failure") && termination["subsolve_state_at_failure"].is_object())
+					source = &termination["subsolve_state_at_failure"];
+				if (source->contains("al_stagnation") && (*source)["al_stagnation"].is_object())
+				{
+					const json &details = (*source)["al_stagnation"];
+					al_stagnation = json::object();
+					for (const char *key : {"reason", "passes", "window", "weight_ceiling", "budget", "progress", "last_pass", "reference_pass", "history"})
+						if (details.contains(key))
+							al_stagnation[key] = details[key];
+				}
+			}
 			json compact_lagging = json::object();
 			if (lagging.is_object())
 				for (const char *key : {"state", "iteration", "updated_lag_residual_norm_objective", "tolerance"})
@@ -121,6 +147,7 @@ namespace polyfem::varform
 				{"subsolves", subsolves},
 				{"stall_retunes", stall_retunes},
 				{"lagging", compact_lagging},
+				{"al_stagnation", al_stagnation},
 				{"error", error.empty() ? json(nullptr) : json(error)}};
 			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
 			{
@@ -2189,6 +2216,8 @@ namespace polyfem::varform
 					this->solve_data_.update_barrier_stiffness(sol);
 				},
 				stall_opts, on_stall);
+			// RB-07: opt-in AL pass budget / stagnation exit (off by default).
+			al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"]));
 
 			al_solver.post_subsolve = [&](const double al_weight) {
 				diagnostic_termination = al_solver.info();
@@ -2208,6 +2237,14 @@ namespace polyfem::varform
 			{
 				al_solver.solve_al(nl_problem, sol,
 								   args["solver"]["augmented_lagrangian"]["nonlinear"], args["solver"]["linear"], units.characteristic_length());
+			}
+			catch (const solver::ALBudgetExhausted &e)
+			{
+				// RB-07: the stage's reason and pass history travel with the
+				// subsolve state into the failure record and the manifest.
+				diagnostic_termination = al_solver.info();
+				diagnostic_termination["al_stagnation"] = e.details();
+				throw;
 			}
 			catch (...)
 			{

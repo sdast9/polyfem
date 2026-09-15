@@ -123,6 +123,19 @@ namespace polyfem::solver
 
 	double FullNLProblem::max_step_size(const TVector &x0, const TVector &x1)
 	{
+		const double step = probe_step_bound(x0, x1);
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::StepBound;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observation.step_bound = step;
+		observe(observation);
+		return step;
+	}
+
+	double FullNLProblem::probe_step_bound(const TVector &x0, const TVector &x1)
+	{
 		// Sequential clamping: each form bounds the step over the interval
 		// already clamped by the forms before it, instead of the full
 		// [x0, x1]. Forms are ordered elastic-first, contact-last, so the
@@ -163,13 +176,6 @@ namespace polyfem::solver
 				break;
 			}
 		}
-
-		IterationObservation observation;
-		observation.kind = IterationObservation::Kind::StepBound;
-		observation.x0 = &x0;
-		observation.x1 = &x1;
-		observation.step_bound = step;
-		observe(observation);
 		return step;
 	}
 

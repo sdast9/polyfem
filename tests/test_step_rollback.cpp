@@ -22,6 +22,7 @@
 
 #include <polyfem/State.hpp>
 #include <polyfem/solver/FailureInjection.hpp>
+#include <polyfem/solver/ALSolver.hpp>
 #include <polyfem/solver/NLProblem.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/solver/forms/FrictionForm.hpp>
@@ -606,4 +607,94 @@ TEST_CASE("A publication failure after an accepted solve publishes nothing of th
 	REQUIRE(manifest["steps"].size() == 2);
 	CHECK(manifest["steps"][1]["outcome"] == "accepted");
 	CHECK(!manifest["steps"][1].contains("rollback"));
+}
+
+// RB-07: an AL stage that ends under its opt-in budget is a named failure of
+// the attempt like any other -- rolled back, unpublished, on record -- and
+// the prescribed motion that cannot be snapped is the public fixture's top
+// face driven below the slab at step 2.
+TEST_CASE("An AL stage ended by its budget is rolled back to the accepted state and recorded", "[rollback][scene][al_budget]")
+{
+	logger().set_level(spdlog::level::warn);
+	const auto dir = scratch_dir("rb07-al-budget");
+	const json budget = {{"max_passes", 30}, {"stagnation_window", 3}};
+	// Step 1 is the fixture's own motion (-0.0625); from t = .3 the target
+	// jumps 1.5 below that, through the slab at z = -0.02.
+	const json motion = json::array({"0", "0", "-0.25*t + if(t-0.3, -1.5, 0)"});
+
+	Run control;
+	{
+		json args = scene_args(dir / "control", json::object());
+		args["/boundary_conditions/dirichlet_boundary/0/value"_json_pointer] = motion;
+		control.begin(args);
+		control.solve(1);
+		control.advance(1);
+	}
+
+	json args = scene_args(dir / "budget", json::object());
+	args["/boundary_conditions/dirichlet_boundary/0/value"_json_pointer] = motion;
+	args["/solver/augmented_lagrangian/budget"_json_pointer] = budget;
+	Run run;
+	run.begin(args);
+	run.solve(1);
+	run.advance(1);
+	REQUIRE(run.endpoints[0] == control.endpoints[0]);
+
+	const Eigen::VectorXd before = run.sol;
+	const json fingerprint_before = test::VarFormTestAccess::attempt_state_fingerprint(*run.form, before);
+	const auto &integrator = *test::VarFormTestAccess::solve_data(*run.form).time_integrator;
+	const Eigen::VectorXd x_prev = integrator.x_prev(), v_prev = integrator.v_prev(), a_prev = integrator.a_prev();
+	CHECK_THROWS_AS(run.solve(2), ALBudgetExhausted);
+
+	// The accepted state is back and nothing of step 2 was published.
+	CHECK(run.sol == before);
+	CHECK(test::VarFormTestAccess::attempt_state_fingerprint(*run.form, run.sol) == fingerprint_before);
+	CHECK(integrator.x_prev() == x_prev);
+	CHECK(integrator.v_prev() == v_prev);
+	CHECK(integrator.a_prev() == a_prev);
+	CHECK(run.callbacks == std::vector<int>{0, 1});
+	CHECK(!std::filesystem::exists(dir / "budget" / "step_2.vtu"));
+
+	// The manifest's step record: the failed attempt in the AL phase with
+	// the stage's reason, its pass history and the verified rollback.
+	const json manifest = read_json(dir / "budget" / "run-manifest.json");
+	REQUIRE(manifest["steps"].size() == 2);
+	const json &step = manifest["steps"][1];
+	CHECK(step["outcome"] == "failed_attempt");
+	CHECK(step["phase"] == "augmented_lagrangian");
+	CHECK(step["rollback"]["performed"] == true);
+	CHECK(step["rollback"]["verified"] == true);
+	REQUIRE(step["al_stagnation"].is_object());
+	const json &stagnation = step["al_stagnation"];
+	CHECK((stagnation["reason"] == "stagnation" || stagnation["reason"] == "pass_budget"));
+	const int passes = stagnation["passes"].get<int>();
+	CHECK(passes >= 1);
+	CHECK(passes <= 30);
+	REQUIRE(stagnation["history"].size() == size_t(passes) + 1);
+	CHECK(stagnation["last_pass"]["gate"]["feasible"] == false);
+	CHECK(stagnation["last_pass"]["gate"]["blocked_by"].is_string());
+	int al_subsolves = 0;
+	for (const json &subsolve : step["subsolves"])
+		if (subsolve["type"] == "al")
+		{
+			++al_subsolves;
+			CHECK(subsolve.contains("al_bc_residual"));
+			CHECK(subsolve.contains("al_gate"));
+		}
+	CHECK(al_subsolves == passes);
+	CHECK_THAT(step["error"].get<std::string>(), ContainsSubstring("Augmented-Lagrangian stage"));
+
+	// The RB-04 failure record names the AL phase and announces the rollback.
+	{
+		std::ifstream stream(dir / "budget" / "physical-diagnostics.jsonl");
+		std::string line, last;
+		while (std::getline(stream, line))
+			if (!line.empty())
+				last = line;
+		const json record = json::parse(last);
+		CHECK(record["outcome"] == "failed_attempt");
+		CHECK(record["step"] == 2);
+		CHECK(record["phase"] == "augmented_lagrangian");
+		CHECK(record["rollback"]["performed"] == "after this record");
+	}
 }

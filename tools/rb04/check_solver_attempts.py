@@ -7,8 +7,9 @@ every PolySolve minimize with a `start` row (iteration 0), accepted rows are
 numbered consecutively, every accepted fraction lies in (0, step_bound],
 rejected rows carry a finite step bound, and the endpoint record's attempt
 summary, last proposal and termination iteration count agree with the rows.
-Failed attempts must carry the last internal iterate. Norms are objective-side
-bookkeeping; they certify nothing physical.
+Failed attempts must carry the last internal iterate (equal to the retained
+coordinates only for an AL stage ended by its RB-07 budget, which fails between
+passes). Norms are objective-side bookkeeping; they certify nothing physical.
 
 RB-05: an `aborted` row is a proposal whose line search an exception abandoned
 (a broad-phase resource failure, an allocation failure). It may appear only in
@@ -105,7 +106,17 @@ def check_run(directory):
         elif accepted_rows:
             iterate = endpoint['last_internal_iterate']
             assert iterate['value'] is not None and len(iterate['value']) == len(endpoint['endpoint']['value'])
-            assert iterate['iteration'] >= 1 and iterate['value'] != endpoint['endpoint']['value']
+            assert iterate['iteration'] >= 1
+            # RB-07: an AL stage ended by its budget fails between passes, so
+            # the retained coordinates are the last pass's accepted iterate;
+            # every other failure strikes inside a minimize and leaves the
+            # caller's coordinates behind the last internal iterate.
+            al_budget_exit = endpoint['phase'] == 'augmented_lagrangian' and isinstance(
+                endpoint['termination'].get('subsolve_state_at_failure', {}).get('al_stagnation'), dict)
+            if al_budget_exit:
+                assert iterate['value'] == endpoint['endpoint']['value']
+            else:
+                assert iterate['value'] != endpoint['endpoint']['value']
         else:
             # Failed before any accepted Newton iterate (RB-05: an aborted
             # first sweep): the record says so instead of carrying one.

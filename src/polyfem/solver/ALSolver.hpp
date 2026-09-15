@@ -8,6 +8,10 @@
 #include <Eigen/Core>
 
 #include <functional>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace polyfem::solver
@@ -22,6 +26,42 @@ namespace polyfem::solver
 		int min_iterations = 5;        ///< Do not judge stalls before this many iterations
 		int soft_iteration_limit = -1; ///< Restart after this many iterations (-1 to disable)
 		int max_restarts = 5;          ///< Maximum number of restarts per solve
+	};
+
+	/// @brief RB-07: opt-in bounds on the augmented-Lagrangian feasibility
+	///        preparation (solver/augmented_lagrangian/budget). Both exits are
+	///        off by default, which is the historical unbounded loop; when one
+	///        fires the stage ends with ALBudgetExhausted, a named failure that
+	///        is never a convergence claim. The pass cap is a plain budget; the
+	///        stagnation exit needs a window of passes at the weight ceiling
+	///        (no continuation left) over which none of the measured progress
+	///        signals moved: the BC residual, the snap's feasibility gates, the
+	///        collision-free fraction of the snap and the iterate itself.
+	struct ALBudgetOptions
+	{
+		int max_passes = 0;               ///< AL passes (subsolves) per solve; 0 = unbounded
+		int stagnation_window = 0;        ///< Consecutive passes at the weight ceiling without progress that end the stage; 0 = never
+		double progress_tolerance = 1e-2; ///< Relative decrease of the BC residual norm over the window that counts as progress (dimensionless)
+		double snap_tolerance = 1e-2;     ///< Increase of the collision-free fraction of the snap over the window that counts as progress (fraction of the snap)
+		double drift_tolerance = 1e-2;    ///< Drift of the iterate over the window, relative to the largest constrained-DOF residual, that counts as progress (dimensionless)
+		bool enabled() const { return max_passes > 0 || stagnation_window > 0; }
+		/// @brief Reads al_args["budget"] when present; every key optional.
+		static ALBudgetOptions from_json(const json &al_args);
+		json to_json() const;
+	};
+
+	/// @brief RB-07: the AL stage ended under its configured budget. Carries
+	///        the structured reason (pass history, the reference and last pass
+	///        records, tolerances) for the failure record and the manifest.
+	class ALBudgetExhausted : public std::runtime_error
+	{
+	public:
+		ALBudgetExhausted(const std::string &what, json details)
+			: std::runtime_error(what), details_(std::move(details)) {}
+		const json &details() const { return details_; }
+
+	private:
+		json details_;
 	};
 
 	class ALSolver
@@ -76,6 +116,14 @@ namespace polyfem::solver
 
 		std::function<void(const double)> post_subsolve = [](const double) {};
 
+		/// @brief RB-07: install the opt-in AL budget (default: none).
+		void set_budget(const ALBudgetOptions &budget) { budget_ = budget; }
+		const ALBudgetOptions &budget() const { return budget_; }
+		/// @brief RB-07: one record per AL pass of the last solve_al call
+		///        (pass 0 is the state the stage started from), also carried
+		///        by info()["al_history"] when the stage fails.
+		const json &al_history() const { return al_history_; }
+
 		/// @brief Optional filter applied to every Newton update direction
 		///        (installed on the nonlinear solver for each subsolve).
 		///        The objective derivative remains gradient.dot(direction).
@@ -103,6 +151,30 @@ namespace polyfem::solver
 
 		// TODO: replace this with a member function
 		std::function<void(const Eigen::VectorXd &)> update_barrier_stiffness;
+
+		/// @brief RB-07: the three feasibility gates of the snap from the
+		///        current full-space iterate to the prescribed values, the
+		///        collision-free fraction of that snap and the gate that
+		///        blocked it. Without a budget the gates are evaluated with
+		///        the historical short circuit (a later gate is not evaluated
+		///        once an earlier one fails, and reads as unknown); with a
+		///        budget every gate is evaluated and the fraction probed.
+		struct SnapGate
+		{
+			bool finite = false;
+			std::optional<bool> valid, collision_free;
+			bool feasible = false;
+			double ccd_fraction = std::numeric_limits<double>::quiet_NaN();
+			std::string blocked_by; ///< "", "energy", "validity" or "collision"
+			json to_json() const;
+		};
+		SnapGate snap_gate(NLProblem &nl_problem, const Eigen::VectorXd &sol, const Eigen::VectorXd &tmp_sol) const;
+		/// @brief RB-07: throws ALBudgetExhausted when the completed passes
+		///        exhaust the pass cap or form a stagnant window.
+		void check_budget(NLProblem &nl_problem, const int passes) const;
+
+		ALBudgetOptions budget_;
+		json al_history_ = json::array();
 
 		/// @brief Stall detection and restart options
 		const StallRestartOptions stall_opts;

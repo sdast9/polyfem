@@ -620,6 +620,16 @@ namespace polyfem::solver
 		return max_step;
 	}
 
+	double NLProblem::probe_step_bound(const TVector &x0, const TVector &x1)
+	{
+		double max_step = FullNLProblem::probe_step_bound(reduced_to_full(x0), reduced_to_full(x1));
+
+		if (penalty_problem_ && full_size() == current_size())
+			max_step = std::min(max_step, penalty_problem_->probe_step_bound(x0, x1));
+
+		return max_step;
+	}
+
 	bool NLProblem::is_step_valid(const TVector &x0, const TVector &x1)
 	{
 		bool valid = FullNLProblem::is_step_valid(reduced_to_full(x0), reduced_to_full(x1));

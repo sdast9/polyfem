@@ -3,10 +3,142 @@
 #include <polyfem/utils/Logger.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace polyfem::solver
 {
+	ALBudgetOptions ALBudgetOptions::from_json(const json &al_args)
+	{
+		ALBudgetOptions budget;
+		if (!al_args.is_object() || !al_args.contains("budget") || !al_args["budget"].is_object())
+			return budget;
+		const json &b = al_args["budget"];
+		budget.max_passes = b.value("max_passes", budget.max_passes);
+		budget.stagnation_window = b.value("stagnation_window", budget.stagnation_window);
+		budget.progress_tolerance = b.value("progress_tolerance", budget.progress_tolerance);
+		budget.snap_tolerance = b.value("snap_tolerance", budget.snap_tolerance);
+		budget.drift_tolerance = b.value("drift_tolerance", budget.drift_tolerance);
+		if (budget.max_passes < 0 || budget.stagnation_window < 0 || budget.progress_tolerance < 0
+			|| budget.snap_tolerance < 0 || budget.drift_tolerance < 0)
+			log_and_throw_error("solver/augmented_lagrangian/budget: max_passes, stagnation_window and the tolerances must be nonnegative");
+		return budget;
+	}
+
+	json ALBudgetOptions::to_json() const
+	{
+		return {{"max_passes", max_passes}, {"stagnation_window", stagnation_window}, {"progress_tolerance", progress_tolerance}, {"snap_tolerance", snap_tolerance}, {"drift_tolerance", drift_tolerance}, {"enabled", enabled()}};
+	}
+
+	json ALSolver::SnapGate::to_json() const
+	{
+		const auto opt = [](const std::optional<bool> &v) { return v.has_value() ? json(*v) : json(nullptr); };
+		return {{"finite_energy", finite}, {"valid", opt(valid)}, {"collision_free", opt(collision_free)}, {"feasible", feasible}, {"blocked_by", blocked_by.empty() ? json(nullptr) : json(blocked_by)}, {"ccd_fraction", std::isfinite(ccd_fraction) ? json(ccd_fraction) : json(nullptr)}};
+	}
+
+	ALSolver::SnapGate ALSolver::snap_gate(NLProblem &nl_problem, const Eigen::VectorXd &sol, const Eigen::VectorXd &tmp_sol) const
+	{
+		// The snap: from the current full-space iterate (sol) straight to the
+		// prescribed values (tmp_sol in reduced coordinates). Same three checks
+		// as the historical loop condition, in its order.
+		SnapGate gate;
+		gate.finite = std::isfinite(nl_problem.value(tmp_sol));
+		if (budget_.enabled())
+		{
+			// Every gate for the record, plus the collision-free fraction of
+			// the snap when it is blocked (unobserved: not a Newton trial).
+			gate.valid = nl_problem.is_step_valid(sol, tmp_sol);
+			gate.collision_free = nl_problem.is_step_collision_free(sol, tmp_sol);
+			gate.feasible = gate.finite && *gate.valid && *gate.collision_free;
+			if (!gate.feasible)
+				gate.ccd_fraction = nl_problem.probe_step_bound(sol, tmp_sol);
+		}
+		else
+		{
+			// Historical short circuit: nothing more is evaluated once a gate
+			// fails, so the later verdicts are unknown.
+			if (gate.finite)
+				gate.valid = nl_problem.is_step_valid(sol, tmp_sol);
+			if (gate.finite && *gate.valid)
+				gate.collision_free = nl_problem.is_step_collision_free(sol, tmp_sol);
+			gate.feasible = gate.finite && gate.valid.value_or(false) && gate.collision_free.value_or(false);
+		}
+		if (!gate.finite)
+			gate.blocked_by = "energy";
+		else if (gate.valid.has_value() && !*gate.valid)
+			gate.blocked_by = "validity";
+		else if (gate.collision_free.has_value() && !*gate.collision_free)
+			gate.blocked_by = "collision";
+		return gate;
+	}
+
+	void ALSolver::check_budget(NLProblem &nl_problem, const int passes) const
+	{
+		if (!budget_.enabled() || passes < 1)
+			return;
+		assert(al_history_.size() == size_t(passes) + 1);
+		const json &last = al_history_[passes];
+		const auto number = [](const json &record, const char *key) {
+			return record.contains(key) && record[key].is_number() ? record[key].get<double>() : std::numeric_limits<double>::quiet_NaN();
+		};
+		const auto fail = [&](const std::string &reason, const std::string &what, json details) {
+			details["reason"] = reason;
+			details["budget"] = budget_.to_json();
+			details["passes"] = passes;
+			details["weight_ceiling"] = max_al_weight;
+			details["last_pass"] = last;
+			details["history"] = al_history_;
+			details["scope"] = "The augmented-Lagrangian stage prepares a geometrically safe snap to the prescribed values; it ended under solver/augmented_lagrangian/budget before the snap became feasible. Not a convergence claim and not a solver error: the last pass's subsolve outcome and the gate that blocked the snap are in last_pass. The failed attempt is rolled back by the step transaction (RB-06) where one is installed; nothing of the step is published.";
+			nl_problem.line_search_end();
+			logger().error("{}", what);
+			throw ALBudgetExhausted(what, details);
+		};
+		const auto gate_text = [&](const json &record) {
+			const json &gate = record["gate"];
+			return fmt::format("snap blocked by {} (finite energy {}, valid {}, collision-free {}, CCD fraction {})",
+							   gate["blocked_by"].is_string() ? gate["blocked_by"].get<std::string>() : std::string("nothing"),
+							   gate["finite_energy"].dump(), gate["valid"].dump(), gate["collision_free"].dump(), gate["ccd_fraction"].dump());
+		};
+		if (budget_.max_passes > 0 && passes >= budget_.max_passes)
+		{
+			fail("pass_budget",
+				 fmt::format("Augmented-Lagrangian stage exhausted its pass budget: {} passes (solver/augmented_lagrangian/budget/max_passes = {}) without a feasible snap to the prescribed values. Last pass: weight {:g} (ceiling {:g}), subsolve {} after {} iterations, BC residual {:.6g} (started at {:.6g}), {}. Read the pass history in the failure record; a residual still falling with the gates changing means the budget is too small for this step, a flat residual at the ceiling means the prescribed motion cannot be snapped from this state.",
+							 passes, budget_.max_passes, number(last, "weight"), max_al_weight,
+							 last["subsolve"]["outcome"].is_string() ? last["subsolve"]["outcome"].get<std::string>() : std::string("?"),
+							 last["subsolve"]["iterations"].dump(), number(last, "bc_residual_carried"), number(al_history_[0], "bc_residual_carried"), gate_text(last)),
+				 json::object());
+		}
+		const int W = budget_.stagnation_window;
+		if (W <= 0 || passes < W)
+			return;
+		for (int j = passes - W + 1; j <= passes; ++j)
+			if (!al_history_[j].value("at_ceiling", false))
+				return;
+		const json &ref = al_history_[passes - W];
+		const double e_ref = number(ref, "bc_residual_carried"), e_now = number(last, "bc_residual_carried");
+		const bool bc_progress = std::isfinite(e_ref) && std::isfinite(e_now) && e_ref > 0 && e_now <= (1 - budget_.progress_tolerance) * e_ref;
+		bool gate_progress = false;
+		for (const char *key : {"finite_energy", "valid", "collision_free"})
+		{
+			const json &before = ref["gate"][key], &after = last["gate"][key];
+			if (before.is_boolean() && after.is_boolean() && !before.get<bool>() && after.get<bool>())
+				gate_progress = true;
+		}
+		const double f_ref = number(ref["gate"], "ccd_fraction"), f_now = number(last["gate"], "ccd_fraction");
+		const bool snap_progress = std::isfinite(f_ref) && std::isfinite(f_now) && f_now >= f_ref + budget_.snap_tolerance;
+		const double drift = number(last, "drift_over_window"), snap_linf = std::max(number(last, "snap_linf"), number(ref, "snap_linf"));
+		const bool drift_progress = std::isfinite(drift) && (snap_linf > 0 ? drift > budget_.drift_tolerance * snap_linf : drift > 0);
+		if (bc_progress || gate_progress || snap_progress || drift_progress)
+			return;
+		fail("stagnation",
+			 fmt::format("Augmented-Lagrangian stage stagnated: {} consecutive passes at the weight ceiling {:g} (passes {}-{}) made no measurable progress toward a feasible snap -- BC residual {:.6g} -> {:.6g} (relative decrease {:.3g}, progress needs >= {:g}), {} throughout (CCD fraction {} -> {}, progress needs an increase >= {:g}), iterate drift {:.3g} against the largest constrained residual {:.3g} (progress needs > {:g} of it). The prescribed motion cannot be snapped from the states this continuation reaches; the last subsolve {} after {} iterations.",
+						 W, max_al_weight, passes - W + 1, passes, e_ref, e_now, e_ref > 0 ? (e_ref - e_now) / e_ref : 0.0, budget_.progress_tolerance,
+						 gate_text(last), ref["gate"]["ccd_fraction"].dump(), last["gate"]["ccd_fraction"].dump(), budget_.snap_tolerance,
+						 drift, snap_linf, budget_.drift_tolerance,
+						 last["subsolve"]["outcome"].is_string() ? last["subsolve"]["outcome"].get<std::string>() : std::string("?"), last["subsolve"]["iterations"].dump()),
+			 {{"window", W}, {"reference_pass", ref}, {"progress", {{"bc_residual", bc_progress}, {"gates", gate_progress}, {"ccd_fraction", snap_progress}, {"drift", drift_progress}}}});
+	}
+
 	ALSolver::ALSolver(
 		const std::vector<std::shared_ptr<AugmentedLagrangianForm>> &alagr_form,
 		const double initial_al_weight,
@@ -254,10 +386,40 @@ namespace polyfem::solver
 
 		logger().debug("Initial error = {}", current_error);
 
-		while (!std::isfinite(nl_problem.value(tmp_sol))
-			   || !nl_problem.is_step_valid(sol, tmp_sol)
-			   || !nl_problem.is_step_collision_free(sol, tmp_sol))
+		// RB-07: the largest constrained-DOF residual of the carried state
+		// (the longest jump the snap would make), for the drift measure.
+		const auto snap_linf = [&](const Eigen::VectorXd &x) {
+			double linf = 0;
+			for (const auto &f : alagr_forms)
+			{
+				const Eigen::VectorXd residual = f->constraint_matrix() * x - f->constraint_value();
+				if (residual.size() > 0)
+					linf = std::max(linf, residual.lpNorm<Eigen::Infinity>());
+			}
+			return linf;
+		};
+		const auto multiplier_norm = [&]() {
+			double norm = 0;
+			for (const auto &f : alagr_forms)
+				norm += f->lagrange_multipliers().norm();
+			return norm;
+		};
+		const auto finite_or_null = [](const double v) { return std::isfinite(v) ? json(v) : json(nullptr); };
+
+		// Pass 0: the state the stage starts from, against which the first
+		// window of the stagnation exit is judged.
+		SnapGate gate = snap_gate(nl_problem, sol, tmp_sol);
+		al_history_ = json::array();
+		al_history_.push_back({{"pass", 0}, {"weight", al_weight}, {"at_ceiling", al_weight >= max_al_weight}, {"subsolve", nullptr}, {"bc_residual", std::sqrt(current_error)}, {"bc_residual_carried", std::sqrt(current_error)}, {"relative_progress", nullptr}, {"rolled_back", false}, {"gate", gate.to_json()}, {"snap_linf", snap_linf(sol)}, {"moved", 0.0}, {"drift_over_window", nullptr}, {"multiplier_norm", multiplier_norm()}, {"wall_seconds", 0.0}});
+		std::vector<Eigen::VectorXd> carried; ///< the carried full-space state after each pass (pass 0 = start), for the drift measure
+		if (budget_.enabled())
+			carried.push_back(sol);
+
+		while (!gate.feasible)
 		{
+			check_budget(nl_problem, al_steps); // RB-07: throws ALBudgetExhausted (opt-in; never fires at the defaults)
+			const auto pass_start = std::chrono::steady_clock::now();
+			const double pass_weight = al_weight;
 			nl_problem.line_search_end();
 
 			nl_problem.use_full_size();
@@ -313,10 +475,12 @@ namespace polyfem::solver
 
 			logger().debug("Current eta = {}", eta);
 
+			bool rolled_back = false;
 			if (eta < 0)
 			{
 				logger().debug("Higher error than initial, increase weight and revert to previous solution");
 				sol = initial_sol;
+				rolled_back = true;
 			}
 
 			nl_problem.use_reduced_size();
@@ -329,14 +493,40 @@ namespace polyfem::solver
 			for (auto &f : alagr_forms)
 				f->update_lagrangian(sol, al_weight);
 
+			// RB-07: the snap's gates after this pass (the loop condition),
+			// recorded with the pass. Same evaluations as before in the same
+			// place of the sequence: after the multiplier update, before the
+			// subsolve callback.
+			gate = snap_gate(nl_problem, sol, tmp_sol);
+			++al_steps;
+			double moved = 0, drift = std::numeric_limits<double>::quiet_NaN();
+			if (budget_.enabled())
+			{
+				moved = (sol - carried.back()).lpNorm<Eigen::Infinity>();
+				carried.push_back(sol);
+				if (budget_.stagnation_window > 0 && int(carried.size()) > budget_.stagnation_window)
+					drift = (sol - carried[carried.size() - 1 - budget_.stagnation_window]).lpNorm<Eigen::Infinity>();
+			}
+			const double carried_error = rolled_back ? initial_error : current_error;
+			json subsolve = {{"outcome", solve_info_.value("outcome", std::string("failed"))}, {"termination_reason", solve_info_.contains("termination_reason") ? solve_info_["termination_reason"] : json(nullptr)}, {"iterations", solve_info_.contains("iterations") ? solve_info_["iterations"] : json(nullptr)}, {"restarts", solve_info_.contains("restarts") ? solve_info_["restarts"] : json(nullptr)}, {"error", solve_info_.contains("error") ? solve_info_["error"] : json(nullptr)}};
+			al_history_.push_back({{"pass", al_steps}, {"weight", pass_weight}, {"at_ceiling", pass_weight >= max_al_weight}, {"subsolve", subsolve}, {"bc_residual", std::sqrt(current_error)}, {"bc_residual_carried", std::sqrt(carried_error)}, {"relative_progress", finite_or_null(eta)}, {"rolled_back", rolled_back}, {"gate", gate.to_json()}, {"snap_linf", snap_linf(sol)}, {"moved", moved}, {"drift_over_window", finite_or_null(drift)}, {"multiplier_norm", multiplier_norm()}, {"wall_seconds", std::chrono::duration<double>(std::chrono::steady_clock::now() - pass_start).count()}});
+
 			solve_info_["al_initial_error"] = initial_error;
 			solve_info_["al_current_error"] = current_error;
 			solve_info_["al_relative_progress"] = eta;
 			solve_info_["al_next_weight"] = al_weight;
+			solve_info_["al_pass"] = al_steps;
+			solve_info_["al_weight"] = pass_weight;
+			solve_info_["al_at_ceiling"] = pass_weight >= max_al_weight;
+			solve_info_["al_bc_residual"] = std::sqrt(carried_error);
+			solve_info_["al_rolled_back"] = rolled_back;
+			solve_info_["al_gate"] = gate.to_json();
+			solve_info_["al_moved"] = moved;
 			post_subsolve(al_weight);
-			++al_steps;
 		}
 		nl_problem.line_search_end();
+		if (al_steps > 0)
+			logger().debug("Augmented-Lagrangian stage: feasible snap after {} pass(es)", al_steps);
 	}
 
 	void ALSolver::solve_reduced(NLProblem &nl_problem, Eigen::MatrixXd &sol,

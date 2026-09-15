@@ -784,3 +784,309 @@ TEST_CASE("Iteration observer reports proposals, bounds and accepted iterates wi
 	solve();
 	CHECK(events.empty());
 }
+
+// ---------------------------------------------------------------------------
+// RB-07: bounded AL stagnation handling. The budget is opt-in and off by
+// default; a compatible continuation under a budget it does not exhaust is
+// unchanged, an infeasible one ends with a named failure carrying the pass
+// history instead of looping forever.
+namespace
+{
+	struct TwoQuarticsForm : Form
+	{
+		std::string name() const override { return "two-quartics"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return .25 * x.array().pow(4).sum(); }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override { g = x.array().cube(); }
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override
+		{
+			h.resize(2, 2);
+			h.setZero();
+			for (int i = 0; i < 2; ++i)
+				h.coeffRef(i, i) = 3 * x[i] * x[i];
+		}
+	};
+
+	// Synthetic geometric gate on the prescribed coordinate: the snap is safe
+	// once the free coordinate is below `open_below` (never, when negative).
+	struct GatedSnapProblem : NLProblem
+	{
+		double open_below;
+		GatedSnapProblem(const std::vector<std::shared_ptr<Form>> &forms, std::shared_ptr<AugmentedLagrangianForm> bc, const StiffnessMatrix &mass, double open_below)
+			: NLProblem(2, 0, forms, {bc}, polysolve::linear::Solver::create(linear, logger()), 1, 1, mass, 1), open_below(open_below) {}
+		bool is_step_collision_free(const TVector &from, const TVector &to) override
+		{
+			if (from.size() == 2 && to.size() == 1)
+				return from[1] < open_below;
+			return NLProblem::is_step_collision_free(from, to);
+		}
+	};
+
+	// A synthetic obstacle on the prescribed coordinate at `wall`: a log
+	// barrier of the distance to the wall that the AL cannot push through,
+	// with the CCD-like step bound and collision check the real contact form
+	// provides (the energy stays finite on the far side, like the unsigned
+	// distance of a penetrating configuration; only the sweep is blocked).
+	// Not a contact model; it reproduces the shape of the incompatible-motion
+	// fixture (the constraint target lies behind the wall).
+	struct WallForm : Form
+	{
+		double wall = .5, kappa = .1;
+		std::string name() const override { return "wall"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return -kappa * std::log(std::abs(x[0] - wall)); }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override
+		{
+			g = Eigen::VectorXd::Zero(x.size());
+			g[0] = -kappa / (x[0] - wall);
+		}
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override
+		{
+			h.resize(x.size(), x.size());
+			h.setZero();
+			h.coeffRef(0, 0) = kappa / std::pow(x[0] - wall, 2);
+		}
+		bool is_step_collision_free(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const override
+		{
+			return (x0[0] - wall) * (x1[0] - wall) > 0;
+		}
+		double max_step_size(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const override
+		{
+			if (is_step_collision_free(x0, x1))
+				return 1;
+			return std::max(0.0, (x0[0] - wall) / (x0[0] - x1[0]) * .9);
+		}
+	};
+
+	// A strictly convex free coordinate (the quartic's Hessian vanishes at
+	// its minimum and sends Newton to gradient descent, which cannot reach a
+	// 1e-12 gradient next to the wall's roundoff).
+	struct QuadraticFreeForm : Form
+	{
+		std::string name() const override { return "quadratic-free"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return .5 * x[1] * x[1]; }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override
+		{
+			g = Eigen::VectorXd::Zero(x.size());
+			g[1] = x[1];
+		}
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override
+		{
+			h.resize(x.size(), x.size());
+			h.setZero();
+			h.coeffRef(1, 1) = 1;
+		}
+	};
+
+	StiffnessMatrix identity2()
+	{
+		StiffnessMatrix mass(2, 2);
+		mass.setIdentity();
+		return mass;
+	}
+
+	json wall_parameters()
+	{
+		json params = parameters();
+		params["grad_norm_tol"] = 1e-8;
+		return params;
+	}
+} // namespace
+
+TEST_CASE("AL budget options are off by default and read from the AL block", "[al_solver][al_budget]")
+{
+	CHECK_FALSE(ALBudgetOptions().enabled());
+	CHECK_FALSE(ALBudgetOptions::from_json(json::object()).enabled());
+	CHECK_FALSE(ALBudgetOptions::from_json({{"budget", json::object()}}).enabled());
+	const auto budget = ALBudgetOptions::from_json({{"budget", {{"max_passes", 7}, {"stagnation_window", 2}, {"progress_tolerance", .05}}}});
+	CHECK(budget.enabled());
+	CHECK(budget.max_passes == 7);
+	CHECK(budget.stagnation_window == 2);
+	CHECK(budget.progress_tolerance == .05);
+	CHECK(budget.snap_tolerance == 1e-2);
+	CHECK(budget.drift_tolerance == 1e-2);
+	CHECK_THROWS(ALBudgetOptions::from_json({{"budget", {{"max_passes", -1}}}}));
+	ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+	CHECK_FALSE(solver.budget().enabled());
+}
+
+TEST_CASE("AL pass budget ends an infeasible continuation with a named failure and its pass history", "[al_solver][al_budget]")
+{
+	const auto mass = identity2();
+	auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+	GatedSnapProblem problem({std::make_shared<TwoQuarticsForm>()}, bc, mass, /*open_below=*/-1); // never opens
+	ALSolver solver({bc}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
+	ALBudgetOptions budget;
+	budget.max_passes = 4;
+	solver.set_budget(budget);
+	int passes = 0;
+	solver.post_subsolve = [&](double) { ++passes; };
+	Eigen::MatrixXd sol = Eigen::VectorXd::Constant(2, 10);
+	try
+	{
+		solver.solve_al(problem, sol, parameters(), linear, 1);
+		FAIL("the budget must end the stage");
+	}
+	catch (const ALBudgetExhausted &e)
+	{
+		CHECK_THAT(e.what(), ContainsSubstring("exhausted its pass budget: 4 passes"));
+		const json &d = e.details();
+		CHECK(d["reason"] == "pass_budget");
+		CHECK(d["passes"] == 4);
+		CHECK(d["budget"]["max_passes"] == 4);
+		REQUIRE(d["history"].size() == 5); // pass 0 + four passes
+		CHECK(d["history"][0]["pass"] == 0);
+		CHECK(d["history"][0]["gate"]["blocked_by"] == "collision");
+		for (int k = 1; k <= 4; ++k)
+		{
+			const json &pass = d["history"][k];
+			CHECK(pass["pass"] == k);
+			CHECK(pass["subsolve"]["outcome"] == "interrupted");
+			CHECK(pass["gate"]["feasible"] == false);
+			CHECK(pass["gate"]["blocked_by"] == "collision");
+			CHECK(pass["gate"]["finite_energy"] == true);
+			CHECK(pass["gate"]["valid"] == true);
+			CHECK(pass["gate"]["collision_free"] == false);
+			// One Newton step per pass overshoots; the residual is finite and
+			// below the start, not monotone.
+			CHECK(std::isfinite(pass["bc_residual"].get<double>()));
+			CHECK(pass["bc_residual"].get<double>() < d["history"][0]["bc_residual"].get<double>());
+			CHECK(pass["moved"].get<double>() > 0);
+		}
+		CHECK(d["last_pass"] == d["history"][4]);
+	}
+	CHECK(passes == 4);
+	CHECK(solver.al_history().size() == 5);
+	// ALSolver leaves the last iterate in the caller's solution, like every
+	// other AL failure; the step transaction (RB-06) restores the accepted
+	// state around it.
+	CHECK(sol(1, 0) < 10);
+}
+
+TEST_CASE("AL budget that is not exhausted leaves a compatible continuation unchanged", "[al_solver][al_budget][al_continuation]")
+{
+	// The PF-07 fixture: initial weight 3, ceiling 5 (reached at the second
+	// pass), one Newton step per pass, the gate opens once the free
+	// coordinate is below .5. With a nonzero BC residual the residual falls
+	// every pass; with a zero one only the free coordinate moves -- progress
+	// the BC residual cannot see and the drift measure must.
+	for (const bool zero_initial_error : {false, true})
+	{
+		CAPTURE(zero_initial_error);
+		const auto run = [&](const ALBudgetOptions *budget) {
+			const auto mass = identity2();
+			auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+			GatedSnapProblem problem({std::make_shared<TwoQuarticsForm>()}, bc, mass, .5);
+			ALSolver preparation({bc}, 3, 2, 5, 1.0, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
+			if (budget)
+				preparation.set_budget(*budget);
+			std::vector<double> weights;
+			preparation.post_subsolve = [&](double weight) { weights.push_back(weight); };
+			Eigen::MatrixXd sol = Eigen::VectorXd::Constant(2, 10);
+			if (zero_initial_error)
+				sol(0, 0) = 0;
+			REQUIRE_NOTHROW(preparation.solve_al(problem, sol, parameters(), linear, 1));
+			ALSolver final_solve({bc}, 1, 2, 1e8, .99, [](const auto &) {});
+			REQUIRE_NOTHROW(final_solve.solve_reduced(problem, sol, parameters(), linear, 1));
+			return std::make_tuple(Eigen::VectorXd(sol), weights, preparation.al_history());
+		};
+		const auto [sol_off, weights_off, history_off] = run(nullptr);
+		ALBudgetOptions budget;
+		budget.max_passes = 100;
+		budget.stagnation_window = 2;
+		const auto [sol_on, weights_on, history_on] = run(&budget);
+		REQUIRE(weights_off.size() >= 3);
+		CHECK(weights_on == weights_off);
+		CHECK(sol_on == sol_off);
+		CHECK(sol_on[0] == 0);
+		CHECK(std::abs(std::pow(sol_on[1], 3)) < 1e-12);
+		// Every pass after the first ran at the ceiling: the stagnation exit
+		// was armed and did not fire because the iterate kept moving.
+		REQUIRE(history_on.size() == weights_on.size() + 1);
+		for (size_t k = 2; k < history_on.size(); ++k)
+		{
+			CHECK(history_on[k]["at_ceiling"] == true);
+			CHECK(history_on[k]["moved"].get<double>() > 0);
+			// The fraction is probed while the snap is blocked (the last
+			// record is the feasible snap that ended the stage).
+			CHECK(history_on[k]["gate"]["ccd_fraction"].is_number() == (history_on[k]["gate"]["feasible"] == false));
+		}
+		// Without a budget the record keeps the historical short circuit:
+		// the collision gate is not evaluated once an earlier gate fails, and
+		// the CCD fraction is not probed.
+		for (size_t k = 0; k < history_off.size(); ++k)
+			CHECK(history_off[k]["gate"]["ccd_fraction"].is_null());
+	}
+}
+
+TEST_CASE("AL stagnation window ends a continuation blocked by a wall at the weight ceiling", "[al_solver][al_budget]")
+{
+	// The prescribed coordinate is driven to 0 behind a wall at .5: every
+	// pass ends at the wall (the BC residual plateaus at .5), the snap is
+	// blocked by the collision gate throughout, the collision-free fraction
+	// of the snap shrinks with the gap and the iterate stops moving once the
+	// free coordinate has converged. Nothing the loop can do changes that.
+	const auto mass = identity2();
+	auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+	auto wall = std::make_shared<WallForm>();
+	NLProblem problem(2, 0, {std::make_shared<QuadraticFreeForm>(), wall}, {bc}, polysolve::linear::Solver::create(linear, logger()), 1, 1, mass, 1);
+	ALSolver solver({bc}, 1, 2, 4, .99, [](const auto &) {});
+	ALBudgetOptions budget;
+	budget.max_passes = 100;
+	budget.stagnation_window = 3;
+	solver.set_budget(budget);
+	int passes = 0;
+	solver.post_subsolve = [&](double) { ++passes; };
+	Eigen::MatrixXd sol(2, 1);
+	sol << 2, 2;
+	try
+	{
+		solver.solve_al(problem, sol, wall_parameters(), linear, 1);
+		FAIL("the stagnation window must end the stage");
+	}
+	catch (const ALBudgetExhausted &e)
+	{
+		CHECK_THAT(e.what(), ContainsSubstring("stagnated: 3 consecutive passes at the weight ceiling 4"));
+		const json &d = e.details();
+		CHECK(d["reason"] == "stagnation");
+		CHECK(d["window"] == 3);
+		CHECK(d["progress"]["bc_residual"] == false);
+		CHECK(d["progress"]["gates"] == false);
+		CHECK(d["progress"]["ccd_fraction"] == false);
+		CHECK(d["progress"]["drift"] == false);
+		const int n = d["passes"].get<int>();
+		CHECK(n == passes);
+		CHECK(n < 100);
+		REQUIRE(d["history"].size() == size_t(n) + 1);
+		const json &last = d["last_pass"], &ref = d["reference_pass"];
+		CHECK(ref["pass"] == n - 3);
+		CHECK(last["pass"] == n);
+		for (int k = n - 2; k <= n; ++k)
+			CHECK(d["history"][k]["at_ceiling"] == true);
+		CHECK(last["gate"]["blocked_by"] == "collision");
+		CHECK(last["subsolve"]["outcome"] == "converged");
+		const double e_ref = ref["bc_residual_carried"], e_now = last["bc_residual_carried"];
+		CHECK(e_now > .5);
+		CHECK(e_now > (1 - budget.progress_tolerance) * e_ref);
+		CHECK(last["gate"]["ccd_fraction"].get<double>() < ref["gate"]["ccd_fraction"].get<double>() + budget.snap_tolerance);
+		CHECK(last["drift_over_window"].get<double>() <= budget.drift_tolerance * last["snap_linf"].get<double>());
+	}
+	CHECK(sol(0, 0) > .5);
+	CHECK(std::abs(sol(1, 0)) < 1e-3);
+
+	// The same stage with the exit off keeps looping: bound it by the pass
+	// cap alone and confirm the residual plateau the window judged.
+	{
+		auto bc2 = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+		NLProblem problem2(2, 0, {std::make_shared<QuadraticFreeForm>(), std::make_shared<WallForm>()}, {bc2}, polysolve::linear::Solver::create(linear, logger()), 1, 1, mass, 1);
+		ALSolver capped({bc2}, 1, 2, 4, .99, [](const auto &) {});
+		ALBudgetOptions cap;
+		cap.max_passes = 12;
+		capped.set_budget(cap);
+		Eigen::MatrixXd sol2(2, 1);
+		sol2 << 2, 2;
+		REQUIRE_THROWS_AS(capped.solve_al(problem2, sol2, wall_parameters(), linear, 1), ALBudgetExhausted);
+		const json &h = capped.al_history();
+		REQUIRE(h.size() == 13);
+		for (int k = 6; k <= 12; ++k)
+			CHECK(std::abs(h[k]["bc_residual_carried"].get<double>() - .5) < .05);
+	}
+}

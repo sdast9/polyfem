@@ -1007,6 +1007,7 @@ namespace polyfem::varform
 					solid_varform_->update_barrier_stiffness_for_embedding(
 						x.segment(solid_displacement_offset(), solid_displacement_ndof()));
 			});
+		al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 		al_solver.post_subsolve = [&](const double weight) {
 			stats.solver_info.push_back({{"type", weight > 0 ? "al" : "rc"}, {"t", step}, {"info", nonlinear_solver->info()}});
 			if (weight > 0)

@@ -129,6 +129,31 @@ re-estimating behavior (measured on the public smokes: ~1e-4 frictionless,
 ~1.6e-2 with friction, on a .25 displacement); `force_continuation: false`
 restores it.
 
+### Augmented-Lagrangian budget (RB-07)
+
+The AL stage that prepares a geometrically safe snap to the prescribed
+Dirichlet values is unbounded by default: a prescribed motion that can never
+be snapped (a face driven through an obstacle, a body crushed to zero height)
+keeps the loop running at the weight ceiling until the subsolves degrade. The
+opt-in `solver.augmented_lagrangian.budget` ends it with a named failure
+(exit status 1; the step is rolled back, RB-06, and nothing of it is
+published): `max_passes` is a plain cap on the passes per solve;
+`stagnation_window: W` ends the stage after `W` consecutive passes at the
+weight ceiling over which none of the progress signals moved — the BC residual
+(`progress_tolerance`, relative), the snap's gates (finite energy, validity,
+collision-free), the collision-free fraction of the snap (`snap_tolerance`)
+and the iterate's drift relative to the largest constrained residual
+(`drift_tolerance`). Both default to off; every run's manifest carries, per AL
+pass, the BC residual, the gate that blocked the snap and the CCD fraction,
+and a budget failure adds the stage's reason and full pass history
+(`steps[].al_stagnation`). Measured on the public fixture (2026-09-15): a
+compatible 0.3 compression under interrupted passes needs 105 passes and is
+unchanged under `{max_passes: 200, stagnation_window: 3}`; a bottom face driven
+0.05 into the slab stagnates at pass 10 (passes 8–10 at the ceiling); a top
+face driven down by the cube height is not stagnant by these signals (the
+crush keeps moving) and ends by the pass cap. See
+[docs/rb-07-validation.md](../../docs/rb-07-validation.md).
+
 ### Run manifest (RB-12)
 
 Every `PolyFEM_bin` run writes `run-manifest.json` into its output directory

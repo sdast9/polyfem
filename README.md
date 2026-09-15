@@ -54,7 +54,12 @@ current.
   remain; PF-09 hard contact is deferred. A failed nonlinear solve attempt
   restores the last accepted state in memory before the failure is reported
   ([RB-06](docs/rb-06-validation.md), 2026-09-15; no retry — a failed step
-  still ends the run with exit status 1, or 3 for a resource failure). See also
+  still ends the run with exit status 1, or 3 for a resource failure). The
+  augmented-Lagrangian stage that prepares the snap to prescribed values can
+  be bounded on request (`solver.augmented_lagrangian.budget`: a pass cap
+  and a stagnation window; off by default, [RB-07](docs/rb-07-validation.md),
+  2026-09-15 — a motion that can never be snapped otherwise keeps the loop
+  running until the process is killed). See also
   [floor retirement](docs/pf-02-floor-removal.md),
   [semi-implicit usage](scenes/semi-implicit/README.md) and
   [VarForm architecture](docs/varform-design.md).

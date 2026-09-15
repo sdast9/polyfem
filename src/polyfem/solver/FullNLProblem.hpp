@@ -28,9 +28,12 @@ namespace polyfem::solver
 		/// A Newton iteration is observed as Validity* (finite-energy stage),
 		/// Proposal, StepBound, Validity* (descent stage), LineSearchEnd,
 		/// Accepted. ALSolver's feasibility checks before a subsolve appear as
-		/// Proposal, Validity, LineSearchEnd with no StepBound. PolySolve's
-		/// post_step reports the number of iterations completed before the
-		/// call, so the start point and the first update both carry 0.
+		/// Proposal, Validity, LineSearchEnd with no StepBound (the RB-07
+		/// snap-fraction probe, probe_step_bound, is deliberately unobserved
+		/// so that a feasibility check never reads as a Newton trial).
+		/// PolySolve's post_step reports the number of iterations completed
+		/// before the call, so the start point and the first update both
+		/// carry 0.
 		Kind kind;
 		const Eigen::VectorXd *x0 = nullptr;                          ///< Current iterate (Proposal, StepBound, Validity)
 		const Eigen::VectorXd *x1 = nullptr;                          ///< Trial endpoint, or the accepted iterate (Accepted)
@@ -55,6 +58,12 @@ namespace polyfem::solver
 		virtual bool is_step_valid(const TVector &x0, const TVector &x1) override;
 		virtual bool is_step_collision_free(const TVector &x0, const TVector &x1);
 		virtual double max_step_size(const TVector &x0, const TVector &x1) override;
+		/// @brief RB-07: the forms' step bound of [x0, x1] (inversion check,
+		///        CCD) without the StepBound observation, for a diagnostic
+		///        probe outside a line search -- the RB-04 observer reads a
+		///        proposal that carries a step bound as a Newton trial. Needs
+		///        line_search_begin(x0, x1) to be active like max_step_size.
+		virtual double probe_step_bound(const TVector &x0, const TVector &x1);
 
 		virtual void line_search_begin(const TVector &x0, const TVector &x1) override;
 		virtual void line_search_end() override;

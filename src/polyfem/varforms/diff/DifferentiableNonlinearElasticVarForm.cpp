@@ -310,6 +310,7 @@ namespace polyfem::varform
 			[&](const Eigen::VectorXd &) {
 				solve_data_.update_barrier_stiffness(solution);
 			});
+		al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(

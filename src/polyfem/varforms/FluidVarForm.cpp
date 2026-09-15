@@ -1115,6 +1115,7 @@ namespace polyfem::varform
 			args["solver"]["augmented_lagrangian"]["max_weight"],
 			args["solver"]["augmented_lagrangian"]["eta"],
 			[](const Eigen::VectorXd &) {});
+		al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(
