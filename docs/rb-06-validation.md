@@ -287,7 +287,9 @@ observation. The runner now takes `--max-threads 1` for the comparison.
 ## Publication and reproducibility
 
 - Rebuilt targets: `polyfem`, `PolyFEM_bin`, `unit_tests` (hashes above).
-- Committed files: see the implementation commit (recorded below).
+- Committed files and commit: `229a6f83c` on `sdast9/polyfem:main`
+  (implementation, tests, tools, spec, this record, the plan/README/RB-04
+  contract updates); this note follows it.
 - Companion pins unchanged (`c24d803e`, `bce32a39`); no HDA source or asset
   change (the hook is a JSON test option the asset does not expose).
 - Remaining working-tree changes: none intended.
