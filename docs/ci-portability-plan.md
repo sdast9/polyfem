@@ -8,6 +8,8 @@ This document records the investigation and work still required. **No solver, te
 
 **Implementation update, 2026-09-13:** the bounded CI-01 and CI-02 source/test/formatting repairs have now been implemented without changing solver behavior or production defaults. An isolated AppleClang build and the three affected CTest cases pass, and the pinned clang-format 21.1.8 check passes over the full tracked C/C++/CUDA-family tree. Native GCC/MSVC and all-platform focused-test acceptance remain pending the GitHub run triggered by publication.
 
+**Implementation update, 2026-09-15 (RB-12 stage 3, [record](rb-12-validation.md#stage-3--ci-and-release-integration-2026-09-14)):** the native acceptance of CI-01 and CI-02 is read from [Build run 34903453744](https://github.com/sdast9/polyfem/actions/runs/34903453744) at `fffc722b9` — Linux GCC 13 Debug 312/312 and Release 340/344, Windows MSVC 19.44 Debug 309/309 and Release 328/328, macOS AppleClang Debug 311/311 and Release 339/343, with [pre-commit run 34903453923](https://github.com/sdast9/polyfem/actions/runs/34903453923) green; the only failures on any lane are the four CI-03–CI-06 scene groups (`standard`, `contact_2d`, `contact_3d`, `triangle_data`) on the two Release lanes that run them. **CI-01 and CI-02 are complete.** Of CI-07, RB-12 delivered the dependency-fork triggers (item 1), the `SCCACHE_CACHE_SIZE` fix and the always-on `LastTest.log` / `LastTestsFailed.log` / CLI-contract uploads (item 6, in part), the compiled-in build identity printed on every lane by the new CTest `cli_contract` (`PolyFEM_bin --build_info`: compiler, configuration, options, effective PolyFEM/IPC/PolySolve SHAs against the declared pins — item 2, in part) and one public integration run through the real executable on all three OSes (`quasistatic-semi`, single-threaded — a first step toward item 3). Two findings recorded by RB-12 are now CI-07 work items (see its 2026-09-15 update): the IPC Toolkit fork's two Windows lane failures on upstream code, and the cross-platform repeatability matrix. The user's decision of 2026-09-14 sets the required lanes to pre-commit, Linux Release and macOS Release; the four scene groups stay tracked exceptions with the owners below, and the Windows lanes are informational (green since `fffc722b9`).
+
 ## 1. Verified state
 
 The latest completed [Build run 34757133039](https://github.com/sdast9/polyfem/actions/runs/34757133039), started September 13 at 12:27 UTC, reports:
@@ -28,7 +30,7 @@ At the 13:54 UTC metadata snapshot, the most recent 100 PolyFEM workflow runs co
 
 ## 2. Recommended work order
 
-CI-01 and CI-02 are **implemented with local validation; native CI validation is pending**. CI-03 through CI-09 remain **open**. IDs are specific to this CI plan and do not rename the existing RB work.
+CI-01 and CI-02 are **complete** (native validation read on 2026-09-15, see the implementation update above). CI-03 through CI-09 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
 
 | Order / ID | Work | Completion evidence |
 | --- | --- | --- |
@@ -50,6 +52,8 @@ CI-01 and CI-02 are one mechanical repair changeset. The scene items should rema
 
 **Implemented:** the `std::array` now uses explicit nested braces, and the test-local `near` identifier is now `near_selector_count` everywhere in that test case. Local warning-policy and empty-`near`-macro syntax probes pass. Native GCC and MSVC builds remain the completion evidence.
 
+**Complete (2026-09-15):** both configurations compile and their suites run on native GCC 13.3 (Linux) and MSVC 19.44 (Windows) at `fffc722b9`, Build run 34903453744; the Debug and Windows lanes are green there.
+
 **Linux: confirmed compiler failure.** In [BarrierContactForm.cpp](../src/polyfem/solver/forms/BarrierContactForm.cpp), `interpolated_stiffness()` initializes:
 
 ```cpp
@@ -65,6 +69,8 @@ A small isolated Apple-Clang syntax probe with the SDK's empty `near` macro fail
 ### CI-02 — Floating-point expectations and formatting
 
 **Implemented:** the three vector assertions retain exact cardinality checks and compare the single analytical value using `Approx(100.).epsilon(4 * std::numeric_limits<double>::epsilon())`. The JSON median is extracted as `double` and uses the same bound. This relative tolerance is about `8.88e-16`, covers the observed `2.84e-16` relative discrepancy, and remains specific to these well-conditioned synthetic calculations. clang-format 21.1.8 was applied to all four files identified by the audit and rechecked over the tracked tree.
+
+**Complete (2026-09-15):** the focused tests pass on all three platforms in Build run 34903453744 (every lane is green apart from the CI-03–CI-06 scene groups), and the repository formatting check passes (pre-commit run 34903453923; green since `1f6f826fa`, run 34854316144).
 
 **Confirmed on earlier native Linux and Windows runs; currently masked by CI-01.** At `ca5a7965`, both platforms compute `99.99999999999997158` where these tests demand literal `100.0`:
 
@@ -145,6 +151,15 @@ Required work: establish explicit policy settings, repeat the exact scene across
 - The shared developer build uses RelWithDebInfo and local IPC/PolySolve source overrides. Clean GitHub builds use committed recipe pins and different feature/toolchain settings. Do not use the shared build as evidence of a clean-clone pass.
 - At this snapshot, only PolyFEM Build and pre-commit are enabled. Artifacts, Nightly, Coverage, Docs, and Docker are manually disabled. Their absence is not success. Re-enable only workflows selected for the fork's intended use; publishing workflows require fork-specific destinations and credentials to be reviewed first.
 
+**Update 2026-09-15 (RB-12 stage 3):**
+
+- Item 1 is done for the triggers: `sdast9/ipc-toolkit@c24d803e` and `sdast9/polysolve@bce32a39` (workflow files only) run `Build` on `semi-implicit-stiffness` / `iteration-callback` and by `workflow_dispatch`; PolyFEM's recipe pins follow at `4f5acc773`. First native outcomes: PolySolve [run 34889533898](https://github.com/sdast9/polysolve/actions/runs/34889533898) **6/6 green**; IPC Toolkit [run 34889554146](https://github.com/sdast9/ipc-toolkit/actions/runs/34889554146) **4/6** — Linux and macOS Debug/Release green, both Windows lanes failing on upstream code under the upstream workflow's Windows toolchain (MinGW GCC 15.2.0, not the MSVC that builds PolyFEM): Debug stops in the oneTBB 2022.3.0 dependency build (`oneapi/tbb/profiling.h:148: cannot convert 'const char*' to 'const wchar_t*'`, before any toolkit source compiles); Release builds and passes 284/285, the upstream `Smooth barrier potential real sim 2D C^2` test segfaulting (a GCP/smooth-contact test the fork does not touch). Logs: `outputs/rb-12/20260914T142106Z-repeat/ci-stage3/ipc/`. **New work item (8 below).**
+- Item 6 is done for `LastTest.log`, `LastTestsFailed.log` and the CLI contract's manifests/logs (`if: always()`, all three OSes, `f5f59db26`); JUnit results, configure metadata and failing-scene diagnostics remain.
+- The sccache paragraph below is resolved: `SCCACHE_CACHE_SIZE: "1G"` is the job environment (`f5f59db26`).
+- Item 2 is partly covered: `PolyFEM_bin --build_info` (compiled in before every build) prints compiler, configuration, options and the effective PolyFEM/IPC/PolySolve SHAs against the declared pins, and CTest `cli_contract` prints it on every lane; presets, a pinned runner OS/toolchain and the cold-cache build remain.
+- Item 3 has a first public integration run on all three OSes through the real executable (`cli_contract`: `quasistatic-semi`, single-threaded, exit statuses 0/1/3 checked); the named subset, the expected counts and the `[.][run]` gating remain.
+- RB-12's controlled repeatability matrix (`tools/rb12/repeat.py`, rule in `tools/rb12/README.md`) ran on one host only — macOS arm64, AppleClang, RelWithDebInfo; the plan's cross-platform/compiler comparison is pending and needs another host. **New work item (9 below).**
+
 Required changes:
 
 1. Trigger IPC/PolySolve checks on their maintained fork branches and PRs, with manual dispatch for diagnosis. Record the exact dependency SHAs; publish a companion fix before advancing PolyFEM's pin.
@@ -154,8 +169,10 @@ Required changes:
 5. Use explicit bounded test/build concurrency. `CTEST_PARALLEL_LEVEL` counts test processes, not each solver's internal threads. The existing Linux `OMP_NUM_THREADS=1` is useful but does not limit all TBB work.
 6. Upload `LastTest.log`, `LastTestsFailed.log`, JUnit results, configure metadata, and failing scene diagnostics with `if: always()`. Preserve per-test output directories and original fixtures. Never turn a failure into a warning with `continue-on-error` on a required lane.
 7. Run the pinned formatter before publishing. Reduce redundant expensive runs through reviewed path filters or a cheap-check/build split, while preserving checks required by branch protection. Keep cancelled runs separate from completed results.
+8. **IPC Toolkit fork, Windows lanes (from RB-12).** Reproduce the two failures against upstream `ipc-toolkit` at the fork's base commit to confirm they are upstream; then either make the lane match the consumer's toolchain (PolyFEM builds IPC with MSVC 19.44, where the same sources compile and pass inside PolyFEM's Windows lanes) or pin a oneTBB revision that compiles under MinGW GCC 15, and report the segfaulting upstream test with its reproduction rather than deleting it. Until then the IPC Windows lanes are informational; no fork source is involved.
+9. **Cross-platform repeatability (from RB-12).** Run `python3 tools/rb12/repeat.py --binary <PolyFEM_bin> --output <fresh> --fixtures quasistatic-semi --threads 1 --repeats 3 --verify` (serial: the rule requires bit-identical endpoints) and a threaded pair on the Linux and Windows runners as an informational job or on another host, upload `summary.json` / `summary.md`, and append the outcome to the RB-12 record's stage-2 section as measured evidence. Thread-count divergence on friction fixtures is a documented limit (1.7e-4, RB-12), not a failure of this item.
 
-The Windows setup also runs `sccache --max-size=1.0G`, which sccache 0.17.0 rejects. The setup step nevertheless succeeds after later commands; this is **not** the reported build blocker. Set `SCCACHE_CACHE_SIZE=1G`, as documented by [sccache](https://github.com/mozilla/sccache/blob/main/docs/Local.md), and make command failures propagate. Avoid copying ccache-only options into sccache commands.
+**Resolved 2026-09-14 (`f5f59db26`).** The Windows setup also ran `sccache --max-size=1.0G`, which sccache 0.17.0 rejects. The setup step nevertheless succeeds after later commands; this is **not** the reported build blocker. Set `SCCACHE_CACHE_SIZE=1G`, as documented by [sccache](https://github.com/mozilla/sccache/blob/main/docs/Local.md), and make command failures propagate. Avoid copying ccache-only options into sccache commands.
 
 ### CI-08 — Installable solver packages
 

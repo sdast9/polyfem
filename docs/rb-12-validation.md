@@ -1,7 +1,7 @@
 # RB-12 — Repeatability, provenance and release discipline
 
 Date: 2026-09-14 (closed 2026-09-15)
-Status: **validated within stated scope** — stage 1 (run identity)
+Status: **closed — validated within stated scope** (2026-09-15, [closure](#closure-2026-09-15)) — stage 1 (run identity)
 published `1f6f826fa`; stage 2 (controlled repeatability)
 characterized—limits documented; stage 3 (CI/release integration)
 published `f5f59db26`, `4f5acc773`, `fffc722b9`: the required lanes
@@ -275,8 +275,9 @@ CLI contract, not this matrix).
 
 ## Stage 3 — CI and release integration (2026-09-14)
 
-**Status: in progress.** Bounded additions, no workflow lane removed, no
-required check turned into a warning:
+**Status: published (`f5f59db26`, `4f5acc773`, `fffc722b9`); closed
+2026-09-15 (see [Closure](#closure-2026-09-15)).** Bounded additions, no
+workflow lane removed, no required check turned into a warning:
 
 - `PolyFEM_bin --build_info` prints the compiled-in identity as JSON.
 - CTest `cli_contract` (`tools/rb12/cli_check.py`, standard-library
@@ -538,12 +539,49 @@ Debug was cancelled by this push.)
   stated scope`; stage 2's findings are limits, not promises: threaded
   friction runs reproduce only to the contact-model scale, one platform
   and configuration were sampled.
-- Open, with owners: the four CI-03–CI-06 scene groups (the CI plan's
-  items, not RB-12's); RB-24 (per-thread memory, opened here); the IPC
-  fork's two upstream Windows lane failures (recorded, not the fork's
-  code); a cross-platform repeat matrix needs another host.
+- Open, with owners (checked against the CI plan at closure, see
+  [Closure](#closure-2026-09-15)): the four CI-03–CI-06 scene groups (the
+  CI plan's items); the IPC fork's two upstream Windows lane failures
+  (CI-07 item 8); the cross-platform repeat matrix (CI-07 item 9); RB-24
+  (per-thread memory). Nothing is left under RB-12.
 - Next command: `ctest --test-dir build -R cli_contract -V` after any
   change to `main.cpp`, the manifest or the exit statuses;
   `python3 tools/rb12/repeat.py --binary build/PolyFEM_bin --output <fresh>`
   for a new platform or build configuration. Next eligible items: RB-23,
   RB-24, RB-06.
+
+## Closure (2026-09-15)
+
+The user asked whether RB-12 can close and, if anything remained, that it
+be checked against the CI plan's items. Every open item of the handoff has
+a home outside RB-12:
+
+| Left open by RB-12 | Home | Where it is recorded |
+| --- | --- | --- |
+| The four scene groups failing on the Release lanes (`contact_2d`, `standard`, `triangle_data`, `contact_3d`) | CI-03, CI-04, CI-05, CI-06 | already the CI plan's items since 2026-09-13; tracked exceptions of the required lanes by the user's decision |
+| IPC Toolkit fork: Windows Debug stops in oneTBB 2022.3.0 under MinGW GCC 15.2 (`profiling.h:148`), Windows Release 284/285 with the upstream `Smooth barrier potential real sim 2D C^2` segfault | CI-07 (dependency-fork CI) — **added today as item 8** | [ci-portability-plan.md](ci-portability-plan.md#ci-07--workflow-triggers-test-selection-and-reproducible-builds), update 2026-09-15 |
+| Cross-platform / cross-compiler repeat matrix (stage 2 ran on macOS arm64 only; the plan says record it as pending) | CI-07 (platform coverage) — **added today as item 9** | same section |
+| Per-thread memory of the contact path | RB-24 | plan section, opened 2026-09-14 on the user's decision |
+
+What RB-12 completed of the CI plan is now written there as well (CI-01
+and CI-02 complete on the native lanes at `fffc722b9`; of CI-07 the
+dependency triggers, the sccache fix, the always-on test-log uploads, the
+build identity on every lane and a first public integration run on all
+three OSes), so the next CI session starts from the measured state rather
+than the 2026-09-13 audit.
+
+README claims: the fork section of `README.md` still named the
+2026-09-08 baseline, the pre-RB-12 dependency pins (`9da3094`,
+`4d372fa8`) and "all RB items initially remain unimplemented", and said
+nothing about the fork's own CI — corrected today to the current pins,
+the plan's status table and the measured lane state (the upstream badges
+stay, labelled as upstream's).
+
+Acceptance re-read at closure: manifest identifies the tested artifacts —
+yes; repeat matrix and declared tolerances saved — yes; appropriate CI run
+and linked — yes, on the user's required-lane decision; README claims match
+the measured scope — yes after today's correction. No dependency upgrade,
+upstream merge, release tag or feature promotion was made. **Status:
+closed — validated within stated scope**; the stage-2 limits (threaded
+friction to the contact-model scale; one platform sampled) stand as
+documented, with the cross-platform matrix now a CI-07 item.
