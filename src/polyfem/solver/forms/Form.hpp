@@ -4,9 +4,32 @@
 #include <polysolve/nonlinear/PostStepData.hpp>
 
 #include <filesystem>
+#include <memory>
+#include <stdexcept>
 
 namespace polyfem::solver
 {
+	/// @brief RB-06: the state of a form that a nonlinear solve attempt can
+	///        change and that a failed attempt must therefore not leave
+	///        behind. A form with attempt-mutable state (contact snapshot and
+	///        trim, friction lag, AL multipliers, lagged fields) derives its
+	///        own state type from this one; the base carries what every form
+	///        owns. Captured by Form::save_state at a transaction boundary
+	///        (the start of a step's solve) and put back by
+	///        Form::restore_state when the attempt fails, so the in-memory
+	///        state after a failure equals the last accepted state. This is
+	///        an in-memory transaction, not a retry policy and not a disk
+	///        checkpoint.
+	class FormState
+	{
+	public:
+		virtual ~FormState() = default;
+		double weight = 1;
+		double scale = 1;
+		bool enabled = true;
+		bool project_to_psd = false;
+	};
+
 	class Form
 	{
 	public:
@@ -155,7 +178,57 @@ namespace polyfem::solver
 		/// @param scale
 		void virtual set_scale(const double scale) { scale_ = scale; }
 
+		/// @brief RB-06: capture every state member a solve attempt can change
+		///        (see FormState). A form without attempt-mutable state of its
+		///        own returns the base state (weight, scale, enabled, PSD flag).
+		///        Caches that a later init rebuilds from the coordinates are
+		///        included when they are cheap, so a restored form is coherent
+		///        without an extra rebuild; the pure diagnostic counters that
+		///        must stay monotonic across a rollback (event ids) are not.
+		virtual std::unique_ptr<FormState> save_state() const
+		{
+			auto state = std::make_unique<FormState>();
+			save_base_state(*state);
+			return state;
+		}
+
+		/// @brief RB-06: put back a state captured by save_state on this form.
+		/// @param state The captured state (must come from the same form type).
+		/// @param x The full coordinates the state was captured at, for the
+		///          diagnostic event a form may emit about the rollback.
+		virtual void restore_state(const FormState &state, const Eigen::VectorXd &x)
+		{
+			restore_base_state(state);
+		}
+
 	protected:
+		void save_base_state(FormState &state) const
+		{
+			state.weight = weight_;
+			state.scale = scale_;
+			state.enabled = enabled_;
+			state.project_to_psd = project_to_psd_;
+		}
+
+		void restore_base_state(const FormState &state)
+		{
+			weight_ = state.weight;
+			scale_ = state.scale;
+			enabled_ = state.enabled;
+			project_to_psd_ = state.project_to_psd;
+		}
+
+		/// @brief The captured state as this form's own state type; a state
+		///        captured from another form type is a programming error.
+		template <typename State>
+		static const State &state_as(const FormState &state, const char *form_name)
+		{
+			const State *typed = dynamic_cast<const State *>(&state);
+			if (typed == nullptr)
+				throw std::logic_error(std::string("Form state restored on ") + form_name + " was captured from a different form type");
+			return *typed;
+		}
+
 		bool project_to_psd_ = false; ///< If true, the form's second derivative is projected to be positive semidefinite
 
 		double weight_ = 1; ///< weight of the form (e.g., AL penalty weight or Δt²)

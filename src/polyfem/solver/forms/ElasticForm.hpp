@@ -102,6 +102,19 @@ namespace polyfem::solver
 		/// most recent max_step_size() call, once the step is accepted.
 		void post_step(const polysolve::nonlinear::PostStepData &data) override;
 
+		/// @brief RB-06: the elastic form's attempt state is the base state;
+		///        restoring drops a pending quadrature-refinement candidate
+		///        of the conservative inversion check (an accepted step would
+		///        have committed it in post_step). Refinements already
+		///        committed into the quadrature hierarchy during the failed
+		///        attempt are not undone (documented limit; the check is
+		///        Discrete in builds without miso).
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override
+		{
+			Form::restore_state(state, x);
+			pending_refinement_.reset();
+		}
+
 	private:
 		const int n_bases_;
 		std::vector<basis::ElementBases> &bases_;

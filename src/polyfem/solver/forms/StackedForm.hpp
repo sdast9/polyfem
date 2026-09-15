@@ -57,6 +57,14 @@ namespace polyfem::solver
 		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const override;
 		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const override;
 
+		/// @brief RB-06: every term's state.
+		struct State : public FormState
+		{
+			std::vector<std::unique_ptr<FormState>> terms;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
 	private:
 		struct Term
 		{

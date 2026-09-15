@@ -33,9 +33,19 @@ def main():
         assert [r['event_id'] for r in rows] == list(range(rows[0]['event_id'], rows[0]['event_id']+len(rows)))
         groups = defaultdict(list)
         unavailable = 0
+        # RB-06: a failed attempt ends with exactly one rollback event -- the
+        # last event of its step, measured at the restored coordinates: before
+        # = the failed attempt's coefficient state, after = the restored one
+        # (a refresh identity no newer than the failed attempt's).
+        rollbacks = [r for r in rows if r['operation'] == 'rollback']
+        for rb in rollbacks:
+            same_step = [r for r in rows if r['step'] == rb['step']]
+            assert same_step[-1] is rb
+            assert rb['operation_threw'] is False
+            assert rb['after']['state']['refresh_id'] <= rb['before']['state']['refresh_id']
         for row in rows:
             assert row['schema'] == 'polyfem.coefficient-event' and row['version'] == 1
-            assert row['operation'] in ('refresh', 'post_step', 'stall_retune', 'calibration')
+            assert row['operation'] in ('refresh', 'post_step', 'stall_retune', 'calibration', 'rollback')
             delta = row['objective_change_at_fixed_coordinates']
             if delta is None:
                 assert row.get('unavailable_reason')
@@ -65,6 +75,7 @@ def main():
                 max_free_contact_force_change_norm=max(f for _, _, f in values)))
         if 'failure' in run['name']:
             assert any(r['operation'] == 'stall_retune' for r in rows)
+            assert len(rollbacks) == 1
         else:
             assert {r['step'] for r in rows if r['phase'] == 'between_steps_after_endpoint'} == {1, 2, 3, 4}
         result['runs'].append(summary)

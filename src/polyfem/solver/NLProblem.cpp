@@ -561,6 +561,32 @@ namespace polyfem::solver
 			penalty_problem_->update_lagging(x, iter_num);
 	}
 
+	std::unique_ptr<FullNLProblem::SavedState> NLProblem::save_state() const
+	{
+		auto state = std::make_unique<SavedState>();
+		for (const auto &f : forms_)
+			state->forms.push_back(f->save_state());
+		for (const auto &f : penalty_forms_)
+			state->penalty_forms.push_back(f->save_state());
+		state->reduced = current_size_ == CurrentSize::REDUCED_SIZE;
+		return state;
+	}
+
+	void NLProblem::restore_state(const FullNLProblem::SavedState &state, const TVector &x)
+	{
+		const SavedState *typed = dynamic_cast<const SavedState *>(&state);
+		if (typed == nullptr)
+			throw std::logic_error("NLProblem state was captured from a different problem type");
+		if (typed->penalty_forms.size() != penalty_forms_.size())
+			throw std::logic_error("Nonlinear problem state was captured with a different number of penalty forms");
+		// x is in full coordinates; the forms' states were captured at it.
+		assert(x.size() == full_size_);
+		FullNLProblem::restore_state(state, x);
+		for (size_t i = 0; i < penalty_forms_.size(); ++i)
+			penalty_forms_[i]->restore_state(*typed->penalty_forms[i], x);
+		current_size_ = typed->reduced ? CurrentSize::REDUCED_SIZE : CurrentSize::FULL_SIZE;
+	}
+
 	void NLProblem::update_quantities(const double t, const TVector &x)
 	{
 		t_ = t;

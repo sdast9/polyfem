@@ -151,6 +151,25 @@ namespace polyfem::solver
 			term.form->init_lagging(gather(x, term));
 	}
 
+	std::unique_ptr<FormState> StackedForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_base_state(*state);
+		for (const Term &term : terms_)
+			state->terms.push_back(term.form->save_state());
+		return state;
+	}
+
+	void StackedForm::restore_state(const FormState &state, const Eigen::VectorXd &x)
+	{
+		const State &stacked = state_as<State>(state, "StackedForm");
+		if (stacked.terms.size() != terms_.size())
+			throw std::logic_error("StackedForm state has a different number of terms");
+		restore_base_state(stacked);
+		for (size_t i = 0; i < terms_.size(); ++i)
+			terms_[i].form->restore_state(*stacked.terms[i], x.size() == size_ ? gather(x, terms_[i]) : Eigen::VectorXd());
+	}
+
 	void StackedForm::update_lagging(const Eigen::VectorXd &x, const int iter_num)
 	{
 		assert(x.size() == size_);

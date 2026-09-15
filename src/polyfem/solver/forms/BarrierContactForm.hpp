@@ -209,7 +209,43 @@ namespace polyfem::solver
 		///        moved); false means a restart would repeat an identical solve.
 		bool retune_on_stall(const Eigen::VectorXd &x, const double factor);
 
+		/// @brief RB-06: the attempt-mutable state of the barrier form on top
+		///        of ContactForm::State -- the current collision set and, in
+		///        semi-implicit mode, the frozen snapshot (surface, system
+		///        Hessian, its max entry), the memoized coefficients of this
+		///        and the previous snapshot, the continuation seeds and keys,
+		///        the batch statistics, the controller counters and anchor,
+		///        the first-contact flag and the refresh identity. Every
+		///        member a refresh, retune, bump, post_step or collision
+		///        rebuild writes is here; the coefficient event counter is not
+		///        (event ids stay monotonic so the event stream keeps the
+		///        failed attempt's rows distinguishable from the rollback).
+		struct State : public ContactForm::State
+		{
+			ipc::NormalCollisions collision_set;
+			Eigen::MatrixXd kappa_surface;
+			StiffnessMatrix kappa_hessian;
+			std::map<std::array<long, 5>, double> kappa_cache, prev_kappa_cache, endpoint_kappa;
+			std::set<std::array<long, 5>> continued_keys;
+			int kappa_continued_count = 0, kappa_fresh_count = 0;
+			int iters_since_refresh = 0, iters_since_trim = 0;
+			uint64_t diagnostic_refresh_id = 0;
+			double kappa_cap = 0, kappa_floor = 0, kappa_median = 0;
+			int kappa_fallback_count = 0, kappa_abs_fallback_count = 0, kappa_global_fallback_count = 0;
+			int kappa_interpolated_count = 0, kappa_direction_fallback_count = 0;
+			bool kappa_snapshot_had_contacts = false;
+			double trim_solve_anchor = 1, kappa_hessian_max = 0;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		/// @brief Restores the captured state and, in semi-implicit mode,
+		///        reports a "rollback" coefficient event (before = the failed
+		///        attempt's state at x, after = the restored state).
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
 	protected:
+		void save_barrier_state(State &state) const;
+		void restore_barrier_state(const State &state);
+
 		class CoefficientEventScope;
 		std::function<void(const json &)> coefficient_observer_;
 		int coefficient_event_depth_ = 0;

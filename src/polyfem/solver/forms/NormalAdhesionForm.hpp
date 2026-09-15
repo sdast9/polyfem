@@ -108,6 +108,18 @@ namespace polyfem::solver
 		const ipc::NormalCollisions &collision_set() const { return collision_set_; }
 		const ipc::NormalAdhesionPotential &normal_adhesion_potential() const { return normal_adhesion_potential_; }
 
+		/// @brief RB-06: the previous distance, the swept candidate interval
+		///        and the current collision set.
+		struct State : public FormState
+		{
+			double prev_distance = 0;
+			bool use_cached_candidates = false;
+			ipc::Candidates candidates;
+			ipc::NormalCollisions collision_set;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
 	protected:
 		/// @brief Update the cached candidate set for the current solution
 		/// @param displaced_surface Vertex positions displaced by the current solution

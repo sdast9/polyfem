@@ -12,6 +12,7 @@ set(test_sources
   test_kappa_continuity.cpp
   test_friction_lag.cpp
   test_resource_containment.cpp
+  test_step_rollback.cpp
   test_input_validation.cpp
   test_material_envelope.cpp
   test_linear_elastic_time.cpp

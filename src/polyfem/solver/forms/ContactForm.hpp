@@ -194,7 +194,26 @@ namespace polyfem::solver
 		///        applied as written (an error when not enforceable).
 		void apply_resource_limits(const ResourceLimits &limits);
 
+		/// @brief RB-06: the attempt-mutable state of the base contact form --
+		///        the global stiffness/trim and its adaptive bound, the
+		///        adaptive controller's previous distance, the swept candidate
+		///        interval and the retained candidate statistics.
+		struct State : public FormState
+		{
+			double barrier_stiffness = 0;
+			double max_barrier_stiffness = 0;
+			double prev_distance = 0;
+			bool use_cached_candidates = false;
+			ipc::Candidates candidates;
+			CandidateStatistics candidate_statistics;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
 	protected:
+		void save_contact_state(State &state) const;
+		void restore_contact_state(const State &state);
+
 		/// @brief Update the cached candidate set for the current solution
 		/// @param displaced_surface Vertex positions displaced by the current solution
 		virtual void update_collision_set(const Eigen::MatrixXd &displaced_surface) = 0;

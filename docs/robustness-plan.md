@@ -178,8 +178,8 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-03 | Collision/FEM coordinate mapping contract | RB-01; consult RB-02 | [closed 2026-09-11 — validated within stated scope: exact indexing (2026-09-08) and the selected interpolated stiffness, parent block condensed onto the stencil with the gap-normalized direction fallback (2026-09-11); nothing pending](rb-03-validation.md#interpolated-stencil-stiffness--2026-09-11) |
 | RB-04 | Accepted-step physical accounting and diagnostics | RB-02 inventory; RB-03 supported mappings | [validated within stated scope 2026-09-12 — record version 2 (attempt stream, candidate counts, failed-attempt iterate, right-endpoint work increments), VTU kinematics aligned; `physical_balance_pass` populated since 2026-09-13 (record version 3, RB-09 decision)](rb-04-validation.md#remainder-completed--record-version-2-2026-09-12) |
 | RB-05 | Bounded candidate generation and resource failure | RB-01; reuse RB-04 diagnostics where available | [validated within stated scope 2026-09-12 — stale swept-cache containment, pre-build sweep diagnostics, `solver/contact/CCD/resource_limits` enforced by the toolkit before allocation (hash grid, brute force), **on by default (automatic: 1e8 items / 5e7 emissions; user decision 2026-09-12)**, exit status 3 for a resource failure / 1 for any named failure, HDA controls with novice tooltips; retry is RB-08](rb-05-validation.md) |
-| RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | not started |
-| RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration | not started |
+| RB-06 | Failed-attempt state rollback | RB-01; RB-02 state inventory | [validated within stated scope 2026-09-15 — the step transaction of the nonlinear elastic VarForm path: every form's attempt state (`Form::save_state`/`restore_state`: contact snapshot, trim and memo, swept candidates, friction lag, AL multipliers and weights, lagged fields, weights/flags) and the caller's solution are captured at solve start and restored when the attempt fails, verified by a fingerprint and recorded in the RB-04 failure record, the manifest step and a `rollback` coefficient event; nothing of a failed step is published; a test-driven solve from the restored state is bit-identical to a fresh control on every injected phase (`solver/advanced/failure_injection`, a test hook) and the real RB-04 failure; the adhesion and smooth-contact forms lose their shared function-static position cache (RB-01) and the adhesion form its stale swept cache (RB-05); six public scenes bit-identical without a failure; no retry (RB-08 stands)](rb-06-validation.md) |
+| RB-07 | Bounded AL stagnation handling | RB-04 diagnostics; RB-06 restoration (available since 2026-09-15: `NLProblem::save_state/restore_state`, the fingerprint) | not started |
 | RB-08 | Optional timestep/load-increment retry | RB-04, RB-06, RB-07 and explicit policy decision | **closed — retry stays off (user decision 2026-09-13)**; a failed step reports failure and stops, no automatic subdivision |
 | RB-09 | Reference benchmarks and refinement envelope | RB-04; resolve relevant RB-02/03 failures | [characterized—limits documented 2026-09-13 — analytical block, spring/contact and same-mesh hard-contact references; the semi-implicit model error is the realized gap (`e_R = c·ḡ/H`, .35–.6 % at `d̂` 1e-3, rate ≈ 1 in `d̂`), solver error 1.4e-5, discretisation of the public 4×4×4 smoke 11 % (order 1.5); realized gap .62–.99 `d̂` across sweeps; raw m → mm conversion differs by 1e-3 (upstream absolute CCD clearance, `F0·L^1.5` tolerance); classic/Fixed 1e-6 at 2× the cost; acceptance decided the same day: `physical_balance_pass` = force residual at 1e-6 of the peak external force (record version 3), gap statistics reported](rb-09-validation.md) |
 | RB-10 | Friction coupling and dissipation validation | RB-04 and reference protocol from RB-09 | [validated within stated scope 2026-09-13 — Coulomb identity to 1e-8 at the updated lag, dissipation ≥ 0 on every accepted step, exact normal-force transfer through every semi-implicit retuning path, budget/`epsv` sensitivity; the RB-18 F6 trim-following (a doubled friction capacity after an in-solve bump at constant load) was reproduced and, by the user's decision, `semi_implicit/friction_lag: realized_force` and `friction_iterations: 2` are the defaults (F6 kept as `follow_stiffness`, budget 1 explicit); HDA *Friction Lag* control `f10f9c8`](rb-10-validation.md) |
@@ -209,12 +209,14 @@ input-validation stage is validated within stated scope and published
 (2026-09-13); its physical envelope stage is characterized with its limits
 documented (2026-09-14). RB-12 is closed (2026-09-15): run manifest,
 repeatability matrix, CI checks and the dependency forks' CI; its
-leftovers are CI-plan items. Remaining
+leftovers are CI-plan items. RB-06 is validated within stated scope
+(2026-09-15): a failed attempt restores the last accepted state in memory
+before the failure is reported (no retry). Remaining
 order: RB-23 (Q3+ hexahedral basis) is
-independently eligible and is the prerequisite for Q3+ hex contact. RB-06–RB-08 remain the resource/recovery track
-(RB-05's `aborted` attempt row and discarded swept interval are the state RB-06
-starts from; a resource failure is now a distinct, non-retried exception type
-for RB-08 to build a policy on); select them when needed. The default resource
+independently eligible and is the prerequisite for Q3+ hex contact. RB-07 is
+the remaining item of the resource/recovery track and can build on RB-06's
+restoration; RB-08 stays closed (a resource failure is a distinct,
+non-retried exception type should the policy ever be reopened). The default resource
 limits and the exit statuses were decided on 2026-09-12 (RB-05 follow-up):
 named failures exit 1, resource failures 3, an abort signal is a real crash. RB-24 (per-thread contact memory) can be
 selected at any time. A dependency does not authorize completing two items
@@ -474,6 +476,18 @@ and the precise scope of resource protection. A default budget needs a separate
 user choice based on target machines and measured workloads.
 
 ## RB-06 — Failed-attempt state isolation and rollback
+
+**Status 2026-09-15: validated within stated scope** — see
+[rb-06-validation.md](rb-06-validation.md). The step transaction lives in
+`NonlinearElasticVarForm::solve_tensor_nonlinear` (rollback point captured
+before the first mutation, restored and verified on any exception, then the
+exception is rethrown unchanged); the state API is `Form::save_state` /
+`restore_state` and `NLProblem::save_state` / `restore_state`; the test hook
+is `solver/advanced/failure_injection`; the recovery test is
+`unit_tests "[rollback]"` and the end-to-end matrix `tools/rb06/run_injection.py`.
+Exclusions: the legacy `State` path, the FSI embedding, the differentiable
+solve body, committed conservative-check quadrature refinements, disk
+checkpoints. The specification below is retained as the item's contract.
 
 **Revised integration scope:** extend the inventory to RB-14 estimator caches,
 reference states, gap/demand uncertainty, RB-15 coefficient identity and RB-16

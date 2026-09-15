@@ -90,7 +90,28 @@ namespace polyfem::solver
 			iteration_observer_failed_ = false;
 		}
 
+		/// @brief RB-06: the attempt-mutable state of every form of this
+		///        problem (Form::save_state), captured together at a
+		///        transaction boundary. Opaque to callers; restore it with
+		///        restore_state on the same problem.
+		struct SavedState
+		{
+			virtual ~SavedState() = default;
+			std::vector<std::unique_ptr<FormState>> forms;
+		};
+		virtual std::unique_ptr<SavedState> save_state() const;
+		/// @param x The full coordinates the state was captured at.
+		virtual void restore_state(const SavedState &state, const TVector &x);
+
+		/// @brief RB-06 test hook: called after the forms' post_step of every
+		///        accepted iterate with the iteration count and the full
+		///        coordinates; it may throw to abandon the solve at a
+		///        deterministic point (solver/advanced/failure_injection).
+		///        Never installed in production; nullptr clears it.
+		void set_post_step_fault(std::function<void(int, const TVector &)> fault) { post_step_fault_ = std::move(fault); }
+
 	protected:
+		std::function<void(int, const TVector &)> post_step_fault_ = nullptr;
 		std::vector<std::shared_ptr<Form>> forms_;
 		const bool is_residual_;
 

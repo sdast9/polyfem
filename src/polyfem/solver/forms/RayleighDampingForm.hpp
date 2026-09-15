@@ -63,6 +63,25 @@ namespace polyfem::solver
 		/// @brief Get the stiffness of the form
 		double stiffness() const;
 
+		/// @brief RB-06: the lagged stiffness matrix.
+		struct State : public FormState
+		{
+			StiffnessMatrix lagged_stiffness_matrix;
+		};
+		std::unique_ptr<FormState> save_state() const override
+		{
+			auto state = std::make_unique<State>();
+			save_base_state(*state);
+			state->lagged_stiffness_matrix = lagged_stiffness_matrix_;
+			return state;
+		}
+		void restore_state(const FormState &state, const Eigen::VectorXd &) override
+		{
+			const State &damping = state_as<State>(state, "RayleighDampingForm");
+			restore_base_state(damping);
+			lagged_stiffness_matrix_ = damping.lagged_stiffness_matrix;
+		}
+
 	private:
 		const Form &form_to_damp_;                                       ///< Reference to the form we are damping
 		const time_integrator::ImplicitTimeIntegrator &time_integrator_; ///< Reference to the time integrator

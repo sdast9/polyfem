@@ -51,7 +51,10 @@ current.
   implemented and the constraint-floor barrier deletion/projection was removed
   on 2026-09-07 (old `constraint_floor` values are ignored compatibility data;
   positive values warn); CCD and the semi-implicit trial-displacement cap
-  remain; PF-09 hard contact is deferred. See also
+  remain; PF-09 hard contact is deferred. A failed nonlinear solve attempt
+  restores the last accepted state in memory before the failure is reported
+  ([RB-06](docs/rb-06-validation.md), 2026-09-15; no retry — a failed step
+  still ends the run with exit status 1, or 3 for a resource failure). See also
   [floor retirement](docs/pf-02-floor-removal.md),
   [semi-implicit usage](scenes/semi-implicit/README.md) and
   [VarForm architecture](docs/varform-design.md).

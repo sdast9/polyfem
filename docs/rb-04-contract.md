@@ -20,6 +20,16 @@ here. A failure record's coordinates are the retained caller `sol`, with current
 attempt form state, **not** an exposed failed internal Newton trial or a
 transactionally restored last accepted state. RB-06 owns rollback.
 
+**RB-06 addition (2026-09-15, record version unchanged):** a failure record
+carries `rollback` (what the in-memory transaction restores right after the
+record is written and where its verification is) and `solve_start` (the
+solve-start coordinates, i.e. the state the rollback restores). The record's
+`endpoint` and form measurements still describe the failed attempt's retained
+coordinates and form state; the manifest's step record then carries
+`rollback: {performed, verified}`, and the coefficient-event stream ends the
+failed step with a `rollback` event (before = the failed attempt's state,
+after = the restored one, both at the restored coordinates).
+
 Final AL/reduced termination comes from `ALSolver::info`, including configured
 slope/gradient criteria and restart counts. Lagged minimize termination comes
 from PolySolve; the independently measured updated-lag residual and convergence

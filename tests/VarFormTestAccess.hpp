@@ -66,6 +66,37 @@ namespace polyfem::test
 			form.prepare();
 		}
 
+		// RB-06: drive the staged transient loop step by step (a rolled-back
+		// step re-solved by a test is a test action, not a retry policy).
+		static void begin_transient_run(varform::NonlinearElasticTransientVarForm &form, Eigen::MatrixXd &sol, const varform::ForwardStepCallback &post_step)
+		{
+			form.begin_transient_run(sol, nullptr, post_step);
+		}
+		static void solve_transient_step(varform::NonlinearElasticTransientVarForm &form, const int t, Eigen::MatrixXd &sol, const varform::ForwardStepCallback &post_step)
+		{
+			form.solve_transient_step(t, sol, post_step);
+		}
+		static void advance_transient_step(varform::NonlinearElasticTransientVarForm &form, const int t, Eigen::MatrixXd &sol)
+		{
+			form.advance_transient_step(t, sol);
+		}
+		static void end_transient_run(varform::NonlinearElasticTransientVarForm &form)
+		{
+			form.end_transient_run();
+		}
+		static json attempt_state_fingerprint(const varform::NonlinearElasticVarForm &form, const Eigen::VectorXd &sol)
+		{
+			return form.attempt_state_fingerprint(sol);
+		}
+		static void set_failure_injection(varform::NonlinearElasticVarForm &form, const solver::FailureInjection &injection)
+		{
+			form.failure_injection_ = injection;
+		}
+		static const solver::SolveData &solve_data(const varform::NonlinearElasticVarForm &form)
+		{
+			return form.solve_data_;
+		}
+
 		static VarFormDebugData debug_data(const varform::VarForm &form)
 		{
 			const io::OutputSpace output_space = form.output_space();

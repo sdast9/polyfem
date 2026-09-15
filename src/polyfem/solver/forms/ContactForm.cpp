@@ -122,6 +122,40 @@ namespace polyfem::solver
 		use_cached_candidates_ = false;
 	}
 
+	void ContactForm::save_contact_state(State &state) const
+	{
+		save_base_state(state);
+		state.barrier_stiffness = barrier_stiffness_;
+		state.max_barrier_stiffness = max_barrier_stiffness_;
+		state.prev_distance = prev_distance_;
+		state.use_cached_candidates = use_cached_candidates_;
+		state.candidates = candidates_;
+		state.candidate_statistics = candidate_statistics_;
+	}
+
+	void ContactForm::restore_contact_state(const State &state)
+	{
+		restore_base_state(state);
+		barrier_stiffness_ = state.barrier_stiffness;
+		max_barrier_stiffness_ = state.max_barrier_stiffness;
+		prev_distance_ = state.prev_distance;
+		use_cached_candidates_ = state.use_cached_candidates;
+		candidates_ = state.candidates;
+		candidate_statistics_ = state.candidate_statistics;
+	}
+
+	std::unique_ptr<FormState> ContactForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_contact_state(*state);
+		return state;
+	}
+
+	void ContactForm::restore_state(const FormState &state, const Eigen::VectorXd &)
+	{
+		restore_contact_state(state_as<State>(state, "ContactForm"));
+	}
+
 	void ContactForm::apply_resource_limits(const ResourceLimits &limits)
 	{
 		const bool enforceable = broad_phase_->supports_budget();

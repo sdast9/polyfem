@@ -74,6 +74,16 @@ namespace polyfem::solver
 
 		double normalize_forms() override;
 
+		/// @brief RB-06: the forms' state plus the penalty (AL) forms' state
+		///        and the current (full/reduced) coordinate mode.
+		struct SavedState : public FullNLProblem::SavedState
+		{
+			std::vector<std::unique_ptr<FormState>> penalty_forms;
+			bool reduced = false;
+		};
+		std::unique_ptr<FullNLProblem::SavedState> save_state() const override;
+		void restore_state(const FullNLProblem::SavedState &state, const TVector &x) override;
+
 		virtual double grad_norm_rescaling(const polysolve::nonlinear::NormType norm_type) const override;
 		virtual double step_norm_rescaling(const polysolve::nonlinear::NormType norm_type) const override;
 		virtual double energy_norm_rescaling(const polysolve::nonlinear::NormType norm_type) const override;

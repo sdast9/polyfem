@@ -123,6 +123,25 @@ namespace polyfem::solver
 		hessian = collision_mesh_.to_full_dof(hessian);
 	}
 
+	std::unique_ptr<FormState> FrictionForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_base_state(*state);
+		state->friction_collision_set = friction_collision_set_;
+		state->lagged_trim = lagged_trim_;
+		state->lag_x = lag_x_;
+		return state;
+	}
+
+	void FrictionForm::restore_state(const FormState &state, const Eigen::VectorXd &)
+	{
+		const State &friction_state = state_as<State>(state, "FrictionForm");
+		restore_base_state(friction_state);
+		friction_collision_set_ = friction_state.friction_collision_set;
+		lagged_trim_ = friction_state.lagged_trim;
+		lag_x_ = friction_state.lag_x;
+	}
+
 	void FrictionForm::update_lagging(const Eigen::VectorXd &x, const int iter_num)
 	{
 		lag_x_ = x;

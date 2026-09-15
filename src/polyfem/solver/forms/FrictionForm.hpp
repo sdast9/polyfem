@@ -109,6 +109,18 @@ namespace polyfem::solver
 		bool realized_lag() const;
 		const ipc::FrictionPotential &friction_potential() const { return friction_potential_; }
 
+		/// @brief RB-06: the lag -- the tangential collision set with its
+		///        lagged normal forces, the trim baked into them and the
+		///        coordinates it was built at.
+		struct State : public FormState
+		{
+			ipc::TangentialCollisions friction_collision_set;
+			double lagged_trim = 1;
+			Eigen::VectorXd lag_x;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
 	private:
 		/// Reference to the collision mesh
 		const ipc::CollisionMesh &collision_mesh_;

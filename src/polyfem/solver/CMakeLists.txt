@@ -1,6 +1,8 @@
 set(SOURCES
 	ALSolver.cpp
 	ALSolver.hpp
+	FailureInjection.cpp
+	FailureInjection.hpp
 	FullNLProblem.cpp
 	FullNLProblem.hpp
 	NLProblem.cpp

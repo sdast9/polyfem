@@ -30,6 +30,22 @@ namespace polyfem::solver
 			f->init(x);
 	}
 
+	std::unique_ptr<FullNLProblem::SavedState> FullNLProblem::save_state() const
+	{
+		auto state = std::make_unique<SavedState>();
+		for (const auto &f : forms_)
+			state->forms.push_back(f->save_state());
+		return state;
+	}
+
+	void FullNLProblem::restore_state(const SavedState &state, const TVector &x)
+	{
+		if (state.forms.size() != forms_.size())
+			throw std::logic_error("Nonlinear problem state was captured with a different number of forms");
+		for (size_t i = 0; i < forms_.size(); ++i)
+			forms_[i]->restore_state(*state.forms[i], x);
+	}
+
 	void FullNLProblem::set_project_to_psd(bool project_to_psd)
 	{
 		for (auto &f : forms_)
@@ -246,5 +262,10 @@ namespace polyfem::solver
 		observation.iteration = data.iter_num;
 		observation.solver_info = &data.solver_info;
 		observe(observation);
+
+		// RB-06 test hook, after the observation so the stream keeps the
+		// iterate the injected failure abandons.
+		if (post_step_fault_)
+			post_step_fault_(data.iter_num, data.x);
 	}
 } // namespace polyfem::solver

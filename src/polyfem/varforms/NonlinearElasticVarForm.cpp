@@ -232,6 +232,10 @@ namespace polyfem::varform
 			record["last_internal_iterate"] = observations.contains("last_internal_iterate")
 												  ? observations["last_internal_iterate"]
 												  : missing("No accepted Newton iterate was observed before the failure");
+			// RB-06: what happens to that state right after this record; the
+			// solve-start coordinates are the state the rollback restores.
+			record["rollback"] = observations.contains("rollback") ? observations["rollback"] : missing("No rollback announced for this attempt");
+			record["solve_start"] = start.size() == x.size() ? vector(start) : missing("Solve-start coordinates not retained");
 		}
 		record["work_convention"] = "Right-endpoint discrete increments: endpoint force dotted with the accepted displacement of this step, physical units; support force on the system sign; solved-lag friction; parameter-state energy change at the previous physical coordinates (docs/rb-04-work-convention.md). Not path integrals and not a physical balance.";
 		record["physical_balance_pass"] = missing("Not evaluated: no complete endpoint measurement");
@@ -1361,6 +1365,10 @@ namespace polyfem::varform
 		init_solve(sol, 1.0, initial_condition_override);
 
 		solve_tensor_nonlinear(0, sol, true);
+		// RB-06: the solve is accepted; a failure from here on is a
+		// publication failure of an accepted solve, not a failed attempt.
+		if (failure_injection_.matches(solver::FailureInjection::Phase::BeforePublication, 0))
+			failure_injection_.raise("static solve, before the step callback and the state output");
 		if (post_step)
 			post_step(0, sol);
 
@@ -1373,7 +1381,37 @@ namespace polyfem::varform
 		logger().info(" took {}s", timings.solving_time);
 	}
 
+	/// RB-06: the per-run writers and counters the staged time loop shares.
+	struct NonlinearElasticTransientVarForm::TransientRun
+	{
+		igl::Timer timer;
+		std::unique_ptr<io::EnergyCSVWriter> energy_csv;
+		std::unique_ptr<io::RuntimeStatsCSVWriter> stats_csv;
+		int save_i = 0;
+		double forward_solve_time = 0;
+	};
+
+	NonlinearElasticTransientVarForm::NonlinearElasticTransientVarForm() = default;
+	NonlinearElasticTransientVarForm::~NonlinearElasticTransientVarForm() = default;
+
 	void NonlinearElasticTransientVarForm::solve_problem(
+		Eigen::MatrixXd &sol,
+		const InitialConditionOverride *initial_condition_override,
+		const ForwardStepCallback &post_step)
+	{
+		begin_transient_run(sol, initial_condition_override, post_step);
+		for (int t = 1; t <= time_steps; ++t)
+		{
+			// A failed attempt restores the last accepted state and rethrows:
+			// nothing of this step is published, the history does not advance
+			// and the run stops with a named failure (RB-08: no retry).
+			solve_transient_step(t, sol, post_step);
+			advance_transient_step(t, sol);
+		}
+		end_transient_run();
+	}
+
+	void NonlinearElasticTransientVarForm::begin_transient_run(
 		Eigen::MatrixXd &sol,
 		const InitialConditionOverride *initial_condition_override,
 		const ForwardStepCallback &post_step)
@@ -1381,8 +1419,9 @@ namespace polyfem::varform
 		const bool save_stats = args["output"]["stats"];
 		stats.spectrum.setZero();
 
-		igl::Timer timer;
-		timer.start();
+		transient_run_ = std::make_unique<TransientRun>();
+		TransientRun &run = *transient_run_;
+		run.timer.start();
 		logger().info("Solving {}", primary_assembler_->name());
 
 		{
@@ -1408,17 +1447,12 @@ namespace polyfem::varform
 			post_step(0, sol);
 
 		// Write the total energy to a CSV file
-		int save_i = 0;
-
-		std::unique_ptr<io::EnergyCSVWriter> energy_csv = nullptr;
-		std::unique_ptr<io::RuntimeStatsCSVWriter> stats_csv = nullptr;
-
 		if (save_stats)
 		{
 			logger().debug("Saving nl stats to {} and {}", resolve_output_path("energy.csv"), resolve_output_path("stats.csv"));
-			energy_csv = std::make_unique<io::EnergyCSVWriter>(resolve_output_path("energy.csv"), solve_data_);
+			run.energy_csv = std::make_unique<io::EnergyCSVWriter>(resolve_output_path("energy.csv"), solve_data_);
 			const io::OutputSpace space = output_space();
-			stats_csv = std::make_unique<io::RuntimeStatsCSVWriter>(
+			run.stats_csv = std::make_unique<io::RuntimeStatsCSVWriter>(
 				resolve_output_path("stats.csv"),
 				space_.n_bases,
 				space.mesh ? space.mesh->n_elements() : 0,
@@ -1426,53 +1460,74 @@ namespace polyfem::varform
 		}
 
 		// Save the initial solution
-		if (energy_csv)
-			energy_csv->write(save_i, sol);
+		if (run.energy_csv)
+			run.energy_csv->write(run.save_i, sol);
 		save_timestep(t0, 0, t0, dt, sol);
 
-		save_i++;
+		run.save_i++;
+	}
 
-		for (int t = 1; t <= time_steps; ++t)
+	void NonlinearElasticTransientVarForm::solve_transient_step(const int t, Eigen::MatrixXd &sol, const ForwardStepCallback &post_step)
+	{
+		assert(transient_run_ && "begin_transient_run must precede the steps");
+		TransientRun &run = *transient_run_;
+		run.forward_solve_time = 0;
 		{
-			double forward_solve_time = 0, remeshing_time = 0, global_relaxation_time = 0;
+			POLYFEM_SCOPED_TIMER(run.forward_solve_time);
+			solve_tensor_nonlinear(t, sol, true);
+		}
+		// RB-06: from here on the solve is accepted (RB-04 recording boundary);
+		// a failure below is a publication failure of an accepted solve. The
+		// step callback fires only for an accepted solve, so no caller ever
+		// hears of a failed attempt as a completed step.
+		if (failure_injection_.matches(solver::FailureInjection::Phase::BeforePublication, t))
+			failure_injection_.raise("transient step, before the step callback and the step's outputs");
+		if (post_step)
+			post_step(t, sol);
 
-			{
-				POLYFEM_SCOPED_TIMER(forward_solve_time);
-				solve_tensor_nonlinear(t, sol, true);
-			}
-			if (post_step)
-				post_step(t, sol);
+		// Always save the solution for consistency
+		if (run.energy_csv)
+			run.energy_csv->write(run.save_i, sol);
+		save_timestep(t0 + dt * t, t, t0, dt, sol);
+		run.save_i++;
+		if (failure_injection_.matches(solver::FailureInjection::Phase::AfterPublication, t))
+			failure_injection_.raise("transient step, after the step's outputs and before the history advances");
+	}
 
-			// Always save the solution for consistency
-			if (energy_csv)
-				energy_csv->write(save_i, sol);
-			save_timestep(t0 + dt * t, t, t0, dt, sol);
-			save_i++;
+	void NonlinearElasticTransientVarForm::advance_transient_step(const int t, Eigen::MatrixXd &sol)
+	{
+		assert(transient_run_ && "begin_transient_run must precede the steps");
+		TransientRun &run = *transient_run_;
+		const double remeshing_time = 0, global_relaxation_time = 0;
+		{
+			POLYFEM_SCOPED_TIMER("Update quantities");
+			configure_coefficient_diagnostics(t, "between_steps_after_endpoint");
 
-			{
-				POLYFEM_SCOPED_TIMER("Update quantities");
-				configure_coefficient_diagnostics(t, "between_steps_after_endpoint");
+			if (solve_data_.time_integrator)
+				solve_data_.time_integrator->update_quantities(sol);
 
-				if (solve_data_.time_integrator)
-					solve_data_.time_integrator->update_quantities(sol);
+			solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);
 
-				solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);
-
-				solve_data_.update_dt();
-				solve_data_.update_barrier_stiffness(sol);
-			}
-
-			logger().info("{}/{}  t={}", t, time_steps, t0 + dt * t);
-			notify_time_step(t, time_steps, t0, dt);
-
-			save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
-			if (stats_csv)
-				stats_csv->write(t, forward_solve_time, remeshing_time, global_relaxation_time);
+			solve_data_.update_dt();
+			solve_data_.update_barrier_stiffness(sol);
 		}
 
-		timer.stop();
-		timings.solving_time = timer.getElapsedTime();
+		logger().info("{}/{}  t={}", t, time_steps, t0 + dt * t);
+		notify_time_step(t, time_steps, t0, dt);
+
+		save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
+		if (run.stats_csv)
+			run.stats_csv->write(t, run.forward_solve_time, remeshing_time, global_relaxation_time);
+	}
+
+	void NonlinearElasticTransientVarForm::end_transient_run()
+	{
+		assert(transient_run_ && "begin_transient_run must precede end_transient_run");
+		TransientRun &run = *transient_run_;
+		run.timer.stop();
+		timings.solving_time = run.timer.getElapsedTime();
 		logger().info(" took {}s", timings.solving_time);
+		transient_run_.reset();
 	}
 
 	void NonlinearElasticVarForm::init_forms(const json &args, const int dim, Eigen::MatrixXd &sol, const double t)
@@ -1680,6 +1735,7 @@ namespace polyfem::varform
 		// Initialize nonlinear problems
 
 		init_forms(args, mesh_->dimension(), sol, t);
+		failure_injection_ = solver::FailureInjection::from_args(args["solver"]["advanced"]);
 		if (run_manifest_)
 			run_manifest_->record_model(manifest_model_description());
 
@@ -1744,6 +1800,36 @@ namespace polyfem::varform
 		if (diagnostics_enabled)
 			ensure_diagnostic_run_id();
 		const Eigen::VectorXd diagnostic_start = diagnostics_enabled ? Eigen::VectorXd(sol) : Eigen::VectorXd();
+
+		// RB-06 step transaction. Everything below may change the solution
+		// vector and the forms' attempt state (contact snapshot, trim and
+		// memo, friction lag, AL multipliers and weights, lagged fields, the
+		// problem's coordinate mode). The rollback point captures all of it
+		// before the first mutation; a failed attempt puts it back before
+		// the failure is rethrown, so the caller's solution and every form
+		// equal the last accepted state (verified by the fingerprint below),
+		// the failed iterate survives only in the diagnostic records, and no
+		// success callback or output of this step ever fires. The time
+		// integrator's history is not touched by an attempt (it advances
+		// between steps) and is checked, not restored. In-memory only: the
+		// files of earlier accepted steps are untouched either way. This is
+		// not a retry (RB-08): the failure still ends the run.
+		struct RollbackPoint
+		{
+			Eigen::VectorXd solution;
+			std::unique_ptr<solver::FullNLProblem::SavedState> state;
+			json fingerprint;
+		} rollback_point;
+		{
+			double capture_seconds = 0;
+			{
+				POLYFEM_SCOPED_TIMER(capture_seconds);
+				rollback_point.solution = sol;
+				rollback_point.state = solve_data_.nl_problem->save_state();
+				rollback_point.fingerprint = attempt_state_fingerprint(rollback_point.solution);
+			}
+			logger().debug("Rollback point of step {} captured in {:g} s", step, capture_seconds);
+		}
 		std::string diagnostic_phase = "initialization";
 		json diagnostic_termination = {{"unavailable_reason", "No completed subsolve"}};
 		json diagnostic_lagging = {{"state", "not reached"}};
@@ -1955,6 +2041,32 @@ namespace polyfem::varform
 			}
 		} observer_guard{diagnostics_enabled ? solve_data_.nl_problem : nullptr};
 
+		// RB-06 test hook: an injected failure at an accepted Newton iterate
+		// of an AL subsolve or of the reduced solve (solver/advanced/
+		// failure_injection). Cleared on every exit path.
+		struct FaultGuard
+		{
+			std::shared_ptr<solver::NLProblem> problem;
+			~FaultGuard()
+			{
+				if (problem)
+					problem->set_post_step_fault(nullptr);
+			}
+		} fault_guard{failure_injection_.phase == solver::FailureInjection::Phase::ALSubsolve
+							  || failure_injection_.phase == solver::FailureInjection::Phase::Reduced
+						  ? solve_data_.nl_problem
+						  : nullptr};
+		if (fault_guard.problem)
+		{
+			fault_guard.problem->set_post_step_fault([this, step, &diagnostic_phase](const int iteration, const Eigen::VectorXd &) {
+				const auto at = diagnostic_phase == "augmented_lagrangian" ? solver::FailureInjection::Phase::ALSubsolve
+								: diagnostic_phase == "reduced"            ? solver::FailureInjection::Phase::Reduced
+																		   : solver::FailureInjection::Phase::None;
+				if (at != solver::FailureInjection::Phase::None && failure_injection_.matches(at, step, iteration))
+					failure_injection_.raise(fmt::format("accepted Newton iterate {} of the {} solve", iteration, diagnostic_phase));
+			});
+		}
+
 		const auto emit_diagnostics = [&](const std::string &outcome, const std::string &error = "") {
 			// RB-12: the manifest's step record, for every outcome, before the
 			// opt-in RB-04 record (which may be disabled).
@@ -2056,9 +2168,14 @@ namespace polyfem::varform
 				stall_opts.max_restarts = restart_opts["max_restarts"];
 
 				const double stall_trim_factor = restart_opts["stall_trim_factor"];
-				on_stall = [barrier_form, stall_trim_factor, &attempts](const Eigen::VectorXd &x) {
+				on_stall = [this, barrier_form, stall_trim_factor, step, &attempts](const Eigen::VectorXd &x) {
 					++attempts.stall_retunes;
-					return barrier_form->retune_on_stall(x, stall_trim_factor);
+					const bool retuned = barrier_form->retune_on_stall(x, stall_trim_factor);
+					// RB-06 test hook: a failure between a coefficient
+					// correction and the equilibrium solve that would use it.
+					if (failure_injection_.matches(solver::FailureInjection::Phase::AfterStallRetune, step))
+						failure_injection_.raise("stall restart hook, after the barrier stiffness retune");
+					return retuned;
 				};
 			}
 
@@ -2097,6 +2214,11 @@ namespace polyfem::varform
 				diagnostic_termination = al_solver.info();
 				throw;
 			}
+			// RB-06 test hook: a failure between the feasibility stage and
+			// the reduced solve (the AL multipliers, weights and any stall
+			// retune of that stage are then attempt state to roll back).
+			if (failure_injection_.matches(solver::FailureInjection::Phase::AfterAL, step))
+				failure_injection_.raise("after the augmented-Lagrangian stage, before the reduced solve");
 
 			diagnostic_phase = "reduced";
 			configure_coefficient_diagnostics(step, diagnostic_phase);
@@ -2129,6 +2251,10 @@ namespace polyfem::varform
 				configure_coefficient_diagnostics(step, diagnostic_phase);
 				const json friction_before = diagnostics_enabled ? observe_friction() : json();
 				nl_problem.update_lagging(tmp_sol, lag_i);
+				// RB-06 test hook: a failure right after the friction lag was
+				// rebuilt at the returned coordinates.
+				if (failure_injection_.matches(solver::FailureInjection::Phase::Lagging, step, lag_i))
+					failure_injection_.raise(fmt::format("lagging iteration {}, after the lag update", lag_i));
 
 				Eigen::VectorXd grad;
 				nl_problem.gradient(tmp_sol, grad);
@@ -2205,9 +2331,79 @@ namespace polyfem::varform
 				++attempts.aborted_proposals;
 				attempts.has_proposal = false;
 			}
+			// RB-06: the failure record keeps the RB-04 contract -- the
+			// retained caller coordinates with the attempt's form state, i.e.
+			// what the failed attempt left behind -- and announces the rollback
+			// that follows it; the manifest's step record then carries the
+			// rollback's verification.
+			diagnostic_observations["rollback"] = {
+				{"performed", "after this record"},
+				{"restores", "the solution vector, every form's attempt state (Form::save_state: contact snapshot, trim and memo, swept candidates, friction lag, AL multipliers and weights, lagged fields, form weights/scales/enabled flags) and the problem's coordinate mode, all captured at solve start"},
+				{"not_restored", "the time-integration history (not touched by an attempt; checked), diagnostic event counters (monotonic), files of earlier accepted steps (untouched either way)"},
+				{"verification", "run-manifest.json steps[].rollback (fingerprint equality after the restore) and the log"}};
 			emit_diagnostics("failed_attempt", e.what());
+			json rollback = {{"performed", false}, {"verified", false}};
+			try
+			{
+				solve_data_.nl_problem->restore_state(*rollback_point.state, rollback_point.solution);
+				sol = rollback_point.solution;
+				rollback["performed"] = true;
+				const json after = attempt_state_fingerprint(sol);
+				rollback["verified"] = after == rollback_point.fingerprint;
+				if (rollback["verified"].get<bool>())
+					logger().warn(
+						"Step {}: the failed attempt was rolled back; the solution and the forms are at the last accepted state again (verified). The failed iterate is kept only in the diagnostic records. Failure: {}",
+						step, e.what());
+				else
+				{
+					rollback["fingerprint_at_capture"] = rollback_point.fingerprint;
+					rollback["fingerprint_after_restore"] = after;
+					logger().error(
+						"Step {}: the failed attempt was rolled back but the restored state does not match the state captured at solve start (see run-manifest.json steps[].rollback); a member of a form's attempt state is not covered by Form::save_state",
+						step);
+				}
+			}
+			catch (const std::exception &restore_error)
+			{
+				rollback["error"] = restore_error.what();
+				logger().critical("Step {}: rollback of the failed attempt failed: {}", step, restore_error.what());
+			}
+			logger().flush();
+			if (run_manifest_)
+				run_manifest_->amend_last_step({{"rollback", rollback}});
 			throw;
 		}
+	}
+
+	json NonlinearElasticVarForm::attempt_state_fingerprint(const Eigen::VectorXd &sol) const
+	{
+		json fingerprint = {{"solution_size", sol.size()}, {"solution_norm", sol.norm()}, {"solution_linf", sol.size() > 0 ? sol.lpNorm<Eigen::Infinity>() : 0.0}};
+		if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+			fingerprint["contact"] = barrier->diagnostic_state();
+		else if (solve_data_.contact_form)
+			fingerprint["contact"] = {{"stiffness", solve_data_.contact_form->barrier_stiffness()}};
+		if (solve_data_.friction_form)
+		{
+			const auto &lag = solve_data_.friction_form->friction_collision_set();
+			double normal_force_sum = 0;
+			for (size_t i = 0; i < lag.size(); ++i)
+				normal_force_sum += lag[i].weight * lag[i].normal_force_magnitude;
+			fingerprint["friction"] = {{"lag_size", lag.size()}, {"lagged_normal_force_sum", normal_force_sum}, {"trim_scale", solve_data_.friction_form->trim_scale()}};
+		}
+		json al = json::array();
+		for (const auto &form : solve_data_.al_form)
+			al.push_back({{"name", form->name()}, {"weight", form->lagrangian_weight()}, {"multiplier_norm", form->lagrange_multipliers().norm()}, {"multiplier_size", form->lagrange_multipliers().size()}});
+		fingerprint["augmented_lagrangian"] = al;
+		json weights = json::object();
+		for (const auto &form : forms)
+			weights[form->name()] = {{"weight", form->weight()}, {"enabled", form->enabled()}};
+		fingerprint["forms"] = weights;
+		if (solve_data_.time_integrator)
+		{
+			const auto &integrator = *solve_data_.time_integrator;
+			fingerprint["history"] = {{"steps", integrator.steps()}, {"x_prev_norm", integrator.x_prev().norm()}, {"v_prev_norm", integrator.v_prev().norm()}, {"a_prev_norm", integrator.a_prev().norm()}, {"dt", integrator.dt()}};
+		}
+		return fingerprint;
 	}
 
 } // namespace polyfem::varform

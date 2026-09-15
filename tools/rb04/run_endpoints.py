@@ -25,10 +25,16 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--contact-path', action='store_true', help='Enable expensive path observations in diagnostic-on runs')
+    p.add_argument('--binary', type=Path, default=ROOT / 'build/PolyFEM_bin')
+    # RB-12 stage 2: threaded friction runs of the public fixture diverge to
+    # 1.7e-4 through a trim decision at the tolerance edge, so the on/off
+    # comparison below is only meaningful single-threaded; unset = the
+    # binary's default (all cores), as the historical runs were made.
+    p.add_argument('--max-threads', type=int, default=None)
     args = p.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    binary = ROOT / 'build/PolyFEM_bin'
+    binary = args.binary.resolve()
     results = {'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'runs': []}
     def run(name, enabled, failure=False):
         directory = out / (name + ('-failure' if failure else '') + ('-on' if enabled else '-off'))
@@ -46,6 +52,8 @@ def main():
                 'soft_iteration_limit': 1, 'max_restarts': 1, 'min_iterations': 0}}
         (directory / 'params.json').write_text(json.dumps(config, indent=2) + '\n')
         cmd = [str(binary), '--json', str(directory / 'params.json'), '--log_level', 'debug']
+        if args.max_threads is not None:
+            cmd += ['--max_threads', str(args.max_threads)]
         started = time.monotonic()
         with (directory / 'run.log').open('w') as log:
             proc = subprocess.run(cmd, cwd=directory, stdout=log, stderr=subprocess.STDOUT)

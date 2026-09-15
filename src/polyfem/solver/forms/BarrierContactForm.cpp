@@ -1159,6 +1159,84 @@ namespace polyfem::solver
 			barrier_stiffness(), max_barrier_stiffness_);
 	}
 
+	void BarrierContactForm::save_barrier_state(State &state) const
+	{
+		save_contact_state(state);
+		state.collision_set = collision_set_;
+		state.kappa_surface = kappa_surface_;
+		state.kappa_hessian = kappa_hessian_;
+		state.kappa_cache = kappa_cache_;
+		state.prev_kappa_cache = prev_kappa_cache_;
+		state.endpoint_kappa = endpoint_kappa_;
+		state.continued_keys = continued_keys_;
+		state.kappa_continued_count = kappa_continued_count_;
+		state.kappa_fresh_count = kappa_fresh_count_;
+		state.iters_since_refresh = iters_since_refresh_;
+		state.iters_since_trim = iters_since_trim_;
+		state.diagnostic_refresh_id = diagnostic_refresh_id_;
+		state.kappa_cap = kappa_cap_;
+		state.kappa_floor = kappa_floor_;
+		state.kappa_median = kappa_median_;
+		state.kappa_fallback_count = kappa_fallback_count_;
+		state.kappa_abs_fallback_count = kappa_abs_fallback_count_;
+		state.kappa_global_fallback_count = kappa_global_fallback_count_;
+		state.kappa_interpolated_count = kappa_interpolated_count_;
+		state.kappa_direction_fallback_count = kappa_direction_fallback_count_;
+		state.kappa_snapshot_had_contacts = kappa_snapshot_had_contacts_;
+		state.trim_solve_anchor = trim_solve_anchor_;
+		state.kappa_hessian_max = kappa_hessian_max_;
+	}
+
+	void BarrierContactForm::restore_barrier_state(const State &state)
+	{
+		restore_contact_state(state);
+		collision_set_ = state.collision_set;
+		kappa_surface_ = state.kappa_surface;
+		kappa_hessian_ = state.kappa_hessian;
+		kappa_cache_ = state.kappa_cache;
+		prev_kappa_cache_ = state.prev_kappa_cache;
+		endpoint_kappa_ = state.endpoint_kappa;
+		continued_keys_ = state.continued_keys;
+		kappa_continued_count_ = state.kappa_continued_count;
+		kappa_fresh_count_ = state.kappa_fresh_count;
+		iters_since_refresh_ = state.iters_since_refresh;
+		iters_since_trim_ = state.iters_since_trim;
+		diagnostic_refresh_id_ = state.diagnostic_refresh_id;
+		kappa_cap_ = state.kappa_cap;
+		kappa_floor_ = state.kappa_floor;
+		kappa_median_ = state.kappa_median;
+		kappa_fallback_count_ = state.kappa_fallback_count;
+		kappa_abs_fallback_count_ = state.kappa_abs_fallback_count;
+		kappa_global_fallback_count_ = state.kappa_global_fallback_count;
+		kappa_interpolated_count_ = state.kappa_interpolated_count;
+		kappa_direction_fallback_count_ = state.kappa_direction_fallback_count;
+		kappa_snapshot_had_contacts_ = state.kappa_snapshot_had_contacts;
+		trim_solve_anchor_ = state.trim_solve_anchor;
+		kappa_hessian_max_ = state.kappa_hessian_max;
+		// Transient flags of a refresh in progress; a state is never captured
+		// inside one, and a rollback never lands inside one.
+		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+	}
+
+	std::unique_ptr<FormState> BarrierContactForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_barrier_state(*state);
+		return state;
+	}
+
+	void BarrierContactForm::restore_state(const FormState &state, const Eigen::VectorXd &x)
+	{
+		const State &barrier_state = state_as<State>(state, "BarrierContactForm");
+		// The event's "before" is the failed attempt's coefficient state at
+		// the restored coordinates, its "after" the restored state: the
+		// objective change at fixed coordinates is the rollback's own
+		// parameter-state change, not mechanical work.
+		CoefficientEventScope event(*this, x, "rollback");
+		restore_barrier_state(barrier_state);
+	}
+
 	void BarrierContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
 	{
 		// Position equality is not a complete cache key: another form can use

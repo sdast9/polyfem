@@ -1944,9 +1944,60 @@
             "jacobian_threshold",
             "conservative_max_iter",
             "characteristic_length",
-            "characteristic_force_density"
+            "characteristic_force_density",
+            "failure_injection"
         ],
         "doc": "Advanced settings for the solver"
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "phase",
+            "step",
+            "iteration",
+            "kind"
+        ],
+        "doc": "RB-06 test hook, off by default: throw a deterministic failure at a chosen point of one step's nonlinear solve so the failed-attempt rollback (the in-memory transaction that returns the solution and every form's state to the last accepted state before the failure is reported) and the publication path can be exercised end to end. The failure is a named exception the solver never retries (kind \"named\", exit status 1) or a std::runtime_error (kind \"runtime_error\") that the existing in-step handlers may absorb (the AL scaled-weight retry, the stall restart). Never a production setting: an injected failure stops the run like any other named failure."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/phase",
+        "default": "none",
+        "type": "string",
+        "options": [
+            "none",
+            "after_al",
+            "after_stall_retune",
+            "al_subsolve",
+            "reduced",
+            "lagging",
+            "before_publication",
+            "after_publication"
+        ],
+        "doc": "Where the failure is thrown in the selected step: \"after_al\" after the augmented-Lagrangian feasibility stage returns and before the reduced solve; \"after_stall_retune\" inside the stall restart hook, right after the barrier stiffness was retuned (needs a stall, e.g. solver/contact/semi_implicit/restart with a soft_iteration_limit); \"al_subsolve\" / \"reduced\" at the accepted Newton iterate whose count equals `iteration` of an AL subsolve / the reduced solve; \"lagging\" right after the friction lag was updated at lagging iteration `iteration` (1 = the first update after the reduced solve); \"before_publication\" after the step's solve returned, before the step callback and any output of the step; \"after_publication\" after the step's outputs were written and before the time-integration history advances. \"none\" disables the hook."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/step",
+        "default": 1,
+        "type": "int",
+        "doc": "The step (solve_tensor_nonlinear call: 1 = the first time step, 0 = a static solve) at which the failure is thrown."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/iteration",
+        "default": 0,
+        "type": "int",
+        "doc": "For phases al_subsolve / reduced: the accepted Newton iteration count (PolySolve's post_step count, 0 = the start point) at which the failure is thrown; for lagging: the lagging iteration."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/kind",
+        "default": "named",
+        "type": "string",
+        "options": [
+            "named",
+            "runtime_error"
+        ],
+        "doc": "\"named\": a std::exception that no in-step handler absorbs (like a resource failure); \"runtime_error\": a std::runtime_error, which the AL scaled-weight retry absorbs inside an AL subsolve and which propagates everywhere else."
     },
     {
         "pointer": "/solver/advanced/characteristic_length",

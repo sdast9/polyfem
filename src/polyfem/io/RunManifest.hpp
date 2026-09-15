@@ -68,6 +68,12 @@ namespace polyfem::io
 		///        for every outcome).
 		void record_step(const json &step);
 
+		/// @brief RB-06: merge fields into the most recently recorded step (the
+		///        rollback verification of a failed attempt is known only after
+		///        the step's record was written) and rewrite the file. No-op
+		///        without a recorded step.
+		void amend_last_step(const json &fields);
+
 		/// @brief Record the completion of the run. The first call wins; a
 		///        later call with a different status is logged and ignored.
 		/// @param status "completed", "failed" or "resource_failure".

@@ -478,6 +478,16 @@ namespace polyfem::io
 		write();
 	}
 
+	void RunManifest::amend_last_step(const json &fields)
+	{
+		if (manifest_["steps"].empty() || !fields.is_object())
+			return;
+		json &last = manifest_["steps"].back();
+		for (const auto &[key, value] : fields.items())
+			last[key] = value;
+		write();
+	}
+
 	void RunManifest::finalize(const std::string &status, const int exit_status, const std::string &message)
 	{
 		if (finalized_)

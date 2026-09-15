@@ -44,12 +44,38 @@ namespace polyfem::solver
 
 	void NormalAdhesionForm::init(const Eigen::VectorXd &x)
 	{
+		// RB-06 (the RB-05 contract applied to this form): a new solve never
+		// continues a line search; a swept cache still marked active here was
+		// abandoned by an exception and is not complete for x.
+		line_search_end();
 		update_collision_set(compute_displaced_surface(x));
 	}
 
 	void NormalAdhesionForm::update_quantities(const double t, const Eigen::VectorXd &x)
 	{
+		line_search_end();
 		update_collision_set(compute_displaced_surface(x));
+	}
+
+	std::unique_ptr<FormState> NormalAdhesionForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_base_state(*state);
+		state->prev_distance = prev_distance_;
+		state->use_cached_candidates = use_cached_candidates_;
+		state->candidates = candidates_;
+		state->collision_set = collision_set_;
+		return state;
+	}
+
+	void NormalAdhesionForm::restore_state(const FormState &state, const Eigen::VectorXd &)
+	{
+		const State &adhesion = state_as<State>(state, "NormalAdhesionForm");
+		restore_base_state(adhesion);
+		prev_distance_ = adhesion.prev_distance;
+		use_cached_candidates_ = adhesion.use_cached_candidates;
+		candidates_ = adhesion.candidates;
+		collision_set_ = adhesion.collision_set;
 	}
 
 	Eigen::MatrixXd NormalAdhesionForm::compute_displaced_surface(const Eigen::VectorXd &x) const
@@ -59,18 +85,18 @@ namespace polyfem::solver
 
 	void NormalAdhesionForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
 	{
-		// Store the previous value used to compute the constraint set to avoid duplicate computation.
-		static Eigen::MatrixXd cached_displaced_surface;
-		if (cached_displaced_surface.size() == displaced_surface.size() && cached_displaced_surface == displaced_surface)
-			return;
-
+		// RB-06 (the RB-01 invariant applied to this form): the upstream
+		// function-static position cache was shared by every instance in the
+		// process, so a form skipped its own rebuild whenever another instance
+		// -- or its own restored state -- had last evaluated the same
+		// positions. Position equality is not a complete cache key; rebuild
+		// on every notification, as BarrierContactForm does.
 		if (use_cached_candidates_)
 			collision_set_.build(
 				candidates_, collision_mesh_, displaced_surface, dhat_a_);
 		else
 			collision_set_.build(
 				collision_mesh_, displaced_surface, dhat_a_, dmin_, broad_phase_.get());
-		cached_displaced_surface = displaced_surface;
 	}
 
 	double NormalAdhesionForm::value_unweighted(const Eigen::VectorXd &x) const
@@ -160,12 +186,22 @@ namespace polyfem::solver
 
 	void NormalAdhesionForm::line_search_begin(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1)
 	{
-		candidates_.build(
-			collision_mesh_,
-			compute_displaced_surface(x0),
-			compute_displaced_surface(x1),
-			/*inflation_radius=*/dhat_a_ / 2,
-			broad_phase_.get());
+		// Any previous interval is over (after an exception nothing ended it).
+		line_search_end();
+		try
+		{
+			candidates_.build(
+				collision_mesh_,
+				compute_displaced_surface(x0),
+				compute_displaced_surface(x1),
+				/*inflation_radius=*/dhat_a_ / 2,
+				broad_phase_.get());
+		}
+		catch (...)
+		{
+			line_search_end();
+			throw;
+		}
 
 		use_cached_candidates_ = true;
 	}
