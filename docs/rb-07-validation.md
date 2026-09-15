@@ -1,9 +1,9 @@
 # RB-07 — Bounded AL stagnation handling
 
 Date: 2026-09-15
-Status: **implemented—validation pending → validated within stated scope for
-the opt-in mechanism; production default: decision pending** (both exits are
-off by default; enabling one by default needs the user's choice, see
+Status: **validated within stated scope** (the opt-in mechanism, off by
+default) — **production default: decision pending** (enabling an exit by
+default needs the user's choice, see
 [Decision](#decision-required-production-default))
 Selected stage: reproduction → proposal of a stage budget and a stagnation
 metric → opt-in implementation (default disabled) → validation → publication.
@@ -42,10 +42,10 @@ update or the geometric snap gates.
 - Exclusions: no production default (decision below); the remeshing
   `L2Projection` AL (its own hard-coded ALSolver parameters; the budget is
   not installed there); the FSI/fluid/thermo/differentiable/legacy paths get
-  the same option but their rollback is not RB-06's transaction (the failure
-  still ends the run with exit status 1, nothing of the failed step is
-  published by those loops either, but no fingerprint-verified restore is
-  claimed for them); the Conservative inversion check's quadrature side effect
+  the same option, but only the nonlinear-elastic VarForm path has RB-06's
+  transaction: on the others the failure still ends the run with exit
+  status 1 and no rollback or publication claim is made (not exercised — the
+  public set has no AL fixture for them); the Conservative inversion check's quadrature side effect
   of the snap probe (miso builds only — this build forces the Discrete
   check); Teseo and private scenes (not run); the Houdini asset (no control
   added until a default is chosen).
@@ -67,8 +67,12 @@ update or the geometric snap gates.
   `probe-collision-sequence/` (per-pass solution frames of the collision
   scene, `save_solve_sequence_debug`), `try-candidate-{1,2,3-crush}/`
   (development runs, kept), `validate-final-{a,b,c}/` (the validation
-  matrix), `ab-smokes/` (six public scenes baseline vs candidate),
-  `tests-1/`, `tests-full/` (unit-test logs), `build-*.log`.
+  matrix on the pre-format candidate) and `validate-final-formatted/` (on
+  the formatted one), `ab-smokes/` and `ab-smokes-final/` (six public scenes
+  baseline vs candidate, before and after the format pass), `tests-1/`,
+  `tests-full/` (a killed partial run, see below), `tests-final/` and
+  `tests-full-final/` (the main-tree build), `run-smoke-main-tree.txt`,
+  `hda-test-polyfem.log`, `build-*.log`, `session-log.md`.
 - Fixtures (`tools/rb07/run_al_stagnation.py`; public `quasistatic-semi.json`
   cube on a fixed slab 0.02 below it, NeoHookean E = 1e7, ν = .45, d̂ = 1e-3,
   semi-implicit barrier, one quasistatic step, `--max_threads 1`, RB-04
@@ -90,11 +94,12 @@ update or the geometric snap gates.
     on the first pass, then collision; the collision-free fraction of the
     snap rises from 0.02 to 0.57 over the ceiling passes (candidate record).
   - `incompatible-collision`: **no exit; killed at 300 s after 98 passes**.
-    Initial residual 0.25 (25 nodes × 0.05). The AL cannot lower the bottom
+    Initial residual 0.25 (√25 nodes × 0.05). The AL cannot lower the bottom
     face through the slab; instead it drags the slab's own penalized DOFs
     (obstacle nodes are AL-penalized to zero displacement, not fixed, in the
-    full-space stage): after pass 1 the cube bottom is at −0.0454 and the
-    slab vertices at −0.025…−0.050 (`probe-collision-sequence/`). The weight
+    full-space stage): after pass 1 the cube's bottom face sits at z ≈ −0.045
+    and the slab's vertices at z = −0.025…−0.050 (rest −0.02;
+    `probe-collision-sequence/`). The weight
     reaches the ceiling at pass 8; the residual then sits at 0.0494 ± 0.5 %
     for 50 passes (subsolves converged in 3–8 iterations, min gap
     3–5e-4 wandering inside the trim band), the multipliers growing linearly;
@@ -196,10 +201,11 @@ the subsolve state at failure, so the RB-04 failure record
 
 Why the checks distinguish exhaustion from a solver error: a solver error is
 a subsolve that threw (NaN energy, iteration limit, a line search that failed
-three passes in a row) and is reported as before, with `subsolve.outcome =
-failed`; a budget exit happens *between* passes with the last subsolve
-converged or interrupted (usable, PF-01) and the failure record says which
-gate blocked the snap. Within the budget exits, `pass_budget` with a falling
+three passes in a row) and is reported as before — the stage rethrows at
+once, or after three absorbed retries whose passes carry `subsolve.outcome =
+failed` in the history; a budget exit happens *between* passes with the last
+subsolve converged or interrupted (usable, PF-01) and the failure record says
+which gate blocked the snap. Within the budget exits, `pass_budget` with a falling
 residual and changing gates means the cap was too small for the step (the
 crush fixture: residual still moving, drift progress every window),
 `stagnation` means the loop reached a fixed point (the collision fixture:
@@ -236,7 +242,7 @@ the snap length is what is implemented.
 | Pass cap alone, collision | `validate-final-c/incompatible-collision`, `{max_passes: 30}` | reason `pass_budget` at pass 30, rollback verified | stopped at pass 30 in 16 s, reason `pass_budget`, gate `collision`, residual 0.0494 at the ceiling (the flat plateau the message describes), exit 1, rollback verified; 15/15 checks | pass |
 | Unit regressions | `unit_tests "[al_budget]"` | options parsing; pass cap with history; unexhausted budget on the PF-07 fixture (zero and nonzero initial error) identical to no budget, gates probed only under a budget; stagnation window on the synthetic wall (all four progress flags false, converged passes, plateau at 0.5 confirmed under a cap-only run); public transient fixture driven 1.5 below the slab at step 2: `ALBudgetExhausted`, accepted state and integrator history restored, no callback, manifest + RB-04 record | 5 cases / 194 assertions | pass |
 | Affected selection | `[al_solver],[rollback],[bc_metric],[bc_scale],[direction_filter],[iteration_observer],[al_continuation],[input_validation]`, semi-implicit contact/friction derivatives | all pass | 55 cases / 3672 assertions (`tests-1/affected-suite.log`) | pass |
-| Full suite | `unit_tests` (`tests-full/`) | only the known failures (`large-mass-ratio` 2D+3D, `gcp-contact/cube-on-floor`, `stretch-cubes`) | PENDING_FULL | PENDING_FULL |
+| Full suite | `unit_tests` on the main-tree build `7a8d0eab…` (`tests-full-final/`) | only the known failures (`large-mass-ratio` 2D+3D, `gcp-contact/cube-on-floor`, `stretch-cubes`) | 355 cases / 352 passed / 3 failed, 5,158,785 assertions / 4 failed: `standard` (`multi-material/stretch-cubes`, RB-22), `contact_3d` and `contact_2d` (`large-mass-ratio` 2D+3D at the RB-10 defaults, `gcp-contact/cube-on-floor`) — the same three cases and four assertions as RB-06's 347/350 run, plus the five new `[al_budget]` cases; 2 h 12 min wall | pass (known failures only) |
 | RB-04 attempt-stream identities with the budget on | `check_solver_attempts.check_run` on `try-candidate-1/incompatible-collision`, `try-candidate-2/compatible-multipass-on`, `try-candidate-3-crush/incompatible-crush` | start/accepted/rejected rows, build-count identity, feasibility-check count = passes + 1 | 79 accepted / 11 feasibility checks (10 passes); 534 / 107 (105 passes + the reduced solve's check); 11041 / 61 (60 passes) | pass |
 | Affected smokes (off path) | `ab-smokes/`: the five public scenes + `rb03-hex-q1`, baseline vs candidate, `--max_threads 1` | exit 0, 0 error lines, every frame byte-identical | 6/6 exit 0/0, 0/0 error lines, 5 frames each byte-identical | pass |
 | Formatting / diff | clang-format 23.1.0 (`--style=file`) on the changed C++ files, `git diff --check` | clean | clean | pass |
@@ -253,7 +259,11 @@ the snap length is what is implemented.
   AL fixture in the public set).
 - Retained partial runs: the two baseline timeouts (the reproduction), the
   development runs `try-candidate-1` (budget 12/3: the compatible scene
-  correctly exhausted at 12 — a cap is a cap) and `try-candidate-3-crush`.
+  correctly exhausted at 12 — a cap is a cap) and `try-candidate-3-crush`,
+  and `tests-full/full-suite-killed-at-app-quit-partial.log` — a full-suite
+  run on the pre-format worktree build that the desktop app's quit killed
+  after ≈ 50 min without a summary (not counted; the suite was rerun on the
+  final build, `tests-full-final/`).
 - Not performed: full physical certification; a threaded repeat (the
   fixtures are single-threaded; RB-12's threaded-friction cluster applies to
   any threaded comparison); Windows/Linux lanes (CI on push).
@@ -282,8 +292,18 @@ the user's stalls look like.
 ## Publication and reproducibility
 
 - Rebuilt targets: `PolyFEM_bin` and `unit_tests` in the isolated worktree
-  build (`outputs/rb-07/20260915T195548Z/build`); candidate identity
-  PENDING_HASHES.
+  build (`outputs/rb-07/20260915T195548Z/build`: candidate `PolyFEM_bin`
+  `76df650e…` before the final clang-format pass — the A/B smokes, the full
+  suite and `validate-final-{a,b,c}` ran on it — and `4a420e88…` after it,
+  on which `validate-final-formatted/` (23/23 checks, endpoint `860cde46…`
+  again) and `ab-smokes-final/` (6/6 byte-identical) ran), then the main
+  checkout fast-forwarded to `6a553447b` and `polyfem/build` rebuilt from it
+  (`PolyFEM_bin 62939e21…`, `unit_tests 7a8d0eab…`, `--build_info` polyfem
+  `6a553447b` / IPC `c24d803e` / PolySolve `bce32a39`): `tests-final/`
+  (`[al_budget]` 5 cases / 194 assertions, the affected selection 55 cases
+  / 3672 assertions), `run-smoke-main-tree.txt` (five smokes exit 0, 0
+  error lines) and the Houdini PolyFEM 2.0 end-to-end HDA test through the
+  real binary (`hda-test-polyfem.log`, 8 PASS, exit 0).
 - Committed files: `src/polyfem/solver/ALSolver.{hpp,cpp}` (budget options,
   `ALBudgetExhausted`, snap gate, pass records, budget checks),
   `FullNLProblem.{hpp,cpp}` / `NLProblem.{hpp,cpp}` (`probe_step_bound`),
@@ -292,7 +312,8 @@ the user's stalls look like.
   (`/solver/augmented_lagrangian/budget/*`), `tests/test_al_solver.cpp`,
   `tests/test_step_rollback.cpp`, `tools/rb04/check_solver_attempts.py`,
   `tools/rb07/`, `scenes/semi-implicit/README.md`, this record, the plan row.
-  Commit PENDING_COMMIT on `sdast9/polyfem:main`.
+  Implementation commit `6a553447b` on `sdast9/polyfem:main` (this record's
+  publication details are in the follow-up documentation commit).
 - Companion pins unchanged (IPC `c24d803e`, PolySolve `bce32a39`); no HDA
   change (no default chosen, so no control).
 - Evidence stays local under `outputs/rb-07/20260915T195548Z/` (public
