@@ -6,6 +6,20 @@ and corresponding changes to RB-05–RB-12. Existing IDs retain their meanings.
 **Current implementation status is recorded below; no new physical certification is claimed.**
 Use the `RB-` identifiers below; do not renumber or reuse the historical PF items.
 
+**Review and implementation handoff, 2026-09-20:** the user requested a review
+of completed RB-01–RB-24 and plans only for later implementation. The
+[review](rb-completed-review-20260920.md) distinguishes implementation fixes,
+model choices and completed investigations. Its
+[repair plan](rb-review-repair-plan-20260920.md) records two reproduced
+defects (RB-04 held-position output kinematics; RB-05 count overflow), the
+RB-07 full-iterate storage issue, and an RB-21 supported-formulation gap
+whose numerical reproduction is still required. These follow-ups are
+**planned, not implemented**. The
+[upstream plan](rb-upstream-plan-20260920.md) separates shared correctness
+patches, optional per-contact model work, and RB-24's future adoption of an
+already-upstream dependency remedy. The dated completion records below
+remain the evidence for their original bounded scope.
+
 ## Start here in every session
 
 A sufficient user prompt is: **“Work on RB-01 using docs/robustness-plan.md.”**
