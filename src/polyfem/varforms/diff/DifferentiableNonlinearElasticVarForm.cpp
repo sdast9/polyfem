@@ -615,6 +615,7 @@ namespace polyfem::varform
 				POLYFEM_SCOPED_TIMER("Update quantities");
 				if (solve_data_.time_integrator)
 					solve_data_.time_integrator->update_quantities(solution);
+				output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01
 				solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, solution);
 				solve_data_.update_dt();
 				solve_data_.update_barrier_stiffness(solution);

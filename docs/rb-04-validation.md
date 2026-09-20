@@ -1,12 +1,20 @@
 # RB-04 — Accepted-step physical accounting and diagnostics
 
-Dates: 2026-09-08–2026-09-09; remainder completed 2026-09-12
+Dates: 2026-09-08–2026-09-09; remainder completed 2026-09-12; output
+kinematics repaired 2026-09-20 (RBR-01)
 Status: **validated within stated scope** — the record's required fields are
 complete (version 2: attempt observation, candidate counts, failed-attempt
 iterate, right-endpoint work increments), the nonlinear VTU kinematics are
 aligned, and the limits documented on 2026-09-09 are either resolved by
 RB-18–RB-21/RB-03 or carried by RB-09/RB-10 as measurement limits. See the
 [remainder section](#remainder-completed--record-version-2-2026-09-12).
+The 2026-09-12 kinematics alignment was incomplete: it inferred the
+history phase from position equality, so a held position (a quasistatic
+dwell) was still exported with the previous step's velocity and
+acceleration. The [completed-RB review](rb-completed-review-20260920.md)
+reproduced this (RBR-01) and the
+[repair section](#rbr-01--explicit-output-time-state-2026-09-20) below
+records the explicit-phase repair.
 Continuation history: the [candidate research log](rb-04-research-log.md)
 records the user's coherent-model direction, trim-band hypothesis, 15-run
 pilot, and the event/work-accounting stages. The dated sections below are the
@@ -590,7 +598,7 @@ interrupted, exactly as the option budget prescribes.
 | --- | --- |
 | Per-trial proposals and per-subsolve attempts not retained; failed attempts expose only the retained caller state | Resolved: attempt stream, `attempt_summary`, `proposed_displacement`, `last_internal_iterate` |
 | Candidate count unavailable at the endpoint | Resolved: retained statistics of the solve's trial sweeps |
-| Nonlinear VTU velocity lags the saved displacement | Resolved (upstream-inherited ordering; exporter aligned; FSI embedding unaffected) |
+| Nonlinear VTU velocity lags the saved displacement | Resolved for a changed endpoint (upstream-inherited ordering; exporter aligned; FSI embedding unaffected); **a held endpoint still lagged** until the RBR-01 repair of 2026-09-20 (see below) |
 | `external_work`, `frictional_dissipation`, `retuning_energy_change` unavailable | Resolved as declared right-endpoint discrete increments with cumulative sums; not path integrals |
 | `physical_balance_pass` unavailable | Retained by decision: no threshold is authorized here (plan decision boundary); a later item may select one from the reported terms |
 | Post-publication contact-force drift (145746.710 at the final quasistatic endpoint; 17.4/8.5/4.2 % across dt) | Resolved by RB-20/RB-21 (force continuation on parent-keyed coefficients): drift ~1e-16 / ≤6.5e-4 |
@@ -619,3 +627,130 @@ hashes of the validated binaries; the final endpoint run used
 norms as its pre-build diagnostics; RB-06 owns rollback of the exposed failed
 iterate; RB-10 owns friction accuracy; RB-09 owns the physical threshold that
 `physical_balance_pass` deliberately does not select.
+
+## RBR-01 — explicit output time state (2026-09-20)
+
+**Status: repaired and validated within stated scope.** The
+[completed-RB review](rb-completed-review-20260920.md) found that
+`saved_solution_kinematics` (2026-09-12) inferred "the history has already
+advanced to this solution" from `x_prev() == solution`. In the nonlinear
+loop, which saves before advancing, a new endpoint can equal the previous one
+without being the history head; the exporter then returned the previous
+step's stored velocity and acceleration. The
+[repair plan](rb-review-repair-plan-20260920.md#rbr-01--explicit-output-time-state-instead-of-position-equality)
+was followed as written: the phase is now stated by the integrator's owner,
+never inferred from the solution's value. Solutions and forces are untouched.
+
+Started on `main` at `92e0d8c20` (clean tree; effective IPC `c24d803e`,
+PolySolve `bce32a39`, both equal to the recipe pins; shared `build/`,
+RelWithDebInfo, `POLYFEM_WITH_PYTHON=ON`; no other task in the checkout).
+Evidence: parent `outputs/rbr-01/20260920T192257Z/` (`baseline/provenance.txt`,
+`control/`, `candidate/` with `tested.patch`, binaries and every selection
+log, `repro-vtu-baseline*/`, `ab-smokes/`, `rb04-endpoints-*/`,
+`hold-forces-ab/`, `thermo-ab/`). No dependency, coefficient law, tolerance,
+CCD, trial cap, retry policy, default or HDA asset changed; no private scene
+or Teseo ran.
+
+### Reproduction on the current source
+
+- Helper level, the review's exact values: Implicit Euler, one DOF, dt .25,
+  from rest; advance to .1 (history `v=.4, a=1.6`); export the held
+  solution .1 before advancing: the reviewed helper returned `.4, 1.6`; the
+  integrator's rules give `0, -1.6` (`control/output_kinematics.log`).
+- VTU level, ordinary quantitative output: the public 2×1×1 beam (and the
+  public `scenes/semi-implicit/cube.mesh` in the regression), Neo-Hookean,
+  **quasistatic** Implicit Euler, dt .25, the +x face prescribed
+  `0.1*min(t/0.25, 1)` — a move at step 1 and a hold after it. With the
+  production default tolerances every held step returns in zero Newton
+  iterations (`‖∇f‖ 3.4e-9` below the first-iteration criterion), so the
+  held solution is bit-identical to the previous one. The saved `step_2.vtu`
+  carried `v_x=.4, a_x=1.6` on the prescribed face instead of `0, -1.6`, and
+  `step_3.vtu` carried `a_x=-1.6` instead of `0` — a one-step lag along the
+  whole hold segment (`repro-vtu-baseline/kinematics_check.json`). A supplied
+  initial velocity (.2) was exported correctly at step 0 and entered the
+  step-1 acceleration correctly (`repro-vtu-baseline-v0/`).
+- A fully prescribed body (every node Dirichlet) would be the other ordinary
+  hold; the current binary segfaults on it (zero free DOFs; also on the
+  baseline, `repro-vtu-baseline-fully-prescribed-segfault/`). Not in this
+  item's scope; recorded as a separate defect.
+
+### What changed
+
+- `ElasticVarForm.hpp`: `enum class OutputTimePhase { HistoryHead,
+  CurrentStepBeforeAdvance }` with the contract of each phase;
+  `saved_solution_kinematics(integrator, solution, phase)` takes the phase
+  as a required argument (HistoryHead reads `v_prev()/a_prev()`;
+  CurrentStepBeforeAdvance calls `compute_velocity(solution)` and
+  `compute_acceleration(v)` also when the solution equals the head; zero
+  before initialization or on a size mismatch, as before); the owner state
+  `output_time_phase_` that `elastic_output_fields` reads.
+- Every owner of an integrator maintains the phase at its transitions, from
+  its control flow: `NonlinearElasticVarForm::init_solve_data` (HistoryHead
+  after the integrator's init, including restart histories and the FSI
+  embedding init), `solve_tensor_nonlinear` (CurrentStepBeforeAdvance from
+  the start of the attempt, so subsolve sequences, the step callback and the
+  step's frame all describe the current step; captured with the RB-06
+  rollback point and restored with it, and part of the attempt fingerprint),
+  `advance_transient_step` / the differentiable loop / `advance_for_embedding`
+  (HistoryHead after `update_quantities`); `LinearElasticVarForm` (the step
+  callback sees CurrentStepBeforeAdvance, the frame is saved after the
+  advance in HistoryHead); `IncompressibleElasticVarForm` (saves after
+  advancing); `ThermoElasticVarForm` (its own save-before-advance loop
+  through its own solve, so it states both transitions itself).
+- Tests: `[output_kinematics]` in `tests/test_time_integrators.cpp` — the
+  held-position values above; changed / identical / returning / advanced
+  endpoints with explicit hand-computed values; Implicit Euler, Newmark and
+  BDF2/BDF3 startup and mature histories against textbook rules written in
+  the test (not the integrators' own methods), in both phases, with a held
+  and a returning step; the uninitialized and size-mismatch guards for both
+  phases. New `tests/test_output_kinematics.cpp` `[output_kinematics][scene]`
+  drives the real nonlinear loop (`VarFormTestAccess`) on the public cube
+  with the move-then-hold motion and a supplied initial velocity, checks that
+  the held steps are bit-identical, parses the saved `step_N.vtu` and checks
+  velocity/acceleration against the Implicit Euler rule on the saved
+  displacements at every step, the exact prescribed-face values
+  (`.2/.4/0/0/0` and `0/.8/-1.6/0/0`), and that the output of the same
+  solution before its advance (what the VTU is written from) and after it
+  agree with each other and with the rule.
+
+### Validation
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| New regressions on the reviewed helper (control build: unchanged sources + the new tests) | Fail with the review's values | Helper: `v=.4` vs `0`, `a=1.6` vs `-1.6` (2 assertions); scene: 84 assertions fail, all at the held steps (`control/output_kinematics.log`) | Reproduced |
+| New regressions on the repair | Pass | 5 cases / 1,031 assertions | Pass |
+| `[output_kinematics],[time_integrator],[linear_elastic]` (seed 1) | No failure | 14 cases / 1,927 assertions | Pass |
+| `[rollback],[physical_diagnostics],[iteration_observer],[coefficient_events],[al_budget]` (phase is attempt state) | No failure | 19 cases / 2,570 assertions | Pass |
+| Full unit suite (seed 1, `-d yes`, 63 min) | Only the known golden failures | 366 cases / 5,171,942 assertions; 363 passed; the 3 failing cases are the 4 known scenes (2D/3D `large-mass-ratio` — RB-10 defaults vs golden; `gcp-contact/cube-on-floor` — open; `multi-material/stretch-cubes` — RB-22) (`candidate/full-suite/full-suite.log`) | Pass (known) |
+| Final binary after the last tidy (member placement, test formatting; no semantic change): the affected selections and the hold/thermo A/B | Unchanged | 33 cases / 4,497 assertions pass; hold and thermo outputs byte-identical to the candidate's (`candidate/selection-final.log`, `*/candidate-final/`) | Pass |
+| Five public smokes, single-threaded, baseline vs candidate binary (RB-23's commands) | Every VTU field identical | 30 fields × 5 steps each: identical; the rebuilt baseline is identical to the original `74c259b0…` runs of RB-23 stage 4 | Pass |
+| `tools/rb04/run_endpoints.py --max-threads 1`, both binaries | Runner passes; records identical | Both pass (VTU velocity/acceleration error 0.0 at all 12 endpoints); 32 VTU fields identical; 13,052–19,256 non-volatile diagnostic values per fixture identical (forces, work, energies); failure record differs only in embedded timings/RSS/run id | Pass |
+| Hold scene with `forces` on, both binaries | Only `velocity`/`acceleration` differ, only at held steps | 40 of 42 fields identical incl. all 10 force fields; `velocity` differs at step 2 (.4), `acceleration` at steps 2–3 (2.4, 1.6): the corrections | Pass |
+| Thermoelastic reference bar (Newmark β .3025 γ .6 for displacement, own loop), both binaries | Identical; kinematics follow an independent Newmark evaluation | 52 fields × 4 steps identical; velocity/acceleration errors ≤ 1.5e-18 vs the rule on the saved displacements | Pass |
+| clang-format on changed hunks, `git diff --check` | Clean | Clean | Pass |
+
+### Publication
+
+Tested binaries: `candidate/bin-final/` (`PolyFEM_bin` `fa7837fd…`,
+`unit_tests` `996694cf…`; the full suite ran on `d155cab2…`/`92b62190…`,
+the same sources before the tidy); `tested.patch` `2377dd77…`. The commit on
+`sdast9/polyfem:main` is recorded in the hash note that follows this record's
+publication. No companion pin or HDA asset changed.
+
+### Limits
+
+- The phase is authoritative: an output in the HistoryHead phase reports the
+  head's kinematics for whatever solution is passed. The owners' transitions
+  are the contract; no equality check remains to catch a caller that passes
+  another solution after an advance (the Python bindings can).
+- The legacy `State` path (`legacy/io/OutData.cpp`, remeshing) still exports
+  `v_prev()`/`a_prev()` directly, as documented for RB-04; not in scope.
+- A fully prescribed body cannot be run (zero free DOFs segfault, above);
+  the regression uses a quasistatic dwell, which is the ordinary production
+  hold. `first_grad_norm_tol` is set equal to `grad_norm_tol` in the test
+  scene so that the zero-iteration return is guaranteed by construction; the
+  defaults already gave it on this machine.
+- The thermoelastic phase is validated by identity with the baseline (whose
+  equality heuristic took the differencing path there because the
+  displacement changes every step) and by the independent Newmark check;
+  no thermoelastic hold scene was run.

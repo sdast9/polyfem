@@ -17,6 +17,7 @@ set(test_sources
   test_input_validation.cpp
   test_material_envelope.cpp
   test_linear_elastic_time.cpp
+  test_output_kinematics.cpp
   test_run_manifest.cpp
   test_assembler.cpp
   test_bases.cpp

@@ -58,6 +58,7 @@ namespace polyfem::varform
 		t0 = 0;
 		time_steps = 0;
 		dt = 0;
+		output_time_phase_ = OutputTimePhase::HistoryHead;
 	}
 
 	void ElasticVarForm::init(const std::string &formulation, const Units &units, const json &args, const std::string &out_path)
@@ -452,18 +453,29 @@ namespace polyfem::varform
 
 	std::pair<Eigen::VectorXd, Eigen::VectorXd> saved_solution_kinematics(
 		const time_integrator::ImplicitTimeIntegrator &time_integrator,
-		const Eigen::VectorXd &solution)
+		const Eigen::VectorXd &solution,
+		const OutputTimePhase phase)
 	{
 		if (time_integrator.steps() == 0 || time_integrator.x_prev().size() != solution.size())
 			return {Eigen::VectorXd::Zero(solution.size()), Eigen::VectorXd::Zero(solution.size())};
 
-		// History already advanced to this solution (FSI embedding, initial
-		// save): the stored values are its kinematics.
-		if (time_integrator.x_prev() == solution)
+		switch (phase)
+		{
+		case OutputTimePhase::HistoryHead:
+			// The history was initialized at or advanced to this solution:
+			// the stored values are its kinematics.
 			return {time_integrator.v_prev(), time_integrator.a_prev()};
-
-		const Eigen::VectorXd v = time_integrator.compute_velocity(solution);
-		return {v, time_integrator.compute_acceleration(v)};
+		case OutputTimePhase::CurrentStepBeforeAdvance:
+		{
+			// The step's endpoint against the previous step's history, by the
+			// integrator's own rule -- also for a held position, which equals
+			// the head without being it (RBR-01).
+			const Eigen::VectorXd v = time_integrator.compute_velocity(solution);
+			return {v, time_integrator.compute_acceleration(v)};
+		}
+		}
+		assert(false && "unhandled OutputTimePhase");
+		return {Eigen::VectorXd::Zero(solution.size()), Eigen::VectorXd::Zero(solution.size())};
 	}
 
 	std::vector<io::OutputField> ElasticVarForm::elastic_output_fields(
@@ -986,13 +998,13 @@ namespace polyfem::varform
 			const bool export_acceleration = acceleration && options.export_field("acceleration");
 			if (export_velocity || export_acceleration)
 			{
-				// Kinematics of the saved solution, not of the integrator's
-				// history head: the nonlinear loop saves before advancing
-				// (RB-04 output alignment; see saved_solution_kinematics).
+				// Kinematics of the saved solution in the owner's stated time
+				// phase (RB-04 output alignment, RBR-01 explicit phase): the
+				// nonlinear loop saves before advancing, the others after.
 				Eigen::VectorXd saved_velocity = Eigen::VectorXd::Zero(solution.size());
 				Eigen::VectorXd saved_acceleration = Eigen::VectorXd::Zero(solution.size());
 				if (time_integrator)
-					std::tie(saved_velocity, saved_acceleration) = saved_solution_kinematics(*time_integrator, solution.col(0));
+					std::tie(saved_velocity, saved_acceleration) = saved_solution_kinematics(*time_integrator, solution.col(0), output_time_phase_);
 				if (export_velocity)
 					append_sampled_dof_field("velocity", saved_velocity, actual_dim);
 				if (export_acceleration)

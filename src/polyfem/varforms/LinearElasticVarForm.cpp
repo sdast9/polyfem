@@ -154,6 +154,7 @@ namespace polyfem::varform
 			}
 
 			solve_data_.time_integrator->init(solution, velocity, acceleration, dt);
+			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
 			// RB-11: InertiaForm reads x_tilde from the integrator in its constructor
 			// (upstream #508), so it must be built after init: before, the history is
 			// empty and x_prev() dereferences an empty deque (a segfault on every
@@ -263,6 +264,7 @@ namespace polyfem::varform
 			Eigen::VectorXd b = current_rhs;
 
 			solve_linear_system(solver, A, b, args["output"]["advanced"]["spectrum"].get<bool>() && t == 1, sol);
+			output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance; // RBR-01: the callback's output describes the new endpoint
 			if (post_step)
 				post_step(t, sol);
 
@@ -276,6 +278,7 @@ namespace polyfem::varform
 				solve_data_.inertia_form->update_quantities(time, sol);
 
 			solve_data_.time_integrator->update_quantities(sol);
+			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: this loop saves after advancing
 			save_timestep(time, t, t0, dt, sol);
 			save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
 

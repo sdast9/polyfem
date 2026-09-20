@@ -32,6 +32,8 @@ two further implementation gaps were identified in source:
    itself is unaffected; quantitative output is wrong. Source:
    [`ElasticVarForm.cpp`](../src/polyfem/varforms/ElasticVarForm.cpp),
    `saved_solution_kinematics`, reviewed lines 453–466. Priority P2.
+   *Repaired 2026-09-20 (RBR-01, explicit `OutputTimePhase`); see the
+   [RB-04 record](rb-04-validation.md#rbr-01--explicit-output-time-state-2026-09-20).*
 2. **RBR-02 / RB-05: an overflowing item estimate can bypass the resource
    budget.** The actual toolkit count/check methods accept an AABB covering
    `4194304 × 2097152 × 2097152 = 2^64` cells with `max_cell_items=100`,
@@ -91,7 +93,7 @@ as such, rather than as missing implementations.
 | [RB-01](rb-01-validation.md) | Appropriate: eliminate shared position-only contact-cache ownership and rebuild with the correct lifecycle. | Applies to fixed and adaptive contact too. RB-06 extends the repair to adhesion/smooth contact. |
 | [RB-02](rb-02-validation.md) | Appropriate investigation and regression contract; original six counterexamples were addressed by later items. | Closure is not an independent physical validation of the retained adaptive law. Keep both the parent-law regression and the old stencil-law control. |
 | [RB-03](rb-03-validation.md) | Exact selector/permutation/obstacle indexing repair is correct. Interpolated-stencil condensation is a coherent selected approximation. | Local parent-block condensation is not the full assembled compliance; the gap-normalized directional fallback is a different approximation, not an algebraically equivalent inverse. |
-| [RB-04](rb-04-validation.md) | Observational accounting, private snapshots and unavailable-value handling are appropriate. Kinematics repair is incomplete: RBR-01. | Right-endpoint work estimates are not exact trajectory integrals. `physical_balance_pass` is a force-residual check, not an energy or engineering-accuracy certificate. |
+| [RB-04](rb-04-validation.md) | Observational accounting, private snapshots and unavailable-value handling are appropriate. Kinematics repair was incomplete: RBR-01 (repaired 2026-09-20). | Right-endpoint work estimates are not exact trajectory integrals. `physical_balance_pass` is a force-residual check, not an energy or engineering-accuracy certificate. |
 | [RB-05](rb-05-validation.md) | Preallocation limits, named failures, cache clearing and exit status 3 are the right containment design. Arithmetic needs RBR-02. | Limits bound selected intermediates, not total process RSS. Unsupported broad phases must never silently truncate or pretend to enforce a limit. |
 | [RB-06](rb-06-validation.md) | Appropriate transaction around the nonlinear elastic attempt, with deep state restoration and control-solve checks. | The documented solve-attempt boundary is narrower than arbitrary application rollback. An output failure after acceptance is a publication failure; automatic retry is not implemented. |
 | [RB-07](rb-07-validation.md) | Pass cap and combined progress signals are appropriate opt-in controls. Correct RBR-03's storage growth. | Still off by default. A stagnation-only budget cannot guarantee termination when a bad configuration continues moving; the pass cap supplies that bound. A production default remains a separate decision. |

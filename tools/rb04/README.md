@@ -30,7 +30,13 @@ Since 2026-09-12 the VTU `velocity`/`acceleration` fields of the nonlinear path
 are the kinematics of the saved endpoint (before that they were the previous
 step's history head). The runner checks them against `(u_n-u_{n-1})/dt` for
 the public ImplicitEuler fixtures and still reconstructs the kinetic-energy
-reference from the displacement history, not from the VTU field.
+reference from the displacement history, not from the VTU field. Since
+2026-09-20 (RBR-01) the exporter takes the history phase from the owner of the
+integrator instead of inferring it from position equality, so a held endpoint
+(a dwell that returns the previous solution bit for bit) is exported with its
+own zero velocity and the matching acceleration; the fixtures here never hold,
+so their values are unchanged (`unit_tests "[output_kinematics]"` covers the
+hold).
 
 Focused snapshot test: `[physical_diagnostics]`. It checks private coefficient
 memoization, unchanged production energy/gradient/Hessian, finite differences,

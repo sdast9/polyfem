@@ -24,18 +24,43 @@ namespace polyfem::time_integrator
 
 namespace polyfem::varform
 {
+	/// @brief Where an exported solution stands relative to the time
+	///        integrator's history (RBR-01: explicit output time state).
+	///
+	/// The owner of the integrator states the phase from its control flow;
+	/// it is never inferred from the solution's value. A held position equals
+	/// the history head without being it (a quasistatic dwell returns the
+	/// previous solution bit for bit), so the reviewed equality heuristic
+	/// reported the previous step's kinematics for it.
+	enum class OutputTimePhase
+	{
+		/// The history was initialized at, or advanced to, the exported
+		/// solution: x_prev() is that solution and v_prev()/a_prev() are its
+		/// kinematics. The initial output of every loop; the linear,
+		/// incompressible and FSI-embedding loops (which advance before
+		/// saving); any output after a step's advance, including the final
+		/// export_data and the restored state after a rolled-back attempt.
+		HistoryHead,
+		/// The exported solution is the current step's endpoint, or an
+		/// iterate of it (subsolve sequences, the step callback), and the
+		/// history still ends at the previous step: the nonlinear loop saves
+		/// before advancing. The integrator's own rule differences it
+		/// against the history, whatever its value.
+		CurrentStepBeforeAdvance,
+	};
+
 	/// @brief Velocity and acceleration of a saved solution (RB-04 output
-	///        kinematics alignment). The nonlinear time loop exports each
-	///        accepted endpoint before advancing the integrator history, so
-	///        there v_prev()/a_prev() are the previous step's kinematics; the
-	///        FSI embedding exports after advancing, when x_prev() is the
-	///        saved solution and v_prev()/a_prev() are its kinematics. A
-	///        solution equal to the history head therefore reads the stored
-	///        values; any other solution is differenced with the integrator's
-	///        own rule at the current history. Zero before initialization.
+	///        kinematics alignment, RBR-01 explicit phase). In the
+	///        HistoryHead phase the stored v_prev()/a_prev() are returned;
+	///        in the CurrentStepBeforeAdvance phase the solution is
+	///        differenced with the integrator's compute_velocity /
+	///        compute_acceleration at the current history, also when it
+	///        equals the head. Zero before initialization or for a solution
+	///        of another size than the history.
 	std::pair<Eigen::VectorXd, Eigen::VectorXd> saved_solution_kinematics(
 		const time_integrator::ImplicitTimeIntegrator &time_integrator,
-		const Eigen::VectorXd &solution);
+		const Eigen::VectorXd &solution,
+		const OutputTimePhase phase);
 
 	class ElasticVarForm : public VarForm
 	{
@@ -123,5 +148,16 @@ namespace polyfem::varform
 		double t0 = 0;
 		int time_steps = 0;
 		double dt = 0;
+
+		/// @brief The time phase of the solution the next output describes
+		///        (RBR-01). The owner of the time integrator maintains it at
+		///        every transition: HistoryHead when the integrator is
+		///        initialized and after every history advance (the between-
+		///        steps advance, the FSI embedding advance, the restored
+		///        state of a rolled-back attempt); CurrentStepBeforeAdvance
+		///        from the start of a step's solve attempt until its advance.
+		///        elastic_output_fields reads it for the exported velocity
+		///        and acceleration. Reset to HistoryHead with the formulation.
+		OutputTimePhase output_time_phase_ = OutputTimePhase::HistoryHead;
 	};
 } // namespace polyfem::varform

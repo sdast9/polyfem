@@ -1,7 +1,8 @@
 # Implementation handoff for the completed-RB review — 2026-09-20
 
-**Status: plans; RBR-02 implemented 2026-09-20 (see its section), the
-others as recorded in their sections.** Context and verdicts are in the
+**Status: plans; RBR-01 and RBR-02 implemented 2026-09-20 (see their
+sections), RBR-03 and RBR-04 as recorded in their sections.** Context and
+verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
 completion record or authorization to execute every task in one session.
@@ -31,6 +32,12 @@ pin; verify the final build uses that revision, not a stale override.
 Do not use `git add -A` in the shared checkout.
 
 ## RBR-01 — Explicit output time state instead of position equality
+
+**Status: implemented 2026-09-20** — see the
+[RB-04 record](rb-04-validation.md#rbr-01--explicit-output-time-state-2026-09-20)
+(`varform::OutputTimePhase`, owner-maintained; `[output_kinematics]` incl. the
+hold-segment VTU scene; solutions/forces identical, only the held-step
+kinematics changed). The text below is the plan as handed off.
 
 **Parent item:** RB-04; affects all transient stiffness modes and potentially
 contact-free output. **Priority:** P2. **Evidence:** reproduced in the real

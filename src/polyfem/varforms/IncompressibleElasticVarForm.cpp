@@ -380,6 +380,7 @@ namespace polyfem::varform
 			Eigen::MatrixXd::Zero(displacement.rows(), displacement.cols()),
 			dt);
 		time_integrator = bdf;
+		output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
 
 		save_timestep(t0, 0, t0, dt, sol);
 
@@ -414,8 +415,10 @@ namespace polyfem::varform
 			b += current_rhs;
 
 			solve_linear_system(solver, A, b, args["output"]["advanced"]["spectrum"].get<bool>() && t == time_steps, sol);
+			output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance; // RBR-01: nothing exports here today; the phase still states it
 			split_solution(sol, displacement, pressure);
 			bdf->update_quantities(displacement.col(0));
+			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: this loop saves after advancing
 
 			save_timestep(time, t, t0, dt, sol);
 			save_elastic_step_state(t0, dt, t, time_integrator.get());

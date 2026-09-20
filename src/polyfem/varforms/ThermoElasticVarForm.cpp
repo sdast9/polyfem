@@ -719,6 +719,7 @@ namespace polyfem::varform
 		{
 			solve_data_.time_integrator = nullptr;
 		}
+		output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
 
 		init_forms(args, mesh_->dimension(), displacement, t);
 		for (const auto &form : forms)
@@ -1000,6 +1001,10 @@ namespace polyfem::varform
 			for (int t = 1; t <= time_steps; ++t)
 			{
 				const double time = t0 + dt * t;
+				// RBR-01: this loop saves the step before advancing (the
+				// nonlinear order), through its own solve rather than
+				// solve_tensor_nonlinear, so it states the phase itself.
+				output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
 				solve_nonlinear_step(t, sol);
 
 				save_timestep(time, t, t0, dt, sol);
@@ -1008,6 +1013,7 @@ namespace polyfem::varform
 				split_solution(sol, displacement, temperature);
 				solve_data_.time_integrator->update_quantities(displacement);
 				temperature_time_integrator_->update_quantities(temperature);
+				output_time_phase_ = OutputTimePhase::HistoryHead;
 				update_transient_form_weights();
 				solve_data_.update_barrier_stiffness(displacement);
 				solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);

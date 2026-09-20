@@ -1533,6 +1533,8 @@ namespace polyfem::varform
 
 			if (solve_data_.time_integrator)
 				solve_data_.time_integrator->update_quantities(sol);
+			// RBR-01: from here on the accepted solution is the history head.
+			output_time_phase_ = OutputTimePhase::HistoryHead;
 
 			solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);
 
@@ -1755,6 +1757,9 @@ namespace polyfem::varform
 		{
 			solve_data_.time_integrator = nullptr;
 		}
+		// RBR-01: the initial output describes the history head (the supplied
+		// initial velocity and acceleration).
+		output_time_phase_ = OutputTimePhase::HistoryHead;
 
 		// --------------------------------------------------------------------
 		// Initialize forms
@@ -1795,6 +1800,7 @@ namespace polyfem::varform
 	{
 		assert(solve_data_.time_integrator);
 		solve_data_.time_integrator->update_quantities(solution);
+		output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the embedding saves after this advance
 		solve_data_.update_dt();
 	}
 
@@ -1847,6 +1853,7 @@ namespace polyfem::varform
 			Eigen::VectorXd solution;
 			std::unique_ptr<solver::FullNLProblem::SavedState> state;
 			json fingerprint;
+			OutputTimePhase output_time_phase = OutputTimePhase::HistoryHead;
 		} rollback_point;
 		{
 			double capture_seconds = 0;
@@ -1854,10 +1861,16 @@ namespace polyfem::varform
 				POLYFEM_SCOPED_TIMER(capture_seconds);
 				rollback_point.solution = sol;
 				rollback_point.state = solve_data_.nl_problem->save_state();
+				rollback_point.output_time_phase = output_time_phase_;
 				rollback_point.fingerprint = attempt_state_fingerprint(rollback_point.solution);
 			}
 			logger().debug("Rollback point of step {} captured in {:g} s", step, capture_seconds);
 		}
+		// RBR-01: every output of this attempt (subsolve sequences, the step
+		// callback, the step's frame) describes an endpoint of the current
+		// step against the previous step's history; the between-steps advance
+		// moves the phase back to the head, and so does a rollback.
+		output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
 		std::string diagnostic_phase = "initialization";
 		json diagnostic_termination = {{"unavailable_reason", "No completed subsolve"}};
 		json diagnostic_lagging = {{"state", "not reached"}};
@@ -2385,6 +2398,7 @@ namespace polyfem::varform
 			{
 				solve_data_.nl_problem->restore_state(*rollback_point.state, rollback_point.solution);
 				sol = rollback_point.solution;
+				output_time_phase_ = rollback_point.output_time_phase;
 				rollback["performed"] = true;
 				const json after = attempt_state_fingerprint(sol);
 				rollback["verified"] = after == rollback_point.fingerprint;
@@ -2440,6 +2454,7 @@ namespace polyfem::varform
 		{
 			const auto &integrator = *solve_data_.time_integrator;
 			fingerprint["history"] = {{"steps", integrator.steps()}, {"x_prev_norm", integrator.x_prev().norm()}, {"v_prev_norm", integrator.v_prev().norm()}, {"a_prev_norm", integrator.a_prev().norm()}, {"dt", integrator.dt()}};
+			fingerprint["output_time_phase"] = output_time_phase_ == OutputTimePhase::HistoryHead ? "history_head" : "current_step_before_advance"; // RBR-01
 		}
 		return fingerprint;
 	}

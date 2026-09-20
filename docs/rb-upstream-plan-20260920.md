@@ -80,6 +80,8 @@ Prepare separate patches:
    `ef5dffe80`, `eaa624098`).
 4. Correct nonlinear output kinematics after **RBR-01** supplies an explicit
    history-phase contract. Do not upstream the position-equality heuristic.
+   (RBR-01 implemented 2026-09-20: `varform::OutputTimePhase`, owner-maintained
+   at every transition; carry that contract, not the 2026-09-12 helper.)
 
 Acceptance: real time-dependent linear input, not a preset analytical
 problem whose `is_time_dependent` is false; static/quasistatic equivalence

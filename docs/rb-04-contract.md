@@ -364,3 +364,12 @@ reads the stored values, any other solution is differenced with the
 integrator's own rule at the current history (`saved_solution_kinematics`).
 The diagnostic `velocity`/`kinetic_energy` fields were already defined this
 way; the VTU fields now agree with them and with the displacement history.
+
+*Amended 2026-09-20 (RBR-01):* the position-equality rule above was wrong
+for a held endpoint (a quasistatic dwell returns the previous solution bit
+for bit and is exported before the history advances), which read the previous
+step's kinematics. The phase is now stated by the integrator's owner
+(`varform::OutputTimePhase`: `HistoryHead` reads the stored values,
+`CurrentStepBeforeAdvance` differences the solution by the integrator's
+rule, also when it equals the head); see the
+[RB-04 record](rb-04-validation.md#rbr-01--explicit-output-time-state-2026-09-20).
