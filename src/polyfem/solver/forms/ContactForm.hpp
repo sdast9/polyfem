@@ -158,6 +158,7 @@ namespace polyfem::solver
 			size_t max_cell_items = 0;           ///< largest item count since the reset
 			size_t last_candidate_emissions = 0; ///< pre-filter pair emissions of the last build (budget enabled only)
 			size_t max_candidate_emissions = 0;  ///< largest emission count since the reset
+			bool emissions_saturated = false;    ///< a build's emission sum saturated at SIZE_MAX, so the counts above are lower bounds (RBR-02)
 		};
 		const CandidateStatistics &candidate_statistics() const { return candidate_statistics_; }
 		void reset_candidate_statistics() { candidate_statistics_ = CandidateStatistics(); }

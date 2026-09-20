@@ -14,9 +14,11 @@ namespace polyfem
 		/// configured, an unsupported option, a scene the code refuses.
 		Failure = 1,
 		/// A resource failure: a contact broad-phase resource limit reached
-		/// before allocation (solver/contact/CCD/resource_limits) or an
-		/// allocation the system refused (std::bad_alloc). Not a crash: the
-		/// accepted steps on disk are intact.
+		/// before allocation (solver/contact/CCD/resource_limits), a
+		/// broad-phase grid the toolkit cannot index (refused before any
+		/// conversion, with or without limits; RBR-02) or an allocation the
+		/// system refused (std::bad_alloc). Not a crash: the accepted steps
+		/// on disk are intact.
 		ResourceLimit = 3,
 	};
 } // namespace polyfem

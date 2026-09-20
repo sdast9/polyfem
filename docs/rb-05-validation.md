@@ -5,7 +5,8 @@ Status: **validated within stated scope** (stage 1: containment of the swept
 candidate cache, pre-build step diagnostics, broad-phase resource limits
 enforced before allocation; **the limits are on by default since the
 follow-up below (user decision 2026-09-12)**, together with meaningful exit
-statuses and the Houdini controls)
+statuses and the Houdini controls; **the budget's counting arithmetic is
+checked since 2026-09-20 — [RBR-02](#rbr-02--checked-arithmetic-in-the-broad-phase-resource-accounting-2026-09-20)**)
 Selected stage: inventory → bounded reproduction → containment + opt-in limit
 → validation. Retry/backoff is RB-08; rollback of the exposed failed iterate
 is RB-06; the production broad-phase default and the 50·d̂ trial cap are
@@ -143,7 +144,7 @@ pre-allocation check.
 | Hash-grid items and pre-filter emissions grow unbounded before any count exists; a localized far sweep costs ~(L/cell)³ items per box; uniform sweeps grow emissions ~N² | R2 | **characterized; opt-in limit implemented**: `ipc::BroadPhaseBudget{max_cell_items, max_candidate_emissions}` on `ipc::BroadPhase`, checked from the boxes (before insertion) and from the sorted items (before enumeration); `BruteForce` bounds its box pairs; other methods refuse a budget explicitly |
 | No pre-build step diagnostics; the failing trial's norms were lost | inventory; E2E `sweep` | **fixed**: pre-build debug line (trial L∞, in supports, clamp, swept L∞, median vertex sweep, surface sizes, method, budget); Proposal observed before the forms build; `aborted` row with `broad_phase_built`; static-build failures (`init`, `update_quantities`, `solution_changed`) logged and flushed |
 | Allocation failure cannot be provoked or caught on the target platform | R2 `rlimit` | **documented limit**: only pre-allocation checks contain the failure |
-| `SpatialHash` voxel lists, `HashGrid::hash()` int product / `HashItem(int,int)` narrowing above ~2³¹ cells (keys wrap: extra false positives filtered by the AABB test, no lost pairs; UB in principle) | reading; R2 grid counts up to 1.25e15 cells | **disclosed, not changed** (upstream behavior; a budgeted grid never reaches it) |
+| `SpatialHash` voxel lists, `HashGrid::hash()` int product / `HashItem(int,int)` narrowing above ~2³¹ cells (keys wrap: extra false positives filtered by the AABB test, no lost pairs; UB in principle) | reading; R2 grid counts up to 1.25e15 cells | **disclosed, not changed** (upstream behavior; a budgeted grid never reaches it) — *the hash-grid part repaired 2026-09-20 by [RBR-02](#rbr-02--checked-arithmetic-in-the-broad-phase-resource-accounting-2026-09-20): keys in the key type, grids beyond it refused by name; `SpatialHash` unchanged* |
 | Spec offers `sweep_and_prune`/`SAP` but `ContactForm.hpp`'s enum map has no entry, so the string maps silently to `hash_grid` | reading | **not RB-05**: recorded for RB-11 |
 
 ### What changed
@@ -374,3 +375,210 @@ algorithm change upstream made in Tight-Inclusion 1.1.0 (measured there:
 4× less). By the user's decision of 2026-09-20 nothing changed; the
 exit-status-3 containment above stays a broad-phase contract and a lower
 *Max Threads* remains the workaround for large floor-contact scenes.
+
+## RBR-02 — checked arithmetic in the broad-phase resource accounting (2026-09-20)
+
+**Status: repaired and validated within stated scope.** The
+[completed-RB review](rb-completed-review-20260920.md) found that the
+budget's counts were plain `size_t` arithmetic: one box over a
+`2^22 × 2^21 × 2^21` grid (2⁶⁴ cells) counted **zero** items and was admitted
+against a budget of 100, and a count of 2⁶⁴ + 2⁴³ was reported as an exact
+2⁴³ (8.8·10¹²). The
+[repair plan](rb-review-repair-plan-20260920.md#rbr-02--checked-arithmetic-throughout-broad-phase-resource-accounting)
+was followed as written; every count behind a budget decision is now checked
+arithmetic, and the adjacent audit (item 5: conversions into grid coordinates)
+is done with its own failing tests first. No coefficient law, tolerance, CCD,
+trial cap, retry policy, default limit value, supported broad-phase choice or
+HDA asset changed; no private scene or Teseo ran.
+
+Started on `main` at `92e0d8c20`, toolkit `c24d803e` (= the recipe pin),
+PolySolve `bce32a39` (= the pin), in **isolated worktrees and builds** (the
+RBR-01 session held uncommitted, validated changes in the shared checkout and
+was running the full unit suite in the shared build throughout): PolyFEM
+worktree `rbr-02-checked-counting` from `92e0d8c20`, toolkit worktree from
+`c24d803e`, a fresh RelWithDebInfo configure with the saved option set
+(`POLYFEM_WITH_PYTHON=ON`, the toolkit worktree as the CPM source override)
+and a standalone toolkit test build with the pinned tests data (`c7eba549`).
+Evidence: parent `outputs/rbr-02/20260920T202503Z/` (`provenance.txt`,
+`build-logs/`, `control-repro/` and `control/` — the failing controls —,
+`baseline-bin/`, `candidate/` with `tested.patch`, `candidate-bin/` with
+`build_info.json`, `ab-smokes/`, `final/`).
+
+### Reproduction on the current source (`c24d803e`)
+
+- The review's probe, recompiled against the shared build's `libipc_toolkit.a`
+  (built from `c24d803e`, no source newer than it) and extended
+  (`control-repro/count_overflow-result.txt`): the 1024³ control reports
+  1,073,741,824 and is rejected; the `2^22 × 2^21 × 2^21` box reports **0** and
+  is **accepted** against `max_cell_items = 100`; a `2^22 × 2^21 × (2^21+1)`
+  box (2⁶⁴ + 2⁴³ cells) is rejected with an exact-looking
+  `8796093022208 cell_items (140737488355328 bytes)` — the wrapped value. No
+  insertion, no allocation.
+- A control test file written against the *unmodified* API
+  (`control/test_rbr02_control.cpp`, compiled into the standalone toolkit
+  test build on the unmodified sources; `control/rbr02_control.log`):
+  **3 cases, 15 of 22 assertions fail** — the 2⁶⁴ grid counts 0 and is
+  admitted; three whole-grid boxes over the representable
+  `2^21 × 2^21 × (2^21−1)` grid (true count 2.77·10¹⁹) are reported as an
+  exact 9223358842715242496 and **admitted against a `SIZE_MAX` budget**
+  (the wrapped sum is below it); none of the eight invalid geometries (cell
+  size 0 / −1 / NaN / ∞, NaN or ∞ extents, 3·10⁹ cells along an axis, 2⁶⁴
+  cells in total) throws — the asserts are compiled out of the release
+  build, the double→int conversions are undefined; NaN and ∞ vertex
+  positions are accepted silently by the static and the dynamic build (the
+  dynamic build's two-point box masks a NaN endpoint through Eigen's min/max
+  into a finite-looking box). The two-box case (2⁶⁴ − 2⁴³, representable) is
+  exact on the control as well.
+- PolySolve rejects a non-finite direction and computes a NaN-free step
+  (`is_step_valid` and a finite energy) *before* `line_search_begin`, and
+  `ContactForm` does not override `is_step_valid`, so a non-finite sweep does
+  not reach the broad phase on the ordinary solver path: the refusal below is
+  an API contract, not a change of the solver's NaN handling.
+
+### What changed
+
+Toolkit (`ipc-toolkit-fork`, `semi-implicit-stiffness`, `a28de2db`):
+- `broad_phase/checked_count.hpp`: `CheckedCount {value, overflowed}` —
+  checked `product` (2 and 3 factors), `unordered_pairs(n)` = n(n−1)/2
+  dividing the even factor first (so every result that fits is exact; the
+  naive n(n−1) overflows from n = 2³² + 1), saturating `+`/`+=` with a
+  sticky flag, `times`, `exceeds(limit)` (true for every representable limit,
+  `SIZE_MAX` included, once the count overflowed), `exact()`. Saturation
+  with a sticky flag is associative and commutative, so a `parallel_reduce`
+  gives the same value and flag whatever the partition or thread count.
+- `HashGrid`: `count_cell_items` returns a `CheckedCount` (per-box products,
+  which fit once the grid is representable, summed in the reduction with a
+  checked join); `check_cell_item_budget` decides with `exceeds` and reports
+  `exact` and a checked byte estimate ("more than … bytes"); both emission
+  loops sum `product(n0, n1)` / `unordered_pairs(n)`; `check_emission_budget`
+  takes the `CheckedCount`. `resize` validates on the floating-point values
+  before any conversion: a non-positive or non-finite cell size and a
+  non-finite domain are `std::invalid_argument`; more than `INT_MAX` cells
+  along an axis (also a division that overflows to ∞) or more cells in total
+  than a hash key (`long`) can index — checked as a `CheckedCount` product
+  against `numeric_limits<long>::max()`, exact at the boundary — is the new
+  named **`BroadPhaseUnrepresentable`** (`std::exception`, not
+  `runtime_error`; raised with or without a budget). `hash()` computes in the
+  key type and `HashItem` takes `long` keys, so keys no longer wrap above
+  2³¹ cells (the RB-05 disclosure); `box_cell_range` checks a box against the
+  domain on the doubles and refuses (`invalid_argument`) before the cast.
+- `build_vertex_boxes` (both overloads) and `compute_mesh_aabb` refuse
+  non-finite positions/boxes by name (`invalid_argument`) — the conversion
+  points where a NaN would otherwise become a finite-looking box; the
+  latter also covers the `build(const AABBs&, …)` entry and, through the
+  shared helper, LBVH and SpatialHash.
+- `BruteForce`: rectangular `product`, triangular `unordered_pairs`, decided
+  with `exceeds`, `exact` reported.
+- `BroadPhaseBudgetExceeded` gains `bool exact` (default true) and says
+  "would need at least … (the exact count is not representable in 64 bits)"
+  when false; `BroadPhaseBuildStatistics` gains
+  `candidate_emissions_overflowed` with saturating
+  `add_candidate_emissions`, used by the detect calls and by
+  `Candidates::build`'s accumulation over its sub-builds. Python binding of
+  `HashItem` follows (`long, long`).
+- `tests/src/tests/broad_phase/test_checked_count.cpp` `[checked_count]`
+  (11 cases): the primitives on synthetic values (products incl. the
+  review's factors, sums and every join order, pairs from 0 to the largest
+  representable n = 6,074,001,000 and n = 2³² + 1, exact limit / one over /
+  `SIZE_MAX` / disabled decisions), the exception types and messages, the
+  count-only regressions through a derived probe (1024³ control exact; one /
+  two / three whole-grid boxes over `2^21 × 2^21 × (2^21−1)`: exact 2⁶³ − 2⁴²
+  with the exact-limit and one-under decisions and the overflowing byte
+  estimate, exact 2⁶⁴ − 2⁴³, overflowed "at least" rejected against 100 and
+  `SIZE_MAX`, not checked when disabled; zero / one boxes; the same count and
+  decision at 1 thread and at the default parallelism), emission counts on
+  synthetic items (single-set and two-set, exact boundary), saturating
+  cumulative statistics, geometry validation (every invalid case above, the
+  key-range boundary on both sides, ordinary grids unchanged, an
+  out-of-domain / non-finite box before the cast), non-finite positions on
+  every row through the public static and dynamic builds with the grid
+  usable afterwards, an unrepresentable sweep (3·10⁹ along x) through
+  `Candidates::build` with and without a budget leaving no candidates and a
+  later build working, brute-force counts on ordinary sizes. The near-2⁶³
+  grids need a 64-bit key: on an LLP64 platform (Windows, `long` = 32 bits)
+  those sections `SKIP` and the key-range boundary is tested at 2³¹.
+
+PolyFEM (`polyfem`, `main`):
+- `cmake/recipes/ipc_toolkit.cmake`: pin `c24d803e` → `a28de2db`.
+- `main`: `ipc::BroadPhaseUnrepresentable` → **exit status 3** with its own
+  plain-language advice (the same containment family as the budget, raised
+  with or without limits; the accepted steps on disk are intact);
+  `ExitStatus.hpp` says so. A non-finite input refusal is an
+  `invalid_argument` → exit 1, a named failure, as before.
+- `ContactForm`: the pre-build sweep summary's median is computed only from
+  a finite sweep (`nth_element` must not see NaN; the failure log of a
+  non-finite sweep reports `nan`); the post-build debug line says "at least"
+  for a saturated emission sum; `CandidateStatistics::emissions_saturated`
+  and `broad_phase_intermediates.candidate_emissions.saturated` in the RB-04
+  diagnostic state.
+- `tests/test_resource_containment.cpp`: a new `[resource_containment]` case
+  — a 5·10⁹ sweep of the free vertex (2.5·10⁹ cells along x with the edge's
+  2-unit cell) is refused by name with and without a limit, leaves no swept
+  cache and no build, and the retry from the accepted state builds the
+  complete set and a later line search works; a NaN sweep is refused by
+  name with the same containment.
+
+Decisions taken within the plan's latitude: no early stop of the counting
+(item 3) — the count is one integer pass over the boxes / the sorted items,
+measured unresolvable against the build in RB-05, and stopping early would
+replace the exact diagnostic count the E2E records rely on with a partial
+one; saturation bounds the overflowed case anyway. "Representable" is
+defined by the hash key type (`long`): 2⁶³ − 1 cells on LP64 platforms
+(this one), 2³¹ − 1 on LLP64 — a named failure at exactly the point where
+the key arithmetic would wrap.
+
+### Validation
+
+Toolkit: standalone test build of the worktree (`candidate/*.log`);
+`ipc_toolkit_tests` with `--rng-seed 1`.
+
+| Check | Criterion | Result | Status |
+| --- | --- | --- | --- |
+| Failing control on the unmodified sources (`control/`) | fails with the review's values | 3 cases, 15 / 22 assertions fail (count 0 admitted; wrapped 9.2·10¹⁸ claimed exact and admitted against `SIZE_MAX`; no geometry or non-finite refusal) | reproduced |
+| The same control on the repair (`candidate/rbr02_control-on-repair.log`, one token changed for the new return type) | passes | 3 cases / 20 assertions (the 2 in the "not refused" branch no longer execute: the 2⁶⁴ grid is refused at `resize`) | pass |
+| `[checked_count]` at 1, 2, 8 and 16 threads | identical pass | 11 cases / 192 assertions at every thread count | pass |
+| `[budget]` (RB-05's 3 cases + the 11 new) | pass | 14 cases / 272 assertions | pass |
+| `[broad_phase]~[.]` | pass | 26 cases / 1,464,255 assertions (RB-05: 15 / 1,464,063 + exactly the new file) | pass |
+| The review's probe on the repaired library (`candidate/repro/`) | named refusal / exact counts / "at least" | `2^22 × 2^21 × 2^21` and `+1` refused by `BroadPhaseUnrepresentable` ("more than the 9223372036854775807 cells a hash key can index"); `2^21 × 2^21 × (2^21−1)` × 1 box = 9223367638808264704 exact, × 2 = 18446735277616529408 exact, × 3 = "at least 18446744073709551615 … not representable in 64 bits", `exact = 0`; 1024³ control unchanged | pass |
+
+PolyFEM: isolated build, final binaries `PolyFEM_bin` `fc648718…`,
+`unit_tests` `afc11ca1…` (`candidate-bin/binaries.txt`; `build_info.json`:
+toolkit `a28de2db`, clean, `matches_declared_pin: true`, source override =
+the worktree at that commit; PolyFEM `92e0d8c20` + `tested.patch`
+`b727f971…`); baseline binaries `b6e02511…` / `75ca5c11…` from the same
+isolated configure at `92e0d8c20` + toolkit `c24d803e` (`baseline-bin/`).
+
+| Check | Criterion | Result | Status |
+| --- | --- | --- | --- |
+| `[resource_containment],[contact_cache]` (seed 1), final binary | pass | 9 cases / 843 assertions (`final/polyfem-tests/`) | pass |
+| Five public smokes, `--max_threads 1`, baseline vs final candidate (`final/ab-smokes/`, RBR-01's `compare_vtu_dirs.py`) | every VTU field identical; identical per-sweep counts | 30 fields × 5 steps identical on all five; the "Broad phase over trial step" count lines (45 / 39 / 39 / 70 / 34 sweeps: 2,415 items, 4,982 emissions per sweep) identical line for line; 0 error lines (`ab-smokes/sweep-count-identity.txt`) | pass |
+| RB-05 probe `quick` (`candidate/rb05-probe-quick/`) | estimate == measured; RB-05's counts | 11 built configurations estimate == measured (13,480 / 11,974 / 974,248 / 2,286,974 / 33,094 / 39,431 …), candidates 6,630 / 6,196 / 11,047 / 14,367 / 912,192 as in the RB-05 table | pass |
+| RB-05 probe `budget` (`candidate/` and `final/rb05-probe-budget/`) | refusals before allocation; generous == unlimited; toolkit count == independent | 6.08·10⁷ / 1.42·10⁸ items refused, 3 emission refusals, brute force refused, BVH budget refused (`invalid_argument`); generous limits reproduce 11,047 / 14,367 / 912,192; toolkit emission count == independent 4 / 4; `candidates_after_failure` 0 | pass |
+| `tools/rb05/run_scene_limits.py --threads 1` (`final/rb05-scene-limits/`) | exits 0/0/0/3/3/1/0; generous == default == unlimited | both scenes: exits as expected, `generous == unlimited == default` with solution SHAs `b33a92a4…` / `98a813e6…` — the values of the 2026-09-12 record; `tiny`/`sweep` exit 3 with the named message, `unsupported` exit 1, `bvh-automatic` exit 0 | pass |
+| clang-format on the changed files (both repos), `git diff --check` | clean | clean | pass |
+
+### Limits
+
+- The count-only regressions cannot exercise an overflowing *emission* sum
+  through real items (that needs > 2³² items in memory); the emission paths
+  are covered by the primitives, by synthetic items at ordinary sizes, and
+  by RB-05's independent-count checks. Likewise `BruteForce` at extreme
+  sizes.
+- The non-finite refusal covers the vertex-position entries and the
+  hash-grid/LBVH/spatial-hash domain; `SweepAndPrune` builds its boxes
+  through `scalable_ccd` and `BruteForce` takes boxes without a domain — a
+  NaN box there still produces no candidates silently (unchanged; outside
+  the grid-coordinate audit). `SpatialHash`'s own voxel arithmetic is
+  unchanged (RB-05's disclosure stands for it).
+- The exit-3 classification of `BroadPhaseUnrepresentable` is verified by
+  reading `main` and by the unit test on the form; no public scene produces
+  a 10⁹-cell sweep, so no E2E run exercises that status (the budget's exit 3
+  is exercised by the limit scenes as before).
+- On LLP64 platforms (Windows) the key range is 2³¹ − 1 cells: grids beyond
+  it, which wrapped their keys before, are now refused by name there; the
+  fork's CI matrix (Linux / macOS / Windows) will build the pushed revision.
+- Not performed: the whole PolyFEM unit suite (the RBR-01 session owned the
+  shared build; the affected selections, probes and smokes above are the
+  specified acceptance), the HDA end-to-end tests (no asset or option
+  changed), private scenes, Teseo, the toolkit's hidden benchmarks.
+

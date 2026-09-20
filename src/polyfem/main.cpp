@@ -357,6 +357,15 @@ int main(int argc, char **argv)
 			ExitStatus::ResourceLimit, e.what(),
 			"A contact broad-phase resource limit was reached before the memory was allocated: the solver's trial step would have swept the surfaces so far that finding their candidate pairs needed more scratch memory than solver.contact.CCD.resource_limits allows (a safety stop, not a crash). Usually a few nodes moved very far in one Newton trial. Reduce the time step or the load increment, use a BVH broad phase, or raise the limits (0 disables them).");
 	}
+	catch (const ipc::BroadPhaseUnrepresentable &e)
+	{
+		// RBR-02: the same containment family as the budget, raised with or
+		// without resource limits -- the grid this sweep needs cannot be
+		// indexed, so the build is refused before any conversion.
+		return report_failure(
+			ExitStatus::ResourceLimit, e.what(),
+			"The contact broad phase cannot index the hash grid this trial step would need: the solver's trial step swept the surfaces so far, relative to the grid's cell size, that the grid would have more cells than can be addressed (a safety stop, not a crash; it does not depend on solver.contact.CCD.resource_limits). Usually a few nodes moved very far in one Newton trial. Reduce the time step or the load increment, or use a BVH broad phase.");
+	}
 	catch (const std::bad_alloc &e)
 	{
 		return report_failure(

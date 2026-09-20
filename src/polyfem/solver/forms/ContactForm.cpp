@@ -327,8 +327,10 @@ namespace polyfem::solver
 		const double swept_linf = trial_linf * trial_clamp;
 		const auto sweep_summary = [&]() {
 			Eigen::VectorXd per_vertex = (V1 - V0).rowwise().norm();
-			double median = 0;
-			if (per_vertex.size() > 0)
+			double median = std::numeric_limits<double>::quiet_NaN();
+			// (a non-finite sweep -- refused by name by the toolkit -- has no
+			// ordered median; nth_element must not see it)
+			if (per_vertex.size() > 0 && per_vertex.allFinite())
 			{
 				std::nth_element(per_vertex.data(), per_vertex.data() + per_vertex.size() / 2, per_vertex.data() + per_vertex.size());
 				median = per_vertex[per_vertex.size() / 2];
@@ -375,8 +377,9 @@ namespace polyfem::solver
 		const ipc::BroadPhaseBuildStatistics &built = broad_phase_->build_statistics();
 		if (built.measured)
 			logger().debug(
-				"Broad phase over trial step: {} candidates ({} cell items, {} pre-filter pair emissions{}; cell size {:g}, grid {}x{}x{})",
-				candidates_.size(), built.cell_items, built.candidate_emissions,
+				"Broad phase over trial step: {} candidates ({} cell items, {}{} pre-filter pair emissions{}; cell size {:g}, grid {}x{}x{})",
+				candidates_.size(), built.cell_items,
+				built.candidate_emissions_overflowed ? "at least " : "", built.candidate_emissions,
 				broad_phase_->budget.enabled() ? "" : " [emissions counted only under a budget]",
 				built.cell_size, built.grid_size[0], built.grid_size[1], built.grid_size[2]);
 		else
@@ -394,6 +397,7 @@ namespace polyfem::solver
 			candidate_statistics_.max_cell_items = std::max(candidate_statistics_.max_cell_items, built.cell_items);
 			candidate_statistics_.last_candidate_emissions = built.candidate_emissions;
 			candidate_statistics_.max_candidate_emissions = std::max(candidate_statistics_.max_candidate_emissions, built.candidate_emissions);
+			candidate_statistics_.emissions_saturated = candidate_statistics_.emissions_saturated || built.candidate_emissions_overflowed;
 		}
 
 		use_cached_candidates_ = true;

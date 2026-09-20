@@ -1,6 +1,7 @@
 # Implementation handoff for the completed-RB review — 2026-09-20
 
-**Status: plans only.** Context and verdicts are in the
+**Status: plans; RBR-02 implemented 2026-09-20 (see its section), the
+others as recorded in their sections.** Context and verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
 completion record or authorization to execute every task in one session.
@@ -106,6 +107,15 @@ Deliver code, regression, RB-04 record correction and concise evidence.
 This repair is a prerequisite for upstreaming RB-04's output fix (UP-02).
 
 ## RBR-02 — Checked arithmetic throughout broad-phase resource accounting
+
+**Status: implemented 2026-09-20** — see the
+[RB-05 record](rb-05-validation.md#rbr-02--checked-arithmetic-in-the-broad-phase-resource-accounting-2026-09-20)
+(toolkit `a28de2db`: `CheckedCount` behind every budget decision, "at
+least" reporting, the named `BroadPhaseUnrepresentable` for grids the key
+cannot index and `invalid_argument` for non-finite input before any
+conversion, keys in the key type; PolyFEM pin bump, exit 3 classification,
+`[resource_containment]` sweep refusals; ordinary counts, candidates and
+solutions unchanged). The text below is the plan as handed off.
 
 **Parent item:** RB-05. **Priority:** P2. **Evidence:** real toolkit counting
 methods wrap `2^64` items to zero and admit them against a budget of 100.

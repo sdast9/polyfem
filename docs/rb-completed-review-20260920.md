@@ -41,6 +41,10 @@ two further implementation gaps were identified in source:
    75–80 and the category sum in `check_cell_item_budget` lines 92–93.
    Priority P2; this is an extreme-input containment defect, not evidence
    that ordinary scenes commonly reach this count.
+   *Repaired 2026-09-20 (RBR-02, checked `CheckedCount` arithmetic, named
+   refusal of unrepresentable grids and non-finite input before any
+   conversion; toolkit `a28de2db`); see the
+   [RB-05 record](rb-05-validation.md#rbr-02--checked-arithmetic-in-the-broad-phase-resource-accounting-2026-09-20).*
 3. **RBR-03 / RB-07: enabling a budget retains every full-space iterate.**
    `ALSolver::solve_al` uses an ever-growing `vector<VectorXd> carried`,
    including with a pass cap alone and `stagnation_window=0`. Only the

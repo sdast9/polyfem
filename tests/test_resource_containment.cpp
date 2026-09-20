@@ -17,6 +17,7 @@
 
 #include <ipc/broad_phase/hash_grid.hpp>
 
+#include <limits>
 #include <stdexcept>
 #include <type_traits>
 
@@ -297,5 +298,79 @@ TEST_CASE("A broad-phase resource limit fails before allocation and leaves no pa
 		grid.apply_resource_limits(custom);
 		CHECK(grid.broad_phase_budget().max_cell_items == 12);
 		CHECK(grid.broad_phase_budget().max_candidate_emissions == 0);
+	}
+}
+
+TEST_CASE("A named broad-phase refusal of a trial sweep leaves no partial candidate set (RBR-02)", "[resource_containment]")
+{
+	// RBR-02: the toolkit refuses, before any conversion or allocation, a
+	// sweep whose hash grid it cannot index (with or without a resource
+	// limit) and a non-finite sweep. Both are containment stops for this
+	// form: the interval is not entered and the retry sees a complete set.
+	static_assert(!std::is_base_of_v<std::runtime_error, ipc::BroadPhaseUnrepresentable>);
+	static_assert(std::is_base_of_v<std::exception, ipc::BroadPhaseUnrepresentable>);
+
+	const auto mesh = make_mesh();
+	const Eigen::VectorXd in_contact = displaced_vertex(-.15);
+	ProbeForm fresh(mesh);
+	fresh.init(in_contact);
+	REQUIRE(fresh.collision_set().size() == 1);
+
+	SECTION("a sweep the hash grid cannot index is refused by name, with or without a limit")
+	{
+		// The free vertex swept 5e9 units along x. The cell size is the
+		// edge's box (2 units), so the grid would need 2.5e9 cells along x,
+		// more than an int holds. Fixed mode sweeps the whole trial step.
+		Eigen::VectorXd far = zero;
+		far[4] = 5e9;
+		for (const bool limited : {false, true})
+		{
+			ProbeForm form(mesh);
+			form.init(zero);
+			if (limited)
+			{
+				ipc::BroadPhaseBudget budget;
+				budget.max_cell_items = 100;
+				form.set_broad_phase_budget(budget);
+			}
+			try
+			{
+				form.line_search_begin(zero, far);
+				FAIL("the sweep was built");
+			}
+			catch (const ipc::BroadPhaseUnrepresentable &e)
+			{
+				CHECK(e.method == "HashGrid");
+				CHECK(e.quantity == "grid_cells");
+				CHECK_THAT(e.what(), Catch::Matchers::ContainsSubstring("along an axis"));
+			}
+			CHECK(!form.swept_cache_active());
+			CHECK(form.candidate_statistics().builds == 0);
+			CHECK(form.candidate_statistics().last == 0);
+			// The retry from the accepted state builds a complete set.
+			form.set_broad_phase_budget(ipc::BroadPhaseBudget());
+			form.init(in_contact);
+			CHECK(form.collision_set().size() == fresh.collision_set().size());
+			CHECK(form.value(in_contact) == Catch::Approx(fresh.value(in_contact)));
+			form.line_search_begin(in_contact, zero);
+			CHECK(form.swept_cache_active());
+			CHECK(form.candidate_statistics().builds == 1);
+			form.line_search_end();
+		}
+	}
+	SECTION("a non-finite sweep is refused by name")
+	{
+		Eigen::VectorXd not_finite = zero;
+		not_finite[4] = std::numeric_limits<double>::quiet_NaN();
+		ProbeForm form(mesh);
+		form.init(zero);
+		CHECK_THROWS_AS(form.line_search_begin(zero, not_finite), std::invalid_argument);
+		CHECK(!form.swept_cache_active());
+		CHECK(form.candidate_statistics().builds == 0);
+		form.init(in_contact);
+		CHECK(form.collision_set().size() == fresh.collision_set().size());
+		form.line_search_begin(in_contact, zero);
+		CHECK(form.swept_cache_active());
+		form.line_search_end();
 	}
 }
