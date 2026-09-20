@@ -282,8 +282,8 @@ run's scheduling; 5 repeats in the matrix.
 ## Publication and reproducibility
 
 No source change published. Record `docs/rb-24-validation.md`, the plan's
-status row and section, the RB-05 cross-reference and the README rows
-(commit hash noted below on publication). The worktrees under the evidence
+status row and section, the RB-05 cross-reference and the README rows:
+`58a08a820` on `sdast9/polyfem:main` (2026-09-20). The worktrees under the evidence
 directory are left at their clean base (`a6d70bd49` / `c24d803e` /
 `bce32a39`); the candidate's one-line pin edit is kept as
 `candidate-pin.patch` and both executables are in `bin/`. Reproduce stage 1 from `outputs/rb-24/20260920T150231Z/summary.md`
