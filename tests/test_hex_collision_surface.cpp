@@ -8,7 +8,9 @@
 // (identity) displacement map, and the first Newton Hessian crashed in the
 // reduced projection (EXC_BAD_ACCESS). These tests pin the named error on the
 // default path and the two supported tessellations of Q2/Q3/serendipity
-// hexahedra through the production collision-mesh builder.
+// hexahedra through the production collision-mesh builder. Q3 hexahedra were
+// refused with a degenerate-face error until RB-23 repaired the basis node
+// bookkeeping (2026-09-20); their surfaces are checked here since.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -193,13 +195,6 @@ namespace
 		check_geometry(s);
 	}
 
-	// Q3 hexahedra: the basis stores edge/face node positions that are not
-	// the images of their reference nodes (nonconforming; see the hex_nodes
-	// tests and docs/rb-22-validation.md), so both proxies are combinatorially
-	// right but geometrically degenerate, and the production builder refuses
-	// them with a named error. The geometric acceptance lives in the hidden
-	// [q3_hex_defect] tests until the basis is repaired.
-	const char *const Q3_DEFECT = "Q3+ hexahedral bases store edge/face node positions";
 } // namespace
 
 TEST_CASE("An extraction that skips boundary faces is refused with a named error", "[rb22][hex_collision_surface]")
@@ -258,14 +253,18 @@ TEST_CASE("Q2+ hex contact scenes get the DOF-resolution proxy by default", "[rb
 		CHECK(s.n_faces == 18 * 6);
 		CHECK(s.selector_rows == 56);
 	}
-	SECTION("Q3: the degenerate node positions are refused, never a crash")
+	SECTION("Q3: the DOF proxy of the repaired basis (RB-23), 4 x 4 nodes per face")
 	{
-		State state;
-		state.init(column_args(3), true);
-		state.set_max_threads(1);
-		state.load_mesh();
-		REQUIRE_THROWS_WITH(test::VarFormTestAccess::prepare(*state.variational_formulation),
-							ContainsSubstring("degenerate (zero-area) collision faces") && ContainsSubstring(Q3_DEFECT));
+		// Before RB-23 this stopped with the degenerate-face error (32 of
+		// 324 zero-area faces from the permuted node positions).
+		const Built b = build(column_args(3));
+		REQUIRE(b.mesh != nullptr);
+		const SurfaceStats s = analyze(*b.mesh, b.debug.n_bases);
+		check_closed_sphere(s);
+		CHECK(s.n_vertices == 164); // 4x4x13 nodes minus the 44 interior ones
+		CHECK(s.n_faces == 18 * 18);
+		CHECK(s.selector_rows == 164);
+		CHECK(s.interpolated_rows == 0);
 	}
 }
 
@@ -302,14 +301,18 @@ TEST_CASE("DOF-resolution proxy of Q2/Q3/serendipity hexahedra is closed with ex
 		CHECK(s.selector_rows == 74);
 		CHECK(s.interpolated_rows == 0);
 	}
-	SECTION("Q3: 18 triangles per face in the extraction; the builder refuses the degenerate node positions")
+	SECTION("Q3: 18 triangles per face, every boundary node an exact selector")
 	{
-		State state;
-		state.init(column_args(3, tessellation("dof")), true);
-		state.set_max_threads(1);
-		state.load_mesh();
-		REQUIRE_THROWS_WITH(test::VarFormTestAccess::prepare(*state.variational_formulation),
-							ContainsSubstring("degenerate (zero-area) collision faces") && ContainsSubstring(Q3_DEFECT));
+		{
+			const Built built = build(column_args(3, tessellation("dof")));
+			REQUIRE(built.mesh != nullptr);
+			const SurfaceStats s = analyze(*built.mesh, built.debug.n_bases);
+			check_closed_sphere(s);
+			CHECK(s.n_vertices == 164);
+			CHECK(s.n_faces == 18 * 18);
+			CHECK(s.selector_rows == 164);
+			CHECK(s.interpolated_rows == 0);
+		}
 
 		const Built b = build(column_args(3, json(), "Lagrange", /*contact=*/false));
 		Eigen::MatrixXd V;
@@ -359,14 +362,17 @@ TEST_CASE("max_order lattice proxy of Q2/Q3/serendipity hexahedra is closed", "[
 		CHECK(s.selector_rows == 74);
 		CHECK(s.interpolated_rows == 0);
 	}
-	SECTION("Q3: lattice nodes at thirds are not exact selectors; the builder refuses the degenerate node positions")
+	SECTION("Q3: lattice nodes at thirds are not exact selectors; the surface is closed")
 	{
-		State state;
-		state.init(column_args(3, tessellation("max_order")), true);
-		state.set_max_threads(1);
-		state.load_mesh();
-		REQUIRE_THROWS_WITH(test::VarFormTestAccess::prepare(*state.variational_formulation),
-							ContainsSubstring("degenerate (zero-area) collision faces") && ContainsSubstring(Q3_DEFECT));
+		{
+			const Built built = build(column_args(3, tessellation("max_order")));
+			REQUIRE(built.mesh != nullptr);
+			const SurfaceStats s = analyze(*built.mesh, built.debug.n_bases);
+			check_closed_sphere(s);
+			CHECK(s.n_vertices == 164);
+			CHECK(s.n_faces == 18 * 18);
+			CHECK(s.empty_rows == 0);
+		}
 
 		// The displacement-map weights are basis values at the lattice
 		// points and do not depend on the node positions: at thirds the
@@ -535,13 +541,13 @@ TEST_CASE("Q2 hex node positions are the geometric images of their reference nod
 	CHECK(shared == 3 * 9); // the three shared Q2 faces
 }
 
-// Known upstream defect (RB-22, 2026-09-12): Q3 hexahedra. Hidden; run it by
-// name to check a basis repair. On the 4-hex column 124 of 256 node positions
-// are not the images of their reference nodes (edge nodes swapped within an
-// edge, face-interior nodes permuted within a face) and the 12 face-interior
-// nodes of the 3 shared faces are placed differently by their two elements,
-// i.e. the Q3 hex space is nonconforming.
-TEST_CASE("Q3 hex node positions are the geometric images of their reference nodes and shared consistently", "[.][q3_hex_defect]")
+// The RB-22 acceptance for the upstream Q3 defect (2026-09-12), hidden until
+// RB-23 repaired the basis (2026-09-20). On the 4-hex column 124 of 256 node
+// positions were not the images of their reference nodes (the two nodes of
+// the vertical edges e5-e7 swapped, face-interior and cell nodes permuted)
+// and the 12 face-interior nodes of the 3 shared faces were placed
+// differently by their two elements, i.e. the Q3 hex space was nonconforming.
+TEST_CASE("Q3 hex node positions are the geometric images of their reference nodes and shared consistently", "[rb22][rb23][hex_collision_surface][hex_nodes][q3_hex_defect]")
 {
 	const Built b = build(column_args(3, json(), "Lagrange", /*contact=*/false));
 	int checked = 0, shared = 0;
@@ -551,7 +557,7 @@ TEST_CASE("Q3 hex node positions are the geometric images of their reference nod
 	CHECK(shared == 3 * 16);
 }
 
-TEST_CASE("Q3 hex proxies are geometrically valid once the basis is repaired", "[.][q3_hex_defect]")
+TEST_CASE("Q3 hex proxies are geometrically valid once the basis is repaired", "[rb22][rb23][hex_collision_surface][q3_hex_defect]")
 {
 	const std::string type = GENERATE("dof", "max_order");
 	CAPTURE(type);

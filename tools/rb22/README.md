@@ -32,9 +32,11 @@ Scene names: `q<order>[s]-<tessellation>[-adaptive]` on the hex cube
 `-adaptive` = classic adaptive barrier stiffness instead of semi-implicit) and
 `hextet2-q<order>-<tessellation>[-adaptive]` for the two-body scene.
 `q2-default`, `q2s-default`, `q3-default` and `hextet2-q2-default` are the
-former silent/crashing configurations and must now stop with the named error;
-`q3-dof` / `q3-max_order` must stop with the degenerate-face error until the
-Q3 hexahedral basis is repaired (see the record).
+former silent/crashing configurations: since the DOF-proxy default they
+complete. `q3-dof` / `q3-max_order` / `q3-default` stopped with the
+degenerate-face error until RB-23 repaired the Q3 hexahedral basis
+(2026-09-20, [docs/rb-23-validation.md](../../docs/rb-23-validation.md));
+they complete since, with 866-vertex / 1728-face surfaces of positive area.
 
 `run_ab_smokes.sh <baseline bin> <candidate bin> <fresh dir>` runs the five
 public semi-implicit smokes and the RB-03 Q1 hex scene single-threaded with two

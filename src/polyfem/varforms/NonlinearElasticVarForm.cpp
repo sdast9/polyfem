@@ -1070,10 +1070,11 @@ namespace polyfem::varform
 		{
 			// A degenerate (zero-area) FE collision face has no normal and
 			// poisons every distance it enters. It means coincident or
-			// collinear boundary node positions: known for Q3+ hexahedra,
-			// whose edge/face node positions are not the images of their
-			// reference nodes (RB-22 record) -- refuse instead of failing
-			// later with "initial solution has intersections".
+			// collinear boundary node positions (a degenerate input mesh, or
+			// a basis whose stored node positions are not the images of its
+			// reference nodes -- the Q3 hexahedral case RB-22 found and RB-23
+			// repaired) -- refuse instead of failing later with "initial
+			// solution has intersections".
 			int degenerate = 0, first = -1;
 			for (int i = 0; i < collision_triangles.rows(); ++i)
 			{
@@ -1094,7 +1095,7 @@ namespace polyfem::varform
 					return fmt::format("[{:g}, {:g}, {:g}]", collision_vertices(v, 0), collision_vertices(v, 1), collision_vertices(v, 2));
 				};
 				log_and_throw_error(
-					"Contact is enabled but {} produced {} degenerate (zero-area) collision faces out of {} (first: face {} on vertices {}, {}, {} at {}, {}, {}); the boundary node positions are coincident or collinear. Known cause: Q3+ hexahedral bases store edge/face node positions that are not the geometric images of their reference nodes (see docs/rb-22-validation.md); use Q2 hexahedra or tetrahedra.",
+					"Contact is enabled but {} produced {} degenerate (zero-area) collision faces out of {} (first: face {} on vertices {}, {}, {} at {}, {}, {}); the boundary node positions are coincident or collinear: check the input mesh for degenerate boundary faces (a basis storing node positions that are not the images of its reference nodes would show the same symptom; docs/rb-22-validation.md and docs/rb-23-validation.md).",
 					extraction_name, degenerate, collision_triangles.rows(), first,
 					collision_triangles(first, 0), collision_triangles(first, 1), collision_triangles(first, 2),
 					at(collision_triangles(first, 0)), at(collision_triangles(first, 1)), at(collision_triangles(first, 2)));

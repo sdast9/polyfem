@@ -16,9 +16,13 @@
 #include <polyfem/autogen/auto_pyramid_bases.hpp>
 
 #include <polyfem/utils/MaybeParallelFor.hpp>
+#include <polyfem/utils/Logger.hpp>
 
+#include <algorithm>
 #include <cassert>
 #include <array>
+#include <set>
+#include <string>
 ////////////////////////////////////////////////////////////////////////////////
 
 using namespace polyfem;
@@ -163,6 +167,97 @@ namespace
 		}
 		assert(false);
 		return Navigation3D::Index();
+	}
+
+	// The autogen hexahedral layout (q_bases.py -> q_nodes_3d) fixes the
+	// direction in which the interior nodes of every edge are listed and the
+	// frame in which the interior nodes of every face and of the cell are
+	// enumerated. The node ids handed to the bases must follow that layout,
+	// otherwise basis j is stored at the position of another reference node
+	// and two elements disagree on where a shared node is (RB-23; Q1/Q2 are
+	// insensitive because they own at most one node per edge/face/cell).
+	//
+	// Edge le runs from HEX_EDGE_DIRECTION[le][0] to [1]: the bottom and top
+	// rings follow the corner numbering, e4 goes up, and the other three
+	// vertical edges e5, e6, e7 go DOWN (v5->v1, v6->v2, v7->v3).
+	constexpr std::array<std::array<int, 2>, 12> HEX_EDGE_DIRECTION = {{{{0, 1}}, {{1, 2}}, {{2, 3}}, {{3, 0}}, {{0, 4}}, {{5, 1}}, {{6, 2}}, {{7, 3}}, {{4, 5}}, {{5, 6}}, {{6, 7}}, {{7, 4}}}};
+
+	// Face lf lists its interior node (i, j), i outer and j inner, at
+	// anchor + i/q (second - anchor) + j/q (fourth - anchor), which is the
+	// order MeshNodes::node_ids_from_face produces for the index frame
+	// {vertex = anchor, switch_vertex -> second, switch_vertex(switch_edge)
+	// -> fourth}. The x = 0 face is enumerated in the reversed frame.
+	constexpr std::array<std::array<int, 3>, 6> HEX_FACE_FRAME = {{{{7, 4, 3}}, {{1, 2, 5}}, {{0, 1, 4}}, {{3, 2, 7}}, {{0, 1, 3}}, {{4, 5, 7}}}};
+
+	// The cell interior nodes are x outer, y middle, z inner: the frame of the
+	// bottom face (v0, v0->v1, v0->v3) with v0->v4 as the third direction,
+	// which is what MeshNodes::node_ids_from_cell walks for that index.
+	constexpr int HEX_CELL_FRAME_FACE = 4;
+
+	// Rotates an index of a quad face until it starts at `anchor` and its edge
+	// leads to `second`, so that the node enumeration of that face happens in
+	// the requested frame.
+	Navigation3D::Index oriented_quad_face_index(const Mesh3D &mesh, Navigation3D::Index index, const int anchor, const int second)
+	{
+		for (int k = 0; k < 4 && index.vertex != anchor; ++k)
+			index = mesh.next_around_face(index);
+		assert(index.vertex == anchor);
+		if (mesh.switch_vertex(index).vertex != second)
+			index = mesh.switch_edge(index);
+		assert(mesh.switch_vertex(index).vertex == second);
+		return index;
+	}
+
+	// Names every hexahedron whose node list carries a placeholder (a shared
+	// edge/face node deferred to a lower-order neighbour) and throws; see the
+	// call site in build_bases.
+	void refuse_mixed_order_hexahedra(const Mesh3D &mesh, const Eigen::VectorXi &discr_orders, const std::vector<std::vector<int>> &element_nodes_id)
+	{
+		std::vector<std::string> offenders;
+		int n_offenders = 0;
+		for (int c = 0; c < mesh.n_cells(); ++c)
+		{
+			if (!mesh.is_cube(c))
+				continue;
+			const auto &ids = element_nodes_id[c];
+			if (std::none_of(ids.begin(), ids.end(), [](const int id) { return id < 0; }))
+				continue;
+
+			++n_offenders;
+			if (offenders.size() >= 8)
+				continue;
+
+			// the lower-order neighbours the placeholders point at
+			std::set<int> lower;
+			for (int lf = 0; lf < mesh.n_cell_faces(c); ++lf)
+			{
+				const int other = mesh.switch_element(mesh.get_index_from_element(c, lf, 0)).element;
+				if (other >= 0 && discr_orders(other) < discr_orders(c))
+					lower.insert(discr_orders(other));
+			}
+			for (int le = 0; le < mesh.n_cell_edges(c); ++le)
+				for (const int cid : mesh.edge_neighs(mesh.cell_edge(c, le)))
+					if (cid != c && discr_orders(cid) < discr_orders(c))
+						lower.insert(discr_orders(cid));
+			std::string orders;
+			for (const int o : lower)
+				orders += (orders.empty() ? "" : ", ") + std::to_string(o);
+			offenders.push_back(fmt::format("hexahedron {} (order {}) next to order {}", c, discr_orders(c), orders.empty() ? "?" : orders));
+		}
+
+		if (n_offenders == 0)
+			return;
+
+		std::string list;
+		for (const auto &s : offenders)
+			list += (list.empty() ? "" : "; ") + s;
+		if (n_offenders > int(offenders.size()))
+			list += fmt::format("; ... {} more", n_offenders - int(offenders.size()));
+		log_and_throw_error(
+			"Mixed per-element hexahedral orders are not supported: {} hexahedr{} of a higher order than an edge/face neighbour "
+			"(the lower-order interface stitching exists for simplices only). Use one discr_order for all hexahedra "
+			"(orders in use: {} to {}), or a tetrahedral mesh for mixed orders. Affected: {}.",
+			n_offenders, n_offenders == 1 ? "on is" : "a are", discr_orders.minCoeff(), discr_orders.maxCoeff(), list);
 	}
 
 	std::array<int, 4> tet_vertices_local_to_global(const Mesh3D &mesh, int c)
@@ -484,28 +579,21 @@ namespace
 		// Vertex nodes
 		auto v = hex_vertices_local_to_global(mesh, c);
 
-		// Edge nodes
+		// Edge nodes, enumerated in the direction of the autogen layout: the
+		// index starts at the edge's first vertex, so node_ids_from_edge
+		// lists the interior nodes from it towards the second vertex.
 		Eigen::Matrix<Navigation3D::Index, 12, 1> e;
 		Eigen::Matrix<int, 12, 2> ev;
-		ev.row(0) << v[0], v[1];
-		ev.row(1) << v[1], v[2];
-		ev.row(2) << v[2], v[3];
-		ev.row(3) << v[3], v[0];
-		ev.row(4) << v[0], v[4];
-		ev.row(5) << v[1], v[5];
-		ev.row(6) << v[2], v[6];
-		ev.row(7) << v[3], v[7];
-		ev.row(8) << v[4], v[5];
-		ev.row(9) << v[5], v[6];
-		ev.row(10) << v[6], v[7];
-		ev.row(11) << v[7], v[4];
+		for (int le = 0; le < e.rows(); ++le)
+			ev.row(le) << v[HEX_EDGE_DIRECTION[le][0]], v[HEX_EDGE_DIRECTION[le][1]];
 		for (int le = 0; le < e.rows(); ++le)
 		{
 			// e[le] = find_edge(mesh, c, ev(le, 0), ev(le, 1)).edge;
 			e[le] = mesh.get_index_from_element_edge(c, ev(le, 0), ev(le, 1));
+			assert(e[le].vertex == ev(le, 0));
 		}
 
-		// Face nodes
+		// Face nodes, enumerated in the frame of the autogen layout
 		Eigen::Matrix<Navigation3D::Index, 6, 1> f;
 		Eigen::Matrix<int, 6, 4> fv;
 		fv.row(0) << v[0], v[3], v[4], v[7];
@@ -517,7 +605,8 @@ namespace
 		for (int lf = 0; lf < f.rows(); ++lf)
 		{
 			const auto index = find_quad_face(mesh, c, fv(lf, 0), fv(lf, 1), fv(lf, 2), fv(lf, 3));
-			f[lf] = index;
+			f[lf] = oriented_quad_face_index(mesh, index, v[HEX_FACE_FRAME[lf][0]], v[HEX_FACE_FRAME[lf][1]]);
+			assert(mesh.switch_vertex(mesh.switch_edge(f[lf])).vertex == v[HEX_FACE_FRAME[lf][2]]);
 		}
 
 		// vertices
@@ -574,10 +663,10 @@ namespace
 		}
 		assert(res.size() == size_t(8 + n_edge_nodes + n_face_nodes));
 
-		// cells
+		// cells, enumerated in the frame of the autogen layout
 		if (n_cell_nodes > 0)
 		{
-			const auto index = f[0];
+			const auto index = f[HEX_CELL_FRAME_FACE];
 
 			auto node_ids = nodes.node_ids_from_cell(index, q - 1);
 			res.insert(res.end(), node_ids.begin(), node_ids.end());
@@ -1671,20 +1760,12 @@ Eigen::VectorXi LagrangeBasis3d::hex_face_local_nodes(const bool serendipity, co
 	result[2] = find_index(l2g.begin(), l2g.end(), mesh.next_around_face(mesh.next_around_face(index)).vertex);
 	result[3] = find_index(l2g.begin(), l2g.end(), mesh.next_around_face(mesh.next_around_face(mesh.next_around_face(index))).vertex);
 
+	// local edge nodes 8 + le * (q - 1) + i run from ev(le, 0) to ev(le, 1)
+	// (the autogen layout, see HEX_EDGE_DIRECTION)
 	Eigen::Matrix<Navigation3D::Index, 12, 1> e;
 	Eigen::Matrix<int, 12, 2> ev;
-	ev.row(0) << l2g[0], l2g[1];
-	ev.row(1) << l2g[1], l2g[2];
-	ev.row(2) << l2g[2], l2g[3];
-	ev.row(3) << l2g[3], l2g[0];
-	ev.row(4) << l2g[0], l2g[4];
-	ev.row(5) << l2g[1], l2g[5];
-	ev.row(6) << l2g[2], l2g[6];
-	ev.row(7) << l2g[3], l2g[7];
-	ev.row(8) << l2g[4], l2g[5];
-	ev.row(9) << l2g[5], l2g[6];
-	ev.row(10) << l2g[6], l2g[7];
-	ev.row(11) << l2g[7], l2g[4];
+	for (int le = 0; le < e.rows(); ++le)
+		ev.row(le) << l2g[HEX_EDGE_DIRECTION[le][0]], l2g[HEX_EDGE_DIRECTION[le][1]];
 
 	Navigation3D::Index tmp = index;
 
@@ -2616,6 +2697,13 @@ int LagrangeBasis3d::build_bases(
 	std::vector<std::vector<int>> element_nodes_id, edge_virtual_nodes, face_virtual_nodes;
 	compute_nodes(mesh, discr_ordersp, discr_ordersq, edge_orders, face_orders, serendipity, has_polys, is_geom_bases, nodes, edge_virtual_nodes, face_virtual_nodes, element_nodes_id, local_boundary, poly_face_to_data);
 	// boundary_nodes = nodes.boundary_nodes();
+
+	// A hexahedron of higher order than an edge/face neighbour got placeholder
+	// ids (< 0) for the shared nodes; stitching them to the neighbour's coarser
+	// space is implemented for simplices only (the hex branch below is a TODO).
+	// Before RB-23 the hex bases were initialised from node_position(< 0) and
+	// the run continued with garbage (bad_alloc or a NaN solve). Refuse by name.
+	refuse_mixed_order_hexahedra(mesh, discr_ordersp, element_nodes_id);
 
 	bases.resize(mesh.n_cells());
 	std::vector<int> interface_elements;

@@ -195,7 +195,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-20 | Force-continuation κ: persisting contacts keep their realized coefficient across refreshes; Hessian estimate only for new contacts | RB-04 H5 drift evidence; RB-15 frozen-coefficient recommendation; RB-18 law for new contacts | [done — default on; drift 17–53% → 1e-16 at equal cost with RB-21](rb-20-force-continuation.md) |
 | RB-21 | Parent-keyed κ: candidate identity carried through the toolkit builder; coefficient keyed on the parent, weighted over contributions | RB-15 parent invariant; RB-20 continuation; toolkit fork | [done — weighted-mean arithmetic and final weighted-coefficient guard validated 2026-09-12](rb-review-followup-20260912.md) |
 | RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | [validated within stated scope 2026-09-12 (`8f76fef69`) — named error for every skipped face, DOF-resolution proxy default for Q2+/serendipity hexahedra (user decision), bit-identical Q1/tet/HDA; Q3+ blocked by RB-23](rb-22-validation.md) |
-| RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | not started — [section](#rb-23--q3-hexahedral-basis-node-bookkeeping) |
+| RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | [validated within stated scope 2026-09-20 — the swap was in the local→global enumeration (`hex_local_to_global` handed `MeshNodes` the wrong edge direction for e5–e7 and the mesh's arbitrary face/cell frames instead of the autogen layout's); repaired by tabulated frames, Q1/Q2/serendipity/tet/smoke paths bit-identical, the hidden `[q3_hex_defect]` tests unhidden and passing (0 of 256 mismatches, 0 of 48 disagreements, both Q3 proxies valid), Q3 reproduces Q_3 to 1e-10 and converges at 3.87 (Q1 1.90, Q2 2.90), the RB-22 `q3-*` scenes complete; mixed per-element hexahedral orders are a **named early failure** (was `bad_alloc` / NaN solve) — implementing the stitching is the user's pending decision](rb-23-validation.md) |
 | RB-24 | Per-thread memory of the contact path: ~185 MB fixed plus ~125 MB per thread on a 387-DOF scene, independent of the stiffness law and broad phase (RB-12 stage 2 probes) | RB-12 manifests (peak RSS per run); RB-05 resource-containment contract | not started (user decision 2026-09-14) — [section](#rb-24--per-thread-memory-of-the-contact-path) |
 
 The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22,
@@ -214,8 +214,10 @@ leftovers are CI-plan items. RB-06 is validated within stated scope
 before the failure is reported (no retry). RB-07 (2026-09-15) bounds the AL
 stage on request: the opt-in budget is validated within its scope and its
 enabled default is the user's pending decision. Remaining
-order: RB-23 (Q3+ hexahedral basis) is
-independently eligible and is the prerequisite for Q3+ hex contact. RB-08
+order: RB-23 (Q3+ hexahedral basis) is validated within stated scope
+(2026-09-20): Q3 hexahedral contact scenes now build valid surfaces and
+complete; mixed per-element hexahedral orders are refused by name until the
+user decides whether to implement the stitching. RB-08
 stays closed (a resource failure is a distinct,
 non-retried exception type should the policy ever be reopened). The default resource
 limits and the exit statuses were decided on 2026-09-12 (RB-05 follow-up):
@@ -243,6 +245,7 @@ work. It does **not** preselect any of these remaining decisions:
 | Automatic timestep/load retry policy | RB-08 | **Decided 2026-09-13: retry off.** No automatic subdivision or re-attempt; reopening requires a new explicit user decision |
 | Friction, material, element or quadrature defaults | RB-10 / RB-11 | Separate model comparison and user agreement; do not bundle with an indexing/validation repair. **Decided 2026-09-13 (RB-10):** the lagged friction carries the realized normal force (`semi_implicit/friction_lag: realized_force`) and the lag budget defaults to 2; the F6 trim-following and budget 1 stay available explicitly. Material, element and quadrature defaults remain open; RB-11 (2026-09-13) changed none of them — it only refuses parameter values the laws cannot use (`E ≤ 0`, `μ ≤ 0`, nonpositive bulk modulus, `ν ∉ (−1, ½)`, `ρ < 0`, `k2 ≤ 0`, `κ ∉ [0, ⅓]`, nonfinite) |
 | Upstream/dependency upgrade or release promotion | RB-12 | Separate user instruction and applicable publication/validation procedure |
+| Mixed per-element hexahedral orders: implement the hexahedral interface stitching or keep refusing | RB-23 | **Refused by name since 2026-09-20 (RB-23)**: a hexahedron of higher order than an edge/face neighbour is a named early failure instead of an out-of-bounds read; implementing the constrained stitching (as `LagrangeBasis3d` does for tetrahedra) is a feature needing its own row, tests and the RB-22 proxies on constrained nodes — the user's choice |
 
 A new physical model is not a “routine implementation detail.” Conversely, a
 reproduced ownership/indexing error with a clear existing contract does not need
@@ -1284,7 +1287,25 @@ smokes; record and status row per the template.
 
 ## RB-23 — Q3+ hexahedral basis node bookkeeping
 
-**Added 2026-09-12** from RB-22. Not started.
+**Added 2026-09-12** from RB-22. **Validated within stated scope 2026-09-20**
+— see the [record](rb-23-validation.md). Outcome: the swap was in the
+local→global enumeration, not in the stored positions or the autogen tables.
+`MeshNodes::node_ids_from_edge/face/cell` list nodes in the frame of the
+index they are given; `hex_local_to_global` oriented the vertical edges
+e5–e7 against the autogen layout (which lists them downward) and handed
+every face and the cell the mesh's own arbitrary corner frame. The frames
+are now tabulated (`HEX_EDGE_DIRECTION`, `HEX_FACE_FRAME`,
+`HEX_CELL_FRAME_FACE`) and asserted; `hex_face_local_nodes` shares the edge
+table. Q1/Q2 own at most one node per edge/face/cell and are bit-identical
+(five public smokes, the RB-03 Q1 hex scene, the RB-22 Q1/Q2/serendipity
+matrix rows). The hidden tests run by default; new `[rb23]` tests reproduce
+Q_q polynomials (1e-10), check continuity across shared faces with random
+data on the column and on non-affine grids, and measure interpolation rates
+1.90 / 2.90 / 3.87 (Q1 / Q2 / Q3); on the unrepaired basis Q3 does not
+converge (rate 0.53). The mixed-order stitching TODO is a named early
+failure (was an out-of-bounds `node_position(<0)`: `bad_alloc` or a NaN
+solve); implementing it is the user's decision (register above). The
+section below is the plan as it stood.
 
 **Defect (characterized 2026-09-12, `tests/test_hex_collision_surface.cpp`
 hidden tests `[q3_hex_defect]`, RB-22 record):** for `discr_order: 3`

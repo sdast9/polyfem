@@ -193,7 +193,12 @@ relied on the silent partial surface now stop with an error.
 - External prerequisite: **RB-23 (new row)** — repair the Q3+ hexahedral
   node bookkeeping in `LagrangeBasis3d` (`hex_local_to_global` edge/face node
   order vs `q_nodes_3d`), then run `unit_tests "[q3_hex_defect]"`; and the
-  mixed-order hex stitching `TODO`. Separate observation for RB-11:
+  mixed-order hex stitching `TODO`. **Done 2026-09-20** — see the
+  [RB-23 record](rb-23-validation.md): the hidden tests run by default and
+  pass, `q3-dof` / `q3-max_order` / `q3-default` complete with valid
+  surfaces, and the mixed-order TODO is a named error. The degenerate-face
+  refusal below stays as a guard for degenerate input meshes; its message no
+  longer names the Q3 basis as the known cause. Separate observation for RB-11:
   `lump_mass_matrix` with quadratic elements should be refused or lumped
   consistently (HRZ) — a row-sum lump is indefinite.
 - Next command: `python3 tools/rb22/run_matrix.py --binary build/PolyFEM_bin --output <fresh>`;
