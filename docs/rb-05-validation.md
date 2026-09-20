@@ -358,3 +358,19 @@ HDA `0f7b8fd` on `sdast9/houdini-plugins:main`.
 The BVH run's solution differs from the hash-grid runs by 1.9·10⁻¹⁶
 (`followup/scene-limits-quick/`): the collision set's summation order, as
 expected — not a limit effect.
+
+## Cross-reference — the per-thread memory is the narrow phase (RB-24, 2026-09-20)
+
+The ~125 MB-per-thread growth RB-12 measured on threaded contact runs and
+handed to RB-24 is **not** covered by the broad-phase budget above and is not
+the candidate set: [RB-24](rb-24-validation.md) traced it to Tight-Inclusion
+1.0.6's BFS priority queue on the CCD queries that run to
+`solver/contact/CCD/max_iterations` — a transient 156 MB per capped query in
+flight (12 such queries single-threaded, 36 at 18 threads on the public
+smoke, all flat cube-bottom pairs against the slab), freed on return. Peak
+RSS of a threaded contact run is therefore ≈ base + (capped queries in
+flight) × 156 MB, with no per-allocation check possible short of the
+algorithm change upstream made in Tight-Inclusion 1.1.0 (measured there:
+4× less). By the user's decision of 2026-09-20 nothing changed; the
+exit-status-3 containment above stays a broad-phase contract and a lower
+*Max Threads* remains the workaround for large floor-contact scenes.

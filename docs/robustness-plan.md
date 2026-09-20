@@ -196,7 +196,7 @@ RB-02 and RB-03 can expose decisions needed before later physical certification.
 | RB-21 | Parent-keyed κ: candidate identity carried through the toolkit builder; coefficient keyed on the parent, weighted over contributions | RB-15 parent invariant; RB-20 continuation; toolkit fork | [done — weighted-mean arithmetic and final weighted-coefficient guard validated 2026-09-12](rb-review-followup-20260912.md) |
 | RB-22 | High-order hexahedral collision surface: Q2+ hex faces are skipped by the default boundary extraction and a contact-enabled scene crashes | RB-03 map contract (done); RB-11 for the input-validation envelope if the fix is a named error | [validated within stated scope 2026-09-12 (`8f76fef69`) — named error for every skipped face, DOF-resolution proxy default for Q2+/serendipity hexahedra (user decision), bit-identical Q1/tet/HDA; Q3+ blocked by RB-23](rb-22-validation.md) |
 | RB-23 | Q3+ hexahedral basis node bookkeeping: stored edge/face node positions are not the images of their reference nodes and the Q3 hex space is nonconforming across faces; mixed per-element hex orders hit an `assert(false)` TODO | RB-22 characterization and hidden acceptance tests | [validated within stated scope 2026-09-20 — the swap was in the local→global enumeration (`hex_local_to_global` handed `MeshNodes` the wrong edge direction for e5–e7 and the mesh's arbitrary face/cell frames instead of the autogen layout's); repaired by tabulated frames, Q1/Q2/serendipity/tet/smoke paths bit-identical, the hidden `[q3_hex_defect]` tests unhidden and passing (0 of 256 mismatches, 0 of 48 disagreements, both Q3 proxies valid), Q3 reproduces Q_3 to 1e-10 and converges at 3.87 (Q1 1.90, Q2 2.90), the RB-22 `q3-*` scenes complete; mixed per-element hexahedral orders are a **named early failure** (was `bad_alloc` / NaN solve; the user decided to keep refusing, 2026-09-20); Q4+ and off-order serendipity hexahedra/quadrilaterals refused by name too (were a segfault / silent mismatched basis)](rb-23-validation.md) |
-| RB-24 | Per-thread memory of the contact path: ~185 MB fixed plus ~125 MB per thread on a 387-DOF scene, independent of the stiffness law and broad phase (RB-12 stage 2 probes) | RB-12 manifests (peak RSS per run); RB-05 resource-containment contract | not started (user decision 2026-09-14) — [section](#rb-24--per-thread-memory-of-the-contact-path) |
+| RB-24 | Per-thread memory of the contact path: ~185 MB fixed plus ~125 MB per thread on a 387-DOF scene, independent of the stiffness law and broad phase (RB-12 stage 2 probes) | RB-12 manifests (peak RSS per run); RB-05 resource-containment contract | [characterized—limits documented 2026-09-20; closed by the user's decision: no code change — the growth is Tight-Inclusion 1.0.6's BFS priority queue on the CCD queries that run to `max_iterations` (156 MB transient per capped query in flight: 12 capped queries single-threaded, 36 at 18 threads on the probe, all flat-face-onto-slab pairs), not the contact form nor the assembly storage; upstream's Tight-Inclusion 1.1.0 bucket DFS (ipc-toolkit's pin since 2026-08-07) measured in isolation at 222→94 MB / 2386→578 MB with the five smokes bit-identical single-threaded, to be taken with the next dependency sync; `Max Threads` remains the workaround](rb-24-validation.md) |
 
 The RB-13–RB-17 research sequence is closed/retired (2026-09-11). RB-22,
 RB-04 and RB-05 are validated within their scope (2026-09-12), RB-10 on
@@ -221,8 +221,9 @@ decision 2026-09-20). RB-08
 stays closed (a resource failure is a distinct,
 non-retried exception type should the policy ever be reopened). The default resource
 limits and the exit statuses were decided on 2026-09-12 (RB-05 follow-up):
-named failures exit 1, resource failures 3, an abort signal is a real crash. RB-24 (per-thread contact memory) can be
-selected at any time. A dependency does not authorize completing two items
+named failures exit 1, resource failures 3, an abort signal is a real crash. RB-24 (per-thread contact memory) was
+characterized on 2026-09-20 and closed without a code change (the remedy is
+upstream's Tight-Inclusion 1.1.0, for the next dependency sync). A dependency does not authorize completing two items
 under one request. Each item may require several sessions with explicit stages.
 
 Status vocabulary: `not started`, `in progress`, `characterized—decision pending`, `characterized—limits documented`,
@@ -1348,7 +1349,22 @@ to node positions.
 
 ## RB-24 — Per-thread memory of the contact path
 
-**Added 2026-09-14** from RB-12 stage 2, on the user's decision. Not started.
+**Added 2026-09-14** from RB-12 stage 2, on the user's decision.
+**Characterized — limits documented 2026-09-20, closed by the user's decision
+(no code change)**; see [the record](rb-24-validation.md). Stage 1 found the
+allocation outside the hypothesis below: it is Tight-Inclusion 1.0.6's
+level-ordered BFS priority queue (`pair<Interval3,int>`, 104 B per entry) on
+the few CCD queries that run to `solver/contact/CCD/max_iterations` — 156 MB
+transient per capped query in flight, freed on return — and the per-thread
+growth is the number of capped queries in flight (12 single-threaded, 36 at
+18 threads on the probe, all flat cube-bottom pairs against the slab's edges
+and diagonal; in parallel every hard query starts at `tmax = 1`). The
+stage-2 remedy that exists is upstream's replacement of the algorithm
+(Tight-Inclusion 1.1.0 bucket DFS, upstream ipc-toolkit's pin since
+2026-08-07), measured in an isolated worktree: 222 → 94 MB at 1 thread,
+2386 → 578 MB at 18, faster, the five smokes bit-identical single-threaded;
+it is a CCD result change in general, so the user chose to take it with the
+next dependency sync rather than now. The original section follows.
 
 **Observation (RB-12 record, `outputs/rb-12/20260914T141159Z-repeat/rss-probe/`
 and `…142106Z-repeat/rss-probe-2/`):** on the 384-tetrahedron public smoke

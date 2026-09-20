@@ -67,7 +67,8 @@ current.
   certification. [PF-08](docs/pf-08-validation.md) records incomplete physical
   accounting, mesh sensitivity and intermittent solve failures; the RB records
   state their measured limits (for example RB-09's accuracy envelope and
-  RB-12's threaded-friction repeatability of 1.7e-4). Packages, the Houdini
+  RB-12's threaded-friction repeatability of 1.7e-4, RB-24's ~156 MB per
+  iteration-capped CCD query in flight on threaded contact runs). Packages, the Houdini
   launch paths on each OS and a cross-platform repeatability matrix are open
   CI-plan items.
 
