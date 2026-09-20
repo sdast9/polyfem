@@ -7,8 +7,10 @@ both RB-22 collision proxies are geometrically valid and the RB-22 Q3 scenes
 complete; Q1/Q2/serendipity/tetrahedral paths bit-identical; mixed
 per-element hexahedral orders are a named early failure). **Mixed-order
 hexahedral stitching is not implemented** — the plan's "implement or refuse"
-choice is resolved as *refuse* here; implementing it is a separate decision
-(see the decision section).
+choice: **the user decided "refuse for now" (2026-09-20)**; reopening it needs
+a new row. Follow-up the same day: tensor-product orders without a table
+(Q4+ hexahedra/quadrilaterals, serendipity at orders other than 2) are named
+errors instead of a segfault or a silent mismatched basis (section below).
 Selected stage: 1 (reproduce, locate the swap) → 2 (repair, Q1/Q2
 bit-identical) → 3 (unhide the acceptance tests, patch/continuity/convergence
 tests, RB-22 `q3-*` scenes) in one session; the mixed-order TODO handled as a
@@ -182,7 +184,7 @@ same four steps) on 12,300 DOF; not investigated here.
 - Small fixtures: the tests generate their skewed grids in the system
   temporary directory at run time; nothing new under `data/`.
 
-## Decision required: mixed-order hexahedral stitching
+## Decision: mixed-order hexahedral stitching — refused (user, 2026-09-20)
 
 The plan left "implement or refuse with a named error" open. This session
 *refused*: the hexahedral interface stitching is a feature (constraining the
@@ -190,8 +192,31 @@ higher-order element's shared edge/face nodes to the neighbour's coarser
 trace, as `LagrangeBasis3d` does for tetrahedra), not a bookkeeping repair,
 and the previous behaviour was undefined. Implementing it would need its own
 plan row (Q2/Q1 and Q3/Q2 hex pairs, hybrid hex/tet interfaces, the RB-22
-proxies on constrained nodes, tests). Until then, a per-element hexahedral
-order file must be uniform.
+proxies on constrained nodes, tests). **The user confirmed "refuse for now"
+on 2026-09-20**; a per-element hexahedral order file must be uniform, and
+reopening the implementation is a new decision.
+
+## Follow-up 2026-09-20: orders without a basis table are named errors
+
+Answering the user's "Q3 but not Q4?" question exposed the neighbouring
+silent-failure class (`stage4-order-guard/`, probes in `q4-probe/`): the
+tensor-product tables exist for Q0–Q3 and serendipity Q2 only
+(`autogen::MAX_Q_BASES = 3`, `q_nodes_3d`/`q_nodes_2d`), and on the RB-23
+candidate a **Q4 or Q5 hexahedron segfaulted** (exit 139, `q_nodes_3d`
+leaves the table empty in a release build), **serendipity at order 3 ran to
+completion with 32 node ids against the 20-function table** (exit 0, a
+silent garbage solve), serendipity at order 1 died with a misleading
+"element 0 is flipped", and a **Q4 quadrilateral segfaulted** the same way.
+
+| Change | Evidence | Outcome |
+| --- | --- | --- |
+| `refuse_unavailable_hexahedral_orders` at the top of `LagrangeBasis3d::build_bases`: Lagrange hexahedra need `0 ≤ q ≤ MAX_Q_BASES`, serendipity hexahedra need `q == 2`; the same two-rule guard inline at the top of `LagrangeBasis2d::build_bases` for quadrilaterals (identical class, one screen of code; noted here as a deliberate 2D inclusion) | the six probes now exit 1 with "Q4/Q5 hexahedral bases are not available …", "Serendipity hexahedral bases exist for discr_order 2 only …", "Q4 quadrilateral …", "Serendipity quadrilateral …" | fixed (named error) |
+| Test `[rb23][hex_basis][input_validation]` "Tensor-product orders without a basis table are refused": hex Q4/Q5, serendipity 1/3, quad Q4, quad serendipity 3; Q3 and serendipity Q2 still build (253 and 56 bases) | `[rb23]` 12,080 assertions / 7 cases; `[rb22]` 802, `[input_validation]` 195 / 20, `[bases]` 347,907, `[lagrange2d]` 121, `[hex_nodes]`, `[contact_stiffness_mapping]` all pass | pass |
+| Accepted inputs untouched | A/B smokes, RB-23 candidate `a339afda…` vs the guarded build: six scenes proxy- and solution-identical, max\|diff\| = 0.0 | pass |
+
+P5+ tetrahedra are a different story (tables up to P4 exist in
+`MAX_P_BASES`, and a P5 tetrahedral scene ran to completion in the probe);
+whether that is a supported path is outside RB-23 and not examined.
 
 ## Next session handoff
 
@@ -199,8 +224,8 @@ order file must be uniform.
   Pending inside RB-23: nothing.
 - Status: validated within stated scope — the hidden tests pass, Q1/Q2/HDA
   paths are bit-identical, the RB-22 Q3 scenes complete with valid surfaces.
-- Decision for the user: implement mixed-order hexahedral stitching (new
-  row) or leave it refused.
+- Decision taken by the user (2026-09-20): mixed-order hexahedral
+  stitching stays refused; reopening it is a new decision.
 - Next: RB-24 (per-thread contact memory) is the remaining open row; the
   RB-07 enabled-budget default is still the user's pending decision.
 - Plan row and README updated in the same commit.

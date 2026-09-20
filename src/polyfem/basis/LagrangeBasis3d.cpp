@@ -208,6 +208,29 @@ namespace
 		return index;
 	}
 
+	// The tensor-product tables exist for Q0-Q3 and serendipity Q2 only
+	// (autogen::MAX_Q_BASES, q_nodes_3d); a hexahedron asking for anything
+	// else used to segfault (Q4+: empty node table) or run with a mismatched
+	// basis (serendipity at order 1 or 3: 8 or 32 node ids for the 20-node
+	// table, "element is flipped" or a silent garbage solve). Refuse by name.
+	void refuse_unavailable_hexahedral_orders(const Mesh3D &mesh, const Eigen::VectorXi &discr_orders, const bool serendipity)
+	{
+		for (int c = 0; c < mesh.n_cells(); ++c)
+		{
+			if (!mesh.is_cube(c))
+				continue;
+			const int q = discr_orders(c);
+			if (serendipity && q != 2)
+				log_and_throw_error(
+					"Serendipity hexahedral bases exist for discr_order 2 only (20-node element); hexahedron {} asks for order {}. Use discr_order 2 or the Lagrange basis_type.",
+					c, q);
+			if (!serendipity && (q < 0 || q > autogen::MAX_Q_BASES))
+				log_and_throw_error(
+					"Q{} hexahedral bases are not available: tensor-product Lagrange tables exist up to Q{} (hexahedron {}). Lower discr_order, or use tetrahedra (P1-P{}).",
+					q, autogen::MAX_Q_BASES, c, autogen::MAX_P_BASES);
+		}
+	}
+
 	// Names every hexahedron whose node list carries a placeholder (a shared
 	// edge/face node deferred to a lower-order neighbour) and throws; see the
 	// call site in build_bases.
@@ -2669,6 +2692,8 @@ int LagrangeBasis3d::build_bases(
 	assert(mesh.is_volume());
 	assert(discr_ordersp.size() == mesh.n_cells());
 	assert(discr_ordersq.size() == mesh.n_cells());
+
+	refuse_unavailable_hexahedral_orders(mesh, discr_ordersp, serendipity);
 
 	// Navigation3D::get_index_from_element_face_time = 0;
 	// Navigation3D::switch_vertex_time = 0;

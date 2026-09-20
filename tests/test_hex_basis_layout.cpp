@@ -449,3 +449,54 @@ TEST_CASE("Mixed per-element hexahedral orders are refused with a named error", 
 	const Built b = build(column_mesh(), path.string());
 	CHECK(b.debug.n_bases == 4 * 64 - 3 * 16);
 }
+
+namespace
+{
+	void expect_basis_error(const std::string &mesh, const int order, const std::string &basis_type, const std::string &text)
+	{
+		State state;
+		json in_args;
+		in_args["/geometry/0/mesh"_json_pointer] = mesh;
+		in_args["/materials/type"_json_pointer] = "NeoHookean";
+		in_args["/materials/E"_json_pointer] = 1e5;
+		in_args["/materials/nu"_json_pointer] = 0.3;
+		in_args["/materials/rho"_json_pointer] = 1e3;
+		in_args["/space/discr_order"_json_pointer] = order;
+		in_args["/space/basis_type"_json_pointer] = basis_type;
+		in_args["/contact/enabled"_json_pointer] = false;
+		in_args["/time/time_steps"_json_pointer] = 1;
+		in_args["/time/tend"_json_pointer] = 1;
+		in_args["/output/log/level"_json_pointer] = "error";
+		state.init(in_args, true);
+		state.set_max_threads(1);
+		state.load_mesh();
+		REQUIRE_THROWS_WITH(test::VarFormTestAccess::prepare(*state.variational_formulation), ContainsSubstring(text));
+	}
+} // namespace
+
+TEST_CASE("Tensor-product orders without a basis table are refused with a named error", "[rb23][hex_basis][input_validation]")
+{
+	// autogen carries Q0-Q3 and serendipity Q2 only (MAX_Q_BASES = 3). A Q4+
+	// hexahedron or quadrilateral used to segfault on the empty node table
+	// (exit 139); serendipity at order 3 ran 32 node ids against the 20-node
+	// table with exit 0 (a silent garbage solve), at order 1 it died with a
+	// misleading "element is flipped".
+	const std::string quad = std::string(POLYFEM_DATA_DIR) + "/quad_test/quad.obj";
+	SECTION("hexahedra")
+	{
+		expect_basis_error(column_mesh(), 4, "Lagrange", "Q4 hexahedral bases are not available");
+		expect_basis_error(column_mesh(), 5, "Lagrange", "Q5 hexahedral bases are not available");
+		expect_basis_error(column_mesh(), 1, "Serendipity", "Serendipity hexahedral bases exist for discr_order 2 only");
+		expect_basis_error(column_mesh(), 3, "Serendipity", "Serendipity hexahedral bases exist for discr_order 2 only");
+	}
+	SECTION("quadrilaterals (the same guard in LagrangeBasis2d)")
+	{
+		expect_basis_error(quad, 4, "Lagrange", "Q4 quadrilateral bases are not available");
+		expect_basis_error(quad, 3, "Serendipity", "Serendipity quadrilateral bases exist for discr_order 2 only");
+	}
+	SECTION("the supported orders still build")
+	{
+		CHECK(build(column_mesh(), 3).debug.n_bases == 4 * 64 - 3 * 16);
+		CHECK(build(column_mesh(), 2, "Serendipity").debug.n_bases == 20 + 36);
+	}
+}
