@@ -169,8 +169,11 @@ same four steps) on 12,300 DOF; not investigated here.
   `tests/test_hex_basis_layout.cpp` (new), `tests/test_hex_collision_surface.cpp`,
   `tests/CMakeLists.txt`, `docs/rb-23-validation.md`,
   `docs/robustness-plan.md`, `docs/rb-22-validation.md` (handoff note),
-  `tools/rb22/README.md` (the Q3 rows now complete), `README.md`.
-  Remote/branch/commit: PENDING.
+  `tools/rb22/README.md` (the Q3 rows now complete); the workspace
+  `README.md` (unversioned) updated alongside.
+  Remote/branch/commit: `sdast9/polyfem:main` `329a1af25` (implementation,
+  tests and this record), fast-forward from `a6d70bd49`; this hash note is a
+  follow-up documentation commit.
 - Companion pins: unchanged (IPC `c24d803e`, PolySolve `bce32a39`). No HDA
   change; the HDA tests were run for evidence only.
 - Remaining working-tree changes: none after the commit (the golden-test
