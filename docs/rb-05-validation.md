@@ -582,3 +582,14 @@ isolated configure at `92e0d8c20` + toolkit `c24d803e` (`baseline-bin/`).
   specified acceptance), the HDA end-to-end tests (no asset or option
   changed), private scenes, Teseo, the toolkit's hidden benchmarks.
 
+### Publication
+
+Toolkit `a28de2db` on `sdast9/ipc-toolkit:semi-implicit-stiffness` (pushed
+first; the shared `ipc-toolkit-fork` checkout fast-forwarded to it, so the
+shared build compiles the pinned sources). PolyFEM `2bce3eb4a` on
+`sdast9/polyfem:main` (this note follows it): the tested sources are
+`92e0d8c20` + `candidate/tested.patch` `b727f971…`, byte-identical to that
+commit's `src`/`tests`/`cmake` diff (the commit adds the records). The isolated worktrees and builds live in the session
+scratchpad and are not part of the evidence; every log, hash, patch and
+run they produced is under `outputs/rbr-02/20260920T202503Z/`.
+
