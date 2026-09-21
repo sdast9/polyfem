@@ -847,9 +847,9 @@ scene or Teseo ran.
 
 Tested binaries: `PolyFEM_bin` `fcc3d157…`, `unit_tests` `9492893c…`
 (`candidate/probe-and-final-binaries.sha256`; sources identical to the
-first repaired build `candidate/bin/`); `tested.patch` in `candidate/`. The
-commit on `sdast9/polyfem:main` is recorded in the hash note that follows.
-No companion pin or HDA asset changed.
+first repaired build `candidate/bin/`); `tested.patch` in `candidate/`.
+Published as `924a8597f` on `sdast9/polyfem:main`. No companion pin or HDA
+asset changed.
 
 ### Limits
 
