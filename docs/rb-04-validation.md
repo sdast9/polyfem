@@ -856,8 +856,22 @@ asset changed.
 - Only the transient differentiable dispatch exports time kinematics; the
   static and homogenization dispatches carry no integrator.
 - The differentiable branch has no rollback transaction, as documented for
-  RB-06; a failed differentiable solve leaves the phase at the attempt, which
-  no output reads before the next solve's initialization.
+  RB-06 (and this follow-up was not authorized to add one). After a failed
+  differentiable step the varform holds the failed iterate against a history
+  that still ends at the previous step, and the phase stays
+  `CurrentStepBeforeAdvance` — which describes that state correctly (an
+  iterate of the unfinished step against the previous history); the limit is
+  the missing rollback, not the phase. No output reads that state: the
+  step's own callback, subsolve and frame exports are never reached; the
+  optimizer's line search (`AdjointNLProblem::solution_changed` under
+  PolySolve's `catch (std::runtime_error)`) retries a smaller step by
+  calling `solve()` again, whose `init_solve_data` resets the phase before
+  any output; the optimizer's `post_step` → `save_to_file` →
+  `save_vtu(diff_cache->u(-1))` fires only after an accepted iterate, i.e.
+  after a completed forward solve whose head is `u(-1)` in `HistoryHead`;
+  and a line search that fails on every step size, or a non-`runtime_error`
+  failure, ends the process through `main`'s named-failure handler with no
+  further export.
 - The adjoint derivatives are not affected by the output phase (they read
   the integrator through `DiffCache`, which states its own step), and this
   follow-up does not re-validate them beyond the existing

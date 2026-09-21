@@ -291,8 +291,10 @@ namespace polyfem::varform
 		// saves before advancing -- describes an endpoint of the current step
 		// against the previous step's history; the loop's update_quantities
 		// moves the phase back to the head. This dispatch carries no RB-06
-		// transaction (documented), so a failed solve ends the run with the
-		// phase left at the attempt and the next solve's init resets it.
+		// transaction (documented): a failed solve leaves the failed iterate
+		// against the previous step's history, and this phase still describes
+		// that state; nothing exports it before the optimizer's retry (a new
+		// solve, whose init resets the phase) or the process ends.
 		output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
 
 		if (nl_problem.uses_lagging())
