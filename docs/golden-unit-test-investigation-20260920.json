@@ -1,0 +1,1346 @@
+{
+  "scope": "Investigation and implementation plan only. No production sources, reference values, margins or defaults changed.",
+  "date_utc": "2026-09-20",
+  "ci_revision": "c30d215ebd62fa7ef23322d0b6230a7d1e657231",
+  "ci_run": 35537426575,
+  "ci_jobs": {
+    "macos_release": 106148868200,
+    "linux_release": 106148868109,
+    "linux_debug_separate_rollback_failures": 106148868118
+  },
+  "local_evidence_directory": "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/golden-investigation/20260920T221525Z",
+  "binary_sha256": "fa7837fd16d6ab0bc321ddaa9798d02606f0feab2e09f4713906a76bb5b6eaae",
+  "build_info": {
+    "build": {
+      "cmake": "4.4.3",
+      "compiler": "AppleClang 21.0.0.21000101",
+      "compiler_path": "/usr/bin/c++",
+      "configuration": "RelWithDebInfo",
+      "cxx_flags": "",
+      "cxx_flags_configuration": "-O2 -g -DNDEBUG",
+      "generator": "Unix Makefiles",
+      "host_system": "Darwin-25.5.0",
+      "options": {
+        "POLYFEM_CODE_COVERAGE": "OFF",
+        "POLYFEM_PORTABLE_BUILD": "OFF",
+        "POLYFEM_WITH_CLIPPER": "ON",
+        "POLYFEM_WITH_CUDA": "OFF",
+        "POLYFEM_WITH_ITR": "OFF",
+        "POLYFEM_WITH_MISO": "OFF",
+        "POLYFEM_WITH_MMG": "ON",
+        "POLYFEM_WITH_OPTIMIZATION": "ON",
+        "POLYFEM_WITH_PYTHON": "ON",
+        "POLYFEM_WITH_TESTS": "ON",
+        "POLYFEM_WITH_TRIANGLE": "OFF"
+      },
+      "target_system": "Darwin-arm64",
+      "threading": "TBB"
+    },
+    "schema": "polyfem.build-info",
+    "sources": {
+      "ipc_toolkit": {
+        "branch": "semi-implicit-stiffness",
+        "commit": "c24d803e6b175d71a610f3ec85bd33c042e2be0d",
+        "commit_time": "2026-09-14T15:51:28-04:00",
+        "declared_pin": "c24d803e6b175d71a610f3ec85bd33c042e2be0d",
+        "declared_repository": "sdast9/ipc-toolkit",
+        "dirty": false,
+        "git_toplevel": "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork",
+        "is_toplevel": true,
+        "matches_declared_pin": true,
+        "patch_sha256": null,
+        "path": "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork",
+        "source_override": "/Users/stevenabramowitch/Downloads/fable_polyfem/ipc-toolkit-fork",
+        "state": "git",
+        "tracked_changes": 0,
+        "untracked_count": 0,
+        "untracked_first": [],
+        "untracked_hashed": 0
+      },
+      "polyfem": {
+        "branch": "main",
+        "commit": "92e0d8c202bf2fe23b292a52c2ff1adbfccb8837",
+        "commit_time": "2026-09-20T15:05:53-04:00",
+        "declared_pin": null,
+        "declared_repository": null,
+        "dirty": true,
+        "git_toplevel": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem",
+        "is_toplevel": true,
+        "matches_declared_pin": null,
+        "patch_sha256": "b9a992fad0000f4a7c7d33ba8af04ab6c014171cd98b7326a502ec4645e1f971",
+        "path": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem",
+        "source_override": null,
+        "state": "git",
+        "tracked_changes": 16,
+        "untracked_count": 1,
+        "untracked_first": [
+          "tests/test_output_kinematics.cpp"
+        ],
+        "untracked_hashed": 1
+      },
+      "polysolve": {
+        "branch": "iteration-callback",
+        "commit": "bce32a39a2c8f0a64cb8ffa85b89f0ee773df0ec",
+        "commit_time": "2026-09-14T15:51:28-04:00",
+        "declared_pin": "bce32a39a2c8f0a64cb8ffa85b89f0ee773df0ec",
+        "declared_repository": "sdast9/polysolve",
+        "dirty": false,
+        "git_toplevel": "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged",
+        "is_toplevel": true,
+        "matches_declared_pin": true,
+        "patch_sha256": null,
+        "path": "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged",
+        "source_override": "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged",
+        "state": "git",
+        "tracked_changes": 0,
+        "untracked_count": 0,
+        "untracked_first": [],
+        "untracked_hashed": 0
+      }
+    },
+    "test_data_declared_pin": "e0efb6ba291e3acfc8a5e12e66486a7246849b30",
+    "version": 1
+  },
+  "local_runs": [
+    {
+      "case": "cube-default1",
+      "source_sha256": "d39d4350cbb79835705c6f872bc56fe77315bd94ed1de9d2018acaa52b2abf2b",
+      "input_sha256": "aabb687b37a1d9e2d41f36c3d567bdff0b1f19662542b5d8d113c08b6acc67b2",
+      "exit_code": 0,
+      "wall_seconds": 9.230290209001396,
+      "golden": {
+        "err_h1": 0.09881319455550931,
+        "err_h1_semi": 0.0983232623925236,
+        "err_l2": 0.009827690001006802,
+        "err_linf": 0.02572930405859209,
+        "err_linf_grad": 0.044732657488330614,
+        "err_lp": 0.016938155138014152,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.009820815740663822,
+        "err_h1": 0.0984743273036342,
+        "err_h1_semi": 0.09798339000101601,
+        "err_linf": 0.02574096398928905,
+        "err_linf_grad": 0.04473733086462694,
+        "err_lp": 0.016923465584738354
+      },
+      "relative_errors": {
+        "err_l2": 0.000699478752613894,
+        "err_h1": 0.003429372498272471,
+        "err_h1_semi": 0.0034566834260519688,
+        "err_linf": 0.0004531770727418464,
+        "err_linf_grad": 0.00010447347773923962,
+        "err_lp": 0.0008672463533428636
+      },
+      "golden_pass": false,
+      "effective": {
+        "time": {
+          "dt": 0.0005,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 0.01,
+          "time_steps": 20
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.1,
+          "alpha_t": 0.3,
+          "dhat": 0.05,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": true,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "BVH",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": 100000.0,
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 0,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:19:27Z",
+        "message": null,
+        "peak_rss_mb": 59.65625,
+        "status": "completed",
+        "steps_recorded": 20,
+        "wall_seconds": 5.411103292
+      }
+    },
+    {
+      "case": "cube-default2",
+      "source_sha256": "d39d4350cbb79835705c6f872bc56fe77315bd94ed1de9d2018acaa52b2abf2b",
+      "input_sha256": "aabb687b37a1d9e2d41f36c3d567bdff0b1f19662542b5d8d113c08b6acc67b2",
+      "exit_code": 0,
+      "wall_seconds": 9.179582624987233,
+      "golden": {
+        "err_h1": 0.09881319455550931,
+        "err_h1_semi": 0.0983232623925236,
+        "err_l2": 0.009827690001006802,
+        "err_linf": 0.02572930405859209,
+        "err_linf_grad": 0.044732657488330614,
+        "err_lp": 0.016938155138014152,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.009826518014746611,
+        "err_h1": 0.09840477378483524,
+        "err_h1_semi": 0.0979129156309343,
+        "err_linf": 0.025747043778713105,
+        "err_linf_grad": 0.04473734152611671,
+        "err_lp": 0.01693593889932154
+      },
+      "relative_errors": {
+        "err_l2": 0.00011925348276868426,
+        "err_h1": 0.004133261479008638,
+        "err_h1_semi": 0.004173445343494966,
+        "err_linf": 0.0006894753189054922,
+        "err_linf_grad": 0.0001047118156867925,
+        "err_lp": 0.0001308429799205068
+      },
+      "golden_pass": false,
+      "effective": {
+        "time": {
+          "dt": 0.0005,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 0.01,
+          "time_steps": 20
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.1,
+          "alpha_t": 0.3,
+          "dhat": 0.05,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": true,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "BVH",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": 100000.0,
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 0,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:19:36Z",
+        "message": null,
+        "peak_rss_mb": 60.65625,
+        "status": "completed",
+        "steps_recorded": 20,
+        "wall_seconds": 5.295394167
+      }
+    },
+    {
+      "case": "cube-f1",
+      "source_sha256": "d39d4350cbb79835705c6f872bc56fe77315bd94ed1de9d2018acaa52b2abf2b",
+      "input_sha256": "3616c63d9fca311055002752d873259b2319f8c606564f22c9c8d518165b5333",
+      "exit_code": 0,
+      "wall_seconds": 9.01637024997035,
+      "golden": {
+        "err_h1": 0.09881319455550931,
+        "err_h1_semi": 0.0983232623925236,
+        "err_l2": 0.009827690001006802,
+        "err_linf": 0.02572930405859209,
+        "err_linf_grad": 0.044732657488330614,
+        "err_lp": 0.016938155138014152,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.009827455403796021,
+        "err_h1": 0.0984245788530227,
+        "err_h1_semi": 0.09793272610665592,
+        "err_linf": 0.025740526582744526,
+        "err_linf_grad": 0.04473474822656217,
+        "err_lp": 0.01693708867837379
+      },
+      "relative_errors": {
+        "err_l2": 2.3871043017921096e-05,
+        "err_h1": 0.003932832090235649,
+        "err_h1_semi": 0.003971962243366159,
+        "err_linf": 0.00043617674721704316,
+        "err_linf_grad": 4.673852055628235e-05,
+        "err_lp": 6.29619714586274e-05
+      },
+      "golden_pass": false,
+      "effective": {
+        "time": {
+          "dt": 0.0005,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 0.01,
+          "time_steps": 20
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.1,
+          "alpha_t": 0.3,
+          "dhat": 0.05,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": true,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "BVH",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": 100000.0,
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 0,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:19:45Z",
+        "message": null,
+        "peak_rss_mb": 59.78125,
+        "status": "completed",
+        "steps_recorded": 20,
+        "wall_seconds": 5.257768042
+      }
+    },
+    {
+      "case": "mass2d-f1",
+      "source_sha256": "1354626d3d74fb490db490c4dd670e88f559edaddb064255de03a6d7465da0ae",
+      "input_sha256": "6ed14a64f4e8c883a04709b1131d492a8b22fa601439f146a8e4dae45365085d",
+      "exit_code": 0,
+      "wall_seconds": 9.631917041959241,
+      "golden": {
+        "err_h1": 0.25144660239320593,
+        "err_h1_semi": 0.1463522823796857,
+        "err_l2": 0.20446614217846373,
+        "err_linf": 0.22595852588023266,
+        "err_linf_grad": 0.22595852588023266,
+        "err_lp": 0.21116501905646945,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.20446614217953651,
+        "err_h1": 0.2514466023940922,
+        "err_h1_semi": 0.14635228237970963,
+        "err_linf": 0.22595852588110665,
+        "err_linf_grad": 0.22595852588110665,
+        "err_lp": 0.2111650190573934
+      },
+      "relative_errors": {
+        "err_l2": 5.2467403242895844e-12,
+        "err_h1": 3.524768408571704e-12,
+        "err_h1_semi": 1.6347750640883107e-13,
+        "err_linf": 3.867945753123706e-12,
+        "err_linf_grad": 3.867945753123706e-12,
+        "err_lp": 4.375513334533823e-12
+      },
+      "golden_pass": true,
+      "effective": {
+        "time": {
+          "dt": 0.025,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 3.0,
+          "time_steps": 120
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.5,
+          "alpha_t": 0.5,
+          "dhat": 0.001,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0.1,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": false,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "hash_grid",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": "adaptive",
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 1,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:17:56Z",
+        "message": null,
+        "peak_rss_mb": 35.3125,
+        "status": "completed",
+        "steps_recorded": 120,
+        "wall_seconds": 6.179332291
+      }
+    },
+    {
+      "case": "mass2d-f2",
+      "source_sha256": "1354626d3d74fb490db490c4dd670e88f559edaddb064255de03a6d7465da0ae",
+      "input_sha256": "dac282ab890b247d3a8b761ca35bbb57806e5b47255a4f468d83c56b97bf1c1a",
+      "exit_code": 0,
+      "wall_seconds": 9.802243083016947,
+      "golden": {
+        "err_h1": 0.25144660239320593,
+        "err_h1_semi": 0.1463522823796857,
+        "err_l2": 0.20446614217846373,
+        "err_linf": 0.22595852588023266,
+        "err_linf_grad": 0.22595852588023266,
+        "err_lp": 0.21116501905646945,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.20349977573659148,
+        "err_h1": 0.2501306299601777,
+        "err_h1_semi": 0.14544130541023184,
+        "err_linf": 0.2247405358516794,
+        "err_linf_grad": 0.2247405358516794,
+        "err_lp": 0.2100766266232714
+      },
+      "relative_errors": {
+        "err_l2": 0.004726290776439582,
+        "err_h1": 0.005233605944574817,
+        "err_h1_semi": 0.006224549112876053,
+        "err_linf": 0.0053903256086863935,
+        "err_linf_grad": 0.0053903256086863935,
+        "err_lp": 0.00515422695511418
+      },
+      "golden_pass": false,
+      "effective": {
+        "time": {
+          "dt": 0.025,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 3.0,
+          "time_steps": 120
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.5,
+          "alpha_t": 0.5,
+          "dhat": 0.001,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0.1,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": false,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "hash_grid",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": "adaptive",
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 2,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged",
+        "missing"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:18:06Z",
+        "message": null,
+        "peak_rss_mb": 40.125,
+        "status": "completed",
+        "steps_recorded": 120,
+        "wall_seconds": 6.313705042
+      }
+    },
+    {
+      "case": "mass3d-f1",
+      "source_sha256": "8605946a2ec5b6c3e090bf3aa96ff5aada1cc7fda115681bb668171a15a46c24",
+      "input_sha256": "4bfb2548acb6be913e5bb2084858e83219c6159a572231dcb7b712593bf0451d",
+      "exit_code": 0,
+      "wall_seconds": 10.865618874959182,
+      "golden": {
+        "err_h1": 0.1851001004433065,
+        "err_h1_semi": 0.051938087521556535,
+        "err_l2": 0.1776639587781531,
+        "err_linf": 0.18101474860174596,
+        "err_linf_grad": 0.18101474860174596,
+        "err_lp": 0.17777025013645098,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.17766395874243338,
+        "err_h1": 0.18510010042029357,
+        "err_h1_semi": 0.05193808756172777,
+        "err_linf": 0.18101474857016278,
+        "err_linf_grad": 0.18101474857016278,
+        "err_lp": 0.17777025010123287
+      },
+      "relative_errors": {
+        "err_l2": 2.0105221662771046e-10,
+        "err_h1": 1.243269174026391e-10,
+        "err_h1_semi": 7.734446205361099e-10,
+        "err_linf": 1.7447849282609213e-10,
+        "err_linf_grad": 1.7447849282609213e-10,
+        "err_lp": 1.9811023600443977e-10
+      },
+      "golden_pass": true,
+      "effective": {
+        "time": {
+          "dt": 0.025,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 3.0,
+          "time_steps": 120
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.5,
+          "alpha_t": 0.5,
+          "dhat": 0.001,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0.5,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": false,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "hash_grid",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": "adaptive",
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 1,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:18:17Z",
+        "message": null,
+        "peak_rss_mb": 218.671875,
+        "status": "completed",
+        "steps_recorded": 120,
+        "wall_seconds": 7.38442275
+      }
+    },
+    {
+      "case": "mass3d-f2",
+      "source_sha256": "8605946a2ec5b6c3e090bf3aa96ff5aada1cc7fda115681bb668171a15a46c24",
+      "input_sha256": "73f5a45bb7d406cd45e8cdd3a7bf8d1a6dbd1e1f63615a5b30ba2a2ae92c189e",
+      "exit_code": 0,
+      "wall_seconds": 10.58362812496489,
+      "golden": {
+        "err_h1": 0.1851001004433065,
+        "err_h1_semi": 0.051938087521556535,
+        "err_l2": 0.1776639587781531,
+        "err_linf": 0.18101474860174596,
+        "err_linf_grad": 0.18101474860174596,
+        "err_lp": 0.17777025013645098,
+        "margin": 1e-05,
+        "time_steps": "all"
+      },
+      "metrics": {
+        "err_l2": 0.17272674248175146,
+        "err_h1": 0.1763354083752956,
+        "err_h1_semi": 0.03549152967293719,
+        "err_linf": 0.17622780331681223,
+        "err_linf_grad": 0.17622780331681223,
+        "err_lp": 0.17285396112451368
+      },
+      "relative_errors": {
+        "err_l2": 0.02778963347634672,
+        "err_h1": 0.04735109298709102,
+        "err_h1_semi": 0.31665697821070743,
+        "err_linf": 0.02644505667030249,
+        "err_linf_grad": 0.02644505667030249,
+        "err_lp": 0.027655296699890506
+      },
+      "golden_pass": false,
+      "effective": {
+        "time": {
+          "dt": 0.025,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 3.0,
+          "time_steps": 120
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.5,
+          "alpha_t": 0.5,
+          "dhat": 0.001,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0.5,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": false,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "hash_grid",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": "adaptive",
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 2,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged",
+        "missing"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:18:27Z",
+        "message": null,
+        "peak_rss_mb": 207.75,
+        "status": "completed",
+        "steps_recorded": 120,
+        "wall_seconds": 7.025784625
+      }
+    },
+    {
+      "case": "stretch-default",
+      "source_sha256": "50866c201239543130c0328cf8d4c8857ca3edef245a4031ebe11033dde878bf",
+      "input_sha256": "858539caff06f13a499ecb97f270267e274060b60bc121d32a3cc1012b681129",
+      "exit_code": 1,
+      "wall_seconds": 3.8854407090111636,
+      "golden": {
+        "err_h1": 0.03493253583470364,
+        "err_h1_semi": 0.034740233420803325,
+        "err_l2": 0.00366036087168375,
+        "err_linf": 0.008882491056512036,
+        "err_linf_grad": 0.008882491056512036,
+        "err_lp": 0.003958690454039257,
+        "margin": 1e-05,
+        "time_steps": 1
+      },
+      "completion": {
+        "exit_status": 1,
+        "finished_at": "2026-09-20T22:17:47Z",
+        "message": "Contact is enabled but the default boundary extraction produced an incomplete collision surface: skipped 437 of 7610 boundary faces on 437 elements [12393, 13736, 13755, 13797, 14071, 14291, 14305, 14329, 14362, 14452, 14489, 14508, ... (425 more)] (order 2 with 10 nodes: 437 faces); first reason: simplex face with 5 owned nodes (boundary export supported up to P4). Refusing to build a partial collision mesh; choose a boundary tessellation that supports these elements (contact/collision_mesh: {\"enabled\": true, \"tessellation_type\": \"dof\" | \"max_order\"}), lower the element order, use a supported element type, or disable contact.",
+        "peak_rss_mb": 637.34375,
+        "status": "failed",
+        "steps_recorded": 0,
+        "wall_seconds": 0.533814125
+      }
+    },
+    {
+      "case": "stretch-dof",
+      "source_sha256": "50866c201239543130c0328cf8d4c8857ca3edef245a4031ebe11033dde878bf",
+      "input_sha256": "1bbb565492916e61bbf020008d3e16ff6044af680000f9463cea72668eb8a32a",
+      "exit_code": 0,
+      "wall_seconds": 25.12918491702294,
+      "golden": {
+        "err_h1": 0.03493253583470364,
+        "err_h1_semi": 0.034740233420803325,
+        "err_l2": 0.00366036087168375,
+        "err_linf": 0.008882491056512036,
+        "err_linf_grad": 0.008882491056512036,
+        "err_lp": 0.003958690454039257,
+        "margin": 1e-05,
+        "time_steps": 1
+      },
+      "metrics": {
+        "err_l2": 0.00366036087168375,
+        "err_h1": 0.03493253583470364,
+        "err_h1_semi": 0.034740233420803325,
+        "err_linf": 0.008882491056512036,
+        "err_linf_grad": 0.008882491056512036,
+        "err_lp": 0.003958690454039257
+      },
+      "relative_errors": {
+        "err_l2": 0.0,
+        "err_h1": 0.0,
+        "err_h1_semi": 0.0,
+        "err_linf": 0.0,
+        "err_linf_grad": 0.0,
+        "err_lp": 0.0
+      },
+      "golden_pass": true,
+      "effective": {
+        "time": {
+          "dt": 0.0025,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 0.0025,
+          "time_steps": 1
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.5,
+          "alpha_t": 0.5,
+          "collision_mesh": {
+            "enabled": true,
+            "sampling_order": 0,
+            "tessellation_type": "dof"
+          },
+          "dhat": 0.001,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": false,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "hash_grid",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": "adaptive",
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 0,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:19:18Z",
+        "message": null,
+        "peak_rss_mb": 2013.53125,
+        "status": "completed",
+        "steps_recorded": 1,
+        "wall_seconds": 21.088708916
+      }
+    },
+    {
+      "case": "stretch-max_order",
+      "source_sha256": "50866c201239543130c0328cf8d4c8857ca3edef245a4031ebe11033dde878bf",
+      "input_sha256": "5ab2a434f186bb273b4b3194f45d5ba0e5ad4236a0568cac46f8ccb248c63094",
+      "exit_code": 0,
+      "wall_seconds": 24.969835333991796,
+      "golden": {
+        "err_h1": 0.03493253583470364,
+        "err_h1_semi": 0.034740233420803325,
+        "err_l2": 0.00366036087168375,
+        "err_linf": 0.008882491056512036,
+        "err_linf_grad": 0.008882491056512036,
+        "err_lp": 0.003958690454039257,
+        "margin": 1e-05,
+        "time_steps": 1
+      },
+      "metrics": {
+        "err_l2": 0.00366036087168375,
+        "err_h1": 0.03493253583470364,
+        "err_h1_semi": 0.034740233420803325,
+        "err_linf": 0.008882491056512036,
+        "err_linf_grad": 0.008882491056512036,
+        "err_lp": 0.003958690454039257
+      },
+      "relative_errors": {
+        "err_l2": 0.0,
+        "err_h1": 0.0,
+        "err_h1_semi": 0.0,
+        "err_linf": 0.0,
+        "err_linf_grad": 0.0,
+        "err_lp": 0.0
+      },
+      "golden_pass": true,
+      "effective": {
+        "time": {
+          "dt": 0.0025,
+          "integrator": "ImplicitEuler",
+          "quasistatic": false,
+          "t0": 0,
+          "tend": 0.0025,
+          "time_steps": 1
+        },
+        "contact": {
+          "adhesion": {
+            "adhesion_enabled": false,
+            "adhesion_strength": 0.001,
+            "dhat_a": 0.01,
+            "dhat_p": 0.001,
+            "epsa": 0.001,
+            "tangential_adhesion_coefficient": 0.0
+          },
+          "alpha_n": 0.5,
+          "alpha_t": 0.5,
+          "collision_mesh": {
+            "enabled": true,
+            "sampling_order": 0,
+            "tessellation_type": "max_order"
+          },
+          "dhat": 0.001,
+          "dhat_percentage": 0.8,
+          "enabled": true,
+          "epsv": 0.001,
+          "friction_coefficient": 0,
+          "min_distance_ratio": 0.5,
+          "periodic": false,
+          "use_adaptive_dhat": false,
+          "use_area_weighting": true,
+          "use_convergent_formulation": false,
+          "use_gcp_formulation": false,
+          "use_improved_max_operator": true,
+          "use_physical_barrier": true
+        },
+        "solver_contact": {
+          "CCD": {
+            "broad_phase": "hash_grid",
+            "max_iterations": 1000000,
+            "resource_limits": {
+              "max_candidate_emissions": -1,
+              "max_cell_items": -1
+            },
+            "tolerance": 1e-06
+          },
+          "barrier_stiffness": "adaptive",
+          "friction_convergence_tol": 0.01,
+          "friction_iterations": 0,
+          "initial_barrier_stiffness": 1,
+          "semi_implicit": {
+            "coefficient_identity": "parent",
+            "conditioning_cap": 1000.0,
+            "constraint_floor": 0,
+            "continuation_max_ratio": 0,
+            "controller_interval": 30,
+            "force_continuation": true,
+            "friction_lag": "realized_force",
+            "gap_floor": 0,
+            "kappa_min": 0,
+            "kappa_spread": 10000.0,
+            "refresh_interval": 0,
+            "restart": {
+              "alpha_threshold": 0.01,
+              "enabled": true,
+              "max_restarts": 20,
+              "min_iterations": 5,
+              "patience": 5,
+              "soft_iteration_limit": 100,
+              "stall_trim_factor": 2.0
+            },
+            "trial_displacement_cap": 50.0,
+            "trim_factor": 2.0,
+            "trim_lower": 0.5,
+            "trim_max": 4294967296.0,
+            "trim_min": 2.3283064365386963e-10,
+            "trim_upper": 0.9
+          },
+          "tangential_adhesion_iterations": 1
+        },
+        "linear_solver": "Eigen::SimplicialLDLT",
+        "threads": 1
+      },
+      "solver_outcomes": [
+        "converged"
+      ],
+      "completion": {
+        "exit_status": 0,
+        "finished_at": "2026-09-20T22:18:52Z",
+        "message": null,
+        "peak_rss_mb": 2059.859375,
+        "status": "completed",
+        "steps_recorded": 1,
+        "wall_seconds": 21.440508333
+      }
+    }
+  ],
+  "dof_proxy_topology": {
+    "source_boundary": {
+      "used_vertices": 3807,
+      "edges": 11415,
+      "faces": 7610,
+      "components": 1,
+      "euler_characteristic": 2,
+      "edge_multiplicity": {
+        "2": 11415
+      },
+      "minimum_area": 2.3877108220645253e-05,
+      "total_area": 10.430232935572167
+    },
+    "dof_proxy": {
+      "used_vertices": 7025,
+      "edges": 21069,
+      "faces": 14046,
+      "components": 1,
+      "euler_characteristic": 2,
+      "edge_multiplicity": {
+        "2": 21069
+      },
+      "unbalanced_oriented_edges": 0,
+      "minimum_area": 1.0392204023195578e-05,
+      "total_area": 10.430232935572167
+    },
+    "relative_area_error": 0.0,
+    "notes": "Source boundary faces counted by sorted tetrahedral vertex triples; source orientation was not evaluated. Proxy uses the emitted face order. Self-intersection and displacement-map checks are not performed by this Python topology check."
+  },
+  "gcp_solution_spread": [
+    {
+      "a": "cube-default1",
+      "b": "cube-default2",
+      "max_abs_component_difference": 0.0008860650379579598
+    },
+    {
+      "a": "cube-default1",
+      "b": "cube-f1",
+      "max_abs_component_difference": 0.00035646612636723997
+    },
+    {
+      "a": "cube-default2",
+      "b": "cube-f1",
+      "max_abs_component_difference": 0.00059892536333715
+    }
+  ],
+  "hash_map_fresh_process_probe": [
+    "hash(1,2)=14638017664488845524 order=2,3,4,9,6,8,0,7,1,10,11,5,",
+    "hash(1,2)=15266229540973336101 order=6,5,2,1,11,8,0,10,3,4,9,7,",
+    "hash(1,2)=14558549519340251081 order=3,6,1,2,0,11,10,9,5,8,7,4,",
+    "hash(1,2)=8389505572339689182 order=2,4,8,7,0,5,3,10,6,11,1,9,",
+    "hash(1,2)=10269368266405720343 order=0,4,10,6,2,9,8,11,7,3,1,5,"
+  ],
+  "limits": [
+    "Local executable built with TRIANGLE=OFF; P4 ball and microstructure have native CI evidence but no local A/B run.",
+    "Local binary records pre-commit RBR-01 source changes on 92e0d8c20 and IPC c24d803e; it is not the exact c30d215e CI binary.",
+    "DOF proxy topology and exact golden agreement do not prove absence of self-intersections or general displacement-map correctness.",
+    "Abseil iteration-order variability is demonstrated; end-to-end GCP causal repair not tested."
+  ]
+}
