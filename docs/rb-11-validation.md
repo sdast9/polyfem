@@ -867,7 +867,7 @@ default or HDA asset changed; no private scene or Teseo ran.
 Tested binaries: `combined/bin/` (`PolyFEM_bin` `10c190c3…`, `unit_tests`
 `233f9bc7…`, built on `e081eafd8` + `tested.patch` `da6fbfd5…`; the
 smokes and the variant runs used the pre-fast-forward candidate `88dd9e3f…`
-of the same sources, IPC library identical). Published as `COMMIT_HASH` on
+of the same sources, IPC library identical). Published as `0028d637a` on
 `sdast9/polyfem:main`. No companion pin or HDA asset changed by this item.
 
 ### Limits
