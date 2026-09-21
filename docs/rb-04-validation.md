@@ -733,9 +733,13 @@ or Teseo ran.
 
 Tested binaries: `candidate/bin-final/` (`PolyFEM_bin` `fa7837fd…`,
 `unit_tests` `996694cf…`; the full suite ran on `d155cab2…`/`92b62190…`,
-the same sources before the tidy); `tested.patch` `2377dd77…`. The commit on
-`sdast9/polyfem:main` is recorded in the hash note that follows this record's
-publication. No companion pin or HDA asset changed.
+the same sources before the tidy); `tested.patch` `2377dd77…`. Published as `766410565` on
+`sdast9/polyfem:main`, rebased onto RBR-02's `c30d215eb` (its IPC pin
+`a28de2db`): the combined tree was rebuilt and `[output_kinematics],
+[resource_containment],[rollback]` (18 cases / 2,966 assertions) and a
+public smoke (identical to the candidate's run; manifest IPC `a28de2db` =
+pin, tree clean) passed before the push (`combined/`). No companion pin or
+HDA asset changed by this item.
 
 ### Limits
 
