@@ -753,3 +753,57 @@ TEST_CASE("time schedule and contact settings are validated at init", "[input_va
 		a["/solver/contact/CCD/broad_phase"_json_pointer] = "sweep_and_prune";
 	}));
 }
+
+TEST_CASE("the convergent formulation's improved max operator is refused with semi-implicit stiffness at init", "[input_validation][settings][rbr04]")
+{
+	// RBR-04: the semi-implicit coefficient law is a sum of parent potentials
+	// only for positive contributions; the improved max operator's
+	// duplicate-removal corrections are negative. Refused by name before any
+	// mesh is read (the form's constructor refuses it too), naming every
+	// unsupported convergent option at once; the non-convergent default, area
+	// weighting alone, and the other stiffness modes are accepted.
+	const auto init = [](const json &contact, const json &barrier_stiffness) {
+		json args = minimal_args("does-not-need-to-exist.msh");
+		args["contact"] = contact;
+		args["contact"]["enabled"] = true;
+		args["contact"]["dhat"] = 1e-3;
+		args["/solver/contact/barrier_stiffness"_json_pointer] = barrier_stiffness;
+		State state;
+		state.init(args, true);
+	};
+	const json fragment = {{"use_convergent_formulation", true}, {"use_area_weighting", false}, {"use_improved_max_operator", true}, {"use_physical_barrier", false}};
+
+	// the plan's public fragment, with and without area weighting
+	CHECK_THROWS_WITH(init(fragment, "semi_implicit"), ContainsSubstring("contact.use_improved_max_operator is unsupported in this mode"));
+	CHECK_THROWS_WITH(init(fragment, "semi_implicit"), ContainsSubstring("does not support the improved max operator"));
+	CHECK_THROWS_WITH(init(fragment, "semi_implicit"), ContainsSubstring("use_convergent_formulation = false"));
+	{
+		json area = fragment;
+		area["use_area_weighting"] = true;
+		CHECK_THROWS_WITH(init(area, "semi_implicit"), ContainsSubstring("contact.use_improved_max_operator is unsupported in this mode"));
+	}
+	// the convergent defaults (improved max and physical barrier both on): one message names both
+	CHECK_THROWS_WITH(init({{"use_convergent_formulation", true}}, "semi_implicit"),
+					  ContainsSubstring("contact.use_improved_max_operator and contact.use_physical_barrier are unsupported in this mode"));
+	// the physical barrier alone is still refused (the constructor's existing rule, now stated at init)
+	{
+		json physical = fragment;
+		physical["use_improved_max_operator"] = false;
+		physical["use_physical_barrier"] = true;
+		CHECK_THROWS_WITH(init(physical, "semi_implicit"), ContainsSubstring("contact.use_physical_barrier is unsupported in this mode"));
+	}
+	// area weighting alone keeps every contribution positive: accepted
+	{
+		json area_only = fragment;
+		area_only["use_area_weighting"] = true;
+		area_only["use_improved_max_operator"] = false;
+		CHECK_NOTHROW(init(area_only, "semi_implicit"));
+	}
+	// the non-convergent default is the validated configuration
+	CHECK_NOTHROW(init({{"use_convergent_formulation", false}}, "semi_implicit"));
+	CHECK_NOTHROW(init(json::object(), "semi_implicit"));
+	// the improved max operator stays available to the classic adaptive and fixed modes
+	CHECK_NOTHROW(init(fragment, "adaptive"));
+	CHECK_NOTHROW(init(fragment, 1e5));
+	CHECK_NOTHROW(init({{"use_convergent_formulation", true}}, "adaptive"));
+}

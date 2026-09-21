@@ -1,8 +1,7 @@
 # Implementation handoff for the completed-RB review — 2026-09-20
 
-**Status: plans; RBR-01, RBR-02 and RBR-05 implemented 2026-09-20 and
-RBR-03 on 2026-09-21 (see their sections), RBR-04 as recorded in its
-section.** Context
+**Status: plans; RBR-01, RBR-02 and RBR-05 implemented 2026-09-20,
+RBR-03 and RBR-04 on 2026-09-21 (see their sections).** Context
 and verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
@@ -263,6 +262,21 @@ the source/test/record only after bounded validation. UP-07 depends on it.
 
 ## RBR-04 — Enforce the parent-law supported formulation
 
+**Status: implemented 2026-09-21 (guard route)** — see the
+[RB-21 record](rb-21-parent-keyed-kappa.md#rbr-04--the-improved-max-operator-is-a-checked-restriction-2026-09-21).
+Reproduced first on the real form (`tools/rbr04/seam_probe.cpp`: a finite
+`|κ₁−κ₂|/2·b(d)` jump, +62.24 / −62.24 at the two seams of the corner
+fixture, constant from offset 1e-3 to 1e-9; equal coefficients, the
+non-convergent default, area weighting alone and fixed/adaptive improved
+max continuous) and through the public JSON path (the fragment ran to
+completion with the manifest reporting `improved_max_operator: true` under
+`semi_implicit`). Then: the constructor and `State::init` refuse
+semi-implicit + `use_improved_max_operator` by name, stating the supported
+alternatives; the input spec states the restriction; `[rbr04]` regressions;
+the RB-21 record's "never used" claim corrected. No heterogeneous
+improved-max energy law was invented. The text below is the plan as handed
+off.
+
 **Parent item:** RB-21, also RB-15's continuity contract.
 **Evidence level:** public-option dispatch and missing guard confirmed in
 source; new end-to-end numerical seam probe not completed by this review.
@@ -422,9 +436,8 @@ binary). The five public smokes are bit-identical to the baseline binary.
 
 ## Suggested implementation order and copy-ready prompts
 
-RBR-01, RBR-02 and RBR-03 are independent and done; RBR-05 is done. RBR-04
-begins with a reproduction and must not be folded into an unrelated
-arithmetic repair. RBR-01 has the
+RBR-01, RBR-02 and RBR-03 are independent and done; RBR-05 is done; RBR-04
+is done (reproduced first, then the guard). RBR-01 has the
 most direct effect on ordinary quantitative output; RBR-02 hardens resource
 containment; RBR-03 prevents the optional budget from becoming a large
 memory consumer. None requires work on RB-23 or RB-24.

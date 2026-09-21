@@ -177,6 +177,21 @@ namespace polyfem::solver
 		}
 	} // namespace
 
+	std::string BarrierContactForm::unsupported_improved_max_message()
+	{
+		return "Semi-implicit barrier stiffness does not support the improved max operator "
+			   "(contact.use_convergent_formulation with contact.use_improved_max_operator): "
+			   "its duplicate-removal corrections are negative collision weights, and the "
+			   "parent-keyed coefficient law is a sum of the parents' potentials only for "
+			   "positive contributions (the energy jumps by |k1 - k2| / 2 * b(d) where two "
+			   "edges with unequal coefficients meet; docs/rb-21-parent-keyed-kappa.md, RBR-04). "
+			   "Supported alternatives: contact.use_convergent_formulation = false (the "
+			   "validated semi-implicit configuration), the convergent formulation with "
+			   "use_improved_max_operator = false and use_physical_barrier = false (area "
+			   "weighting alone keeps every contribution positive), or the improved max "
+			   "operator with solver.contact.barrier_stiffness = \"adaptive\" or a fixed value.";
+	}
+
 	BarrierContactForm::BarrierContactForm(const ipc::CollisionMesh &collision_mesh,
 										   const double dhat,
 										   const double avg_mass,
@@ -233,6 +248,18 @@ namespace polyfem::solver
 				log_and_throw_error("Semi-implicit barrier stiffness does not support shape derivatives!");
 			if (use_physical_barrier)
 				log_and_throw_error("Semi-implicit barrier stiffness does not support the physical barrier; set use_physical_barrier=false!");
+			// RBR-04: the improved max operator removes duplicate counting with
+			// negative contributions (a vertex beyond a corner: two edge
+			// parents +1 each and a -1 vertex-vertex correction). The
+			// coefficient law scales a built collision by the positive-parent
+			// mean, which is the sum of the parents' potentials only when
+			// every contribution is positive; with the correction and unequal
+			// parent coefficients the energy jumps by |k1 - k2| / 2 * b(d) at
+			// the corner (measured, docs/rb-21-parent-keyed-kappa.md). A signed
+			// parent law is a separate model decision, so the combination is
+			// refused here rather than silently disabled or averaged away.
+			if (use_improved_max_operator)
+				log_and_throw_error(unsupported_improved_max_message());
 
 			if (semi_implicit_opts.is_object())
 			{

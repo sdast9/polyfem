@@ -230,7 +230,8 @@ physical balance.
 - **Limits:** separation forgets (re-contact is priced fresh); a contact born
   mid-step is priced by that step's start snapshot; `continuation_max_ratio`
   is unexercised below 2× on the public fixture; the improved-max
-  (convergent) formulation's seam half-jump is analyzed but not measured;
+  (convergent) formulation's seam half-jump is analyzed here, measured
+  2026-09-21 and refused by name under semi-implicit stiffness (RBR-04);
   physical accuracy is not claimed anywhere here.
 - Eligible next items: RB-05 (candidate/resource failure containment), RB-10
   (friction), RB-09 references.

@@ -187,7 +187,15 @@ guesses. Documented in [docs/rb-12-validation.md](../../docs/rb-12-validation.md
   and transient forward solves.
 - Physical barriers, GCP, periodic contact, and shape derivatives are rejected
   for this mode. Optimization's constant-stiffness requirement is separate.
-- The documented validation uses `use_convergent_formulation = false`.
+- The documented validation uses `use_convergent_formulation = false`. With
+  the convergent formulation, `use_improved_max_operator` is refused by name
+  (RBR-04, 2026-09-21: its duplicate-removal corrections are negative
+  collision weights, under which the parent-keyed coefficient is no longer a
+  sum of parent potentials — a measured `|κ₁−κ₂|/2·b(d)` energy jump where
+  two edges with unequal coefficients meet), as is `use_physical_barrier`;
+  `State::init` names both at once. Area weighting alone is accepted but
+  not part of the documented validation. The improved max operator stays
+  available to `adaptive` and fixed stiffness.
 - Remeshing local relaxation does not preserve per-contact stiffness; combining
   it with this mode remains outside the documented validation.
 - The earlier extreme thin-geometry/floating-point-floor experiments remain

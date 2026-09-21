@@ -330,8 +330,16 @@ Divide the contribution into three design units:
    through normal-collision construction and TBB merge. Preserve signed
    weight bookkeeping, stable identities, and no-op behavior when every
    scale equals one. Test VV/EV/FV/EE transitions, merged parents,
-   ordering/threading and contact birth/death. State RBR-04's restriction;
-   positive-only averaging is not generally a signed-energy identity.
+   ordering/threading and contact birth/death. State RBR-04's restriction
+   (2026-09-21): a per-contact scale that is the positive-parent weighted
+   mean is a sum of parent potentials only when every contribution is
+   positive; with the improved-max duplicate-removal corrections (negative
+   weights) and unequal parent coefficients the energy jumps by
+   `|κ₁−κ₂|/2·b(d)` where two edges meet (measured on the fork), so the
+   fork refuses `use_improved_max_operator` under its semi-implicit mode by
+   name. Positive-only averaging is not generally a signed-energy identity;
+   supporting signed sets needs a consistent signed parent construction in
+   the energy and all derivatives — a separate model decision.
 3. **Coefficient lifecycle:** supply regression contracts for a frozen
    line-search objective, explicit retunes, finite/positive arithmetic,
    continued realized coefficients at refresh and defined friction-lag

@@ -1274,7 +1274,7 @@
         "pointer": "/contact/use_convergent_formulation",
         "default": false,
         "type": "bool",
-        "doc": "Whether to use the convergent (area weighted) formulation of IPC."
+        "doc": "Whether to use the convergent (area weighted) formulation of IPC. With solver.contact.barrier_stiffness = \"semi_implicit\" only use_area_weighting is supported: use_improved_max_operator and use_physical_barrier are refused by name (RBR-04)."
     },
     {
         "pointer": "/contact/use_area_weighting",
@@ -1286,7 +1286,7 @@
         "pointer": "/contact/use_improved_max_operator",
         "default": true,
         "type": "bool",
-        "doc": "If using the convergent formulation, whether or not to use improved max operator. Currently not implemented."
+        "doc": "If using the convergent formulation, whether or not to use the improved max operator (duplicate removal through negative collision weights, Li et al. 2023). Not supported with solver.contact.barrier_stiffness = \"semi_implicit\": the parent-keyed coefficient law is a sum of parent potentials only for positive contributions, so the combination is refused by name at input validation and at construction (RBR-04)."
     },
     {
         "pointer": "/contact/use_physical_barrier",
@@ -1893,7 +1893,7 @@
             "semi_implicit"
         ],
         "type": "string",
-        "doc": "How coefficient of clamped log-barrier function for contact is updated. \"adaptive\" is the classic IPC heuristic; \"semi_implicit\" uses per-contact elasticity-inclusive stiffness [Ando 2024] with a gap-band trim controller."
+        "doc": "How coefficient of clamped log-barrier function for contact is updated. \"adaptive\" is the classic IPC heuristic; \"semi_implicit\" uses per-contact elasticity-inclusive stiffness [Ando 2024] with a gap-band trim controller. \"semi_implicit\" is validated with contact.use_convergent_formulation = false; with the convergent formulation it supports area weighting only and refuses use_improved_max_operator and use_physical_barrier by name (RBR-04)."
     },
     {
         "pointer": "/solver/contact/barrier_stiffness",

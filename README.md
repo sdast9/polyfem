@@ -31,7 +31,7 @@ current.
   ([schema](scenes/semi-implicit/README.md#run-manifest-rb-12)) and
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
-- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@c24d803e`
+- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@482b9eab`
   (branch `semi-implicit-stiffness`) and `sdast9/polysolve@bce32a39` (branch
   `iteration-callback`); both forks' `Build` workflows run on those branches
   (PolySolve 6/6 lanes green; IPC Toolkit green on Linux/macOS, its two Windows
@@ -61,7 +61,13 @@ current.
   2026-09-15 — a motion that can never be snapped otherwise keeps the loop
   running until the process is killed; since 2026-09-21 a budget keeps at
   most `stagnation_window + 1` full-space states instead of every pass's,
-  RBR-03). See also
+  RBR-03). The semi-implicit mode refuses the convergent formulation's
+  improved max operator by name (RBR-04, 2026-09-21: under its
+  duplicate-removal corrections the parent-keyed coefficient is no longer a
+  sum of parent potentials — a measured `|κ₁−κ₂|/2·b(d)` energy jump where
+  two edges with unequal coefficients meet; the combination ran silently
+  before; see the [RB-21 record](docs/rb-21-parent-keyed-kappa.md#rbr-04--the-improved-max-operator-is-a-checked-restriction-2026-09-21)).
+  See also
   [floor retirement](docs/pf-02-floor-removal.md),
   [semi-implicit usage](scenes/semi-implicit/README.md) and
   [VarForm architecture](docs/varform-design.md).

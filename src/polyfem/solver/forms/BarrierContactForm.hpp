@@ -43,6 +43,11 @@ namespace polyfem::solver
 
 		virtual std::string name() const override { return "barrier-contact"; }
 
+		/// @brief RBR-04: the named configuration error for the improved max
+		///        operator under semi-implicit stiffness (raised by the
+		///        constructor and, before any mesh is read, by State::init).
+		static std::string unsupported_improved_max_message();
+
 		virtual void update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy) override;
 
 		/// @brief Update fields after a step in the optimization

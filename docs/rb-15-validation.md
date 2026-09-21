@@ -150,7 +150,7 @@ is what production now does; the alternatives are not selected. Disposition:
 | Open decision | Disposition |
 | --- | --- |
 | Parent construction and unknown-parent discovery | Implemented by [RB-21](rb-21-parent-keyed-kappa.md): the toolkit builder records the candidate primitive pair(s) that built each collision (`NormalCollision::parents`, toolkit `e3c8d3fe`), so parents are known by construction — no discovery algorithm is needed |
-| Seam / multiplicity semantics | Implemented by RB-21: the coefficient is keyed on the parent candidate and the built collision's scale is the weight-mean of its parent contributions; seams are exactly C⁰ in the default formulation (`[kappa_continuity][parent]` regression), with the improved-max formulation's half-jump documented and not used |
+| Seam / multiplicity semantics | Implemented by RB-21: the coefficient is keyed on the parent candidate and the built collision's scale is the weight-mean of its parent contributions; seams are exactly C⁰ in the default formulation (`[kappa_continuity][parent]` regression), with the improved-max formulation's half-jump documented, measured (2026-09-21) and refused by name under semi-implicit stiffness (RBR-04, RB-21 record) |
 | Frozen coefficients across the lifecycle | Implemented by [RB-20](rb-20-force-continuation.md): a contact keeps the coefficient that acted at the published endpoint; refresh drift 17–53 % → ~1e-16 |
 | Complete smooth field (changes forces; tangential attraction) | Not selected |
 | Estimator for the parent (RB-14) | Not selected; the production law estimates new parents (see RB-14 closure) |

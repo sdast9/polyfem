@@ -2,6 +2,8 @@
 
 **Review follow-up, 2026-09-12 (validated):** The assignment arithmetic was corrected after two finite parent coefficients overflowed their weighted sum even though their mean was representable. The parent-identity decision is retained; the bounded arithmetic repair and fresh validation are tracked in the [2026-09-12 follow-up](rb-review-followup-20260912.md).
 
+**RBR-04, 2026-09-21 (implemented):** the improved-max seam of the analysis below was reachable through the public options and is now a checked restriction — measured on the real form (a finite `|κ₁−κ₂|/2·b(d)` jump, 62.24 on the fixture) and refused by name at input validation and at construction; see the [RBR-04 section](#rbr-04--the-improved-max-operator-is-a-checked-restriction-2026-09-21).
+
 Date: 2026-09-11
 Status: **done — toolkit `e3c8d3fe` and PolyFEM parent-keyed assignment implemented, regression-tested, validated with RB-20, published**. See the [progress log](#progress-log).
 
@@ -67,11 +69,15 @@ Change:
    corner shared by two edges is simply two merged parent contributions
    (weight 2, scale `(κ₁+κ₂)/2`): energy `κ₁ b(d₁) + κ₂ b(d₂)` on either side,
    **exactly C⁰** for heterogeneous parents. Under `use_improved_max_operator`
-   (the convergent formulation, never used by the semi-implicit mode) the
-   corrections subtract one term in the corner region, and no constant
-   per-collision scale can then be C⁰ on both sides unless `κ₁ = κ₂`; the
-   residual jump is `|κ₁−κ₂|/2 · b(d)` between *neighboring* parents. Recorded
-   as the inherent limit of that formulation; not exercised by production.
+   (the convergent formulation) the corrections subtract one term in the
+   corner region, and no constant per-collision scale can then be C⁰ on both
+   sides unless `κ₁ = κ₂`; the residual jump is `|κ₁−κ₂|/2 · b(d)` between
+   *neighboring* parents. Recorded as the inherent limit of that formulation.
+   *Correction (RBR-04, 2026-09-21):* this record originally said the
+   combination was "never used by the semi-implicit mode"; it was reachable
+   through the public options (`use_convergent_formulation: true`,
+   `use_improved_max_operator: true`, `use_physical_barrier: false`) and ran
+   without notice. It is now a checked restriction — see the RBR-04 section.
 4. Toolkit test (`tests/`): a 2D vertex sliding past an edge endpoint into the
    neighbouring edge's region: the built collision changes EV→VV→EV while the
    parent lists show the two EV candidates with their weights; sum invariant;
@@ -186,3 +192,135 @@ Change:
   published as `948014dbc`. No production change;
   the toolkit and this item's regression are untouched. Details and the
   measured table: [RB-02 record](rb-02-validation.md#regression-update-for-the-parent-keyed-law-2026-09-13).
+
+## RBR-04 — the improved-max operator is a checked restriction (2026-09-21)
+
+**Source:** the [completed-RB review](rb-completed-review-20260920.md) finding
+4 and the [repair plan](rb-review-repair-plan-20260920.md#rbr-04--enforce-the-parent-law-supported-formulation).
+**Evidence:** parent workspace `outputs/rbr-04/20260921T091854Z/` (`README.md`
+maps it); starting sources PolyFEM `b6d0c9a45` (clean), IPC `482b9eab`,
+PolySolve `bce32a39` = the pins.
+
+### Reproduction (before any edit)
+
+`tools/rbr04/seam_probe.cpp` drives the real `BarrierContactForm` on the
+corner fixture of `[kappa_continuity]` (edges e0 = (v0,v1), e1 = (v1,v2)
+meeting at v1; free vertex v3 at height .2; `dhat` 1; frozen snapshot with
+v3 interior to e0, heterogeneous frozen Hessian → parent coefficients
+κ(e0,v3) = 158.038, κ(e1,v3) = 200) and crosses both seams of the corner
+without a refresh, with offsets 1e-2 … 1e-9 (`baseline/seam-probe/`,
+525 checks). Constructed flags, signed weights, parents and assigned
+coefficients were read back from the form:
+
+| configuration | collision set left / right of seam A (x = 0) | jump, ε → 0 | classification |
+| --- | --- | --- | --- |
+| improved max, semi-implicit, parent identity, heterogeneous | EV(e0) w 1 s 158.038 / VV(v3,v1) w **1 = +1 +1 −1** (parents EV e0 +1, EV e1 +1, VV −1) s 179.019 = (158.038+200)/2 | **+62.2405 = (200−158.038)/2 · b(.2)**, seam B −62.2405 | **finite jump** (constant from 1e-3 to 1e-9; gradient jump norm → 347) |
+| the same with area weighting (free vertex with its own edge) | VV w .5 + EV w .325 / VV w .825 | +11.43 / −29.02 | finite jump |
+| improved max, semi-implicit, parent identity, **equal** coefficients | same sets, every scale 100 | 2.9e-3 · (ε/1e-2) → 0 | variation ∝ offset (the homogeneous improved-max potential) |
+| improved max, `coefficient_identity: "stencil"` | EV / VV w 1 s κ_VV | 124.48 / −186.60 | the documented historical stencil jump (identical without improved max) |
+| non-convergent (production default), parent identity | VV w 1 + EV w 1 / VV w 2 s 179.019 | **0** exactly | continuous — the sum identity |
+| area weighting alone (no improved max), parent identity | positive contributions only | 0 | continuous |
+| improved max under `fixed` / `adaptive` (scale 1) | same signed sets | 2.9e-3 · (ε/1e-2) → 0 | continuous (the toolkit's potential) |
+
+The measured jump equals `(Σ weight·scale right − Σ weight·scale left) · b(d)`
+in every row (the probe checks it), i.e. exactly the analysis above: the
+positive-parent mean multiplies a *net* weight that contains the negative
+correction. The toolkit itself warns on the plan's fragment that
+"enabling the improved max approximator while not using area weighting may
+lead to incorrect results".
+
+Through the public JSON path (`baseline/json-path/`, the quasistatic public
+smoke with the plan's fragment merged, `PolyFEM_bin` `5c539466…`): the
+fragment **ran to completion** (4 accepted steps) with the manifest's
+`solver.model` reporting `stiffness_mode: semi_implicit` and
+`convergent_formulation.improved_max_operator: true` — the combination was
+reachable and silent; the same with area weighting; the convergent defaults
+(physical barrier on) were already refused by the constructor's existing
+rule; area weighting alone and the classic `adaptive` improved-max run ran.
+
+### Decision and change
+
+The guard route of the repair plan. A signed parent construction (a
+coefficient for the negative correction, consistent in the energy and all
+derivatives) would make the combination C⁰ but is a separate model
+decision; taking absolute weights or averaging the negatives away is not a
+repair. No law, default, tolerance, CCD, retry or dependency changed:
+
+- `BarrierContactForm` constructor: semi-implicit + `use_improved_max_operator`
+  is refused by name (`unsupported_improved_max_message()`, shared with
+  `State::init`), next to the existing physical-barrier and
+  shape-derivative refusals; the message states the alternatives
+  (`use_convergent_formulation: false` — the validated configuration; the
+  convergent formulation with `use_improved_max_operator: false` and
+  `use_physical_barrier: false`, area weighting alone keeping every
+  contribution positive; or the improved max operator with
+  `barrier_stiffness: "adaptive"` or a fixed value).
+- `State::init` (RB-11 style, before any mesh is read): with
+  `barrier_stiffness: "semi_implicit"` and `use_convergent_formulation: true`,
+  every unsupported convergent option is named in one error
+  (`contact.use_improved_max_operator and contact.use_physical_barrier are
+  unsupported in this mode. …`); the physical barrier was refused later by
+  the constructor before.
+- Input spec: `use_convergent_formulation`, `use_improved_max_operator` and
+  `barrier_stiffness` state the restriction (the improved-max doc no longer
+  claims "currently not implemented").
+- Unchanged: the non-convergent default (`[kappa_continuity][parent]` seams
+  exact), the `"stencil"` identity control, `fixed`/`adaptive` with the
+  improved max operator (the probe's continuous rows; `[rbr04]` asserts the
+  signed parents `+1 +1 −1`, scale one and continuity at both seams), area
+  weighting alone under semi-implicit (accepted; **not** newly validated —
+  the scenes README's scope statement stands), the RB-02 probe.
+- The Houdini asset emits `use_convergent_formulation` only (the convergent
+  defaults follow), so with its default semi-implicit mode an area-weighted
+  export was already refused by the physical-barrier rule; it now gets the
+  combined message. No asset change.
+
+### Regressions
+
+- `[kappa_continuity][parent][rbr04]` (`tests/test_kappa_continuity.cpp`):
+  the direct constructor refuses the combination (with and without area
+  weighting) and names the alternatives; the default, area weighting alone
+  and the other modes construct; fixed/adaptive improved-max sets carry the
+  signed parents with scale one and are continuous at both seams; and the
+  seam the refusal prevents, on the toolkit's improved-max set with the
+  positive-parent mean applied by hand to the plan's example coefficients
+  70/40: 70·b → 55·b at seam A (−15·b = −|70−40|/2·b), 55·b → 40·b at
+  seam B, equal coefficients continuous, the non-convergent set 110·b on
+  both sides.
+- `[input_validation][settings][rbr04]` (`tests/test_input_validation.cpp`):
+  `State::init` refuses the fragment (with and without area weighting) and
+  the convergent defaults with both options named, refuses the physical
+  barrier alone, accepts area weighting alone, the non-convergent default,
+  and the fragment under `adaptive` / a fixed value.
+- `tools/rbr04/seam_probe.cpp --expect-guard`: the five unsupported
+  configurations refused by name, every control row identical to the
+  baseline.
+
+### Validation (`outputs/rbr-04/20260921T091854Z/candidate/`)
+
+| Check | Expected | Result |
+| --- | --- | --- |
+| `unit_tests "[rbr04]"` | the constructor and `State::init` refusals, the accepted neighbours, the fixed/adaptive improved-max controls, the 70/40 seam on the toolkit's set | **2 cases / 79 assertions pass** (`polyfem-tests/rbr04.log`) |
+| Affected selection `[kappa_continuity],[semi_implicit_coefficients],[input_validation],[contact_stiffness_mapping],[friction_lag],[contact_cache],[coefficient_events],[physical_diagnostics],[form],[run_manifest],[direction_filter],[contact_floor_retired],[resource_containment],[rollback],[al_budget],[fully_prescribed],[output_kinematics]` | pass | **117 cases / 10,673 assertions pass** (`polyfem-tests/affected-selection.log`) |
+| `tools/rbr04/seam_probe.cpp --expect-guard` on the repaired build | the five improved-max semi-implicit configurations refused by name; every control row unchanged | **336 checks, exit 0**; refusals name the operator and the alternatives; control rows identical to the baseline run in classification and collision sets (parents order-insensitive), worst relative sample difference 3.8e-16 (`seam-probe/control-comparison.txt`) |
+| Public JSON path on the candidate `PolyFEM_bin` | the fragment refused before any solve; the accepted neighbours unchanged | `improved-max-semi`, `improved-max-area-semi` and `convergent-default-semi` **refused at `State::init`, exit 1** (named failure, before the manifest is written — like the other RB-11 settings refusals; the defaults case names both options); `area-only-semi` and `improved-max-adaptive` complete — `improved-max-adaptive` identical to the baseline binary to roundoff (displacement 2.8e-16); `area-only-semi` identical to the baseline binary **single-threaded** (`compare-area-only-semi-threads1.json`), while threaded runs of this non-default area-weighted scene scatter by 2e-4 in displacement run to run on either binary (`area-only-semi-repeat{1,2}`; single-threaded repeats bit-identical) |
+| Five public smokes, `--max_threads 1`, vs the baseline binary `5c539466…` (RBR-03's runs of the same binary) | byte-identical | **every frame byte-identical**, every VTU field identical (`ab-smokes/identity.txt`, `compare-*.json`) |
+| RB-02 probe (`tools/rb02/run_probe.py`) | 270/270 | **270/270** (`rb02-probe/`) |
+| clang-format on the changed C++ files | clean | clean (the probe source formatted after its evidence copies were taken: two joined lines, whitespace only) |
+
+Limits: the restriction is checked, not the formulation validated — area
+weighting alone under semi-implicit stiffness is accepted because every
+contribution stays positive, and it is still outside the documented
+validation (its threaded scatter above is one reason). The reproduction is
+the 2D corner fixture and the public 3D smoke's dispatch; no 3D seam
+(FV/EV/EE duplicate removal) was measured, since the guard refuses the whole
+operator regardless of dimension. The companion toolkit test file
+(`tests/src/tests/collisions/test_parent_contributions.cpp`) was located and
+left unchanged: the toolkit's signed bookkeeping is unchanged and is pinned
+from the PolyFEM side by `[rbr04]`. The Houdini asset was not changed (it
+never emits `use_improved_max_operator`; its area-weighted export under the
+default semi-implicit mode was already refused and now gets the combined
+message). No golden file regenerated; nothing run on Teseo or a private
+scene.
+
+**Published:** the implementation commit on `sdast9/polyfem:main` (hash recorded by the follow-up note, as for RBR-03).

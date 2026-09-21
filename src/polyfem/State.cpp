@@ -15,6 +15,7 @@
 
 #include <polyfem/varforms/VarForm.hpp>
 #include <polyfem/varforms/VarFormFactory.hpp>
+#include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/solver/forms/ContactForm.hpp>
 
 #include <jse/jse.h>
@@ -375,6 +376,31 @@ namespace polyfem
 					log_and_throw_error(
 						"solver.contact.CCD.broad_phase \"{}\" is not a known broad phase; use one of {}",
 						broad_phase, fmt::format("{}", fmt::join(solver::ContactForm::broad_phase_names(), ", ")));
+			}
+
+			// RBR-04: the convergent formulation's improved max operator is
+			// an unsupported combination with the semi-implicit coefficient
+			// law (negative duplicate-removal weights under a positive-parent
+			// mean). The form's constructor refuses it too; refusing here
+			// names every unsupported convergent option at once, before any
+			// mesh is read. The stiffness mode is the string "semi_implicit"
+			// or "adaptive", or a fixed number.
+			{
+				const json &barrier_stiffness = args["solver"]["contact"]["barrier_stiffness"];
+				const bool semi_implicit = barrier_stiffness.is_string() && barrier_stiffness.get<std::string>() == "semi_implicit";
+				if (semi_implicit && args["contact"]["use_convergent_formulation"].get<bool>())
+				{
+					std::vector<std::string> unsupported;
+					if (args["contact"]["use_improved_max_operator"].get<bool>())
+						unsupported.push_back("contact.use_improved_max_operator");
+					if (args["contact"]["use_physical_barrier"].get<bool>())
+						unsupported.push_back("contact.use_physical_barrier");
+					if (!unsupported.empty())
+						log_and_throw_error(
+							"solver.contact.barrier_stiffness = \"semi_implicit\" with contact.use_convergent_formulation = true: {} {} unsupported in this mode. {}",
+							fmt::format("{}", fmt::join(unsupported, " and ")), unsupported.size() == 1 ? "is" : "are",
+							solver::BarrierContactForm::unsupported_improved_max_message());
+				}
 			}
 
 			if (args["solver"]["contact"]["friction_iterations"] == 0)
