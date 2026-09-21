@@ -230,7 +230,7 @@ set; none is a physical certification (RB-09's limits apply).
   on `fable-fixtures` (3 fixtures edited, 3 added).
 - PolyFEM: `tests/verify_run.cpp` (hook + metric logging), the three manifest
   lines, `cmake/recipes/polyfem_data.cmake`, `tools/ci03/`, this record, the
-  plan/README/RB-10 notes — commit (hash note follows this publication) on `sdast9/polyfem:main`.
+  plan/README/RB-10 notes — commit `bf6ea5c58` on `sdast9/polyfem:main` (this hash note is a documentation follow-up).
 - Evidence: `outputs/ci-03/20260921T142215Z/` (worktrees, both builds, 39 A/B
   run directories with `sim.json`/`run.log`/`run.json`, the CI artefacts, the
   validation logs; not distributed). Reproduction:
