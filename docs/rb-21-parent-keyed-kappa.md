@@ -323,4 +323,4 @@ default semi-implicit mode was already refused and now gets the combined
 message). No golden file regenerated; nothing run on Teseo or a private
 scene.
 
-**Published:** the implementation commit on `sdast9/polyfem:main` (hash recorded by the follow-up note, as for RBR-03).
+**Published:** `fb8377e36` (implementation, tests, tool, records) on `sdast9/polyfem:main`, fast-forward from `b6d0c9a45`; this note is the follow-up commit. No toolkit or PolySolve change; pins unchanged (`482b9eab`, `bce32a39`).
