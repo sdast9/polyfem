@@ -587,9 +587,40 @@ isolated configure at `92e0d8c20` + toolkit `c24d803e` (`baseline-bin/`).
 Toolkit `a28de2db` on `sdast9/ipc-toolkit:semi-implicit-stiffness` (pushed
 first; the shared `ipc-toolkit-fork` checkout fast-forwarded to it, so the
 shared build compiles the pinned sources). PolyFEM `2bce3eb4a` on
-`sdast9/polyfem:main` (this note follows it): the tested sources are
+`sdast9/polyfem:main` (hash note `c30d215eb`): the tested sources are
 `92e0d8c20` + `candidate/tested.patch` `b727f971…`, byte-identical to that
-commit's `src`/`tests`/`cmake` diff (the commit adds the records). The isolated worktrees and builds live in the session
-scratchpad and are not part of the evidence; every log, hash, patch and
-run they produced is under `outputs/rbr-02/20260920T202503Z/`.
+commit's `src`/`tests`/`cmake` diff (the commit adds the records). The
+isolated worktrees and builds live in the session scratchpad and are not
+part of the evidence; every log, hash, patch and run they produced is under
+`outputs/rbr-02/20260920T202503Z/`.
+
+### Fork CI on the published revision (2026-09-20/21)
+
+The fork's `Build` workflow never runs on a push (only `workflow_dispatch`
+runs exist), so it was dispatched by hand (`ci/`):
+
+- [Run 35546941978](https://github.com/sdast9/ipc-toolkit/actions/runs/35546941978)
+  on `a28de2db`: macOS Release and Debug green, Linux Debug 295/295;
+  **Linux Release 181 of 296 tests SIGILL** — the lane restored the
+  2026-09-14 `Linux-Release-cache` (ccache 350/423 hits) whose objects were
+  compiled with `-march=native` on another runner's CPU, and tests untouched
+  by this change (tangent bases, distance Hessians, CCD) died on illegal
+  instructions: an infrastructure artefact, recorded as CI-07 item 10 of the
+  [CI plan](ci-portability-plan.md); **Windows Release 3 failures**: the two
+  pre-existing upstream smooth-barrier segfaults (RB-12's finding, CI-07
+  item 8) and one of mine — the `[checked_count]` control section expected
+  `17179869184 bytes` for 2³⁰ items, but `sizeof(HashItem)` is 8 on LLP64
+  (two 32-bit `long`s), not 16; Windows Debug stops in the oneTBB/MinGW
+  dependency build as before.
+- Follow-up **`482b9eab`** (tests only: the byte estimate is computed from
+  `sizeof(HashItem)`; library sources byte-identical to `a28de2db`; the pin
+  moved to it in `0bf93bdd0`, which also added CI-07 item 10), the two Linux
+  caches deleted, [run 35548043980](https://github.com/sdast9/ipc-toolkit/actions/runs/35548043980):
+  **Linux Release 296/296 (cold cache), Linux Debug 295/295, macOS Release
+  and Debug green; Windows Release 294/296** with only the two upstream
+  smooth-barrier segfaults, the `[checked_count]` case reported *Skipped*
+  there after its control assertions pass (the near-2⁶³ grids need a 64-bit
+  key); Windows Debug as before. The same four green lanes as RB-12's
+  baseline run on `c24d803e`. This paragraph is the following documentation
+  commit.
 
