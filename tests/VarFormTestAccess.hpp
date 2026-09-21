@@ -96,6 +96,11 @@ namespace polyfem::test
 		{
 			return form.solve_data_;
 		}
+		// The per-step subsolve records (stats.solver_info) of a solved form.
+		static const io::OutStatsData &stats(const varform::VarForm &form)
+		{
+			return form.stats;
+		}
 
 		static VarFormDebugData debug_data(const varform::VarForm &form)
 		{

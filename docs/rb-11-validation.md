@@ -754,3 +754,137 @@ intact; the VTU reader is found from a worktree.
 The physical-envelope results, candidates A/B, thresholds and the retained
 C-N miss are unchanged; no default, tolerance, element or law changed. The
 full suite was not rerun for this follow-up.
+
+## RBR-05 — a fully prescribed body is a valid trivial solve (2026-09-20)
+
+**Status: repaired and validated within stated scope.** RBR-01's
+reproduction ([RB-04 record](rb-04-validation.md#rbr-01--explicit-output-time-state-2026-09-20))
+found that a nonlinear transient scene whose every node is
+Dirichlet-prescribed — zero free DOFs — died with SIGSEGV (exit 139) right
+after `step_0.vtu`, on `92e0d8c20`, on the RBR-01 binary and on the
+current source alike. The defect, the decision and its reasons are in the
+[repair plan's RBR-05 section](rb-review-repair-plan-20260920.md#rbr-05--a-fully-prescribed-body-zero-free-dofs-is-a-valid-trivial-solve);
+this section is the evidence. It belongs to this record because the
+input is valid and crashed instead of running (this item's contract is
+that valid inputs run and invalid ones are refused by name); the decision
+was to make it run, not to add a refusal.
+
+Started on `main` at `24d0a3b12` (clean tree; effective IPC `a28de2db`,
+PolySolve `bce32a39`, both equal to the recipe pins; shared `build/`,
+RelWithDebInfo, `POLYFEM_WITH_PYTHON=ON`). During the session another
+session fast-forwarded the shared checkout to `e081eafd8` (RBR-02's CI
+record and the tests-only IPC pin `482b9eab`, library sources identical to
+`a28de2db`); the working-tree edits were untouched (byte-identical to
+`tested.patch`) and the final binaries were rebuilt on `e081eafd8`
+(`combined/`). Evidence: parent `outputs/rbr-05/20260921T002043Z/`
+(`baseline/` reproduction + `lldb.log`, `baseline-bin/`, `control/`,
+`candidate/` with `tested.patch`, the variant runs and every selection
+log, `ab-smokes/`, `rb11-matrix/`, `combined/` with the full suite). No
+dependency, coefficient law, tolerance, CCD, trial cap, retry policy,
+default or HDA asset changed; no private scene or Teseo ran.
+
+### Reproduction and location
+
+- `PolyFEM_bin --json scene.json --log_level debug` on the retained scene
+  (2×1×1 Kuhn-tet beam, `surface_selection: 1`, `dirichlet_boundary` id 1
+  `["0.1*min(t/0.25, 1)", "0", "0"]`, NeoHookean, ImplicitEuler dt .25,
+  3 steps): exit 139 after `Initial error = 0.12` (`baseline/repro/run.log`).
+- lldb (`baseline/repro/lldb.log`): `EXC_BAD_ACCESS (address=0x0)` in
+  `NeoHookeanElasticity::compute_energy_aux` reading `data.x(...)`, called
+  from `ElasticForm::value_unweighted` ← `FullNLProblem::value` ←
+  `NLProblem::value` ← `ALSolver::snap_gate` (the pass-0 gate of
+  `solve_al`) ← `NonlinearElasticVarForm::solve_tensor_nonlinear`.
+  `NLProblem::setup_constraints` (projection branch) had returned early on
+  `reduced_size_ == 0` (upstream `fb762251e`, "fix case of no dofs")
+  without `Q1R1iTb_`, so `reduced_to_full(empty) = Q1R1iTb_ + Q2_ * empty`
+  added a size-0 vector to a full-size one and produced a size-0 vector
+  under `NDEBUG`. Not the RB-06 fingerprint (the rollback point was
+  captured fine) and not PolySolve (never reached).
+
+### What changed (`tested.patch`, 2 source files + tests)
+
+- `src/polyfem/solver/NLProblem.cpp`: `setup_constraints` sets
+  `num_penalty_constraints_`, builds `penalty_problem_` and calls
+  `update_constraint_values()` for an empty reduced space in both the
+  projection and the QR branch, skipping only the 0×0 `Q2ᵀQ2`
+  factorization (debug log "No free degrees of freedom: every one of the N
+  DOFs is prescribed; the reduced problem is empty"); `full_to_reduced`
+  returns an empty vector when the reduced space is empty (nothing to solve
+  for; the solver was never factorized); `reduced_to_full` asserts the
+  sizes and documents that the empty case is the affine offset.
+- `src/polyfem/solver/ALSolver.cpp`: `solve_reduced`, after the
+  feasibility check, `init` and the barrier-stiffness update: a reduced
+  problem of size zero is stated solved without calling the nonlinear
+  solver — `solution_changed(tmp_sol)`, the energy, `solve_info_`
+  (`outcome` converged, `iterations` 0, `energy`, `gradNorm` 0,
+  `termination_reason` "No free degrees of freedom: every DOF is
+  prescribed, the reduced problem is empty and the solution is the
+  prescribed values", `restarts` 0), the iteration-0 `post_step` (the
+  forms, the RB-04 attempt stream's start row, the RB-06 fault hook),
+  `finish`, an info log line. The AL stage, the lagging loop and every
+  nonempty solve are unchanged.
+- Tests: `tests/test_fully_prescribed.cpp` `[fully_prescribed]` (4 cases):
+  the unit fixture (two quartic DOFs both prescribed: transforms, energy,
+  empty gradient / 0×0 Hessian, gates, the penalty still seen by the
+  full-size problem; `solve_al` + `solve_reduced` give the target with the
+  default and with the tripping tolerances/norm); the reproduction through
+  the real transient loop (`VarFormTestAccess`) in four variants (default,
+  tripping tolerances + `Linf`, contact on the lone body, friction):
+  `reduced_size() == 0`, every endpoint the prescribed values to 1e-15,
+  kinematics on every node before/after the advance and in the saved VTUs,
+  one zero-iteration `rc` subsolve per step and no `al` subsolve; the body
+  driven within `dhat` of the public slab (obstacle DOFs prescribed too,
+  barrier active, motion unchanged); a static fully prescribed solve
+  through `State::solve` + `export_data`. `tests/VtuTestUtils.hpp` holds
+  the VTU reader RBR-01's test used (moved verbatim, shared);
+  `VarFormTestAccess::stats` exposes the subsolve records.
+- `tools/rb11/cases.py`: matrix case `g5-fully-prescribed-body`
+  (accepted; a unit cube of 6 tets, all 8 vertices on the boundary, whole
+  boundary prescribed, transient; `check.json` requires the info line).
+
+### Validation
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| Reproduction on the current source (`b2e7734b…`, built from `766410565`) | The crash | exit 139 after step_0.vtu; lldb location above | Reproduced |
+| Control: `unit_tests` from the unrepaired sources + the new tests (`control/`) | The new tests fail | unit case: `reduced_to_full(empty)` size 0 ≠ 2, `solve_reduced` returns a size-0 solution (2 assertions); the three scene cases exit 139 | Reproduced |
+| Rebuilt baseline binary (`baseline-bin/`, parked sources) on the reproduction | The crash | exit 139 | Reproduced |
+| `[fully_prescribed]` on the repair | Pass | 4 cases / 1,396 assertions | Pass |
+| Reproduction and variants on the candidate binary (`candidate/*/`): default, RB-04 diagnostics, contact on the lone body, friction, quasistatic, static, zero tolerances + `Linf`, gravity + BDF2, P2 control, contact within `dhat` of the slab | Complete; the solution the prescribed values; kinematics by the integrator rule | All exit 0 with 3 trivial reduced solves (P2 control: free DOFs, ordinary solves); VTU u = .1, v = .2/.4/0/0, a = 0/.8/−1.6/0 (BDF2: v −.2 / a −4 / 2.4 at its own rule); diagnostics record: free residual 0, `physical_balance_pass` true, reactions = M·a (1,600 / 3,200 / 0 N), attempt stream start rows at 2.5 / 10 / 0; static u = .1 | Pass |
+| Infeasible fully prescribed motion (driven .08 through the slab, `budget/max_passes 4`) | A named failure, not a crash | "Reached iteration limit in AL" (the AL subsolve's 500-iteration limit came first), rolled back (verified), exit 1 — RB-07's characterized behaviour for an infeasible prescribed motion | Pass (unchanged behaviour) |
+| RB-06 rollback on the empty reduced state (`failure_injection` phase reduced, step 2, iteration 0) | The fault fires at the trivial solve's iteration-0 post_step and the rollback verifies | "Injected failure … at accepted Newton iterate 0 of the reduced solve", rolled back (verified), exit 1 | Pass |
+| `[fully_prescribed],[al_solver],[al_budget],[al_continuation],[rollback],[output_kinematics]` (seed 1) | No failure | 36 cases / 5,641 assertions | Pass |
+| `[input_validation],[physical_diagnostics],[iteration_observer],[coefficient_events],[resource_containment],[time_integrator],[linear_elastic],[scene],[run_manifest]` | No failure | 56 cases / 6,122 assertions | Pass |
+| Five public smokes, `--max_threads 1`, baseline binary vs candidate (`ab-smokes/`) | Every VTU field identical | 30 fields × 5 steps identical on all five | Pass |
+| RB-11 matrix, verify mode, 94 cases (`rb11-matrix/full/`) | 94/94 | 94/94 behave as the plan requires (`full.log`; the 93 prior cases unchanged, the new case accepted with its info line) | Pass |
+| `g5-fully-prescribed-body` on the baseline binary | Crash (the finding) | crash, exit −11 | Reproduced |
+| Combined tree (`e081eafd8` + the patch, IPC `482b9eab` = pin): `[fully_prescribed],[rollback],[output_kinematics]` | Pass | 19 cases / 4,249 assertions | Pass |
+| Full unit suite on the combined binary (seed 1, `-d yes`, 63 min) | Only the known golden failures | 371 cases / 5,173,365 assertions; 368 passed; the 3 failing cases are the 4 known scenes (2D/3D `large-mass-ratio` — RB-10 defaults vs golden; `gcp-contact/cube-on-floor` — open; `multi-material/stretch-cubes` — RB-22), the same set as RBR-01's run (`combined/full-suite/full-suite.log`) | Pass (known) |
+| clang-format on the changed hunks, `git diff --check` | Clean | Clean (every changed file reformats to itself) | Pass |
+
+### Publication
+
+Tested binaries: `combined/bin/` (`PolyFEM_bin` `10c190c3…`, `unit_tests`
+`233f9bc7…`, built on `e081eafd8` + `tested.patch` `da6fbfd5…`; the
+smokes and the variant runs used the pre-fast-forward candidate `88dd9e3f…`
+of the same sources, IPC library identical). Published as `COMMIT_HASH` on
+`sdast9/polyfem:main`. No companion pin or HDA asset changed by this item.
+
+### Limits
+
+- The repair is the varform path (`ALSolver`) and `NLProblem`. The legacy
+  `State` solve (`legacy/state/StateSolveNonlinear.cpp`) and the scalar
+  varform's constrained linear solve (`ScalarVarForm.cpp`, a
+  `MatrixLagrangianForm` through the QR branch) now get a correct
+  `reduced_to_full` but still hand an empty system to their own solvers;
+  neither is the production path and neither was run fully prescribed.
+- `NLHomoProblem` (homogenization) composes `NLProblem::reduced_to_full`
+  with its macro DOFs; the repaired offset is what it needs when the
+  microscopic space is empty, but no homogenization scene was run.
+- An infeasible fully prescribed motion is not made feasible: the AL stage
+  runs its full-size passes and ends by the existing named failures
+  (iteration limit, or the opt-in RB-07 budget). That is the same contract
+  as for a partially prescribed body.
+- The exported "gradient" that `NLProblem::post_step` hands the forms and
+  the observer is `reduced_to_full(grad)` (upstream's affine map applied
+  to a gradient); unchanged here, and the observers do not read it.

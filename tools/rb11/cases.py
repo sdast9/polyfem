@@ -684,6 +684,18 @@ def _(d):
     fx.dump_json(os.path.join(d, "scene.json"), s)
 
 
+@case("g5-fully-prescribed-body", "bc", "accepted", "every node Dirichlet (a unit cube of 6 tets whose 8 vertices are all on the boundary, the whole boundary prescribed): zero free DOFs, a valid trivial solve whose solution is the prescribed values (RBR-05; was SIGSEGV after step_0)", "ctl-nocontact")
+def _(d):
+    V, T = fx.tet_cube(1)
+    fx.write_msh41(os.path.join(d, "cube.msh"), V, T)
+    s = fx.base_scene(transient=True)
+    s["geometry"][0]["surface_selection"] = 1
+    s["boundary_conditions"]["dirichlet_boundary"] = [{"id": 1, "value": ["0.05*t", "0", "0"]}]
+    s["output"]["paraview"]["options"]["velocity"] = True
+    fx.dump_json(os.path.join(d, "scene.json"), s)
+    _check(d, {"log_contains": ["No free degrees of freedom: every DOF is prescribed; the step's solution is the prescribed values"]})
+
+
 @case("g5-obstacle-displacement-conflict", "bc", "named_failure", "an obstacle surface id carries both an obstacle_displacements entry and a dirichlet_boundary entry with different values", "ctl-contact", expect_error='prescribed twice with different values')
 def _(d):
     V, T = fx.tet_cube(2, origin=(0, 0, 0.01))

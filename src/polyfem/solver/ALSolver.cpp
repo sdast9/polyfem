@@ -553,12 +553,33 @@ namespace polyfem::solver
 
 		nl_problem.init(sol);
 		update_barrier_stiffness(sol);
-		// Keep the caller's solution unchanged on interruption or failure.
-		const auto outcome = minimize_with_stall_restarts(
-			nl_problem, tmp_sol, nl_solver_params, linear_solver,
-			characteristic_length, nl_solverin);
-		if (outcome != SubsolveOutcome::Converged)
-			log_and_throw_error("Final reduced solve did not converge: {}", solve_info_.dump());
+		if (nl_problem.reduced_size() == 0)
+		{
+			// Every DOF is prescribed: the reduced problem has no unknowns and
+			// the snap just verified (finite energy, valid, collision-free) is
+			// the step's solution. Stated here rather than handed to the
+			// nonlinear solver, whose outcome on an empty problem would depend
+			// on the configuration (a zero first_grad_norm_tol sends it into a
+			// Newton step on a 0x0 system, an Linf norm type into maxCoeff of
+			// an empty gradient). Same observable sequence as a solve that
+			// converges at its start: solution_changed, the iteration-0
+			// post_step (the forms and the RB-04 attempt stream), finish.
+			nl_problem.solution_changed(tmp_sol);
+			const double energy = nl_problem.value(tmp_sol);
+			solve_info_ = {{"outcome", "converged"}, {"termination_reason", "No free degrees of freedom: every DOF is prescribed, the reduced problem is empty and the solution is the prescribed values"}, {"iterations", 0}, {"energy", energy}, {"gradNorm", 0.0}, {"directional_derivative", nullptr}, {"restarts", 0}, {"unchanged_restarts", 0}};
+			nl_problem.post_step(polysolve::nonlinear::PostStepData(0, solve_info_, tmp_sol, Eigen::VectorXd::Zero(0)));
+			nl_problem.finish();
+			logger().info("No free degrees of freedom: every DOF is prescribed; the step's solution is the prescribed values (energy {:g})", energy);
+		}
+		else
+		{
+			// Keep the caller's solution unchanged on interruption or failure.
+			const auto outcome = minimize_with_stall_restarts(
+				nl_problem, tmp_sol, nl_solver_params, linear_solver,
+				characteristic_length, nl_solverin);
+			if (outcome != SubsolveOutcome::Converged)
+				log_and_throw_error("Final reduced solve did not converge: {}", solve_info_.dump());
+		}
 		sol = nl_problem.reduced_to_full(tmp_sol);
 
 		post_subsolve(0);

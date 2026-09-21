@@ -106,3 +106,10 @@ an unconverged run): a nonlinear case without a recorded count or without
 determinant evidence fails C-R and leaves C-N not evaluated.
 `--report-dir` writes the report elsewhere than `--output`, keeping an
 earlier report intact.
+
+RBR-05 addition (2026-09-20): `g5-fully-prescribed-body` — a unit cube of six
+tets whose eight vertices are all on the boundary, with the whole boundary
+prescribed (zero free DOFs), transient. Expected `accepted`: the empty reduced
+problem is a valid trivial solve whose solution is the prescribed values
+(`check.json` requires the "No free degrees of freedom" info line). On the
+binaries before the repair the case is a `crash` (SIGSEGV after `step_0`).

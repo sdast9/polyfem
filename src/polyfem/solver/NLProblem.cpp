@@ -268,16 +268,25 @@ namespace polyfem::solver
 			Q2t_ = Q2_.transpose();
 
 			reduced_size_ = Q2_.cols();
-			if (reduced_size_ == 0)
-				return;
 			num_penalty_constraints_ = full_size_ - reduced_size_;
 
-			timer.start();
-			StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
-			solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
-			solver_->factorize(Q2tQ2);
-			timer.stop();
-			logger().debug("Factorization and computation of Q2tQ2 took: {}", timer.getElapsedTime());
+			// An empty reduced space (every DOF prescribed) still needs the
+			// penalty problem of the full-size AL passes and the affine offset
+			// Q1R1iTb_ = b that reduced_to_full returns; only the 0x0
+			// factorization of Q2'Q2 is skipped (full_to_reduced has nothing
+			// to solve for). Upstream's early return here left both unset,
+			// and the first energy evaluation read a size-0 vector.
+			if (reduced_size_ > 0)
+			{
+				timer.start();
+				StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
+				solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
+				solver_->factorize(Q2tQ2);
+				timer.stop();
+				logger().debug("Factorization and computation of Q2tQ2 took: {}", timer.getElapsedTime());
+			}
+			else
+				logger().debug("No free degrees of freedom: every one of the {} DOFs is prescribed; the reduced problem is empty", full_size_);
 
 			std::vector<std::shared_ptr<Form>> tmp;
 			tmp.insert(tmp.end(), penalty_forms_.begin(), penalty_forms_.end());
@@ -431,20 +440,27 @@ namespace polyfem::solver
 		timer.stop();
 		logger().debug("Getting Q1 Q2, R1 took: {}", timer.getElapsedTime());
 
-		timer.start();
+		// Same as the projection path: nothing to factorize when the
+		// constraints span the whole space.
+		if (reduced_size_ > 0)
+		{
+			timer.start();
 
-		// arma::sp_mat q2a = fill_arma(Q2_);
-		// arma::sp_mat q2tq2 = q2a.t() * q2a;
-		// const StiffnessMatrix Q2tQ2 = fill_eigen(q2tq2);
-		StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
-		timer.stop();
-		logger().debug("Getting Q2'*Q2, took: {}", timer.getElapsedTime());
+			// arma::sp_mat q2a = fill_arma(Q2_);
+			// arma::sp_mat q2tq2 = q2a.t() * q2a;
+			// const StiffnessMatrix Q2tQ2 = fill_eigen(q2tq2);
+			StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
+			timer.stop();
+			logger().debug("Getting Q2'*Q2, took: {}", timer.getElapsedTime());
 
-		timer.start();
-		solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
-		solver_->factorize(Q2tQ2);
-		timer.stop();
-		logger().debug("Factorization of Q2'*Q2 took: {}", timer.getElapsedTime());
+			timer.start();
+			solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
+			solver_->factorize(Q2tQ2);
+			timer.stop();
+			logger().debug("Factorization of Q2'*Q2 took: {}", timer.getElapsedTime());
+		}
+		else
+			logger().debug("No free degrees of freedom: every one of the {} DOFs is constrained; the reduced problem is empty", full_size_);
 
 #ifndef NDEBUG
 		StiffnessMatrix test = R.bottomRows(reduced_size_);
@@ -742,6 +758,10 @@ namespace polyfem::solver
 			return full;
 		}
 
+		// Empty reduced space: there is no free coordinate to solve for.
+		if (reduced_size() == 0)
+			return TVector(0);
+
 		TVector reduced(reduced_size());
 		const TVector k = full - Q1R1iTb_;
 		const TVector rhs = Q2t_ * k;
@@ -795,6 +815,10 @@ namespace polyfem::solver
 		}
 
 		// x =  Q1 * R1^(-T) * P^T b  +  Q2 * y
+		// (an empty reduced space gives the affine offset alone: every DOF is
+		// at its prescribed value)
+		assert(reduced.size() == reduced_size());
+		assert(Q1R1iTb_.size() == full_size());
 
 		const TVector full = Q1R1iTb_ + Q2_ * reduced;
 

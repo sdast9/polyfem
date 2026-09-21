@@ -672,7 +672,10 @@ or Teseo ran.
 - A fully prescribed body (every node Dirichlet) would be the other ordinary
   hold; the current binary segfaults on it (zero free DOFs; also on the
   baseline, `repro-vtu-baseline-fully-prescribed-segfault/`). Not in this
-  item's scope; recorded as a separate defect.
+  item's scope; recorded as a separate defect. *(Repaired the same day as
+  RBR-05: the empty reduced problem is a valid trivial solve whose solution
+  is the prescribed values, kinematics exported by the same phase rules;
+  see the [RB-11 record](rb-11-validation.md#rbr-05--a-fully-prescribed-body-is-a-valid-trivial-solve-2026-09-20).)*
 
 ### What changed
 
@@ -749,9 +752,12 @@ HDA asset changed by this item.
   another solution after an advance (the Python bindings can).
 - The legacy `State` path (`legacy/io/OutData.cpp`, remeshing) still exports
   `v_prev()`/`a_prev()` directly, as documented for RB-04; not in scope.
-- A fully prescribed body cannot be run (zero free DOFs segfault, above);
-  the regression uses a quasistatic dwell, which is the ordinary production
-  hold. `first_grad_norm_tol` is set equal to `grad_norm_tol` in the test
+- A fully prescribed body could not be run when this section was written
+  (zero free DOFs segfault, above), so the regression uses a quasistatic
+  dwell, which is the ordinary production hold. Since RBR-05 (same day) the
+  fully prescribed hold runs and `[fully_prescribed]` checks its exported
+  kinematics against the same Implicit Euler rule (v .2/.4/0/0,
+  a 0/.8/−1.6/0 on every node). `first_grad_norm_tol` is set equal to `grad_norm_tol` in the test
   scene so that the zero-iteration return is guaranteed by construction; the
   defaults already gave it on this machine.
 - The thermoelastic phase is validated by identity with the baseline (whose

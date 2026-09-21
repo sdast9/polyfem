@@ -1,11 +1,14 @@
 # Implementation handoff for the completed-RB review — 2026-09-20
 
-**Status: plans; RBR-01 and RBR-02 implemented 2026-09-20 (see their
-sections), RBR-03 and RBR-04 as recorded in their sections.** Context and
-verdicts are in the
+**Status: plans; RBR-01, RBR-02 and RBR-05 implemented 2026-09-20 (see
+their sections), RBR-03 and RBR-04 as recorded in their sections.** Context
+and verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
 completion record or authorization to execute every task in one session.
+RBR-05 was not part of the review: it is the zero-free-DOF crash that
+RBR-01's reproduction exposed, added here because it was found and
+repaired in the same handoff.
 
 ## Common session contract
 
@@ -319,10 +322,98 @@ controls and the existing RB-02 probe remain intact. Correct the inaccurate
 prevents the combination, record the actual boundary and close the finding
 without an unnecessary behavior change. UP-10 must state this restriction.
 
+## RBR-05 — A fully prescribed body (zero free DOFs) is a valid trivial solve
+
+**Status: implemented 2026-09-20** — see the
+[RB-11 record](rb-11-validation.md#rbr-05--a-fully-prescribed-body-is-a-valid-trivial-solve-2026-09-20)
+(`NLProblem` empty reduced space, `ALSolver::solve_reduced` guard,
+`[fully_prescribed]`, matrix case `g5-fully-prescribed-body`). The text
+below records the defect, the decision and its reasons.
+
+**Parent items:** RB-11 (a valid input crashed instead of running) and
+RB-04 (the other ordinary hold of RBR-01's output-kinematics scene).
+**Priority:** P2. **Evidence:** reproduced at the process level (exit 139)
+on `92e0d8c20`, on the RBR-01 binary and on the current source, located
+with lldb (`outputs/rbr-05/20260921T002043Z/baseline/repro/lldb.log`).
+
+### Defect
+
+A nonlinear transient scene whose every node is Dirichlet-prescribed (a
+2×1×1 P1 Kuhn-tet beam, twelve vertices all on the boundary,
+`surface_selection: 1` for the whole boundary and one time-dependent
+`dirichlet_boundary`) died with SIGSEGV right after `step_0.vtu`. The
+reduced problem has zero unknowns. Upstream's `fix case of no dofs`
+(`fb762251e`) made `NLProblem::setup_constraints` return early when the
+projection has no columns — before `num_penalty_constraints_`, the penalty
+problem of the full-size AL passes and the affine offset `Q1R1iTb_` (the
+prescribed values) were set. `reduced_to_full(empty)` then evaluated
+`Q1R1iTb_ + Q2_ * reduced` with a size-0 left operand: under `NDEBUG` the
+result is a size-0 vector, and the elastic energy of the AL solver's first
+snap gate read it (`NeoHookeanElasticity::compute_energy_aux`, address 0).
+Two further latent faults sat behind it: `full_to_reduced` would have
+solved with a never-factorized `Q2ᵀQ2`, and PolySolve's `minimize` on an
+empty vector depends on the configuration (`first_grad_norm_tol` 0 sends
+it into a Newton step on a 0×0 system, `norm_type: Linf` into `maxCoeff`
+of an empty gradient).
+
+### Decision: valid trivial solve, not a named refusal
+
+The RB-11 input-validation style refuses inputs the solver cannot run.
+This input is not one of them: the transient problem with every DOF
+prescribed is well posed and its solution is the prescribed motion; the
+kinematics (integrator rules), the reactions (the full residual: inertia,
+elastic, contact) and every RB-04 record field are defined. Whether a scene
+has free DOFs is a property of its discretization, not of the scene: the
+same whole-boundary Dirichlet at P2, or on a mesh with an interior node (the
+2×2×2 cube), has free DOFs and runs; refusing the coarse P1 version would
+be an arbitrary discretization-dependent refusal. Upstream's early return
+shows the same intent (support, not refuse). So the empty reduced problem
+is solved by definition:
+
+- `NLProblem::setup_constraints` (both the projection and the QR branch)
+  sets the constraint count, builds the penalty problem and the affine
+  offset for an empty reduced space and skips only the 0×0 factorization;
+  `full_to_reduced` returns an empty vector (nothing to solve for) and
+  `reduced_to_full(empty)` is the affine offset, i.e. the prescribed values
+  at the step's time (refreshed by `update_quantities`).
+- `ALSolver::solve_reduced`: the AL stage is unchanged (its snap gate now
+  evaluates the prescribed configuration correctly; an infeasible
+  prescribed motion — a body driven through an obstacle — takes the same
+  full-size AL passes and ends by the same named failures as a partially
+  prescribed body, RB-07's characterized behaviour). After the feasibility
+  check, a reduced problem of size zero is stated solved without calling
+  the nonlinear solver, with the same observable sequence as a solve that
+  converges at its start (`solution_changed`, the iteration-0 `post_step`
+  for the forms and the RB-04 attempt stream, `finish`), a subsolve record
+  `outcome: converged`, `iterations: 0`, termination reason
+  "No free degrees of freedom: every DOF is prescribed, the reduced problem
+  is empty and the solution is the prescribed values", and an info log line.
+  The lagging loop needs no change (an empty gradient converges the lag).
+
+No tolerance, default, law, CCD, retry or dependency changed; PolySolve is
+untouched (the guard makes the outcome independent of its configuration).
+
+### Acceptance (met)
+
+`[fully_prescribed]`: the NLProblem transforms/energy/derivatives of an
+empty reduced space and the AL stage + reduced stage on a two-DOF fixture
+(also with the tolerances/norm that would trip PolySolve); the real
+transient loop on the reproduction (default tolerances, the tripping
+tolerances, contact on the lone body, friction), every endpoint the
+prescribed values to 1e-15, kinematics v .2/.4/0/0 a 0/.8/−1.6/0 on
+every node before and after the advance and in the saved VTUs, one
+zero-iteration reduced subsolve per step and no AL pass; the body driven
+within `dhat` of the public slab (barrier active, motion unchanged); a
+static fully prescribed solve. Control: the same tests on the unrepaired
+sources segfault (scene cases) or return a size-0 solution (unit case).
+Matrix case `g5-fully-prescribed-body` accepted (crash on the baseline
+binary). The five public smokes are bit-identical to the baseline binary.
+
 ## Suggested implementation order and copy-ready prompts
 
-RBR-01, RBR-02 and RBR-03 are independent. RBR-04 begins with a reproduction
-and must not be folded into an unrelated arithmetic repair. RBR-01 has the
+RBR-01, RBR-02 and RBR-03 are independent; RBR-05 is done. RBR-04 begins
+with a reproduction and must not be folded into an unrelated arithmetic
+repair. RBR-01 has the
 most direct effect on ordinary quantitative output; RBR-02 hardens resource
 containment; RBR-03 prevents the optional budget from becoming a large
 memory consumer. None requires work on RB-23 or RB-24.
