@@ -1,5 +1,12 @@
 # Review of the completed RBR implementations — 2026-09-21
 
+**Follow-up:** the subsequent
+[RBR-01 / CI-01–CI-03 implementation review](rbr-ci-followup-review-20260921.md)
+independently verifies the RBR-01 repair at `baac15c5f`; the previous
+callback/VTU probe passes. The finding below is retained as historical
+evidence. Two newly reproduced CI-03 evidence-tool defects and their
+coding plans are recorded in the follow-up.
+
 **Verdict: one reproduced P2 regression in RBR-01; no additional actionable
 defect found in RBR-02–RBR-05 within the scope below.** The explicit-phase
 design is correct, but its differentiable solve path is missing a phase

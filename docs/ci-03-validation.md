@@ -1,6 +1,19 @@
 # CI-03 — Pin the intended friction policy in historical fixtures
 
 Date: 2026-09-21
+
+**Independent implementation review, 2026-09-21:** the
+[follow-up review](rbr-ci-followup-review-20260921.md) confirms the fixture
+policy, unchanged historical references, causal A/B comparisons, and all
+six fixtures' authentication on both current native Release lanes at
+`baac15c5f`. It also reproduces two P2 defects in the new evidence tools:
+equal-basename generation runs overwrite evidence (F1), and a timeout with
+partial JSON can prevent the execution ledger and matrix summary from
+being written (F2). The fixture repair remains validated; the review
+contains detailed, unimplemented tool-repair plans. The current Linux
+Debug rollback crashes also occur in the pre-update baseline and remain a
+separate issue.
+
 Status: **done — validated within stated scope** (2026-09-21). The three
 scene fixtures that started failing their stored references between the
 last green macOS Release scene run (`91c7ff8ac`) and the RB-10 defaults

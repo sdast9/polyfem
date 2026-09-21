@@ -776,6 +776,15 @@ HDA asset changed by this item.
 
 ## RBR-01 follow-up — the differentiable solve dispatch (2026-09-21)
 
+**Independent follow-up review, 2026-09-21:**
+[review and evidence](rbr-ci-followup-review-20260921.md) at `baac15c5f`
+confirms this repair. The earlier independent callback/VTU probe now
+passes, the saved kinematics agree with independent displacement-history
+arithmetic, and both output regressions pass in the completed native
+lanes. No further RBR-01 implementation defect was found within that
+review's scope. The differentiable rollback and physical-validation
+limits below remain unchanged.
+
 **Status: repaired and validated within stated scope.** The
 [implementation review](rbr-implementation-review-20260921.md) found that
 `DifferentiableNonlinearElasticVarForm::solve_tensor_nonlinear` takes its
