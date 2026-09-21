@@ -630,6 +630,15 @@ iterate; RB-10 owns friction accuracy; RB-09 owns the physical threshold that
 
 ## RBR-01 — explicit output time state (2026-09-20)
 
+**Review follow-up, 2026-09-21: repair pending for the differentiable
+transient branch.** The [implementation review](rbr-implementation-review-20260921.md)
+reproduced previous-step kinematics in its callback and VTU output when
+`differentiable=true`; the separate override never sets the pre-advance
+phase. The ordinary-path and helper results below remain valid, but the
+claim that every owner transition is covered is incomplete. The review
+contains the reproduction and a bounded coding plan; no source repair was
+made during that review.
+
 **Status: repaired and validated within stated scope.** The
 [completed-RB review](rb-completed-review-20260920.md) found that
 `saved_solution_kinematics` (2026-09-12) inferred "the history has already

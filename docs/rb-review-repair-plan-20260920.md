@@ -1,7 +1,11 @@
 # Implementation handoff for the completed-RB review — 2026-09-20
 
 **Status: plans; RBR-01, RBR-02 and RBR-05 implemented 2026-09-20,
-RBR-03 and RBR-04 on 2026-09-21 (see their sections).** Context
+RBR-03 and RBR-04 on 2026-09-21 (see their sections).** The
+[implementation review of 2026-09-21](rbr-implementation-review-20260921.md)
+reproduced an RBR-01 regression in the differentiable transient path and
+provides a bounded follow-up plan; no additional actionable defect was
+found in RBR-02–RBR-05 within that review's scope. Context
 and verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
@@ -12,7 +16,7 @@ repaired in the same handoff.
 
 ## Common session contract
 
-Select one of RBR-01–RBR-04. Read the workspace instructions, the selected
+Select one of RBR-01–RBR-05. Read the workspace instructions, the selected
 RB record, the [PF invariants](correctness-remediation-plan.md), and the
 [robustness plan](robustness-plan.md). Recheck live branches, status,
 dependency pins/overrides and binary provenance. The review's starting
@@ -36,11 +40,15 @@ Do not use `git add -A` in the shared checkout.
 
 ## RBR-01 — Explicit output time state instead of position equality
 
-**Status: implemented 2026-09-20** — see the
+**Status: implemented 2026-09-20; differentiable-path follow-up pending
+after the 2026-09-21 review** — see the
 [RB-04 record](rb-04-validation.md#rbr-01--explicit-output-time-state-2026-09-20)
 (`varform::OutputTimePhase`, owner-maintained; `[output_kinematics]` incl. the
 hold-segment VTU scene; solutions/forces identical, only the held-step
-kinematics changed). The text below is the plan as handed off.
+kinematics changed in the validated ordinary path). The
+[follow-up finding and coding plan](rbr-implementation-review-20260921.md)
+cover the separate differentiable solve branch, which never sets
+`CurrentStepBeforeAdvance`. The text below is the original plan as handed off.
 
 **Parent item:** RB-04; affects all transient stiffness modes and potentially
 contact-free output. **Priority:** P2. **Evidence:** reproduced in the real

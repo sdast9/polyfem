@@ -30,6 +30,13 @@ patches, optional per-contact model work, and RB-24's future adoption of an
 already-upstream dependency remedy. The dated completion records below
 remain the evidence for their original bounded scope.
 
+**RBR implementation review, 2026-09-21:** the
+[review and follow-up handoff](rbr-implementation-review-20260921.md)
+found one reproduced P2 regression: RBR-01's differentiable transient solve
+does not enter the pre-advance output phase, so its saved kinematics lag a
+step. That follow-up remains open. No additional actionable defect was
+found in RBR-02–RBR-05 within the stated source-review and local-test scope.
+
 ## Start here in every session
 
 A sufficient user prompt is: **“Work on RB-01 using docs/robustness-plan.md.”**
