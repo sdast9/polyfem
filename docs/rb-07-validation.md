@@ -457,3 +457,28 @@ that keeps moving (the crush fixture is ended by its cap alone, as on
 2026-09-15). Not run: the private scenes; the fluid/FSI/thermo forward
 paths with a budget (option installed, no public AL fixture); a threaded
 repeat; Windows/Linux lanes (CI on push).
+
+### Publication
+
+Tested binaries: `candidate/bin/` (`PolyFEM_bin 5c539466…`, `unit_tests
+36c95762…`, built from the published C++ sources; the later edits were
+documentation and the runner's check text only). Published as `82be18314`
+on `sdast9/polyfem:main` (fast-forward from `a1050288e`; no companion pin,
+default, spec key or HDA asset changed). The parent-workspace evidence stays
+local under `outputs/rbr-03/20260921T021257Z/` (public inputs only).
+
+### Limits
+
+- The bound is on the AL stage's vector storage for its two motion measures;
+  the scalar pass history (`al_history`, the failure record's and the
+  manifest's `history`, the per-subsolve `solver_info` rows) still grows by
+  one record per pass, by design, and no total-memory claim is made.
+- A window-only budget still cannot end an incompatible motion that keeps
+  moving (the crush fixture drifts every window and is ended by its cap);
+  this repair changes no exit and adds none. The production default is
+  still the user's pending decision above.
+- The manifest's `al_retained_states` and the record's `retained_states` are
+  additive fields; readers that pin the exact key set of a pass record must
+  be updated (none in this repository did).
+- Not run: the private scenes; the fluid/FSI/thermo forward paths under a
+  budget; a threaded repeat; Windows/Linux lanes (CI on push).
