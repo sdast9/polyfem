@@ -4,7 +4,9 @@ Date: 2026-09-15
 Status: **validated within stated scope** (the opt-in mechanism, off by
 default) — **production default: decision pending** (enabling an exit by
 default needs the user's choice, see
-[Decision](#decision-required-production-default))
+[Decision](#decision-required-production-default)); **the budget's
+carried-state storage is bounded since 2026-09-21 —
+[RBR-03](#rbr-03--bounded-carried-state-storage-for-the-budget-2026-09-21)**
 Selected stage: reproduction → proposal of a stage budget and a stagnation
 metric → opt-in implementation (default disabled) → validation → publication.
 No load/timestep subdivision (RB-08 stays closed), no AL stationarity or
@@ -219,7 +221,8 @@ bc_residual_carried (after the `eta < 0` rollback), relative_progress (η),
 rolled_back, gate {finite_energy, valid, collision_free, feasible,
 blocked_by, ccd_fraction}, snap_linf (largest constrained residual), moved
 (L∞ motion of the carried state), drift_over_window, multiplier_norm,
-wall_seconds.
+retained_states (since RBR-03: the full-space states the stage keeps for
+the two motion measures after the pass), wall_seconds.
 
 Alternatives considered: (a) the pass cap only — unambiguous but it cannot
 tell a slow success from a fixed point, so the record carries the signals the
@@ -335,3 +338,122 @@ the user's stalls look like.
 - Next eligible: RB-23 (Q3+ hexahedral basis), RB-24 (per-thread contact
   memory). RB-08 stays closed; a budget exit is a named failure, not a retry
   trigger.
+
+## RBR-03 — bounded carried-state storage for the budget (2026-09-21)
+
+**Status: repaired and validated within stated scope.** The
+[completed-RB review](rb-completed-review-20260920.md) found that
+`ALSolver::solve_al` kept every pass's full-space state in a growing
+`std::vector` whenever a budget was enabled — a pass cap alone included —
+although the two motion measures of the pass record read only the previous
+state (`moved`) and the state `stagnation_window` passes back
+(`drift_over_window`): `8 × ndof × (passes + 1)` bytes on top of the compact
+scalar history (about 8 GB for a million DOFs over 1,000 passes). The
+[repair plan](rb-review-repair-plan-20260920.md#rbr-03--bounded-iterate-storage-for-the-al-budget)
+was followed as written: a memory repair, not a stagnation redesign — the
+scalar pass history stays complete, every value and every exit is that of
+the complete state history, and the budget stays off by default.
+
+Started on `main` at `a1050288e` (clean tree; effective IPC `482b9eab`,
+PolySolve `bce32a39`, both equal to the recipe pins and clean; shared
+`build/`, RelWithDebInfo, Apple clang 21, TBB, `POLYFEM_WITH_PYTHON=ON`,
+miso off; no other task in the checkout). Evidence: parent
+`outputs/rbr-03/20260921T021257Z/` (`provenance.txt`, `baseline-bin/`,
+`control/`, `candidate/`, `scenes/`, `ab-smokes/`, the comparison scripts;
+its `README.md` maps every directory). No dependency, coefficient law,
+tolerance, CCD, trial cap, retry policy, default or HDA asset changed; no
+private scene or Teseo ran.
+
+### Reproduction on the current source
+
+The count is not observable from outside `solve_al` (the vector was a
+local), so the control is the baseline storage logic instrumented: the same
+container semantics (every pass's state pushed, the reference `W` passes
+back indexed, nothing evicted) as a member whose size the new accessor
+`retained_state_count()` and the new pass-record field `retained_states`
+report, plus the new tests (`control/`: `unit_tests e62032a4…` built from those
+sources; the control differs from the candidate only in the eviction lines
+described below). On it the retained count after pass *k* is *k + 1* in
+every configuration — 7 vectors after the 6-pass fixture (bounds 1, 2, 3, 4
+for W = 0, 1, 2, 3), 201 after 200 passes (bounds 1 and 4), 13 on the
+rollback fixture (bound 3), 9 on the wall fixture (bound 4) and 11 on the
+public transient scene of the `[rollback]` budget test (bound 4) — and the
+regression fails as designed: 6 of 9 `[al_budget]` cases, 912 of 2,845
+assertions, all of them retained-count assertions
+(`control/al_budget.log`; the 3 passing cases assert no count). Every
+oracle value (`moved`, `drift_over_window`) and every exit decision already
+agreed on the control: zero failures on those lines. The three public
+budgets of the 2026-09-15 validation were rerun on a baseline binary built
+from the clean `a1050288e` (`scenes/baseline-{a,b,c}`): the same 105 / 10 /
+60 / 30 passes as in September; their manifests carry no retained count.
+
+### What changed
+
+- `ALSolver.hpp/.cpp`: the carried states are a member
+  `std::deque<Eigen::VectorXd> carried_` that lives only while `solve_al`
+  runs (a scope guard swaps it away on the feasible snap and on any
+  exception — a budget exit, a failed subsolve — alike). Pass 0, the state
+  the stage starts from, is a real entry. At pass *k* the deque holds the
+  states of passes `max(0, k−1−W) … k−1`; `moved` reads the last of them,
+  then every entry older than the reference *W* passes back is popped
+  before this pass's state is pushed, so it never holds more than `W + 1`
+  states under a window and one under a pass cap alone (none without a
+  budget). The reference for `drift_over_window` is then the oldest entry —
+  exactly the state a complete history would index (`carried[k − W]`), so
+  the values are those of the unbounded history and `check_budget`, the
+  weight-ceiling requirement, the rolled-back-pass semantics (a rolled-back
+  pass carries the initial state, as before) and every threshold are
+  untouched. `retained_state_count()` exposes the count; every pass record
+  carries it as `retained_states` and every manifest AL subsolve entry as
+  `al_retained_states` (`NonlinearElasticVarForm.cpp` forwards the field;
+  a documented additive field, no other output change).
+- Tests, `tests/test_al_solver.cpp` `[al_budget]`: a *full-history oracle*
+  that rebuilds the complete state history the solver no longer stores from
+  the caller's solution at every `post_subsolve`, recomputes `moved` and
+  `drift_over_window` from it, and re-evaluates the stagnation rule
+  independently (window at the ceiling; residual, gate, CCD-fraction and
+  drift progress) to predict the exit pass and reason. Cases: cap only,
+  W = 1 (drift equals the last motion), W = 2, W = passes (one drift, at the
+  last pass), W > passes (no drift, every state still needed), 200 passes
+  under W = 3 and W = 0 (bound 4 / 1, independent of the pass count); a new
+  fixture whose form pulls the prescribed coordinate away from its target
+  harder than the first AL weights, so the first four converged passes are
+  rolled back (`eta < 0`, the carried state returns to pass 0) and the later
+  eight are kept — the oracle agrees through both kinds of pass; the wall
+  fixture's stagnation exit with a window alone, with a cap that the window
+  beats, and with a cap that wins (checked first), every motion value equal
+  between the runs; and the PF-07 continuation without a budget retaining
+  nothing. The count is asserted exactly (`min(k + 1, W + 1)`) at every pass
+  through the callback and the record, and zero after the stage. The
+  existing pass-cap, unexhausted-budget and `[rollback]` budget tests assert
+  their counts too (1; 3; ≤ 4 in the manifest's AL entries and history).
+- `tools/rb07/run_al_stagnation.py --stage validate`: checks the bound from
+  the failure record's history and, for the compatible scene, from the
+  manifest's AL subsolve entries (a binary without the field fails by name).
+
+### Validation
+
+Binaries: baseline `PolyFEM_bin fdde1427…` / `unit_tests f000e6c0…` (clean
+`a1050288e`), candidate `PolyFEM_bin 5c539466…` / `unit_tests 36c95762…`
+(`candidate/bin/`), control `unit_tests` in `control/`.
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| New regression on the instrumented baseline logic | Fails on the retained count, nowhere else | 6 / 9 cases, 912 / 2,845 assertions fail, all count assertions; counts `passes + 1` (7, 201, 13, 9, 11) | Reproduced |
+| `[al_budget]` on the candidate | Pass | 9 cases / 2,845 assertions (the same assertions) | Pass |
+| Affected selection `[al_solver],[rollback],[al_continuation],[bc_metric],[bc_scale],[direction_filter],[iteration_observer],[input_validation],[fully_prescribed]` | Pass | 63 cases / 7,586 assertions (`candidate/affected-selection.log`) | Pass |
+| Public budgets, baseline vs candidate binary (`scenes/`, `compare-baseline-candidate.json`): a `{max_passes 200, stagnation_window 3}` on `compatible-multipass` off/on and `incompatible-collision`; b `{60, 3}` on `incompatible-crush`; c `{max_passes 30}` on `incompatible-collision` | Same passes, exits, reasons, log pass histories, manifest AL entries and `al_stagnation` records (minus timings and the new count); compatible endpoint byte-identical | compatible 105 / 105 passes, exit 0, all four `step_1.vtu` (off/on × baseline/candidate) `860cde46…` = the 2026-09-15 endpoint; collision `stagnation` at pass 10 (a) and `pass_budget` at 30 (c); crush `pass_budget` at 60; every AL subsolve entry (105 / 10 / 60 / 30) and every history row identical; rollback performed + verified on both binaries; 0 differences | Pass |
+| Retained states on the candidate (the runner's new check and the comparison) | ≤ W + 1 at every pass, independent of the pass count | history rows `1, 2, 3, 4, 4, …` and AL entries `2, 3, 4, 4, …` (max 4 = bound) over 105 / 10 / 60 passes under the window; `1` throughout the 30-pass cap-only run; baseline manifests carry no count | Pass |
+| Five public smokes, single-threaded, baseline vs candidate (`ab-smokes/`; the budget is off there) | Exit 0, no error lines, every frame byte-identical | 5 / 5 exit 0 / 0, 0 error lines; 5 frames each byte-identical; every VTU field identical (`compare-*.json`) | Pass |
+| Full unit suite on the candidate `unit_tests 36c95762…` (seed 1, 60 min, `candidate/full-suite/`) | Only the known golden failures | 375 cases / 372 passed, 5,176,016 assertions / 4 failed: the four known scenes (`large-mass-ratio` 2D+3D — RB-10 defaults vs golden; `gcp-contact/cube-on-floor` — open; `multi-material/stretch-cubes` — RB-22) in `standard`, `contact_2d`, `contact_3d` | Pass (known) |
+| clang-format 23.1.1 (`--style=file`) on the changed C++ files, `git diff --check` | Clean | Clean (nothing to reformat) | Pass |
+
+What is bounded: the vector storage of the AL stage's motion measures. What
+still grows with the pass count, unchanged and documented: the scalar pass
+history (one record per pass in `al_history`, the failure record and the
+manifest) and the per-subsolve `solver_info` rows; neither is claimed
+constant. A window-only budget still cannot end every incompatible motion
+that keeps moving (the crush fixture is ended by its cap alone, as on
+2026-09-15). Not run: the private scenes; the fluid/FSI/thermo forward
+paths with a budget (option installed, no public AL fixture); a threaded
+repeat; Windows/Linux lanes (CI on push).

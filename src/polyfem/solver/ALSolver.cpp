@@ -406,14 +406,23 @@ namespace polyfem::solver
 		};
 		const auto finite_or_null = [](const double v) { return std::isfinite(v) ? json(v) : json(nullptr); };
 
+		// RBR-03: the carried states the motion measures read live only as
+		// long as the stage does -- released on the feasible snap and on any
+		// exception (a budget exit, a failed subsolve) alike.
+		struct ReleaseCarried
+		{
+			std::deque<Eigen::VectorXd> &carried;
+			~ReleaseCarried() { std::deque<Eigen::VectorXd>().swap(carried); }
+		} release_carried{carried_};
+		carried_.clear();
+		if (budget_.enabled())
+			carried_.push_back(sol); // pass 0: the state the stage starts from
+
 		// Pass 0: the state the stage starts from, against which the first
 		// window of the stagnation exit is judged.
 		SnapGate gate = snap_gate(nl_problem, sol, tmp_sol);
 		al_history_ = json::array();
-		al_history_.push_back({{"pass", 0}, {"weight", al_weight}, {"at_ceiling", al_weight >= max_al_weight}, {"subsolve", nullptr}, {"bc_residual", std::sqrt(current_error)}, {"bc_residual_carried", std::sqrt(current_error)}, {"relative_progress", nullptr}, {"rolled_back", false}, {"gate", gate.to_json()}, {"snap_linf", snap_linf(sol)}, {"moved", 0.0}, {"drift_over_window", nullptr}, {"multiplier_norm", multiplier_norm()}, {"wall_seconds", 0.0}});
-		std::vector<Eigen::VectorXd> carried; ///< the carried full-space state after each pass (pass 0 = start), for the drift measure
-		if (budget_.enabled())
-			carried.push_back(sol);
+		al_history_.push_back({{"pass", 0}, {"weight", al_weight}, {"at_ceiling", al_weight >= max_al_weight}, {"subsolve", nullptr}, {"bc_residual", std::sqrt(current_error)}, {"bc_residual_carried", std::sqrt(current_error)}, {"relative_progress", nullptr}, {"rolled_back", false}, {"gate", gate.to_json()}, {"snap_linf", snap_linf(sol)}, {"moved", 0.0}, {"drift_over_window", nullptr}, {"multiplier_norm", multiplier_norm()}, {"retained_states", carried_.size()}, {"wall_seconds", 0.0}});
 
 		while (!gate.feasible)
 		{
@@ -502,14 +511,25 @@ namespace polyfem::solver
 			double moved = 0, drift = std::numeric_limits<double>::quiet_NaN();
 			if (budget_.enabled())
 			{
-				moved = (sol - carried.back()).lpNorm<Eigen::Infinity>();
-				carried.push_back(sol);
-				if (budget_.stagnation_window > 0 && int(carried.size()) > budget_.stagnation_window)
-					drift = (sol - carried[carried.size() - 1 - budget_.stagnation_window]).lpNorm<Eigen::Infinity>();
+				// RBR-03: carried_ holds the states of passes max(0, k-1-W) ..
+				// k-1 for this pass k = al_steps (at most W+1 of them). The
+				// motion of this pass reads the previous state; the state W+1
+				// passes back is not needed any more and leaves before this
+				// pass's state enters, so the deque never grows past W+1 (past
+				// one under a pass cap alone). The reference W passes back is
+				// then the oldest entry, exactly the state a complete history
+				// would index; the values are those of the unbounded history.
+				const int W = budget_.stagnation_window;
+				moved = (sol - carried_.back()).lpNorm<Eigen::Infinity>();
+				while (int(carried_.size()) > std::max(W, 0))
+					carried_.pop_front();
+				if (W > 0 && int(carried_.size()) == W)
+					drift = (sol - carried_.front()).lpNorm<Eigen::Infinity>();
+				carried_.push_back(sol);
 			}
 			const double carried_error = rolled_back ? initial_error : current_error;
 			json subsolve = {{"outcome", solve_info_.value("outcome", std::string("failed"))}, {"termination_reason", solve_info_.contains("termination_reason") ? solve_info_["termination_reason"] : json(nullptr)}, {"iterations", solve_info_.contains("iterations") ? solve_info_["iterations"] : json(nullptr)}, {"restarts", solve_info_.contains("restarts") ? solve_info_["restarts"] : json(nullptr)}, {"error", solve_info_.contains("error") ? solve_info_["error"] : json(nullptr)}};
-			al_history_.push_back({{"pass", al_steps}, {"weight", pass_weight}, {"at_ceiling", pass_weight >= max_al_weight}, {"subsolve", subsolve}, {"bc_residual", std::sqrt(current_error)}, {"bc_residual_carried", std::sqrt(carried_error)}, {"relative_progress", finite_or_null(eta)}, {"rolled_back", rolled_back}, {"gate", gate.to_json()}, {"snap_linf", snap_linf(sol)}, {"moved", moved}, {"drift_over_window", finite_or_null(drift)}, {"multiplier_norm", multiplier_norm()}, {"wall_seconds", std::chrono::duration<double>(std::chrono::steady_clock::now() - pass_start).count()}});
+			al_history_.push_back({{"pass", al_steps}, {"weight", pass_weight}, {"at_ceiling", pass_weight >= max_al_weight}, {"subsolve", subsolve}, {"bc_residual", std::sqrt(current_error)}, {"bc_residual_carried", std::sqrt(carried_error)}, {"relative_progress", finite_or_null(eta)}, {"rolled_back", rolled_back}, {"gate", gate.to_json()}, {"snap_linf", snap_linf(sol)}, {"moved", moved}, {"drift_over_window", finite_or_null(drift)}, {"multiplier_norm", multiplier_norm()}, {"retained_states", carried_.size()}, {"wall_seconds", std::chrono::duration<double>(std::chrono::steady_clock::now() - pass_start).count()}});
 
 			solve_info_["al_initial_error"] = initial_error;
 			solve_info_["al_current_error"] = current_error;
@@ -522,6 +542,7 @@ namespace polyfem::solver
 			solve_info_["al_rolled_back"] = rolled_back;
 			solve_info_["al_gate"] = gate.to_json();
 			solve_info_["al_moved"] = moved;
+			solve_info_["al_retained_states"] = carried_.size();
 			post_subsolve(al_weight);
 		}
 		nl_problem.line_search_end();

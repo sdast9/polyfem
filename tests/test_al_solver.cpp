@@ -950,6 +950,7 @@ TEST_CASE("AL pass budget ends an infeasible continuation with a named failure a
 			CHECK(std::isfinite(pass["bc_residual"].get<double>()));
 			CHECK(pass["bc_residual"].get<double>() < d["history"][0]["bc_residual"].get<double>());
 			CHECK(pass["moved"].get<double>() > 0);
+			CHECK(pass["retained_states"] == 1); // RBR-03: a cap alone keeps the previous state only
 		}
 		CHECK(d["last_pass"] == d["history"][4]);
 	}
@@ -1005,6 +1006,7 @@ TEST_CASE("AL budget that is not exhausted leaves a compatible continuation unch
 		{
 			CHECK(history_on[k]["at_ceiling"] == true);
 			CHECK(history_on[k]["moved"].get<double>() > 0);
+			CHECK(history_on[k]["retained_states"] == 3); // RBR-03: the window (2) plus the current state
 			// The fraction is probed while the snap is blocked (the last
 			// record is the feasible snap that ended the stage).
 			CHECK(history_on[k]["gate"]["ccd_fraction"].is_number() == (history_on[k]["gate"]["feasible"] == false));
@@ -1013,7 +1015,10 @@ TEST_CASE("AL budget that is not exhausted leaves a compatible continuation unch
 		// the collision gate is not evaluated once an earlier gate fails, and
 		// the CCD fraction is not probed.
 		for (size_t k = 0; k < history_off.size(); ++k)
+		{
 			CHECK(history_off[k]["gate"]["ccd_fraction"].is_null());
+			CHECK(history_off[k]["retained_states"] == 0);
+		}
 	}
 }
 
@@ -1088,5 +1093,336 @@ TEST_CASE("AL stagnation window ends a continuation blocked by a wall at the wei
 		REQUIRE(h.size() == 13);
 		for (int k = 6; k <= 12; ++k)
 			CHECK(std::abs(h[k]["bc_residual_carried"].get<double>() - .5) < .05);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RBR-03: the AL stage keeps only the full-space states its motion measures
+// need (the previous pass for `moved`, the pass W back for
+// `drift_over_window`), released when the stage ends. The complete scalar
+// pass record stays. An oracle in the tests keeps the complete state history
+// the solver no longer stores and recomputes every motion value and the
+// stagnation verdict from it.
+namespace
+{
+	// Pulls the prescribed coordinate away from its target harder than the
+	// first AL weights pull it back: the early passes raise the BC residual
+	// above its start and are rolled back (eta < 0), the later ones are kept
+	// -- a carried-state sequence with both kinds of pass.
+	struct PullAwayForm : Form
+	{
+		double stiffness = 4, anchor = 1;
+		std::string name() const override { return "pull-away"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return .5 * stiffness * std::pow(x[0] - anchor, 2) + .5 * x[1] * x[1]; }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override
+		{
+			g = Eigen::VectorXd::Zero(x.size());
+			g[0] = stiffness * (x[0] - anchor);
+			g[1] = x[1];
+		}
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override
+		{
+			h.resize(x.size(), x.size());
+			h.setZero();
+			h.coeffRef(0, 0) = stiffness;
+			h.coeffRef(1, 1) = 1;
+		}
+	};
+
+	// The complete carried-state history, rebuilt from the caller's solution
+	// at every post_subsolve (states[k] = the carried state after pass k,
+	// states[0] = the start), and the motion measures recomputed from it.
+	struct FullHistoryOracle
+	{
+		std::vector<Eigen::VectorXd> states;
+		double moved(const int k) const { return (states[k] - states[k - 1]).lpNorm<Eigen::Infinity>(); }
+		bool has_drift(const int k, const int W) const { return W > 0 && k >= W; }
+		double drift(const int k, const int W) const { return (states[k] - states[k - W]).lpNorm<Eigen::Infinity>(); }
+	};
+
+	// An independent evaluation of the stagnation rule on the scalar pass
+	// records with the oracle's drift: the first pass at which the W passes
+	// before it (inclusive) ran at the ceiling and none of the four progress
+	// signals moved against the pass before the window; -1 when never.
+	int first_stagnant_pass(const json &history, const FullHistoryOracle &oracle, const ALBudgetOptions &budget)
+	{
+		const int W = budget.stagnation_window;
+		if (W <= 0)
+			return -1;
+		const auto num = [](const json &v) { return v.is_number() ? v.get<double>() : std::numeric_limits<double>::quiet_NaN(); };
+		for (int k = W; k < int(history.size()); ++k)
+		{
+			bool at_ceiling = true;
+			for (int j = k - W + 1; j <= k; ++j)
+				at_ceiling = at_ceiling && history[j]["at_ceiling"].get<bool>();
+			if (!at_ceiling)
+				continue;
+			const json &ref = history[k - W], &last = history[k];
+			const double e_ref = num(ref["bc_residual_carried"]), e_now = num(last["bc_residual_carried"]);
+			bool progress = e_ref > 0 && e_now <= (1 - budget.progress_tolerance) * e_ref;
+			for (const char *key : {"finite_energy", "valid", "collision_free"})
+				if (ref["gate"][key].is_boolean() && last["gate"][key].is_boolean() && !ref["gate"][key].get<bool>() && last["gate"][key].get<bool>())
+					progress = true;
+			const double f_ref = num(ref["gate"]["ccd_fraction"]), f_now = num(last["gate"]["ccd_fraction"]);
+			if (std::isfinite(f_ref) && std::isfinite(f_now) && f_now >= f_ref + budget.snap_tolerance)
+				progress = true;
+			const double d = oracle.drift(k, W), linf = std::max(num(last["snap_linf"]), num(ref["snap_linf"]));
+			if (linf > 0 ? d > budget.drift_tolerance * linf : d > 0)
+				progress = true;
+			if (!progress)
+				return k;
+		}
+		return -1;
+	}
+
+	// What the budget must have done on a stage whose snap never becomes
+	// feasible: the cap is checked before the window, so stagnation ends the
+	// stage only when it is measured strictly before the cap.
+	std::pair<std::string, int> expected_exit(const json &history, const FullHistoryOracle &oracle, const ALBudgetOptions &budget)
+	{
+		const int stagnant = first_stagnant_pass(history, oracle, budget);
+		if (stagnant >= 0 && (budget.max_passes <= 0 || stagnant < budget.max_passes))
+			return {"stagnation", stagnant};
+		return {"pass_budget", budget.max_passes};
+	}
+
+	struct BoundedStageRun
+	{
+		json history;
+		FullHistoryOracle oracle;
+		size_t max_retained_seen = 0;
+		size_t retained_after = 0;
+		std::string reason;
+		int passes = -1;
+	};
+
+	// Runs a never-feasible stage under `budget` on `problem`, sampling the
+	// retained-state count at every pass and the caller's solution for the
+	// oracle; checks the bound at every pass and the release afterwards.
+	BoundedStageRun run_bounded_stage(ALSolver &solver, NLProblem &problem, const ALBudgetOptions &budget, Eigen::MatrixXd sol, const json &params)
+	{
+		solver.set_budget(budget);
+		const size_t bound = budget.enabled() ? (budget.stagnation_window > 0 ? size_t(budget.stagnation_window) + 1 : 1) : 0;
+		BoundedStageRun run;
+		run.oracle.states.push_back(sol);
+		solver.post_subsolve = [&](double) {
+			run.oracle.states.push_back(sol);
+			run.max_retained_seen = std::max(run.max_retained_seen, solver.retained_state_count());
+			CHECK(solver.retained_state_count() <= bound);
+		};
+		try
+		{
+			solver.solve_al(problem, sol, params, linear, 1);
+			FAIL("the budget must end the stage");
+		}
+		catch (const ALBudgetExhausted &e)
+		{
+			run.reason = e.details()["reason"].get<std::string>();
+			run.passes = e.details()["passes"].get<int>();
+		}
+		run.history = solver.al_history();
+		run.retained_after = solver.retained_state_count();
+		return run;
+	}
+
+	// Every pass record's motion values equal the oracle's, and the count of
+	// retained states after each pass is exactly what the window needs.
+	void check_against_oracle(const BoundedStageRun &run, const ALBudgetOptions &budget)
+	{
+		const int W = budget.stagnation_window;
+		const size_t bound = W > 0 ? size_t(W) + 1 : 1;
+		REQUIRE(run.history.size() == size_t(run.passes) + 1);
+		REQUIRE(run.oracle.states.size() == run.history.size());
+		for (int k = 0; k <= run.passes; ++k)
+		{
+			CAPTURE(k, W);
+			const json &row = run.history[k];
+			CHECK(row["pass"] == k);
+			CHECK(row["retained_states"] == std::min(size_t(k) + 1, bound));
+			if (k == 0)
+			{
+				CHECK(row["moved"] == 0.0);
+				CHECK(row["drift_over_window"].is_null());
+				continue;
+			}
+			CHECK(row["moved"].get<double>() == run.oracle.moved(k));
+			if (run.oracle.has_drift(k, W))
+				CHECK(row["drift_over_window"].get<double>() == run.oracle.drift(k, W));
+			else
+				CHECK(row["drift_over_window"].is_null());
+		}
+		CHECK(run.max_retained_seen == std::min(size_t(run.passes) + 1, bound));
+		CHECK(run.retained_after == 0);
+		const auto [reason, at] = expected_exit(run.history, run.oracle, budget);
+		CHECK(run.reason == reason);
+		CHECK(run.passes == at);
+	}
+} // namespace
+
+TEST_CASE("AL budget retains only the carried states its motion measures need, whatever the pass count", "[al_solver][al_budget]")
+{
+	// A never-feasible continuation (the gate never opens) with one Newton
+	// step per pass and a pass cap: before RBR-03 the stage kept every
+	// pass's full-space state (passes + 1 vectors); it needs the previous
+	// one and the one W passes back.
+	const auto run = [](const int max_passes, const int W) {
+		const auto mass = identity2();
+		auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+		GatedSnapProblem problem({std::make_shared<TwoQuarticsForm>()}, bc, mass, /*open_below=*/-1);
+		ALSolver solver({bc}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
+		ALBudgetOptions budget;
+		budget.max_passes = max_passes;
+		budget.stagnation_window = W;
+		const auto result = run_bounded_stage(solver, problem, budget, Eigen::VectorXd::Constant(2, 10), parameters());
+		check_against_oracle(result, budget);
+		return result;
+	};
+	SECTION("cap only: the previous state alone")
+	{
+		const auto r = run(6, 0);
+		CHECK(r.reason == "pass_budget");
+		CHECK(r.passes == 6);
+		for (int k = 0; k <= 6; ++k)
+			CHECK(r.history[k]["retained_states"] == 1);
+	}
+	SECTION("window of one: the drift is the motion of the last pass")
+	{
+		const auto r = run(6, 1);
+		for (int k = 1; k <= 6; ++k)
+			CHECK(r.history[k]["drift_over_window"] == r.history[k]["moved"]);
+	}
+	SECTION("window shorter than the stage") { run(6, 2); }
+	SECTION("window equal to the pass count: one drift, at the last pass")
+	{
+		const auto r = run(6, 6);
+		for (int k = 1; k < 6; ++k)
+			CHECK(r.history[k]["drift_over_window"].is_null());
+		CHECK(r.history[6]["drift_over_window"].is_number());
+		CHECK(r.history[6]["retained_states"] == 7);
+	}
+	SECTION("window longer than the stage: no drift, every state still needed")
+	{
+		for (const int W : {7, 100})
+		{
+			const auto r = run(6, W);
+			for (int k = 1; k <= 6; ++k)
+				CHECK(r.history[k]["drift_over_window"].is_null());
+			CHECK(r.max_retained_seen == 7);
+		}
+	}
+	SECTION("many passes: the bound does not grow with the pass count")
+	{
+		const auto r = run(200, 3);
+		CHECK(r.passes == 200);
+		CHECK(r.max_retained_seen == 4);
+		const auto c = run(200, 0);
+		CHECK(c.passes == 200);
+		CHECK(c.max_retained_seen == 1);
+	}
+}
+
+TEST_CASE("AL budget motion measures agree with a full-history oracle through rolled-back passes", "[al_solver][al_budget]")
+{
+	// The prescribed coordinate starts at .1 (target 0) under a form pulling
+	// it towards 1: the first converged passes end farther from the target
+	// than the start and are rolled back to the initial state (eta < 0), the
+	// weight doubling each time, until the penalty dominates and the passes
+	// are kept. The carried state therefore returns to pass 0 several times
+	// before it moves.
+	const auto mass = identity2();
+	auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+	GatedSnapProblem problem({std::make_shared<PullAwayForm>()}, bc, mass, /*open_below=*/-1);
+	ALSolver solver({bc}, 1, 2, 1e8, .99, [](const auto &) {});
+	ALBudgetOptions budget;
+	budget.max_passes = 12;
+	budget.stagnation_window = 2;
+	Eigen::MatrixXd start(2, 1);
+	start << .1, 10;
+	const auto run = run_bounded_stage(solver, problem, budget, start, parameters());
+	check_against_oracle(run, budget);
+	int rolled_back = 0, kept = 0;
+	for (int k = 1; k <= run.passes; ++k)
+	{
+		CAPTURE(k);
+		if (run.history[k]["rolled_back"].get<bool>())
+		{
+			++rolled_back;
+			CHECK(run.history[k]["subsolve"]["outcome"] == "converged");
+			CHECK(run.oracle.states[k] == run.oracle.states[0]);
+		}
+		else
+		{
+			++kept;
+			CHECK(run.oracle.states[k] != run.oracle.states[0]);
+		}
+	}
+	CHECK(rolled_back >= 2);
+	CHECK(kept >= 2);
+	CHECK(run.history[1]["rolled_back"] == true);
+	CHECK(run.history[run.passes]["rolled_back"] == false);
+	CHECK(run.reason == "pass_budget");
+}
+
+TEST_CASE("AL stagnation exit is unchanged by the bounded storage: the wall fixture stops where the full history says", "[al_solver][al_budget]")
+{
+	// The wall fixture of the stagnation test, under a window with and
+	// without a cap: the exit pass, the reason and every motion value are
+	// what the complete history gives, and the stage retained W + 1 states
+	// from pass W on.
+	const auto run = [](const int max_passes, const int W) {
+		const auto mass = identity2();
+		auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+		NLProblem problem(2, 0, {std::make_shared<QuadraticFreeForm>(), std::make_shared<WallForm>()}, {bc}, polysolve::linear::Solver::create(linear, logger()), 1, 1, mass, 1);
+		ALSolver solver({bc}, 1, 2, 4, .99, [](const auto &) {});
+		ALBudgetOptions budget;
+		budget.max_passes = max_passes;
+		budget.stagnation_window = W;
+		Eigen::MatrixXd start(2, 1);
+		start << 2, 2;
+		const auto result = run_bounded_stage(solver, problem, budget, start, wall_parameters());
+		check_against_oracle(result, budget);
+		return result;
+	};
+	const auto window_only = run(0, 3);
+	CHECK(window_only.reason == "stagnation");
+	CHECK(window_only.passes >= 3);
+	CHECK(window_only.max_retained_seen == 4);
+	const auto both = run(100, 3);
+	CHECK(both.reason == "stagnation");
+	CHECK(both.passes == window_only.passes);
+	CHECK(both.history.size() == window_only.history.size());
+	for (size_t k = 0; k < both.history.size(); ++k)
+	{
+		CAPTURE(k);
+		CHECK(both.history[k]["moved"] == window_only.history[k]["moved"]);
+		CHECK(both.history[k]["drift_over_window"] == window_only.history[k]["drift_over_window"]);
+		CHECK(both.history[k]["bc_residual_carried"] == window_only.history[k]["bc_residual_carried"]);
+	}
+	// A cap inside the window's reach wins (checked first).
+	const auto capped = run(std::max(1, window_only.passes - 1), 3);
+	CHECK(capped.reason == "pass_budget");
+	CHECK(capped.passes == std::max(1, window_only.passes - 1));
+}
+
+TEST_CASE("AL stage without a budget retains no carried state", "[al_solver][al_budget][al_continuation]")
+{
+	// The PF-07 continuation with the budget off: nothing is stored for the
+	// motion measures and every pass record says so.
+	const auto mass = identity2();
+	auto bc = std::make_shared<BCLagrangianForm>(2, std::vector<int>{0}, mass, 0, Eigen::VectorXd::Zero(2));
+	GatedSnapProblem problem({std::make_shared<TwoQuarticsForm>()}, bc, mass, .5);
+	ALSolver preparation({bc}, 3, 2, 5, 1.0, [](const auto &) {}, restart_options(0), [](const auto &) { return true; });
+	size_t max_retained = 0;
+	preparation.post_subsolve = [&](double) { max_retained = std::max(max_retained, preparation.retained_state_count()); };
+	Eigen::MatrixXd sol = Eigen::VectorXd::Constant(2, 10);
+	REQUIRE_NOTHROW(preparation.solve_al(problem, sol, parameters(), linear, 1));
+	CHECK(max_retained == 0);
+	CHECK(preparation.retained_state_count() == 0);
+	REQUIRE(preparation.al_history().size() >= 4);
+	for (const json &row : preparation.al_history())
+	{
+		CHECK(row["retained_states"] == 0);
+		CHECK(row["moved"] == 0.0);
+		CHECK(row["drift_over_window"].is_null());
 	}
 }

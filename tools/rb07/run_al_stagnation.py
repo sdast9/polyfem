@@ -27,8 +27,12 @@ extracts the pass history (weight, subsolve outcome and iterations, BC error,
 relative progress) from the debug log: at the baseline the incompatible scenes
 do not stop. `--stage validate` runs them with the budget given by --budget
 (and the compatible scene with and without it) and checks the named failure,
-its exit status, the manifest's `al_stagnation` record, the RB-06 rollback and
-that nothing of the failed step was published. Standard-library Python only.
+its exit status, the manifest's `al_stagnation` record, the RB-06 rollback,
+that nothing of the failed step was published, and (RBR-03) that the stage
+retained at most `stagnation_window + 1` full-space states (one under a pass
+cap alone) at every pass -- from the failure record's pass history and, for
+the compatible scene, from the manifest's AL subsolve entries
+(`al_retained_states`). Standard-library Python only.
 Preserves every run; never overwrites the output directory.
 """
 import argparse
@@ -70,6 +74,21 @@ class Check:
         if not ok:
             self.failed += 1
         print(f"  [{'pass' if ok else 'FAIL'}] {name}{(': ' + str(detail)) if detail else ''}", flush=True)
+
+
+def retained_bound(budget):
+    """RBR-03: the most full-space states the AL stage may keep for its motion measures."""
+    window = int(budget.get('stagnation_window', 0) or 0)
+    return window + 1 if window > 0 else 1
+
+
+def check_retained(check, run, name, counts, passes, budget):
+    """counts: the retained-state counts a run recorded, one per record (None where a record lacks the field)."""
+    missing = [c for c in counts if c is None]
+    if not counts or missing:
+        check(run, name, False, f'{len(missing)} of {len(counts)} records lack the retained-state count (a binary before RBR-03?)')
+        return
+    check(run, name, max(counts) <= retained_bound(budget), dict(max_retained=max(counts), bound=retained_bound(budget), passes=passes, records=len(counts)))
 
 
 def base_scene():
@@ -215,6 +234,12 @@ def main():
             if manifest_on.exists():
                 steps = json.loads(manifest_on.read_text()).get('steps', [])
                 check('compatible-multipass-on', 'accepted step with no al_stagnation record', bool(steps) and steps[0]['outcome'] == 'accepted' and steps[0].get('al_stagnation') is None)
+                # RBR-03: every AL pass of the accepted step reports how many
+                # full-space states the stage kept; the bound is the window's.
+                al_entries = [entry for entry in (steps[0].get('subsolves', []) if steps else []) if entry.get('type') == 'al']
+                check('compatible-multipass-on', 'one AL subsolve entry per pass', len(al_entries) == on['al_passes'], (len(al_entries), on['al_passes']))
+                check_retained(check, 'compatible-multipass-on', 'retained full-space states bounded by the window over every pass',
+                               [entry.get('al_retained_states') for entry in al_entries], on['al_passes'], args.budget)
         for scene in ('incompatible-collision', 'incompatible-crush'):
             if scene not in scenes:
                 continue
@@ -240,6 +265,11 @@ def main():
                         if stagnation.get('reason') == 'stagnation':
                             check(scene, 'stagnation: no progress signal over the window', not any(stagnation.get('progress', {}).values()), stagnation.get('progress'))
                             check(scene, 'stagnation: the window ran at the weight ceiling', all(r.get('at_ceiling') for r in stagnation['history'][-stagnation['window']:]), stagnation.get('window'))
+                        # RBR-03: the pass history says how many full-space
+                        # states the stage kept after each pass (pass 0 = the
+                        # start); never more than the window needs.
+                        check_retained(check, scene, 'retained full-space states bounded by the window over every pass',
+                                       [r.get('retained_states') for r in stagnation.get('history', [])], stagnation.get('passes'), args.budget)
                     rollback = last.get('rollback', {})
                     check(scene, 'rollback performed and verified', rollback.get('performed') is True and rollback.get('verified') is True, rollback)
                     check(scene, 'error names the AL stage', 'augmented' in str(last.get('error', '')).lower() or 'AL ' in str(last.get('error', '')), last.get('error'))

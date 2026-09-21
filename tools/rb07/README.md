@@ -28,7 +28,12 @@ exit status 1, the manifest's `al_stagnation` record (reason, pass history,
 blocking gate, window at the ceiling with no progress signal), the verified
 RB-06 rollback, that nothing of the step was published, and — for the
 compatible scene — that the budget-on run has the same passes and a
-byte-identical endpoint as the budget-off run. `results.json` keeps every
+byte-identical endpoint as the budget-off run. Since RBR-03 (2026-09-21) it
+also checks that the stage retained at most `stagnation_window + 1`
+full-space states (one under a pass cap alone) after every pass: from the
+failure record's pass history (`retained_states`) and, for the compatible
+scene, from the manifest's AL subsolve entries (`al_retained_states`); a
+binary without the field fails the check by name. `results.json` keeps every
 command, exit status, input hash, pass history and check; the output directory
 is never overwritten.
 
@@ -42,6 +47,11 @@ of the snap and the iterate drift, and on that fixture never fires.
 
 The in-process counterparts are `unit_tests "[al_budget]"`
 (`tests/test_al_solver.cpp`: option parsing, the pass cap, an unexhausted
-budget on the PF-07 continuation, the stagnation window on a synthetic wall;
-`tests/test_step_rollback.cpp`: the public transient fixture driven below the
-slab at step 2, rolled back and recorded).
+budget on the PF-07 continuation, the stagnation window on a synthetic wall,
+and — RBR-03 — the bounded carried-state storage checked against a
+full-history oracle: the retained count at every pass for W = 0, 1, 2,
+W = passes, W > passes and 200 passes, the motion values through rolled-back
+passes, the wall fixture's exit pass with and without a cap, and no storage
+without a budget; `tests/test_step_rollback.cpp`: the public transient
+fixture driven below the slab at step 2, rolled back and recorded, with the
+retained count in its manifest).

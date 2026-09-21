@@ -7,6 +7,7 @@
 
 #include <Eigen/Core>
 
+#include <deque>
 #include <functional>
 #include <limits>
 #include <optional>
@@ -123,6 +124,13 @@ namespace polyfem::solver
 		///        (pass 0 is the state the stage started from), also carried
 		///        by info()["al_history"] when the stage fails.
 		const json &al_history() const { return al_history_; }
+		/// @brief RBR-03: the full-space states solve_al currently keeps for
+		///        its motion measures (`moved`, `drift_over_window`): none
+		///        outside the stage or without a budget, one under a pass cap
+		///        alone, at most stagnation_window + 1 under a window, whatever
+		///        the pass count. Each pass record carries it as
+		///        `retained_states`.
+		size_t retained_state_count() const { return carried_.size(); }
 
 		/// @brief Optional filter applied to every Newton update direction
 		///        (installed on the nonlinear solver for each subsolve).
@@ -175,6 +183,14 @@ namespace polyfem::solver
 
 		ALBudgetOptions budget_;
 		json al_history_ = json::array();
+		/// @brief RBR-03: the carried full-space states of the passes the
+		///        motion measures still need -- the previous pass for `moved`
+		///        and the pass stagnation_window back for `drift_over_window`
+		///        -- bounded by the window and released when solve_al ends.
+		///        Pass 0 (the state the stage started from) is a real entry.
+		///        The scalar pass records stay complete; only vectors are
+		///        bounded.
+		std::deque<Eigen::VectorXd> carried_;
 
 		/// @brief Stall detection and restart options
 		const StallRestartOptions stall_opts;

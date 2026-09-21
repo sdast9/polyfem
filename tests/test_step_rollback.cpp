@@ -680,8 +680,15 @@ TEST_CASE("An AL stage ended by its budget is rolled back to the accepted state 
 			++al_subsolves;
 			CHECK(subsolve.contains("al_bc_residual"));
 			CHECK(subsolve.contains("al_gate"));
+			// RBR-03: the stage keeps at most window + 1 full-space states
+			// for its motion measures, whatever the pass count.
+			REQUIRE(subsolve.contains("al_retained_states"));
+			CHECK(subsolve["al_retained_states"].get<int>() <= 4);
+			CHECK(subsolve["al_retained_states"].get<int>() >= 1);
 		}
 	CHECK(al_subsolves == passes);
+	for (const json &row : stagnation["history"])
+		CHECK(row["retained_states"].get<int>() <= 4);
 	CHECK_THAT(step["error"].get<std::string>(), ContainsSubstring("Augmented-Lagrangian stage"));
 
 	// The RB-04 failure record names the AL phase and announces the rollback.

@@ -101,8 +101,10 @@ namespace polyfem::varform
 					// RB-07: what each AL pass left behind -- the BC residual
 					// (length units, sqrt of the summed squared constrained-DOF
 					// residuals), PF-07's relative progress, whether the weight
-					// was at its ceiling and the snap gate after the pass.
-					for (const char *key : {"al_pass", "al_at_ceiling", "al_bc_residual", "al_relative_progress", "al_rolled_back", "al_moved"})
+					// was at its ceiling and the snap gate after the pass;
+					// RBR-03: how many full-space states the stage retained
+					// for its motion measures after the pass.
+					for (const char *key : {"al_pass", "al_at_ceiling", "al_bc_residual", "al_relative_progress", "al_rolled_back", "al_moved", "al_retained_states"})
 						if (detail.contains(key))
 							entry[key] = detail[key];
 					if (detail.contains("al_gate") && detail["al_gate"].is_object())

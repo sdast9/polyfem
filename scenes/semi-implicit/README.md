@@ -151,7 +151,12 @@ compatible 0.3 compression under interrupted passes needs 105 passes and is
 unchanged under `{max_passes: 200, stagnation_window: 3}`; a bottom face driven
 0.05 into the slab stagnates at pass 10 (passes 8–10 at the ceiling); a top
 face driven down by the cube height is not stagnant by these signals (the
-crush keeps moving) and ends by the pass cap. See
+crush keeps moving) and ends by the pass cap. A budget's memory is bounded
+(RBR-03, 2026-09-21): the stage keeps at most `stagnation_window + 1`
+full-space states for its motion measures (one under a pass cap alone) —
+the count is in every pass record (`retained_states`) and manifest AL entry
+(`al_retained_states`); the scalar pass history itself still grows with
+the passes. See
 [docs/rb-07-validation.md](../../docs/rb-07-validation.md).
 
 ### Run manifest (RB-12)

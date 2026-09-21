@@ -59,7 +59,9 @@ current.
   be bounded on request (`solver.augmented_lagrangian.budget`: a pass cap
   and a stagnation window; off by default, [RB-07](docs/rb-07-validation.md),
   2026-09-15 — a motion that can never be snapped otherwise keeps the loop
-  running until the process is killed). See also
+  running until the process is killed; since 2026-09-21 a budget keeps at
+  most `stagnation_window + 1` full-space states instead of every pass's,
+  RBR-03). See also
   [floor retirement](docs/pf-02-floor-removal.md),
   [semi-implicit usage](scenes/semi-implicit/README.md) and
   [VarForm architecture](docs/varform-design.md).

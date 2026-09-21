@@ -1,7 +1,8 @@
 # Implementation handoff for the completed-RB review — 2026-09-20
 
-**Status: plans; RBR-01, RBR-02 and RBR-05 implemented 2026-09-20 (see
-their sections), RBR-03 and RBR-04 as recorded in their sections.** Context
+**Status: plans; RBR-01, RBR-02 and RBR-05 implemented 2026-09-20 and
+RBR-03 on 2026-09-21 (see their sections), RBR-04 as recorded in its
+section.** Context
 and verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
@@ -208,6 +209,16 @@ for UP-05; it is not the separate RB-24 CCD/thread-memory work.
 
 ## RBR-03 — Bounded iterate storage for the AL budget
 
+**Status: implemented 2026-09-21** — see the
+[RB-07 record](rb-07-validation.md#rbr-03--bounded-carried-state-storage-for-the-budget-2026-09-21)
+(`ALSolver::carried_`, a deque of at most `stagnation_window + 1` full-space
+states — one under a pass cap alone, none without a budget — evicted before
+each pass's state enters and released with the stage; the retained count in
+every pass record and manifest AL subsolve entry; the `[al_budget]`
+full-history oracle; the three public budgets stop at the same pass with the
+same reason, gate history and byte-identical compatible endpoint; the scalar
+pass history is still complete). The text below is the plan as handed off.
+
 **Parent item:** RB-07. **Priority:** P2 for large opt-in runs.
 **Evidence:** source-confirmed storage growth; no deliberate OOM was run.
 
@@ -411,9 +422,9 @@ binary). The five public smokes are bit-identical to the baseline binary.
 
 ## Suggested implementation order and copy-ready prompts
 
-RBR-01, RBR-02 and RBR-03 are independent; RBR-05 is done. RBR-04 begins
-with a reproduction and must not be folded into an unrelated arithmetic
-repair. RBR-01 has the
+RBR-01, RBR-02 and RBR-03 are independent and done; RBR-05 is done. RBR-04
+begins with a reproduction and must not be folded into an unrelated
+arithmetic repair. RBR-01 has the
 most direct effect on ordinary quantitative output; RBR-02 hardens resource
 containment; RBR-03 prevents the optional budget from becoming a large
 memory consumer. None requires work on RB-23 or RB-24.
