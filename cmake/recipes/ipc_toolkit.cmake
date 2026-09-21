@@ -7,7 +7,8 @@
 # budget's counts are checked arithmetic (a count beyond size_t is "at
 # least", never wrapped), a hash grid the key cannot index is refused by
 # name (BroadPhaseUnrepresentable) and non-finite positions are refused
-# before any conversion (RBR-02). The pin follows the fork's
+# before any conversion (RBR-02; 482b9eab is a tests-only follow-up for the
+# Windows lane, library sources identical). The pin follows the fork's
 # semi-implicit-stiffness branch.
 # License: MIT
 
@@ -18,4 +19,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#a28de2dbe38f99d5304aada6a42c11033f6d2d90")
+CPMAddPackage("gh:sdast9/ipc-toolkit#482b9eab2f81bbc5ee59586f80ffb041bcd488dd")
