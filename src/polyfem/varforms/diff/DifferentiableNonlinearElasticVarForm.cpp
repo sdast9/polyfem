@@ -284,6 +284,17 @@ namespace polyfem::varform
 		solver::NLProblem &nl_problem = *solve_data_.nl_problem;
 		assert(solution.size() == rhs_.size());
 
+		// RBR-01 (review of 2026-09-21): this dispatch does not pass through
+		// the base solve, which states the phase for the ordinary loop, so it
+		// states it here. Every output of this step's solve -- the subsolve
+		// sequence below, the step callback and the frame the transient loop
+		// saves before advancing -- describes an endpoint of the current step
+		// against the previous step's history; the loop's update_quantities
+		// moves the phase back to the head. This dispatch carries no RB-06
+		// transaction (documented), so a failed solve ends the run with the
+		// phase left at the attempt and the next solve's init resets it.
+		output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
+
 		if (nl_problem.uses_lagging())
 		{
 			if (init_lagging)

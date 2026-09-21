@@ -42,7 +42,11 @@ model/physical-validation limits remain outside this verdict.
 
 ## Finding: RBR-01 leaves differentiable output at the previous time step
 
-**Priority P2; reproduced; repair pending.**
+**Priority P2; reproduced; repaired 2026-09-21** — the differentiable
+dispatch now states `CurrentStepBeforeAdvance` and the `[output_kinematics]`
+regression exercises both modes through the public differentiable solve;
+see the [RB-04 record](rb-04-validation.md#rbr-01-follow-up--the-differentiable-solve-dispatch-2026-09-21).
+The text below is the finding as reviewed.
 
 Source locations at the reviewed revision:
 

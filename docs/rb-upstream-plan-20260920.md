@@ -84,8 +84,9 @@ Prepare separate patches:
    contract, not the 2026-09-12 helper. The
    [2026-09-21 implementation review](rbr-implementation-review-20260921.md)
    found a missing `CurrentStepBeforeAdvance` transition in the specialized
-   differentiable solve. Complete that follow-up and include a
-   `differentiable=true` callback/VTU regression before proposing this port.
+   differentiable solve; repaired 2026-09-21 with a `differentiable=true`/
+   `false` callback/VTU regression (`[output_kinematics][differentiable]`),
+   which the port must carry.
 
 Acceptance: real time-dependent linear input, not a preset analytical
 problem whose `is_time_dependent` is false; static/quasistatic equivalence

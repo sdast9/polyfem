@@ -630,14 +630,14 @@ iterate; RB-10 owns friction accuracy; RB-09 owns the physical threshold that
 
 ## RBR-01 — explicit output time state (2026-09-20)
 
-**Review follow-up, 2026-09-21: repair pending for the differentiable
-transient branch.** The [implementation review](rbr-implementation-review-20260921.md)
-reproduced previous-step kinematics in its callback and VTU output when
-`differentiable=true`; the separate override never sets the pre-advance
-phase. The ordinary-path and helper results below remain valid, but the
-claim that every owner transition is covered is incomplete. The review
-contains the reproduction and a bounded coding plan; no source repair was
-made during that review.
+**Review follow-up, 2026-09-21: the differentiable transient branch is
+repaired** — see the [follow-up section](#rbr-01-follow-up--the-differentiable-solve-dispatch-2026-09-21)
+below. The [implementation review](rbr-implementation-review-20260921.md)
+had reproduced previous-step kinematics in the callback and VTU output when
+`differentiable=true`: the separate solve override never set the pre-advance
+phase. The ordinary-path and helper results below were valid throughout;
+the claim that every owner transition was covered was incomplete until the
+follow-up.
 
 **Status: repaired and validated within stated scope.** The
 [completed-RB review](rb-completed-review-20260920.md) found that
@@ -773,3 +773,92 @@ HDA asset changed by this item.
   equality heuristic took the differencing path there because the
   displacement changes every step) and by the independent Newmark check;
   no thermoelastic hold scene was run.
+
+## RBR-01 follow-up — the differentiable solve dispatch (2026-09-21)
+
+**Status: repaired and validated within stated scope.** The
+[implementation review](rbr-implementation-review-20260921.md) found that
+`DifferentiableNonlinearElasticVarForm::solve_tensor_nonlinear` takes its
+own path when `differentiable=true` (the class the adjoint optimization
+drives through `AdjointNLProblem::solve_pde`) and never passes through the
+base solve that states `CurrentStepBeforeAdvance`; the differentiable
+transient loop saves before advancing, so its step callback, subsolve
+sequence and saved frames described the new displacement with the previous
+step's kinematics (.2 instead of .4 at the first move, .4 instead of 0 at
+the first hold). The changed endpoint was a regression of the 2026-09-20
+repair (the equality heuristic had differenced it); the held endpoint was
+the original defect on a path the first repair did not reach.
+
+Started on `main` at `ad109b58b` (the review's commit; code as reviewed at
+`303b54cc0`; clean tree; effective IPC `482b9eab`, PolySolve `bce32a39`,
+both equal to the pins; shared `build/`, RelWithDebInfo, optimization and
+Python on; no other task in the checkout). Evidence: parent
+`outputs/rbr-01/20260921T130328Z-differentiable/` (`baseline/provenance.txt`,
+`baseline-bin/`, `control/` — the new tests on the unchanged sources and
+the fixture run through a probe linked against the unrepaired library —,
+`candidate/` with `tested.patch`, binaries, every selection log and the
+same probe linked against the repaired library, `probe.cpp` and its build
+commands from the review's recipe, the comparisons). No dependency,
+tolerance, default, optimization policy or HDA asset changed; no private
+scene or Teseo ran.
+
+### What changed
+
+- `DifferentiableNonlinearElasticVarForm::solve_tensor_nonlinear`: the
+  differentiable branch states `CurrentStepBeforeAdvance` before its first
+  output (the `save_subsolve(0, …)` of the step), so the subsolve sequence,
+  the step callback and the frame all describe the current step against the
+  previous step's history; the loop's `update_quantities` reset to
+  `HistoryHead` (2026-09-20) stands. The branch carries no RB-06 transaction
+  (documented), so a failed solve ends the run with the phase at the attempt
+  and the next solve's `init_solve_data` resets it. Lagging behaviour, the
+  base branch's rollback, derivative-cache timing, force scaling and
+  convergence logic are untouched.
+- `tests/test_output_kinematics.cpp`: the public fixture now moves at step 1,
+  holds for two steps and moves back to .05 at step 4 (`0.1*min(t/dt,1)
+  - 0.05*max((t-3dt)/dt, 0)`), so the export after the last advance is not a
+  zero-motion tail; the hand-computed face values are u .0/.1/.1/.1/.05,
+  v .2/.4/0/0/−.2, a 0/.8/−1.6/0/−.8; the oracle helpers (hold pattern,
+  Euler reference, face values, saved-VTU rule) are shared. The staged-loop
+  test keeps its before/after-advance control. New
+  `[output_kinematics][scene][differentiable]`: the differentiable transient
+  class through `State::init(args, true, true)` and its public
+  `solve(sol, nullptr, callback, differentiable)` for both modes — the
+  callback's kinematics, the face values, the saved frames against the rule
+  on the saved displacements, the output after the final advance (same
+  kinematics from the other phase), the last subsolve export of the last
+  step equal to its frame, and the two dispatches' displacements equal.
+  Material, mesh, dt and solver tolerances of the fixture are unchanged.
+
+### Validation
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| New tests on the unchanged sources (control) | `differentiable=true` fails with the review's values, `false` and the staged loop pass | 190 assertions fail, all `differentiable := true` (v .2 vs .4 at step 1, .4 vs 0 at step 2, …); 1 case passed / 1 failed (`control/output_kinematics_scene.log`) | Reproduced |
+| New tests on the repair | Pass | `[output_kinematics]` 6 cases / 2,596 assertions | Pass |
+| `[output_kinematics],[time_integrator],[linear_elastic],[fully_prescribed],[rollback]` (seed 1) | No failure | 29 cases / 6,751 assertions | Pass |
+| `[opt_gradient],[optimization]` (`tests/test_diff.cpp`, `tests/test_opt.cpp`; incl. `material-transient`, `damping-transient`, `shape-transient-friction*`; seed 1, 16 min) on the repaired binary | No failure | 41 cases / 92 assertions (`candidate/opt-tests/opt-tests.log`) | Pass |
+| Same fixture, probe linked against the unrepaired and the repaired library, `differentiable=false` | Every VTU field identical | 42 fields × 5 frames and 5 subsolve exports identical | Pass |
+| Same, `differentiable=true` | Only `velocity`/`acceleration` differ, only at the affected steps; displacements and forces identical | 40 of 42 fields identical incl. all 10 force fields; `velocity` differs at frames 1, 2, 4 (.2, .4, .2) and `acceleration` at 1–4 (.8, 2.4, 1.6, .8): the corrections; the same for the subsolve exports | Pass |
+| Callback and frames vs the independent Euler rule, both modes, repaired library | ≤ 1e-12 | 0 at every step; the output after the final advance equals the step-4 values (v −.2, a −.8 on the face) in both modes; the unrepaired library fails for `true` only (`control/probe-run/callback-kinematics.json`) | Pass |
+| clang-format on changed hunks, `git diff --check` | Clean | Clean | Pass |
+
+### Publication
+
+Tested binaries: `PolyFEM_bin` `fcc3d157…`, `unit_tests` `9492893c…`
+(`candidate/probe-and-final-binaries.sha256`; sources identical to the
+first repaired build `candidate/bin/`); `tested.patch` in `candidate/`. The
+commit on `sdast9/polyfem:main` is recorded in the hash note that follows.
+No companion pin or HDA asset changed.
+
+### Limits
+
+- Only the transient differentiable dispatch exports time kinematics; the
+  static and homogenization dispatches carry no integrator.
+- The differentiable branch has no rollback transaction, as documented for
+  RB-06; a failed differentiable solve leaves the phase at the attempt, which
+  no output reads before the next solve's initialization.
+- The adjoint derivatives are not affected by the output phase (they read
+  the integrator through `DiffCache`, which states its own step), and this
+  follow-up does not re-validate them beyond the existing
+  `[opt_gradient]` selection.

@@ -4,8 +4,9 @@
 RBR-03 and RBR-04 on 2026-09-21 (see their sections).** The
 [implementation review of 2026-09-21](rbr-implementation-review-20260921.md)
 reproduced an RBR-01 regression in the differentiable transient path and
-provides a bounded follow-up plan; no additional actionable defect was
-found in RBR-02–RBR-05 within that review's scope. Context
+provided a bounded follow-up plan, implemented the same day; no additional
+actionable defect was found in RBR-02–RBR-05 within that review's scope.
+Context
 and verdicts are in the
 [review](rb-completed-review-20260920.md). The user explicitly requested
 detailed plans for other models to code later. This document is not a
@@ -40,15 +41,19 @@ Do not use `git add -A` in the shared checkout.
 
 ## RBR-01 — Explicit output time state instead of position equality
 
-**Status: implemented 2026-09-20; differentiable-path follow-up pending
-after the 2026-09-21 review** — see the
+**Status: implemented 2026-09-20; the differentiable-path follow-up of
+the 2026-09-21 review implemented 2026-09-21** — see the
 [RB-04 record](rb-04-validation.md#rbr-01--explicit-output-time-state-2026-09-20)
 (`varform::OutputTimePhase`, owner-maintained; `[output_kinematics]` incl. the
 hold-segment VTU scene; solutions/forces identical, only the held-step
 kinematics changed in the validated ordinary path). The
 [follow-up finding and coding plan](rbr-implementation-review-20260921.md)
-cover the separate differentiable solve branch, which never sets
-`CurrentStepBeforeAdvance`. The text below is the original plan as handed off.
+covered the separate differentiable solve branch, which never set
+`CurrentStepBeforeAdvance`; it now states the phase and a
+`differentiable=true`/`false` regression through the public differentiable
+solve is in `[output_kinematics]` (see the
+[RB-04 record](rb-04-validation.md#rbr-01-follow-up--the-differentiable-solve-dispatch-2026-09-21)).
+The text below is the original plan as handed off.
 
 **Parent item:** RB-04; affects all transient stiffness modes and potentially
 contact-free output. **Priority:** P2. **Evidence:** reproduced in the real
