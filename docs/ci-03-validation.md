@@ -213,7 +213,7 @@ set; none is a physical certification (RB-09's limits apply).
 | `triangle_data` | same | only `contact/examples/3D/higher-order/microstructure.json` (CI-05) fails | 6/7 authenticated (P1–P4, `P4-dt=0.01` and its twin); `microstructure` refused by the RB-05 budget (65,153,532 emissions > 50,000,000) | pass (CI-05 unchanged) |
 | Dissipation sign | the 8 `-diag` runs | `frictional_dissipation_increment ≥ 0` per accepted step | ≥ 0 at every step of both mass-ratio scenes at every budget; the ball's step 15 negative at every budget (BDF2 convention, above) | pass / observation |
 | Formatting / diff | `clang-format` on `verify_run.cpp`, `git diff --check`, JSON parse of the fixtures, `py_compile` of the tools | no issue | clang-format 21.1.8 (the audit's venv) and 23.1.1 report `verify_run.cpp` clean; `git diff --check` clean; the six fixtures parse; the four tools compile | pass |
-| Native lanes | the Build run of this publication | Linux Release and macOS Release: `contact_3d` green, `contact_2d` and `triangle_data` failing only on CI-06 / CI-05, the `[data]` case green with the fork's data pin | read after publication (see the plan's implementation update) | pending at publication |
+| Native lanes | [Build run 35617547219](https://github.com/sdast9/polyfem/actions/runs/35617547219) (`0c129dcfb` = this publication + the GCC brace fix below) | Linux Release and macOS Release: `contact_3d` green, `contact_2d` and `triangle_data` failing only on CI-06 / CI-05, the `[data]` case green with the fork's data pin | **Linux Release 378/381, macOS Release 377/380**: all six CI-03 fixtures authenticate on both, `contact_3d` and the `[data]` classification pass on both, the failures are exactly `contact_2d` (cube-on-floor), `standard` (stretch-cubes) and `triangle_data` (microstructure); Windows Release green; logs in `outputs/…/ci-35617547219/` | pass |
 
 - Not performed: Windows (its Release lane does not run the scene groups —
   CI-07 item 3), the `slow` group, any private scene; no threaded run (the
@@ -237,6 +237,15 @@ set; none is a physical certification (RB-09's limits apply).
   [tools/ci03/README.md](../tools/ci03/README.md).
 - Shared `polyfem/build`: only `unit_tests` was rebuilt (the harness hook);
   its configuration is unchanged (Triangle off).
+- Outside this item's scope, on the way to reading the lanes: the first run
+  of this publication (35614301190) could not build on GCC — the RBR-01
+  follow-up `924a8597f` had initialised three `std::array<double, 5>` in
+  `tests/test_output_kinematics.cpp` with single braces (`-Werror=missing-braces`,
+  the CI-01 pattern) and its own run had been cancelled before a GCC lane
+  compiled it; repaired with nested braces in `0c129dcfb` (`[output_kinematics]`
+  2,596 assertions pass locally). The same run's Windows Release lane failed
+  on a transient 404 of the sccache 0.17.0 release asset in `choco install`;
+  the rerun was green.
 
 ## Next session handoff
 
@@ -272,4 +281,8 @@ Append-only. Newest entry last.
 - **14:55Z** — Groups read: `contact_3d` 50/50, `contact_2d` 28/29
   (cube-on-floor, CI-06), `triangle_data` 6/7 (microstructure, CI-05).
   Record, plan, RB-10 note, READMEs written; formatting checked with the
-  pinned clang-format; publication.
+  pinned clang-format; publication `bf6ea5c58` / `1c326d289`.
+- **16:35Z** — Native acceptance read from run 35617547219 (after the GCC
+  brace fix `0c129dcfb`): Linux Release 378/381, macOS Release 377/380, the
+  six fixtures authenticated on both, `contact_3d` green, only CI-04/05/06
+  left.

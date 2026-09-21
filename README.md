@@ -31,9 +31,10 @@ current.
   three friction fixtures that RB-10's `friction_iterations` default had
   moved now state the budget their references were generated under and have
   `-friction-defaults` twins at the current default, on the data fork
-  `sdast9/polyfem-data@e6ed5cf` (branch `fable-fixtures`); `contact_3d` is
-  expected green from this publication on, `contact_2d` and `triangle_data`
-  keep only their CI-06 / CI-05 failures. The hidden CTest case
+  `sdast9/polyfem-data@e6ed5cf` (branch `fable-fixtures`); read natively from
+  run 35617547219 (`0c129dcfb`): Linux Release 378/381 and macOS Release
+  377/380 with `contact_3d` green on both, the only failures the CI-04/05/06
+  groups (`standard`, `contact_2d`, `triangle_data`). The hidden CTest case
   `run_manifest_env` runs any scene manifest against any data directory
   through the scene harness (`POLYFEM_RUN_MANIFEST`, `POLYFEM_RUN_DATA_DIR`).
   Every `PolyFEM_bin` run writes a `run-manifest.json`
