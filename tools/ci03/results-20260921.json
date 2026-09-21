@@ -1,0 +1,2215 @@
+{
+  "evidence": "20260921T142215Z",
+  "fixtures": {
+    "fixtures": [
+      {
+        "historical": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+        "historical_sha256_after": "6c254570897b44d9088ec9f2893735293084502627e268b1d951823b1e4daa41",
+        "historical_sha256_before": "1354626d3d74fb490db490c4dd670e88f559edaddb064255de03a6d7465da0ae",
+        "historical_status": "pinned",
+        "slug": "2d-large-mass-ratio",
+        "twin": "contact/examples/2D/large-ratios/large-mass-ratio-friction-defaults.json",
+        "twin_sha256": "d8f4554361ee9e89c487af1454d1b49e35dce337244cdb23a407a56bc2572e19",
+        "twin_tests": {
+          "err_h1": 0.2501306299601777,
+          "err_h1_semi": 0.14544130541023184,
+          "err_l2": 0.20349977573659148,
+          "err_linf": 0.2247405358516794,
+          "err_linf_grad": 0.2247405358516794,
+          "err_lp": 0.2100766266232714,
+          "margin": 1e-05,
+          "time_steps": "all"
+        }
+      },
+      {
+        "historical": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+        "historical_sha256_after": "987cb30cb432e04b6e8fcea862a95c91bdd5535bd351de25be82a1edec867ddc",
+        "historical_sha256_before": "8605946a2ec5b6c3e090bf3aa96ff5aada1cc7fda115681bb668171a15a46c24",
+        "historical_status": "pinned",
+        "slug": "3d-large-mass-ratio",
+        "twin": "contact/examples/3D/large-ratios/large-mass-ratio-friction-defaults.json",
+        "twin_sha256": "43f2b3cd002a472e482c16c3c7a5dca5b3e42cd30d440ccfc31e77a48da9a475",
+        "twin_tests": {
+          "err_h1": 0.1763354083752956,
+          "err_h1_semi": 0.03549152967293719,
+          "err_l2": 0.17272674248175146,
+          "err_linf": 0.17622780331681223,
+          "err_linf_grad": 0.17622780331681223,
+          "err_lp": 0.17285396112451368,
+          "margin": 1e-05,
+          "time_steps": "all"
+        }
+      },
+      {
+        "historical": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+        "historical_sha256_after": "8ee82a91b61d3c6add83931eb9ed4c7a64681997d530bb80625696658bfe7941",
+        "historical_sha256_before": "e674b15a1c60c63600e1db19e8a4a52744c0d4266a5dd120df63450a40f4ac73",
+        "historical_status": "pinned",
+        "slug": "ball-bounce-p4-dt0.01",
+        "twin": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01-friction-defaults.json",
+        "twin_sha256": "e5a6d284ff79d0c72a0f028c3bd6b370c59ce6c93358e528a3fd8b8b68757a92",
+        "twin_tests": {
+          "err_h1": 0.00480604001599997,
+          "err_h1_semi": 0.0007342731213253285,
+          "err_l2": 0.0047496172075960135,
+          "err_linf": 0.056942485078309686,
+          "err_linf_grad": 0.056942485078309686,
+          "err_lp": 0.030329615062594358,
+          "margin": 1e-05,
+          "time_steps": 20
+        }
+      }
+    ],
+    "unit_tests": "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/ci-03/20260921T142215Z/build-after/tests/unit_tests",
+    "unit_tests_sha256": "b4a9a8453a1c2e7c450d4e95ef39a6c48a9f972fc0c032e27765d3b4192dad6d"
+  },
+  "run_sets": {
+    "after": {
+      "runs": [
+        {
+          "computed": {
+            "err_h1": 0.2501306299601777,
+            "err_h1_semi": 0.14544130541023184,
+            "err_l2": 0.20349977573659148,
+            "err_linf": 0.2247405358516794,
+            "err_linf_grad": 0.2247405358516794,
+            "err_lp": 0.2100766266232714,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": true,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.006224549112876053,
+          "overlay": {},
+          "relative_error_vs_reference": {
+            "err_h1": 0.005233605944574817,
+            "err_h1_semi": 0.006224549112876053,
+            "err_l2": 0.004726290776439582,
+            "err_linf": 0.0053903256086863935,
+            "err_linf_grad": 0.0053903256086863935,
+            "err_lp": 0.00515422695511418
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "default",
+          "wall_seconds": 11.097196817398071
+        },
+        {
+          "computed": {
+            "err_h1": 0.2501306299601777,
+            "err_h1_semi": 0.14544130541023184,
+            "err_l2": 0.20349977573659148,
+            "err_linf": 0.2247405358516794,
+            "err_linf_grad": 0.2247405358516794,
+            "err_lp": 0.2100766266232714,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 2,
+            "free_residual_norm_max": 713.8304964701406,
+            "frictional_dissipation_cumulative": 960.6945727778102,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 28,
+              "not converged": 92
+            },
+            "physical_balance_pass_counts": {
+              "False": 77,
+              "True": 43
+            },
+            "records": 120,
+            "updated_lag_residual_last": 0.0003311639510353728,
+            "updated_lag_residual_max": 0.4461440602938366
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.1,
+          "effective_friction_iterations": 2,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.006224549112876053,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005233605944574817,
+            "err_h1_semi": 0.006224549112876053,
+            "err_l2": 0.004726290776439582,
+            "err_linf": 0.0053903256086863935,
+            "err_linf_grad": 0.0053903256086863935,
+            "err_lp": 0.00515422695511418
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "default-diag",
+          "wall_seconds": 11.524431943893433
+        },
+        {
+          "computed": {
+            "err_h1": 0.2514466023940922,
+            "err_h1_semi": 0.14635228237970963,
+            "err_l2": 0.20446614217953651,
+            "err_linf": 0.22595852588110665,
+            "err_linf_grad": 0.22595852588110665,
+            "err_lp": 0.2111650190573934,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 0,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 5.2467403242895844e-12,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 3.524768408571704e-12,
+            "err_h1_semi": 1.6347750640883107e-13,
+            "err_l2": 5.2467403242895844e-12,
+            "err_linf": 3.867945753123706e-12,
+            "err_linf_grad": 3.867945753123706e-12,
+            "err_lp": 4.375513334533823e-12
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi1",
+          "wall_seconds": 11.005179166793823
+        },
+        {
+          "computed": {
+            "err_h1": 0.2514466023940922,
+            "err_h1_semi": 0.14635228237970963,
+            "err_l2": 0.20446614217953651,
+            "err_linf": 0.22595852588110665,
+            "err_linf_grad": 0.22595852588110665,
+            "err_lp": 0.2111650190573934,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 1,
+            "free_residual_norm_max": 16390.28413242443,
+            "frictional_dissipation_cumulative": 1118.6876459852529,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 3,
+              "not converged": 117
+            },
+            "physical_balance_pass_counts": {
+              "False": 116,
+              "True": 4
+            },
+            "records": 120,
+            "updated_lag_residual_last": 0.00104323791153133,
+            "updated_lag_residual_max": 10.243927582765272
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.1,
+          "effective_friction_iterations": 1,
+          "exit": 0,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 5.2467403242895844e-12,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 3.524768408571704e-12,
+            "err_h1_semi": 1.6347750640883107e-13,
+            "err_l2": 5.2467403242895844e-12,
+            "err_linf": 3.867945753123706e-12,
+            "err_linf_grad": 3.867945753123706e-12,
+            "err_lp": 4.375513334533823e-12
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi1-diag",
+          "wall_seconds": 11.406840085983276
+        },
+        {
+          "computed": {
+            "err_h1": 0.2501306299601777,
+            "err_h1_semi": 0.14544130541023184,
+            "err_l2": 0.20349977573659148,
+            "err_linf": 0.2247405358516794,
+            "err_linf_grad": 0.2247405358516794,
+            "err_lp": 0.2100766266232714,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.006224549112876053,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 2
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005233605944574817,
+            "err_h1_semi": 0.006224549112876053,
+            "err_l2": 0.004726290776439582,
+            "err_linf": 0.0053903256086863935,
+            "err_linf_grad": 0.0053903256086863935,
+            "err_lp": 0.00515422695511418
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi2",
+          "wall_seconds": 11.075765132904053
+        },
+        {
+          "computed": {
+            "err_h1": 0.2501290615612412,
+            "err_h1_semi": 0.14537468030523382,
+            "err_l2": 0.20354544888957418,
+            "err_linf": 0.2247779114440493,
+            "err_linf_grad": 0.2247779114440493,
+            "err_lp": 0.21011607012086256,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 249,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 369,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.0066797870081428835,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 4
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005239843447573763,
+            "err_h1_semi": 0.0066797870081428835,
+            "err_l2": 0.004502913191788715,
+            "err_linf": 0.005224916526536104,
+            "err_linf_grad": 0.005224916526536104,
+            "err_lp": 0.004967437032392108
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi4",
+          "wall_seconds": 11.081385135650635
+        },
+        {
+          "computed": {
+            "err_h1": 0.2501290615612412,
+            "err_h1_semi": 0.14537468030523382,
+            "err_l2": 0.20354544888957418,
+            "err_linf": 0.2247779114440493,
+            "err_linf_grad": 0.2247779114440493,
+            "err_lp": 0.21011607012086256,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 4,
+            "free_residual_norm_max": 71.48921347423101,
+            "frictional_dissipation_cumulative": 972.6692065480448,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 100,
+              "not converged": 20
+            },
+            "physical_balance_pass_counts": {
+              "False": 2,
+              "True": 118
+            },
+            "records": 120,
+            "updated_lag_residual_last": 5.309917777665018e-06,
+            "updated_lag_residual_max": 0.04468075842139485
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.1,
+          "effective_friction_iterations": 4,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 249,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 369,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.0066797870081428835,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": 4
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005239843447573763,
+            "err_h1_semi": 0.0066797870081428835,
+            "err_l2": 0.004502913191788715,
+            "err_linf": 0.005224916526536104,
+            "err_linf_grad": 0.005224916526536104,
+            "err_lp": 0.004967437032392108
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi4-diag",
+          "wall_seconds": 11.551285982131958
+        },
+        {
+          "computed": {
+            "err_h1": 0.25011589456534294,
+            "err_h1_semi": 0.14537956706953128,
+            "err_l2": 0.20352577771107377,
+            "err_linf": 0.22475887945213258,
+            "err_linf_grad": 0.22475887945213258,
+            "err_lp": 0.2100973529878862,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 271,
+            "max_lag_i_resolved": 5,
+            "rc_rows_total": 391,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.0066463965873171235,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 8
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005292208425954625,
+            "err_h1_semi": 0.0066463965873171235,
+            "err_l2": 0.004599120702190307,
+            "err_linf": 0.005309144337115847,
+            "err_linf_grad": 0.005309144337115847,
+            "err_lp": 0.0050560745020828066
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi8",
+          "wall_seconds": 11.118175029754639
+        },
+        {
+          "computed": {
+            "err_h1": 0.25011589456534294,
+            "err_h1_semi": 0.14537956706953128,
+            "err_l2": 0.20352577771107377,
+            "err_linf": 0.22475887945213258,
+            "err_linf_grad": 0.22475887945213258,
+            "err_lp": 0.2100973529878862,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 271,
+            "max_lag_i_resolved": 5,
+            "rc_rows_total": 391,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.0066463965873171235,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": -1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005292208425954625,
+            "err_h1_semi": 0.0066463965873171235,
+            "err_l2": 0.004599120702190307,
+            "err_linf": 0.005309144337115847,
+            "err_linf_grad": 0.005309144337115847,
+            "err_lp": 0.0050560745020828066
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fiinf",
+          "wall_seconds": 11.100003242492676
+        },
+        {
+          "computed": {
+            "err_h1": 0.25011589456534294,
+            "err_h1_semi": 0.14537956706953128,
+            "err_l2": 0.20352577771107377,
+            "err_linf": 0.22475887945213258,
+            "err_linf_grad": 0.22475887945213258,
+            "err_lp": 0.2100973529878862,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 6,
+            "free_residual_norm_max": 0.39712795245425525,
+            "frictional_dissipation_cumulative": 971.453818573829,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 120
+            },
+            "physical_balance_pass_counts": {
+              "True": 120
+            },
+            "records": 120,
+            "updated_lag_residual_last": 3.3183985475973897e-06,
+            "updated_lag_residual_max": 0.0002482049702843363
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.1,
+          "effective_friction_iterations": 2147483647,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 271,
+            "max_lag_i_resolved": 5,
+            "rc_rows_total": 391,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.0066463965873171235,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": -1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005292208425954625,
+            "err_h1_semi": 0.0066463965873171235,
+            "err_l2": 0.004599120702190307,
+            "err_linf": 0.005309144337115847,
+            "err_linf_grad": 0.005309144337115847,
+            "err_lp": 0.0050560745020828066
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fiinf-diag",
+          "wall_seconds": 11.586498975753784
+        },
+        {
+          "computed": {
+            "err_h1": 0.1763354083752956,
+            "err_h1_semi": 0.03549152967293719,
+            "err_l2": 0.17272674248175146,
+            "err_linf": 0.17622780331681223,
+            "err_linf_grad": 0.17622780331681223,
+            "err_lp": 0.17285396112451368,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": true,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.31665697821070743,
+          "overlay": {},
+          "relative_error_vs_reference": {
+            "err_h1": 0.04735109298709102,
+            "err_h1_semi": 0.31665697821070743,
+            "err_l2": 0.02778963347634672,
+            "err_linf": 0.02644505667030249,
+            "err_linf_grad": 0.02644505667030249,
+            "err_lp": 0.027655296699890506
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "default",
+          "wall_seconds": 12.031178951263428
+        },
+        {
+          "computed": {
+            "err_h1": 0.1763354083752956,
+            "err_h1_semi": 0.03549152967293719,
+            "err_l2": 0.17272674248175146,
+            "err_linf": 0.17622780331681223,
+            "err_linf_grad": 0.17622780331681223,
+            "err_lp": 0.17285396112451368,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 2,
+            "free_residual_norm_max": 10516.86157782645,
+            "frictional_dissipation_cumulative": 73.31070062695139,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 75,
+              "not converged": 45
+            },
+            "physical_balance_pass_counts": {
+              "False": 18,
+              "True": 102
+            },
+            "records": 120,
+            "updated_lag_residual_last": 0.0017023552240622705,
+            "updated_lag_residual_max": 6.573038486141532
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.5,
+          "effective_friction_iterations": 2,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.31665697821070743,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.04735109298709102,
+            "err_h1_semi": 0.31665697821070743,
+            "err_l2": 0.02778963347634672,
+            "err_linf": 0.02644505667030249,
+            "err_linf_grad": 0.02644505667030249,
+            "err_lp": 0.027655296699890506
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "default-diag",
+          "wall_seconds": 12.499268054962158
+        },
+        {
+          "computed": {
+            "err_h1": 0.18510010042029357,
+            "err_h1_semi": 0.05193808756172777,
+            "err_l2": 0.17766395874243338,
+            "err_linf": 0.18101474857016278,
+            "err_linf_grad": 0.18101474857016278,
+            "err_lp": 0.17777025010123287,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 0,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 7.734446205361099e-10,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 1.243269174026391e-10,
+            "err_h1_semi": 7.734446205361099e-10,
+            "err_l2": 2.0105221662771046e-10,
+            "err_linf": 1.7447849282609213e-10,
+            "err_linf_grad": 1.7447849282609213e-10,
+            "err_lp": 1.9811023600443977e-10
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi1",
+          "wall_seconds": 12.487159967422485
+        },
+        {
+          "computed": {
+            "err_h1": 0.18510010042029357,
+            "err_h1_semi": 0.05193808756172777,
+            "err_l2": 0.17766395874243338,
+            "err_linf": 0.18101474857016278,
+            "err_linf_grad": 0.18101474857016278,
+            "err_lp": 0.17777025010123287,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 1,
+            "free_residual_norm_max": 64734.89007089448,
+            "frictional_dissipation_cumulative": 100.19592696418053,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 4,
+              "not converged": 116
+            },
+            "physical_balance_pass_counts": {
+              "False": 117,
+              "True": 3
+            },
+            "records": 120,
+            "updated_lag_residual_last": 0.3153979891575118,
+            "updated_lag_residual_max": 40.45930629430906
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.5,
+          "effective_friction_iterations": 1,
+          "exit": 0,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 7.734446205361099e-10,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 1.243269174026391e-10,
+            "err_h1_semi": 7.734446205361099e-10,
+            "err_l2": 2.0105221662771046e-10,
+            "err_linf": 1.7447849282609213e-10,
+            "err_linf_grad": 1.7447849282609213e-10,
+            "err_lp": 1.9811023600443977e-10
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi1-diag",
+          "wall_seconds": 13.00475025177002
+        },
+        {
+          "computed": {
+            "err_h1": 0.1763354083752956,
+            "err_h1_semi": 0.03549152967293719,
+            "err_l2": 0.17272674248175146,
+            "err_linf": 0.17622780331681223,
+            "err_linf_grad": 0.17622780331681223,
+            "err_lp": 0.17285396112451368,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.31665697821070743,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 2
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.04735109298709102,
+            "err_h1_semi": 0.31665697821070743,
+            "err_l2": 0.02778963347634672,
+            "err_linf": 0.02644505667030249,
+            "err_linf_grad": 0.02644505667030249,
+            "err_lp": 0.027655296699890506
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi2",
+          "wall_seconds": 12.230778694152832
+        },
+        {
+          "computed": {
+            "err_h1": 0.18369184096476282,
+            "err_h1_semi": 0.05314357650313885,
+            "err_l2": 0.17583643738849677,
+            "err_linf": 0.17952253926824857,
+            "err_linf_grad": 0.17952253926824857,
+            "err_lp": 0.17597095596088003,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 224,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 344,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.023210114948533356,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 4
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.007608096782070637,
+            "err_h1_semi": 0.023210114948533356,
+            "err_l2": 0.010286393493788676,
+            "err_linf": 0.008243578741644025,
+            "err_linf_grad": 0.008243578741644025,
+            "err_lp": 0.010121458310318349
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi4",
+          "wall_seconds": 12.336140155792236
+        },
+        {
+          "computed": {
+            "err_h1": 0.18369184096476282,
+            "err_h1_semi": 0.05314357650313885,
+            "err_l2": 0.17583643738849677,
+            "err_linf": 0.17952253926824857,
+            "err_linf_grad": 0.17952253926824857,
+            "err_lp": 0.17597095596088003,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 4,
+            "free_residual_norm_max": 169.83029569513883,
+            "frictional_dissipation_cumulative": 92.9893151551937,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 102,
+              "not converged": 18
+            },
+            "physical_balance_pass_counts": {
+              "False": 13,
+              "True": 107
+            },
+            "records": 120,
+            "updated_lag_residual_last": 6.182295547536528e-05,
+            "updated_lag_residual_max": 0.1061439348094632
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.5,
+          "effective_friction_iterations": 4,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 224,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 344,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.023210114948533356,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": 4
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.007608096782070637,
+            "err_h1_semi": 0.023210114948533356,
+            "err_l2": 0.010286393493788676,
+            "err_linf": 0.008243578741644025,
+            "err_linf_grad": 0.008243578741644025,
+            "err_lp": 0.010121458310318349
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi4-diag",
+          "wall_seconds": 12.548640012741089
+        },
+        {
+          "computed": {
+            "err_h1": 0.18368537948770763,
+            "err_h1_semi": 0.05310447036517807,
+            "err_l2": 0.17584150211135338,
+            "err_linf": 0.1795274861553764,
+            "err_linf_grad": 0.1795274861553764,
+            "err_lp": 0.17597601875302302,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 261,
+            "max_lag_i_resolved": 7,
+            "rc_rows_total": 381,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.022457177367908192,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 8
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.007643004796921583,
+            "err_h1_semi": 0.022457177367908192,
+            "err_l2": 0.010257886176427075,
+            "err_linf": 0.00821625010038118,
+            "err_linf_grad": 0.00821625010038118,
+            "err_lp": 0.0100929788986108
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi8",
+          "wall_seconds": 12.29783582687378
+        },
+        {
+          "computed": {
+            "err_h1": 0.18368537948770763,
+            "err_h1_semi": 0.05310447036517807,
+            "err_l2": 0.17584150211135338,
+            "err_linf": 0.1795274861553764,
+            "err_linf_grad": 0.1795274861553764,
+            "err_lp": 0.17597601875302302,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 261,
+            "max_lag_i_resolved": 7,
+            "rc_rows_total": 381,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.022457177367908192,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": -1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.007643004796921583,
+            "err_h1_semi": 0.022457177367908192,
+            "err_l2": 0.010257886176427075,
+            "err_linf": 0.00821625010038118,
+            "err_linf_grad": 0.00821625010038118,
+            "err_lp": 0.0100929788986108
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fiinf",
+          "wall_seconds": 12.36593508720398
+        },
+        {
+          "computed": {
+            "err_h1": 0.18368537948770763,
+            "err_h1_semi": 0.05310447036517807,
+            "err_l2": 0.17584150211135338,
+            "err_linf": 0.1795274861553764,
+            "err_linf_grad": 0.1795274861553764,
+            "err_lp": 0.17597601875302302,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 8,
+            "free_residual_norm_max": 0.382450755112163,
+            "frictional_dissipation_cumulative": 93.28982895497597,
+            "frictional_dissipation_increment_min": 0.0,
+            "lagging_states": {
+              "converged": 120
+            },
+            "physical_balance_pass_counts": {
+              "False": 1,
+              "True": 119
+            },
+            "records": 120,
+            "updated_lag_residual_last": 5.3694589397247586e-05,
+            "updated_lag_residual_max": 0.00023903172194531948
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.5,
+          "effective_friction_iterations": 2147483647,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 261,
+            "max_lag_i_resolved": 7,
+            "rc_rows_total": 381,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.022457177367908192,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": -1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.007643004796921583,
+            "err_h1_semi": 0.022457177367908192,
+            "err_l2": 0.010257886176427075,
+            "err_linf": 0.00821625010038118,
+            "err_linf_grad": 0.00821625010038118,
+            "err_lp": 0.0100929788986108
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fiinf-diag",
+          "wall_seconds": 12.543074131011963
+        },
+        {
+          "computed": {
+            "err_h1": 0.00480604001599997,
+            "err_h1_semi": 0.0007342731213253285,
+            "err_l2": 0.0047496172075960135,
+            "err_linf": 0.056942485078309686,
+            "err_linf_grad": 0.056942485078309686,
+            "err_lp": 0.030329615062594358,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": true,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 4,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 24,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.4407634569094739,
+          "overlay": {},
+          "relative_error_vs_reference": {
+            "err_h1": 0.026353289471533387,
+            "err_h1_semi": 0.4407634569094739,
+            "err_l2": 0.0018235394797305236,
+            "err_linf": 0.0015556022412957695,
+            "err_linf_grad": 0.0015556022412957695,
+            "err_lp": 0.0017768799871470849
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "default",
+          "wall_seconds": 14.49012804031372
+        },
+        {
+          "computed": {
+            "err_h1": 0.00480604001599997,
+            "err_h1_semi": 0.0007342731213253285,
+            "err_l2": 0.0047496172075960135,
+            "err_linf": 0.056942485078309686,
+            "err_linf_grad": 0.056942485078309686,
+            "err_lp": 0.030329615062594358,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 2,
+            "free_residual_norm_max": 3.7583628427840736,
+            "frictional_dissipation_cumulative": 0.014519957141135176,
+            "frictional_dissipation_increment_min": -0.00028199704178744577,
+            "lagging_states": {
+              "converged": 19,
+              "not converged": 1
+            },
+            "physical_balance_pass_counts": {
+              "False": 4,
+              "True": 16
+            },
+            "records": 20,
+            "updated_lag_residual_last": 7.700634948431315e-12,
+            "updated_lag_residual_max": 0.00016703834856818104
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.2,
+          "effective_friction_iterations": 2,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 4,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 24,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.4407634569094739,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026353289471533387,
+            "err_h1_semi": 0.4407634569094739,
+            "err_l2": 0.0018235394797305236,
+            "err_linf": 0.0015556022412957695,
+            "err_linf_grad": 0.0015556022412957695,
+            "err_lp": 0.0017768799871470849
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "default-diag",
+          "wall_seconds": 15.416460990905762
+        },
+        {
+          "computed": {
+            "err_h1": 0.004936123096837945,
+            "err_h1_semi": 0.0013129920252836907,
+            "err_l2": 0.004758294144825271,
+            "err_linf": 0.05685404280189992,
+            "err_linf_grad": 0.05685404280189992,
+            "err_lp": 0.030383603078842567,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 0,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 20,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 3.385571901115399e-13,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 2.4248973839220778e-14,
+            "err_h1_semi": 3.385571901115399e-13,
+            "err_l2": 3.6456835646937647e-16,
+            "err_linf": 7.078755117361106e-15,
+            "err_linf_grad": 7.078755117361106e-15,
+            "err_lp": 2.2837626880200665e-16
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi1",
+          "wall_seconds": 14.355167150497437
+        },
+        {
+          "computed": {
+            "err_h1": 0.004936123096837945,
+            "err_h1_semi": 0.0013129920252836907,
+            "err_l2": 0.004758294144825271,
+            "err_linf": 0.05685404280189992,
+            "err_linf_grad": 0.05685404280189992,
+            "err_lp": 0.030383603078842567,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 1,
+            "free_residual_norm_max": 33.68259645506864,
+            "frictional_dissipation_cumulative": 0.007169798083835176,
+            "frictional_dissipation_increment_min": -0.0008278897577957487,
+            "lagging_states": {
+              "converged": 16,
+              "not converged": 4
+            },
+            "physical_balance_pass_counts": {
+              "False": 5,
+              "True": 15
+            },
+            "records": 20,
+            "updated_lag_residual_last": 5.3750963958355704e-11,
+            "updated_lag_residual_max": 0.0014970042868919396
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.2,
+          "effective_friction_iterations": 1,
+          "exit": 0,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 20,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 3.385571901115399e-13,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 2.4248973839220778e-14,
+            "err_h1_semi": 3.385571901115399e-13,
+            "err_l2": 3.6456835646937647e-16,
+            "err_linf": 7.078755117361106e-15,
+            "err_linf_grad": 7.078755117361106e-15,
+            "err_lp": 2.2837626880200665e-16
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi1-diag",
+          "wall_seconds": 15.244470119476318
+        },
+        {
+          "computed": {
+            "err_h1": 0.00480604001599997,
+            "err_h1_semi": 0.0007342731213253285,
+            "err_l2": 0.0047496172075960135,
+            "err_linf": 0.056942485078309686,
+            "err_linf_grad": 0.056942485078309686,
+            "err_lp": 0.030329615062594358,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 4,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 24,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.4407634569094739,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 2
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026353289471533387,
+            "err_h1_semi": 0.4407634569094739,
+            "err_l2": 0.0018235394797305236,
+            "err_linf": 0.0015556022412957695,
+            "err_linf_grad": 0.0015556022412957695,
+            "err_lp": 0.0017768799871470849
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi2",
+          "wall_seconds": 14.513543844223022
+        },
+        {
+          "computed": {
+            "err_h1": 0.004803395792261054,
+            "err_h1_semi": 0.0007177409848120174,
+            "err_l2": 0.004749469340445549,
+            "err_linf": 0.05694201057282176,
+            "err_linf_grad": 0.05694201057282176,
+            "err_lp": 0.030328665213263377,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 7,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 27,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.45335465030208677,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 4
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026888977842151544,
+            "err_h1_semi": 0.45335465030208677,
+            "err_l2": 0.0018546151438161031,
+            "err_linf": 0.0015472562123320431,
+            "err_linf_grad": 0.0015472562123320431,
+            "err_lp": 0.001808141892738593
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi4",
+          "wall_seconds": 15.335690975189209
+        },
+        {
+          "computed": {
+            "err_h1": 0.004803395792261054,
+            "err_h1_semi": 0.0007177409848120174,
+            "err_l2": 0.004749469340445549,
+            "err_linf": 0.05694201057282176,
+            "err_linf_grad": 0.05694201057282176,
+            "err_lp": 0.030328665213263377,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 4,
+            "free_residual_norm_max": 2.1575908861373527,
+            "frictional_dissipation_cumulative": 0.005330851081813668,
+            "frictional_dissipation_increment_min": -0.00024161663912378872,
+            "lagging_states": {
+              "converged": 20
+            },
+            "physical_balance_pass_counts": {
+              "False": 4,
+              "True": 16
+            },
+            "records": 20,
+            "updated_lag_residual_last": 8.307500028689785e-12,
+            "updated_lag_residual_max": 9.589292827277127e-05
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.2,
+          "effective_friction_iterations": 4,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 7,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 27,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.45335465030208677,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": 4
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026888977842151544,
+            "err_h1_semi": 0.45335465030208677,
+            "err_l2": 0.0018546151438161031,
+            "err_linf": 0.0015472562123320431,
+            "err_linf_grad": 0.0015472562123320431,
+            "err_lp": 0.001808141892738593
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi4-diag",
+          "wall_seconds": 16.123108863830566
+        },
+        {
+          "computed": {
+            "err_h1": 0.004803395792261054,
+            "err_h1_semi": 0.0007177409848120174,
+            "err_l2": 0.004749469340445549,
+            "err_linf": 0.05694201057282176,
+            "err_linf_grad": 0.05694201057282176,
+            "err_lp": 0.030328665213263377,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 7,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 27,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.45335465030208677,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 8
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026888977842151544,
+            "err_h1_semi": 0.45335465030208677,
+            "err_l2": 0.0018546151438161031,
+            "err_linf": 0.0015472562123320431,
+            "err_linf_grad": 0.0015472562123320431,
+            "err_lp": 0.001808141892738593
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi8",
+          "wall_seconds": 15.478461980819702
+        },
+        {
+          "computed": {
+            "err_h1": 0.004803395792261054,
+            "err_h1_semi": 0.0007177409848120174,
+            "err_l2": 0.004749469340445549,
+            "err_linf": 0.05694201057282176,
+            "err_linf_grad": 0.05694201057282176,
+            "err_lp": 0.030328665213263377,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 7,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 27,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.45335465030208677,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": -1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026888977842151544,
+            "err_h1_semi": 0.45335465030208677,
+            "err_l2": 0.0018546151438161031,
+            "err_linf": 0.0015472562123320431,
+            "err_linf_grad": 0.0015472562123320431,
+            "err_lp": 0.001808141892738593
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fiinf",
+          "wall_seconds": 15.510004043579102
+        },
+        {
+          "computed": {
+            "err_h1": 0.004803395792261054,
+            "err_h1_semi": 0.0007177409848120174,
+            "err_l2": 0.004749469340445549,
+            "err_linf": 0.05694201057282176,
+            "err_linf_grad": 0.05694201057282176,
+            "err_lp": 0.030328665213263377,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "diagnostics": {
+            "final_lag_iteration_max": 4,
+            "free_residual_norm_max": 2.1575908861373527,
+            "frictional_dissipation_cumulative": 0.005330851081813668,
+            "frictional_dissipation_increment_min": -0.00024161663912378872,
+            "lagging_states": {
+              "converged": 20
+            },
+            "physical_balance_pass_counts": {
+              "False": 4,
+              "True": 16
+            },
+            "records": 20,
+            "updated_lag_residual_last": 8.307500028689785e-12,
+            "updated_lag_residual_max": 9.589292827277127e-05
+          },
+          "effective_barrier_stiffness": "adaptive",
+          "effective_friction_coefficient": 0.2,
+          "effective_friction_iterations": 2147483647,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "after",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 7,
+            "max_lag_i_resolved": 3,
+            "rc_rows_total": 27,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.45335465030208677,
+          "overlay": {
+            "output": {
+              "manifest": "run-manifest.json",
+              "physical_diagnostics": true
+            },
+            "solver": {
+              "contact": {
+                "friction_iterations": -1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026888977842151544,
+            "err_h1_semi": 0.45335465030208677,
+            "err_l2": 0.0018546151438161031,
+            "err_linf": 0.0015472562123320431,
+            "err_linf_grad": 0.0015472562123320431,
+            "err_lp": 0.001808141892738593
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fiinf-diag",
+          "wall_seconds": 16.18789029121399
+        }
+      ],
+      "unit_tests_sha256": "b4a9a8453a1c2e7c450d4e95ef39a6c48a9f972fc0c032e27765d3b4192dad6d"
+    },
+    "before": {
+      "runs": [
+        {
+          "computed": {
+            "err_h1": 0.2514466023940922,
+            "err_h1_semi": 0.14635228237970963,
+            "err_l2": 0.20446614217953651,
+            "err_linf": 0.22595852588110665,
+            "err_linf_grad": 0.22595852588110665,
+            "err_lp": 0.2111650190573934,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": true,
+          "exit": 0,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "before",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 5.2467403242895844e-12,
+          "overlay": {},
+          "relative_error_vs_reference": {
+            "err_h1": 3.524768408571704e-12,
+            "err_h1_semi": 1.6347750640883107e-13,
+            "err_l2": 5.2467403242895844e-12,
+            "err_linf": 3.867945753123706e-12,
+            "err_linf_grad": 3.867945753123706e-12,
+            "err_lp": 4.375513334533823e-12
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "default",
+          "wall_seconds": 11.856268644332886
+        },
+        {
+          "computed": {
+            "err_h1": 0.2514466023940922,
+            "err_h1_semi": 0.14635228237970963,
+            "err_l2": 0.20446614217953651,
+            "err_linf": 0.22595852588110665,
+            "err_linf_grad": 0.22595852588110665,
+            "err_lp": 0.2111650190573934,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 0,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "before",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 5.2467403242895844e-12,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 3.524768408571704e-12,
+            "err_h1_semi": 1.6347750640883107e-13,
+            "err_l2": 5.2467403242895844e-12,
+            "err_linf": 3.867945753123706e-12,
+            "err_linf_grad": 3.867945753123706e-12,
+            "err_lp": 4.375513334533823e-12
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi1",
+          "wall_seconds": 11.8642418384552
+        },
+        {
+          "computed": {
+            "err_h1": 0.2501306299601777,
+            "err_h1_semi": 0.14544130541023184,
+            "err_l2": 0.20349977573659148,
+            "err_linf": 0.2247405358516794,
+            "err_linf_grad": 0.2247405358516794,
+            "err_lp": 0.2100766266232714,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/2D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.20446614217846373",
+            "prev_err_h1=0.25144660239320593",
+            "prev_err_h1_semi=0.1463522823796857",
+            "prev_err_linf=0.22595852588023266",
+            "prev_err_linf_grad=0.22595852588023266",
+            "prev_err_lp=0.21116501905646945"
+          ],
+          "label": "before",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.006224549112876053,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 2
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.005233605944574817,
+            "err_h1_semi": 0.006224549112876053,
+            "err_l2": 0.004726290776439582,
+            "err_linf": 0.0053903256086863935,
+            "err_linf_grad": 0.0053903256086863935,
+            "err_lp": 0.00515422695511418
+          },
+          "slug": "2d-large-mass-ratio",
+          "variant": "fi2",
+          "wall_seconds": 11.97115969657898
+        },
+        {
+          "computed": {
+            "err_h1": 0.18510010042029357,
+            "err_h1_semi": 0.05193808756172777,
+            "err_l2": 0.17766395874243338,
+            "err_linf": 0.18101474857016278,
+            "err_linf_grad": 0.18101474857016278,
+            "err_lp": 0.17777025010123287,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": true,
+          "exit": 0,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "before",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 7.734446205361099e-10,
+          "overlay": {},
+          "relative_error_vs_reference": {
+            "err_h1": 1.243269174026391e-10,
+            "err_h1_semi": 7.734446205361099e-10,
+            "err_l2": 2.0105221662771046e-10,
+            "err_linf": 1.7447849282609213e-10,
+            "err_linf_grad": 1.7447849282609213e-10,
+            "err_lp": 1.9811023600443977e-10
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "default",
+          "wall_seconds": 13.354645013809204
+        },
+        {
+          "computed": {
+            "err_h1": 0.18510010042029357,
+            "err_h1_semi": 0.05193808756172777,
+            "err_l2": 0.17766395874243338,
+            "err_linf": 0.18101474857016278,
+            "err_linf_grad": 0.18101474857016278,
+            "err_lp": 0.17777025010123287,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 0,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "before",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 120,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 7.734446205361099e-10,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 1.243269174026391e-10,
+            "err_h1_semi": 7.734446205361099e-10,
+            "err_l2": 2.0105221662771046e-10,
+            "err_linf": 1.7447849282609213e-10,
+            "err_linf_grad": 1.7447849282609213e-10,
+            "err_lp": 1.9811023600443977e-10
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi1",
+          "wall_seconds": 13.37946605682373
+        },
+        {
+          "computed": {
+            "err_h1": 0.1763354083752956,
+            "err_h1_semi": 0.03549152967293719,
+            "err_l2": 0.17272674248175146,
+            "err_linf": 0.17622780331681223,
+            "err_linf_grad": 0.17622780331681223,
+            "err_lp": 0.17285396112451368,
+            "margin": 1e-05,
+            "time_steps": "all"
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/large-ratios/large-mass-ratio.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.1776639587781531",
+            "prev_err_h1=0.1851001004433065",
+            "prev_err_h1_semi=0.051938087521556535",
+            "prev_err_linf=0.18101474860174596",
+            "prev_err_linf_grad=0.18101474860174596",
+            "prev_err_lp=0.17777025013645098"
+          ],
+          "label": "before",
+          "lag": {
+            "first_solves": 120,
+            "lag_resolves_total": 117,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 237,
+            "steps_with_lag_resolve": 117
+          },
+          "max_relative_error_vs_reference": 0.31665697821070743,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 2
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.04735109298709102,
+            "err_h1_semi": 0.31665697821070743,
+            "err_l2": 0.02778963347634672,
+            "err_linf": 0.02644505667030249,
+            "err_linf_grad": 0.02644505667030249,
+            "err_lp": 0.027655296699890506
+          },
+          "slug": "3d-large-mass-ratio",
+          "variant": "fi2",
+          "wall_seconds": 12.698482275009155
+        },
+        {
+          "computed": {
+            "err_h1": 0.004936123096837945,
+            "err_h1_semi": 0.0013129920252836907,
+            "err_l2": 0.004758294144825271,
+            "err_linf": 0.05685404280189992,
+            "err_linf_grad": 0.05685404280189992,
+            "err_lp": 0.030383603078842567,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": true,
+          "exit": 0,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "before",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 20,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 3.385571901115399e-13,
+          "overlay": {},
+          "relative_error_vs_reference": {
+            "err_h1": 2.4248973839220778e-14,
+            "err_h1_semi": 3.385571901115399e-13,
+            "err_l2": 3.6456835646937647e-16,
+            "err_linf": 7.078755117361106e-15,
+            "err_linf_grad": 7.078755117361106e-15,
+            "err_lp": 2.2837626880200665e-16
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "default",
+          "wall_seconds": 15.386669158935547
+        },
+        {
+          "computed": {
+            "err_h1": 0.004936123096837945,
+            "err_h1_semi": 0.0013129920252836907,
+            "err_l2": 0.004758294144825271,
+            "err_linf": 0.05685404280189992,
+            "err_linf_grad": 0.05685404280189992,
+            "err_lp": 0.030383603078842567,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 0,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "authenticated",
+          "harness_violations": [],
+          "label": "before",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 0,
+            "max_lag_i_resolved": 0,
+            "rc_rows_total": 20,
+            "steps_with_lag_resolve": 0
+          },
+          "max_relative_error_vs_reference": 3.385571901115399e-13,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 1
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 2.4248973839220778e-14,
+            "err_h1_semi": 3.385571901115399e-13,
+            "err_l2": 3.6456835646937647e-16,
+            "err_linf": 7.078755117361106e-15,
+            "err_linf_grad": 7.078755117361106e-15,
+            "err_lp": 2.2837626880200665e-16
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi1",
+          "wall_seconds": 15.400895357131958
+        },
+        {
+          "computed": {
+            "err_h1": 0.00480604001599997,
+            "err_h1_semi": 0.0007342731213253285,
+            "err_l2": 0.0047496172075960135,
+            "err_linf": 0.056942485078309686,
+            "err_linf_grad": 0.056942485078309686,
+            "err_lp": 0.030329615062594358,
+            "margin": 1e-05,
+            "time_steps": 20
+          },
+          "copy_identical_to_pinned": false,
+          "exit": 42,
+          "fixture": "contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json",
+          "harness_verdict": "violated",
+          "harness_violations": [
+            "prev_err_l2=0.004758294144825273",
+            "prev_err_h1=0.004936123096838065",
+            "prev_err_h1_semi=0.0013129920252841353",
+            "prev_err_linf=0.056854042801900324",
+            "prev_err_linf_grad=0.056854042801900324",
+            "prev_err_lp=0.030383603078842573"
+          ],
+          "label": "before",
+          "lag": {
+            "first_solves": 20,
+            "lag_resolves_total": 4,
+            "max_lag_i_resolved": 1,
+            "rc_rows_total": 24,
+            "steps_with_lag_resolve": 4
+          },
+          "max_relative_error_vs_reference": 0.4407634569094739,
+          "overlay": {
+            "solver": {
+              "contact": {
+                "friction_iterations": 2
+              }
+            }
+          },
+          "relative_error_vs_reference": {
+            "err_h1": 0.026353289471533387,
+            "err_h1_semi": 0.4407634569094739,
+            "err_l2": 0.0018235394797305236,
+            "err_linf": 0.0015556022412957695,
+            "err_linf_grad": 0.0015556022412957695,
+            "err_lp": 0.0017768799871470849
+          },
+          "slug": "ball-bounce-p4-dt0.01",
+          "variant": "fi2",
+          "wall_seconds": 15.478908061981201
+        }
+      ],
+      "unit_tests_sha256": "9de064862f0dcb12b33e2cfb0265385afebb109ece67c5f47095942f9c836bc6"
+    }
+  }
+}

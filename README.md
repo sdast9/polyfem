@@ -11,7 +11,7 @@ PolyFEM is a polyvalent C++ FEM library.
 
 ### sdast9 fork
 
-State as of **September 15, 2026** (`main`). The dated project state lives in
+State as of **September 21, 2026** (`main`). The dated project state lives in
 the parent workspace's README; this section keeps the repository's own claims
 current.
 
@@ -27,13 +27,24 @@ current.
   only failures are the four scene groups `standard`, `contact_2d`,
   `contact_3d` and `triangle_data` tracked as
   [CI-03–CI-06](docs/ci-portability-plan.md#4-scene-failures-requiring-distinct-treatment).
+  CI-03 is complete (2026-09-21, [record](docs/ci-03-validation.md)): the
+  three friction fixtures that RB-10's `friction_iterations` default had
+  moved now state the budget their references were generated under and have
+  `-friction-defaults` twins at the current default, on the data fork
+  `sdast9/polyfem-data@e6ed5cf` (branch `fable-fixtures`); `contact_3d` is
+  expected green from this publication on, `contact_2d` and `triangle_data`
+  keep only their CI-06 / CI-05 failures. The hidden CTest case
+  `run_manifest_env` runs any scene manifest against any data directory
+  through the scene harness (`POLYFEM_RUN_MANIFEST`, `POLYFEM_RUN_DATA_DIR`).
   Every `PolyFEM_bin` run writes a `run-manifest.json`
   ([schema](scenes/semi-implicit/README.md#run-manifest-rb-12)) and
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
 - **Dependencies:** the recipes pin `sdast9/ipc-toolkit@482b9eab`
-  (branch `semi-implicit-stiffness`) and `sdast9/polysolve@bce32a39` (branch
-  `iteration-callback`); both forks' `Build` workflows run on those branches
+  (branch `semi-implicit-stiffness`), `sdast9/polysolve@bce32a39` (branch
+  `iteration-callback`) and the test data `sdast9/polyfem-data@e6ed5cf`
+  (branch `fable-fixtures`; `main` mirrors upstream `polyfem/polyfem-data`);
+  both code forks' `Build` workflows run on those branches
   (PolySolve 6/6 lanes green; IPC Toolkit green on Linux/macOS, its two Windows
   lanes failing on upstream code — CI-07). A run's manifest records the
   effective sources next to the declared pins; verify local overrides before

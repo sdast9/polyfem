@@ -1,4 +1,8 @@
-# data (https://github.com/polyfem/polyfem-data)
+# data (https://github.com/sdast9/polyfem-data, branch fable-fixtures: the
+# upstream https://github.com/polyfem/polyfem-data set plus this fork's fixture
+# changes -- CI-03 (2026-09-21): three historical friction fixtures state the
+# lag budget their references were generated under and get current-defaults
+# twins; see docs/ci-03-validation.md)
 # License: MIT
 
 if(TARGET polyfem::data)
@@ -27,8 +31,8 @@ else()
         polyfem_data_download
         PREFIX ${FETCHCONTENT_BASE_DIR}/polyfem-test-data
         SOURCE_DIR ${POLYFEM_DATA_DIR}
-        GIT_REPOSITORY https://github.com/polyfem/polyfem-data
-        GIT_TAG e0efb6ba291e3acfc8a5e12e66486a7246849b30
+        GIT_REPOSITORY https://github.com/sdast9/polyfem-data
+        GIT_TAG e6ed5cf2d6514ef2595d28a23400521e2b3c717c
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ""
         INSTALL_COMMAND ""

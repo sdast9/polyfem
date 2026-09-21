@@ -10,6 +10,8 @@ This document records the investigation and work still required. **No solver, te
 
 **Implementation update, 2026-09-15 (RB-12 stage 3, [record](rb-12-validation.md#stage-3--ci-and-release-integration-2026-09-14)):** the native acceptance of CI-01 and CI-02 is read from [Build run 34903453744](https://github.com/sdast9/polyfem/actions/runs/34903453744) at `fffc722b9` — Linux GCC 13 Debug 312/312 and Release 340/344, Windows MSVC 19.44 Debug 309/309 and Release 328/328, macOS AppleClang Debug 311/311 and Release 339/343, with [pre-commit run 34903453923](https://github.com/sdast9/polyfem/actions/runs/34903453923) green; the only failures on any lane are the four CI-03–CI-06 scene groups (`standard`, `contact_2d`, `contact_3d`, `triangle_data`) on the two Release lanes that run them. **CI-01 and CI-02 are complete.** Of CI-07, RB-12 delivered the dependency-fork triggers (item 1), the `SCCACHE_CACHE_SIZE` fix and the always-on `LastTest.log` / `LastTestsFailed.log` / CLI-contract uploads (item 6, in part), the compiled-in build identity printed on every lane by the new CTest `cli_contract` (`PolyFEM_bin --build_info`: compiler, configuration, options, effective PolyFEM/IPC/PolySolve SHAs against the declared pins — item 2, in part) and one public integration run through the real executable on all three OSes (`quasistatic-semi`, single-threaded — a first step toward item 3). Two findings recorded by RB-12 are now CI-07 work items (see its 2026-09-15 update): the IPC Toolkit fork's two Windows lane failures on upstream code, and the cross-platform repeatability matrix. The user's decision of 2026-09-14 sets the required lanes to pre-commit, Linux Release and macOS Release; the four scene groups stay tracked exceptions with the owners below, and the Windows lanes are informational (green since `fffc722b9`).
 
+**Implementation update, 2026-09-21 (CI-03, [record](ci-03-validation.md)):** the three fixtures of CI-03 are explained entirely by RB-10's `friction_iterations` default (1 → 2): on isolated copies run through the scene harness itself, the before-revision default, the before-revision explicit 1 and the current-revision explicit 1 are one bit-identical number set that authenticates all three (5e-12 / 8e-10 / 3e-13), and the current default, explicit 2 and the before-revision explicit 2 are another that equals both Release lanes' values. The fixtures now state that policy, each has a `<name>-friction-defaults.json` twin running at the current default with a harness-generated reference, and both pass; the data set moved to a writable home, `sdast9/polyfem-data@e6ed5cf` (branch `fable-fixtures`, user decision 2026-09-21), and the harness gained `run_manifest_env` (any manifest against any data directory). **CI-03 is complete**; `contact_3d` is expected green, `contact_2d` and `triangle_data` keep exactly their CI-06 and CI-05 failures.
+
 ## 1. Verified state
 
 The latest completed [Build run 34757133039](https://github.com/sdast9/polyfem/actions/runs/34757133039), started September 13 at 12:27 UTC, reports:
@@ -30,13 +32,13 @@ At the 13:54 UTC metadata snapshot, the most recent 100 PolyFEM workflow runs co
 
 ## 2. Recommended work order
 
-CI-01 and CI-02 are **complete** (native validation read on 2026-09-15, see the implementation update above). CI-03 through CI-09 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
+CI-01, CI-02 and CI-03 are **complete** (CI-01/02: native validation read on 2026-09-15; CI-03: 2026-09-21, see the implementation updates above). CI-04 through CI-09 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
 
 | Order / ID | Work | Completion evidence |
 | --- | --- | --- |
 | 1 / CI-01 | Repair GCC initialization and Windows test identifier | Both configurations compile on native GCC and MSVC |
 | 1 / CI-02 | Correct analytical floating-point expectations; apply pinned formatting | Focused tests pass on all three platforms; repository formatting check passes |
-| 2 / CI-03 | Make historical friction fixtures specify their intended policy | A/B comparison explains the new mismatches; historical and current-default coverage both pass |
+| 2 / CI-03 | Make historical friction fixtures specify their intended policy — **complete 2026-09-21** | A/B comparison explains the new mismatches; historical and current-default coverage both pass ([record](ci-03-validation.md)) |
 | 2 / CI-04 | Repair mixed P1/P2 tetrahedral collision-surface extraction | Complete, valid surface and unchanged intended FE mapping; `standard` passes |
 | 2 / CI-05 | Reconcile the microstructure workload with resource protection | Measured resource profile, successful supported run, and preserved budget-refusal coverage |
 | 2 / CI-06 | Resolve the GCP cube-on-floor reference contract | Repeated, controlled comparison with justified reference policy |
@@ -96,6 +98,8 @@ Use the version pinned by [.pre-commit-config.yaml](../.pre-commit-config.yaml),
 
 ### CI-03 — Pin the intended friction policy in historical fixtures
 
+**Complete (2026-09-21, [record](ci-03-validation.md)).** Steps 1–4 below were done as written: isolated copies at `91c7ff8ac` and `11cdf476f` through the harness (`run_manifest_env`), the omitted / 1 / 2 comparison with the resolved input and the RB-04 lagging record, the historical settings encoded in the three fixtures, current-defaults twins with harness-generated references checked against both Release lanes' values (≤ 6e-11) and against a budget sweep to the converged lag (2D and the ball: the default is closer than the single solve; 3D: the second lag iterate overshoots by 33 % in `err_h1_semi` — an observation handed to RB-10, not a change). The production defaults are untouched; no existing reference value changed. The data set is now pinned to the fork `sdast9/polyfem-data@e6ed5cf` (branch `fable-fixtures`); CI-06's data change has the same home.
+
 **Confirmed new mismatches; exact causal contribution still requires an A/B run.** At `3eecd190`, these three fixtures fail their historical reference comparisons but passed in the inspected `91c7ff8a` macOS Release run:
 
 | Fixture | Largest reported relative discrepancy among its six metrics |
@@ -137,7 +141,7 @@ Preserve CCD and the separate trial-displacement cap. A larger global allocation
 
 The pinned `polyfem-data` history was checked directly: `f52db28` changed this scene's margin to `0.01`; bulk update `6f8f569` restored `1e-5`. The current [verify_run.cpp](../tests/verify_run.cpp) also unconditionally emits `out["margin"] = 1e-5` when generating reference data. This explains a concrete fragility in reference maintenance, but does not independently validate `0.01` for the current solver.
 
-Required work: establish explicit policy settings, repeat the exact scene across fresh processes and platforms, inspect the numerical residuals and solution differences, and compare with the relevant upstream/data revisions. Separate the old mismatch from new default-policy effects. Fix reference generation to preserve an existing scene-specific margin, with focused coverage. Change the stored tolerance or golden values only when justified by this evidence. Publish approved data changes to a writable, versioned home and update [polyfem_data.cmake](../cmake/recipes/polyfem_data.cmake); a local edit to `data/` does not reach clean CI clones.
+Required work: establish explicit policy settings, repeat the exact scene across fresh processes and platforms, inspect the numerical residuals and solution differences, and compare with the relevant upstream/data revisions. Separate the old mismatch from new default-policy effects. Fix reference generation to preserve an existing scene-specific margin, with focused coverage. Change the stored tolerance or golden values only when justified by this evidence. Publish approved data changes to a writable, versioned home and update [polyfem_data.cmake](../cmake/recipes/polyfem_data.cmake); a local edit to `data/` does not reach clean CI clones. (Since CI-03, 2026-09-21, that home exists: `sdast9/polyfem-data`, branch `fable-fixtures`, pinned by SHA. CI-03's group run measured this scene's mismatch at 0.0037 locally against 0.0030 on the macOS lane and 0.0049 on the Linux lane of the same day — the repeat across platforms this item asks for is already visibly needed.)
 
 ## 5. Make the checks represent the supported product
 

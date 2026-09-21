@@ -9,6 +9,7 @@
 #include "spdlog/spdlog.h"
 #include <polyfem/Common.hpp>
 
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <set>
@@ -211,6 +212,8 @@ AuthenticateResult authenticate_json(const std::string &json_file, const bool co
 	std::vector<std::string> test_keys =
 		{"err_l2", "err_h1", "err_h1_semi", "err_linf", "err_linf_grad", "err_lp"};
 
+	spdlog::info("Computed tests: {}", out.dump());
+
 	if (!compute_validation)
 	{
 		spdlog::info("Authenticating...");
@@ -253,10 +256,9 @@ std::string tagsrun = "[run]";
 std::string tagsrun = "[.][run]";
 #endif
 
-void run_data(const std::string &test_file, const std::string &dir)
+void run_manifest(const std::string &manifest_path, const std::string &dir)
 {
-	// Disabled on Windows CI, due to the requirement for Pardiso.
-	std::ifstream file(POLYFEM_TEST_DIR "/" + test_file + ".txt");
+	std::ifstream file(manifest_path);
 	std::vector<std::string> failing_tests;
 	std::string line;
 	while (std::getline(file, line))
@@ -288,6 +290,30 @@ void run_data(const std::string &test_file, const std::string &dir)
 
 		logger().error(ss.str());
 	}
+}
+
+void run_data(const std::string &test_file, const std::string &dir)
+{
+	// Disabled on Windows CI, due to the requirement for Pardiso.
+	run_manifest(POLYFEM_TEST_DIR "/" + test_file + ".txt", dir);
+}
+
+// CI-03: the same authentication over any manifest and data directory, so an
+// isolated fixture copy (or an A/B overlay of one) outside the source tree runs
+// through exactly this harness. Hidden; select it by name with both variables
+// set: POLYFEM_RUN_MANIFEST (a manifest file in the format of tests/*.txt,
+// paths relative to the data directory, `*` prefix appends references) and
+// POLYFEM_RUN_DATA_DIR (the data directory those paths are relative to).
+TEST_CASE("run_manifest_env", "[.][run_env]")
+{
+	const char *manifest = std::getenv("POLYFEM_RUN_MANIFEST");
+	const char *data_dir = std::getenv("POLYFEM_RUN_DATA_DIR");
+	REQUIRE(manifest != nullptr);
+	REQUIRE(data_dir != nullptr);
+	CAPTURE(manifest, data_dir);
+	REQUIRE(std::filesystem::is_regular_file(manifest));
+	REQUIRE(std::filesystem::is_directory(data_dir));
+	run_manifest(manifest, data_dir);
 }
 
 TEST_CASE("all PolyFEM data JSON files are classified", "[data]")

@@ -371,6 +371,33 @@ tooltips and the follow/1 round-trip. Published as `f10f9c8` on
   `outputs/rb-10/20260912T232617Z/` (not distributed: 61 run directories with
   logs, records and VTU output, 2.2 GB).
 
+### CI-03 note — the default's golden consequence, measured (2026-09-21)
+
+The "golden consequence" above reached the public scene set: three
+`polyfem-data` fixtures with friction and no pinned budget
+(`2D/large-ratios/large-mass-ratio`, `3D/large-ratios/large-mass-ratio`,
+`3D/higher-order/ball-bounce/P4-dt=0.01`) left their references by 0.6 %,
+32 % and 44 % in `err_h1_semi` — the whole difference is the budget (explicit
+1 reproduces the references to ≤ 8e-10; the Stage 4 code is inert on these
+classic adaptive scenes), see the [CI-03 record](ci-03-validation.md). Every
+other scene of `contact_2d`, `contact_3d` and `triangle` stays within its
+margin at budget 2. Two observations for this item's limits, no change made:
+
+- On the 3D mass-ratio scene (μ .5, a heavy block on a light cube, 120
+  transient steps) the lag fixed point is reached but **not monotonically**:
+  the budget-2 endpoint is 33 % from the converged lag (budget 8 = ∞) in
+  `err_h1_semi` and dissipates 21 % less, while the single solve is 2.2 % /
+  +7.4 % away and budget 4 is 7e-4 / −0.3 % (the loop's own residual does
+  fall, 40 → 6.6 → 0.11 → 2.4e-4). This item's fixtures converged
+  geometrically at every iteration; that is not general. The alternatives
+  to measure, if the default is ever revisited: a tolerance-driven budget
+  (`-1`) as the default, or a larger fixed budget.
+- Under BDF2 (the ball) RB-04's `frictional_dissipation_increment = g_f · Δx`
+  is negative on the rebound step at every budget (−8e-4 … −2e-4), the
+  Stage 1 P3 convention (the potential's velocity is the BDF velocity, not
+  the increment) at trajectory level; the toolkit identity `g · v ≥ 0` is
+  unaffected.
+
 ## Next session handoff
 
 - Completed: Stages 1–5 (audit, unit probe/regression, fixture matrix, budget
