@@ -69,9 +69,9 @@ namespace
 	constexpr double kInitialVelocityX = 0.2;
 	// Exact values on the +z face, by hand: u_x; v_x = (u_n - u_(n-1)) / dt
 	// from v_0 = .2; a_x = (v_n - v_(n-1)) / dt from a_0 = 0.
-	constexpr std::array<double, kSteps + 1> kFaceU = {0.0, 0.1, 0.1, 0.1, 0.05};
-	constexpr std::array<double, kSteps + 1> kFaceV = {0.2, 0.4, 0.0, 0.0, -0.2};
-	constexpr std::array<double, kSteps + 1> kFaceA = {0.0, 0.8, -1.6, 0.0, -0.8};
+	constexpr std::array<double, kSteps + 1> kFaceU = {{0.0, 0.1, 0.1, 0.1, 0.05}};
+	constexpr std::array<double, kSteps + 1> kFaceV = {{0.2, 0.4, 0.0, 0.0, -0.2}};
+	constexpr std::array<double, kSteps + 1> kFaceA = {{0.0, 0.8, -1.6, 0.0, -0.8}};
 	constexpr bool kHeld[kSteps + 1] = {false, false, true, true, false}; // bit-identical to the previous endpoint
 
 	json scene_args(const std::filesystem::path &out_dir)
