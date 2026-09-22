@@ -176,6 +176,7 @@ not be kept. On every other corpus row the value changes nothing.
 | Five public Newton smokes, before and after | 5/5 exit 0, four time steps each, zero error lines, zero restarts, and **all five VTU frames byte-identical** to the pre-stage-1 executable |
 | The two public scenes with L-BFGS and dense BFGS | unchanged: exit 1 at step 1 after 20 restarts, as the audit recorded. Dense BFGS takes 74.7 s and 69.3 s single-threaded |
 | Guard activity on those four scene runs | **none**: no pair was refused and no approximation discarded |
+| Rebuild after `CurvatureGuard.cpp` was clang-formatted | the relinked executable has a different hash and reproduces the recorded `quasistatic-semi` frames byte for byte; `[al_solver],[direction_filter]` and the PolySolve suite were rerun on it |
 
 The last row matters. The public contact scenes do not exercise the defect this
 stage repairs; their failure is the restart-limited plateau the audit already

@@ -158,6 +158,9 @@
     "selector": "[al_solver],[direction_filter]",
     "summary": [
       "All tests passed (4060 assertions in 26 test cases)"
+    ],
+    "rerun_after_formatting": [
+      "All tests passed (4060 assertions in 26 test cases)"
     ]
   },
   "scenes": {
@@ -321,5 +324,12 @@
         "frames": 1
       }
     ]
+  },
+  "relinked_check": {
+    "exit_code": 0,
+    "binary_sha256": "b84113e35796e95b4db11663699ff569f77e3b145ad66fe65d921375145f09a5",
+    "recorded_binary_sha256": "b39b40e7cc8733d31881157fd1e661eac03c692d0d4abb68678708cfd2845007",
+    "frames_match_recorded": true,
+    "frames": 5
   }
 }
