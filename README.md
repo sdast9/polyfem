@@ -30,8 +30,12 @@ current.
   added an opt-in strong Wolfe search (`line_search/method: "Wolfe"`) whose
   growth has the problem rebuild and price every longer interval first; on the
   public scenes it changes L-BFGS's iteration count by −21 % to +11 %, so no
-  default changes. Stage 5 remains in the
-  [evidence-backed repair plan](docs/bfgs-convergence-audit-20260922.md).
+  default changes. Stage 5 ([record](docs/bfgs-forward-methods-20260922.md))
+  made the Houdini asset offer only methods a forward solve can run (L-BFGS-B,
+  MMA and Dense Newton withdrawn; BFGS given its dense linear solver), named
+  each refusal in PolySolve, and repaired ADAM, which had never taken an ADAM
+  step. The [audit and its plan](docs/bfgs-convergence-audit-20260922.md) keep
+  their bounded review follow-ups open.
   None of this establishes contact-scene convergence at production settings:
   the two public scenes with L-BFGS still stop on the soft budget.
 

@@ -1,14 +1,15 @@
 # BFGS convergence audit and repair plan
 
-Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stages 1
-to 4 of the plan below (curvature safeguards, objective-generation history
-reset, an opt-in feasibility-respecting Wolfe search, contact diagnostics)
-implemented and validated — see the
+Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; all five
+stages of the plan below (curvature safeguards, objective-generation history
+reset, an opt-in feasibility-respecting Wolfe search, contact diagnostics,
+forward-method support and test reporting) implemented and validated — see the
 [stage 1](bfgs-curvature-safeguard-20260922.md),
 [stage 2](bfgs-objective-generation-20260922.md),
-[stage 3](bfgs-wolfe-line-search-20260922.md) and
-[stage 4](bfgs-contact-diagnostics-20260922.md) records; stage 5 remains
-planned. Stage 4 found the public L-BFGS failures to be a controller/allowance
+[stage 3](bfgs-wolfe-line-search-20260922.md),
+[stage 4](bfgs-contact-diagnostics-20260922.md) and
+[stage 5](bfgs-forward-methods-20260922.md) records. The bounded review
+follow-ups below remain open. Stage 4 found the public L-BFGS failures to be a controller/allowance
 mismatch, not a solver defect: with only the semi-implicit stall controller's
 100-iteration soft budget removed, all five public smokes converge under L-BFGS
 on their configured criterion. Making that budget method-aware is a production
@@ -176,7 +177,16 @@ scalar quadratic to converge after its first secant.
 
 This is an ordering repair, not a new safeguarded BFGS algorithm.
 
-### 5. Separate availability issue: L-BFGS-B is not a forward FEM solver
+### 5. Addressed in stage 5: L-BFGS-B is not a forward FEM solver
+
+**Stage 5 found it to be one of three** ([record](bfgs-forward-methods-20260922.md)):
+of the ten methods the Houdini asset offered, L-BFGS-B, MMA and Dense Newton
+could never run in a forward solve (no PolyFEM problem assembles a dense
+Hessian), and BFGS could never run from the asset, which offers no dense linear
+solver. The asset now offers the seven that run — and exports BFGS's dense
+solver itself — and PolySolve names each refusal where it is enforced. The
+reporting added there also found that ADAM had never taken an ADAM step
+(repaired). The original text of this finding:
 
 The Houdini nonlinear menu/export accepts `L-BFGS-B`, but forward elastic and AL
 paths use `polysolve::nonlinear::Solver::create`, which does not construct it.
@@ -218,8 +228,8 @@ fail on the still-open issues.
 ## Remaining implementation plan
 
 Work one stage at a time, retain baseline evidence, and publish each validated
-change with its dependency pin. Stages 1 to 4 are complete within their measured
-scope; stage 5 and the bounded review follow-ups below remain. Keep the stage numbers stable for links
+change with its dependency pin. All five stages are complete within their
+measured scope; the bounded review follow-ups below remain. Keep the stage numbers stable for links
 and existing validation records; they no longer describe execution order.
 
 **Review follow-ups (2026-09-22).** Align the dense factorization-exception
@@ -350,7 +360,21 @@ claiming that every exceptional path has been validated.
    configured convergence, not an interrupted solve or an increased allowance
    alone. Do not change the production soft budget merely to make a run finish.
 
-5. **Clarify forward-method support and strengthen test reporting.** Remove or
+5. **Done (2026-09-22): clarify forward-method support and strengthen test reporting.**
+   Recorded in [bfgs-forward-methods-20260922.md](bfgs-forward-methods-20260922.md).
+   The asset's menu is reduced to the methods a forward solve can run, BFGS
+   gets its dense linear solver from the asset, every offered method is
+   exported, run and re-imported by the end-to-end test, and PolySolve names
+   box-constrained methods, dense BFGS's linear solver and the dense Newton
+   strategies' dense-Hessian requirement where it refuses them (validation at
+   PolyFEM's `State::init` was rejected: a linear problem never builds the
+   nonlinear solver). `bfgs-deterministic-*` covers BFGS and L-BFGS under four
+   line searches from fixed starts, alone and with the fallback chain,
+   recording the finishing strategy; the permissive matrix is
+   `nonlinear-stress-permissive` `[stress]`, and both permissive matrices
+   report abandoned and escalated solves. That report exposed ADAM's
+   divide-by-zero first step, repaired with a regression. The original text of
+   this item: Remove or
    explain the unsupported forward L-BFGS-B option while retaining legitimate
    box-constrained optimization support. Add an HDA JSON round-trip check and a
    clear forward validation message. Maintain deterministic BFGS tests that

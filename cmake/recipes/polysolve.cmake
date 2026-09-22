@@ -11,9 +11,11 @@
 # discards that history when the problem reports a changed objective (stage 2,
 # docs/bfgs-objective-generation-20260922.md), fcab19f0 adds the opt-in
 # per-iteration nonlinear diagnostics stage 4 measured the contact scenes with
-# (docs/bfgs-contact-diagnostics-20260922.md) and fc62a67b adds the opt-in
+# (docs/bfgs-contact-diagnostics-20260922.md), fc62a67b adds the opt-in
 # feasibility-respecting Wolfe line search and line_search_extend (stage 3,
-# docs/bfgs-wolfe-line-search-20260922.md).
+# docs/bfgs-wolfe-line-search-20260922.md) and c874cd59 names the methods a
+# forward solve cannot run and repairs ADAM's first step (stage 5,
+# docs/bfgs-forward-methods-20260922.md).
 # License: MIT
 
 if(TARGET polysolve)
@@ -23,4 +25,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#fc62a6791f2136806fb36bd620459bca91bf5c89")
+CPMAddPackage("gh:sdast9/polysolve#c874cd59ca68afa6e7fc6b044581bd37bc2c536a")
