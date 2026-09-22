@@ -1,7 +1,9 @@
 # BFGS convergence audit and repair plan
 
-Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired;
-broader convergence repairs remain planned.**
+Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stage 1 of
+the plan below (curvature safeguards) implemented and validated — see the
+[stage 1 record](bfgs-curvature-safeguard-20260922.md); stages 2 to 5 remain
+planned.**
 
 The BFGS variants have implementation and integration issues that can impair
 convergence. The line search is part of the problem, but replacing Armijo alone
@@ -32,7 +34,7 @@ results are under [tools/bfgs_audit](../tools/bfgs_audit/README.md).
 
 ## Findings
 
-### 1. High priority: BFGS and L-BFGS accept invalid curvature pairs
+### 1. Repaired in stage 1: BFGS and L-BFGS accepted invalid curvature pairs
 
 Sources in PolySolve:
 `src/polysolve/nonlinear/descent_strategies/LBFGS.cpp`,
@@ -68,6 +70,14 @@ that the BFGS strategy itself remained valid.
 L-BFGS-B already filters pairs using `s.dot(y) > 1e-9*y.squaredNorm()` and passes
 these synthetic cases. It should be reviewed for scaling and numerical edge
 cases, but it does not have the same unconditional-update defect.
+
+**Stage 1 repaired this**, in [its own record](bfgs-curvature-safeguard-20260922.md):
+both strategies validate `s`, `y`, the curvature, the initial scale and the
+dense denominators before storing anything, refuse a pair that fails, discard an
+approximation that no longer reflects usable curvature or that produces a
+non-finite or ascent direction, and report every accepted and refused pair. Both
+objectives above now converge with the strategy alone. L-BFGS-B was left on its
+own filter, for the reasons given there.
 
 ### 2. High priority: history can mix different contact objectives
 
@@ -183,7 +193,18 @@ Work one stage at a time, retain baseline evidence, and publish each validated
 change with its dependency pin. Prioritize stages 1 and 2 before evaluating a
 new line-search default.
 
-1. **Safeguard curvature updates in PolySolve.** Add deterministic regressions
+1. **Done (2026-09-22): safeguard curvature updates in PolySolve.**
+   Published as PolySolve
+   [`30f3a3a8b0aa`](https://github.com/sdast9/polysolve/commit/30f3a3a8b0aa291da1c7f738e86bc134a8a269a1) with the record in
+   [bfgs-curvature-safeguard-20260922.md](bfgs-curvature-safeguard-20260922.md).
+   The fixed corpus chose `curvature_policy: Skip` over damping and showed the
+   relative threshold's value to be immaterial between 0 and 1e-2. It also
+   showed the stage's own text to be insufficient: retaining the last valid
+   approximation indefinitely leaves a stale *descent* direction that the line
+   search accepts, so the solver's fallback is never reached, and the public
+   chain stalled at the iteration limit on Rosenbrock under skipping and on the
+   quartic under damping. A bounded `curvature_restart` (default 1) supplies the
+   missing signal. The original text of this item: Add deterministic regressions
    for the bounded polynomials above, zero displacement, near-zero positive
    curvature, overflow/nonfinite intermediate values, and positive quadratics
    across scales. Validate `s`, `y`, curvature, the inverse scale, and dense

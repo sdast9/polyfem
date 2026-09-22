@@ -5,7 +5,9 @@
 # gradient-norm fallback with a finite characteristic-energy bound, merged with
 # polyfem/polysolve@a7727e33 (residual problems, Eigen 5.0.1). The pin
 # follows the fork's iteration-callback branch; 427e1458 also corrects dense
-# BFGS to apply the current secant update before computing its direction.
+# BFGS to apply the current secant update before computing its direction, and
+# 30f3a3a8 validates the secant pairs before they enter either approximation
+# (BFGS audit stage 1, docs/bfgs-curvature-safeguard-20260922.md).
 # License: MIT
 
 if(TARGET polysolve)
@@ -15,4 +17,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#427e1458123120044bb7dfed89e6673f2fb0dd12")
+CPMAddPackage("gh:sdast9/polysolve#30f3a3a8b0aa291da1c7f738e86bc134a8a269a1")

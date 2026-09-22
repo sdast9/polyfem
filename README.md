@@ -16,10 +16,14 @@ the parent workspace's README; this section keeps the repository's own claims
 current.
 
 - **BFGS convergence audit (September 22, 2026):** the dense-BFGS direction now
-  uses the latest secant update (PolySolve `427e1458`). Unsafe curvature updates,
-  contact-objective history invalidation and a feasibility-aware Wolfe search
+  uses the latest secant update (PolySolve `427e1458`), and both BFGS strategies
+  now validate a secant pair before it enters their approximation, refusing it
+  by name and restarting from steepest descent when it carries no usable
+  curvature (PolySolve `30f3a3a8`, [stage 1 record](docs/bfgs-curvature-safeguard-20260922.md)).
+  Contact-objective history invalidation and a feasibility-aware Wolfe search
   remain in the [evidence-backed repair plan](docs/bfgs-convergence-audit-20260922.md).
-  The ordering correction alone does not establish contact-scene convergence.
+  Neither correction establishes contact-scene convergence: the two public
+  scenes fail exactly as before, and neither refused a single pair.
 
 - **Continuous integration** runs on this fork:
   [Build](https://github.com/sdast9/polyfem/actions/workflows/continuous.yml)

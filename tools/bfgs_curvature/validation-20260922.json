@@ -1,0 +1,325 @@
+{
+  "date": "2026-09-22",
+  "stage": "BFGS convergence audit, stage 1: curvature safeguards",
+  "polysolve_commit": "30f3a3a8b0aa291da1c7f738e86bc134a8a269a1",
+  "polysolve_commit_at_run": "30f3a3a8b0aa291da1c7f738e86bc134a8a269a1",
+  "polysolve_status_at_run": "",
+  "note": "Re-run on the published revision with a clean tree and the committed corpus source; the rows are identical to the earlier runs made before CurvatureGuard.cpp and corpus.cpp were clang-formatted. The test records predate that formatting; stage1-final is the rerun of the full suite after it.",
+  "corpus": {
+    "build_command": [
+      "/usr/bin/c++",
+      "-std=c++17",
+      "-O2",
+      "-DNDEBUG",
+      "-DNOMINMAX",
+      "-DPOLYSOLVE_WITH_ACCELERATE",
+      "-DPOLYSOLVE_WITH_CHOLMOD",
+      "-DPOLYSOLVE_WITH_HYPRE",
+      "-DPOLYSOLVE_WITH_SPECTRA",
+      "-DPOLYSOLVE_WITH_SPQR",
+      "-DPOLYSOLVE_WITH_UMFPACK",
+      "-DPOLYSOLVE_WITH_UNICODE",
+      "-DSPDLOG_COMPILED_LIB",
+      "-isystem",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/eigen/4f90a4156591c932f7bd491969c92940f689ac02",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/spdlog/d7e5/include",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/nlohmann_json/38b0c9d43065c91a434f2ccd3dc8165a73a229af/include",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/json-spec-engine/4b7c14d036e640a398e0fa46a4db384be8cf7d13/src",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/blas",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/lapack",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/struct_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/struct_ls",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/sstruct_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/sstruct_ls",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/utilities",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/multivector",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/krylov",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/seq_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/seq_block_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/parcsr_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/parcsr_block_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/distributed_matrix",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/IJ_mv",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/matrix_matrix",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/distributed_ls",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src/parcsr_ls",
+      "-isystem",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/hypre-build",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/hypre/0d42/src",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/spectra/ba1e/include",
+      "-isystem",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/generated/polysolve",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/lbfgspp/4070b1abd12b2b0dc71ba965796709fd61addc96/include",
+      "-isystem",
+      "/Users/stevenabramowitch/.cache/CPM/finite-diff/1d94bd80238c9925fb3a3e08f890692c283943ce/src",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/bfgs_curvature/corpus.cpp",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src/polysolve/nonlinear/descent_strategies/CurvatureGuard.cpp",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src/polysolve/nonlinear/descent_strategies/LBFGS.cpp",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src/polysolve/nonlinear/descent_strategies/BFGS.cpp",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/finite-diff-build/libfinitediff_finitediff.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/libpolysolve.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/libpolysolve_linear.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/hypre-build/lib/libHYPRE.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libumfpack.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/liblinear_spec.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/polysolve-build/libnon_linear_spec.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libspqr.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libcholmod.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libamd.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libcamd.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libccolamd.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libcolamd.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/libsuitesparseconfig.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/spdlog-build/libspdlog.a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/_deps/json-spec-engine-build/libjse.a",
+      "-framework",
+      "Accelerate",
+      "-o",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/corpus-published/corpus"
+    ],
+    "executable_sha256": "860fb239680700ad4117df913d1bebbc7c28822fc23fcb004c90cd22527ed3cc",
+    "source_sha256": {
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/tools/bfgs_curvature/corpus.cpp": "8de2e80fa937900222a4b4093d1b4c37414391a326b1fd5b63fd8f6b138b658a",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src/polysolve/nonlinear/descent_strategies/CurvatureGuard.cpp": "295e27098d41b625a5a6916e036848245f70cd3a632f9d53592bcf1df98fd5ac",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src/polysolve/nonlinear/descent_strategies/LBFGS.cpp": "4fc3f2b926f695a826c354acd08c7ba886a27246b5b65cc9d834b76c5a5c937e",
+      "/Users/stevenabramowitch/Downloads/fable_polyfem/polysolve-merged/src/polysolve/nonlinear/descent_strategies/BFGS.cpp": "63c2a4a5e70f4d235450c2bbdfcb04a98772dc809f591171d9606dc01395f763"
+    },
+    "run_exit_code": 0,
+    "rows": 520,
+    "blocks": {
+      "policy_matrix": 192,
+      "restart_sweep": 256,
+      "threshold_sweep": 64,
+      "traces": 8
+    }
+  },
+  "tests": {
+    "stage1": {
+      "command": [
+        "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/stage1-nonlinear_tests",
+        "[bfgs]"
+      ],
+      "exit_code": 0,
+      "summary": [
+        "All tests passed (398 assertions in 9 test cases)"
+      ],
+      "executable_sha256": "5f84f7e9246340eea0d99b2b417b9831591f1d8c61cadd9f78050e7941cf7432"
+    },
+    "stage1-full": {
+      "command": [
+        "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/stage1-full-nonlinear_tests",
+        "*"
+      ],
+      "exit_code": 0,
+      "summary": [
+        "All tests passed (1632 assertions in 20 test cases)"
+      ],
+      "executable_sha256": "c3db6df9615c1697446567fc904a6ee3e9c31b85d5d38888bc7a06fbeddadd09"
+    },
+    "stage1-final": {
+      "command": [
+        "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/stage1-final-nonlinear_tests",
+        "*"
+      ],
+      "exit_code": 0,
+      "summary": [
+        "All tests passed (1632 assertions in 20 test cases)"
+      ],
+      "executable_sha256": "248f5cf7fbe26bd5ddc85839503a5e757375397bd50d76a42090c74aff6c9032"
+    }
+  },
+  "polyfem_suites": {
+    "selector": "[al_solver],[direction_filter]",
+    "summary": [
+      "All tests passed (4060 assertions in 26 test cases)"
+    ]
+  },
+  "scenes": {
+    "newton_comparison": [
+      {
+        "scene": "quasistatic-adaptive",
+        "exit_codes": [
+          0,
+          0
+        ],
+        "frames": [
+          5,
+          5
+        ],
+        "identical": true
+      },
+      {
+        "scene": "quasistatic-semi",
+        "exit_codes": [
+          0,
+          0
+        ],
+        "frames": [
+          5,
+          5
+        ],
+        "identical": true
+      },
+      {
+        "scene": "quasistatic-semi-alhess",
+        "exit_codes": [
+          0,
+          0
+        ],
+        "frames": [
+          5,
+          5
+        ],
+        "identical": true
+      },
+      {
+        "scene": "quasistatic-semi-friction",
+        "exit_codes": [
+          0,
+          0
+        ],
+        "frames": [
+          5,
+          5
+        ],
+        "identical": true
+      },
+      {
+        "scene": "transient-semi",
+        "exit_codes": [
+          0,
+          0
+        ],
+        "frames": [
+          5,
+          5
+        ],
+        "identical": true
+      }
+    ],
+    "bfgs_family": [
+      {
+        "scene": "quasistatic-semi",
+        "method": "L-BFGS",
+        "label": "quasistatic-semi-L-BFGS-after",
+        "binary": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+        "binary_sha256": "b39b40e7cc8733d31881157fd1e661eac03c692d0d4abb68678708cfd2845007",
+        "command": [
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+          "--json",
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/scenes/quasistatic-semi-L-BFGS-after/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "5e915dcfa7473df5452e9ce9db38dea7559798c4ec68f6bf3e56d1b7cf8d9b4f",
+        "exit_code": 1,
+        "wall_seconds": 12.46,
+        "error_lines": 22,
+        "restarts": 20,
+        "non_descent": 0,
+        "direction_failures": 0,
+        "frames": 1
+      },
+      {
+        "scene": "quasistatic-semi",
+        "method": "BFGS",
+        "label": "quasistatic-semi-BFGS-after",
+        "binary": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+        "binary_sha256": "b39b40e7cc8733d31881157fd1e661eac03c692d0d4abb68678708cfd2845007",
+        "command": [
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+          "--json",
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/scenes/quasistatic-semi-BFGS-after/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "690db8e221b8d652aa6a19dfa908d94322947628bb9530d1d73fa962afb2454f",
+        "exit_code": 1,
+        "wall_seconds": 74.71,
+        "error_lines": 22,
+        "restarts": 20,
+        "non_descent": 0,
+        "direction_failures": 0,
+        "frames": 1
+      },
+      {
+        "scene": "transient-semi",
+        "method": "L-BFGS",
+        "label": "transient-semi-L-BFGS-after",
+        "binary": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+        "binary_sha256": "b39b40e7cc8733d31881157fd1e661eac03c692d0d4abb68678708cfd2845007",
+        "command": [
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+          "--json",
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/scenes/transient-semi-L-BFGS-after/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "35ba562b91563233a7546057ddddcafdc4df077902dcec1279ae6a8e96adaf78",
+        "exit_code": 1,
+        "wall_seconds": 14.13,
+        "error_lines": 22,
+        "restarts": 20,
+        "non_descent": 0,
+        "direction_failures": 0,
+        "frames": 1
+      },
+      {
+        "scene": "transient-semi",
+        "method": "BFGS",
+        "label": "transient-semi-BFGS-after",
+        "binary": "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+        "binary_sha256": "b39b40e7cc8733d31881157fd1e661eac03c692d0d4abb68678708cfd2845007",
+        "command": [
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/polyfem/build/PolyFEM_bin",
+          "--json",
+          "/Users/stevenabramowitch/Downloads/fable_polyfem/outputs/bfgs-stage1/20260922T113940Z/scenes/transient-semi-BFGS-after/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "b3c260ab6e1dadfcc19020cfb7b793ddbca733b26f23fdb6b58fa6ca79dae33c",
+        "exit_code": 1,
+        "wall_seconds": 69.28,
+        "error_lines": 22,
+        "restarts": 20,
+        "non_descent": 0,
+        "direction_failures": 0,
+        "frames": 1
+      }
+    ]
+  }
+}
