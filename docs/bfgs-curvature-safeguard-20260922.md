@@ -49,12 +49,16 @@ The threshold is **relative and scale aware**: `s·y > ε‖s‖‖y‖` is inva
 under a rescaling of the objective or of the variables, unlike an absolute
 curvature bound.
 
-After the direction is computed it is checked as well. A non-finite direction,
-an ascent direction away from a stationary point, or a failed dense
-factorization discards the approximation (`non_finite_direction`,
-`non_descent_direction`, `factorization_failed`) and falls back to steepest
-descent — a dense factorization of an indefinite matrix succeeds and returns an
-ascent direction, so this is not covered by the pair tests.
+After the direction is computed it is checked as well. A non-finite direction
+or an ascent direction away from a stationary point discards the approximation
+(`non_finite_direction`, `non_descent_direction`) and falls back to steepest
+descent. A caught dense factorization/solve exception instead records
+`factorization_failed`, resets the matrix and returns failure to the outer
+strategy chain; a lone BFGS strategy then fails. The
+[stage 1–2 review](bfgs-stage12-review-20260922.md) identified this discrepancy
+with the originally stated fallback and added a contract/test follow-up.
+A dense factorization of an indefinite matrix can succeed and return an ascent
+direction, so the direction check is still needed beyond the pair tests.
 
 Counts of accepted, damped and refused pairs, the reasons, and the discarded
 approximations with their reasons are logged at debug level and reported in

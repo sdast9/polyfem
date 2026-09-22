@@ -5,7 +5,8 @@ and 2 of the plan below (curvature safeguards, objective-generation history
 reset) implemented and validated — see the
 [stage 1](bfgs-curvature-safeguard-20260922.md) and
 [stage 2](bfgs-objective-generation-20260922.md) records; stages 3 to 5 remain
-planned.**
+planned. The [stage 1–2 review](bfgs-stage12-review-20260922.md) recommends
+stage 4 diagnostics next, before stage 3 implementation.**
 
 The BFGS variants have implementation and integration issues that can impair
 convergence. The line search is part of the problem, but replacing Armijo alone
@@ -15,7 +16,7 @@ limits on actual contact scenes.
 
 ## Scope and provenance
 
-Requested: review the BFGS variants and their line searches; supply a plan for
+Original audit scope (before stages 1 and 2): review the BFGS variants and their line searches; supply a plan for
 issues that need more than a straightforward fix. One independent ordering
 correction was made. No curvature policy, contact law, line-search acceptance,
 stopping tolerance, restart budget, friction policy, CCD rule or trial cap changed.
@@ -200,8 +201,24 @@ fail on the still-open issues.
 ## Remaining implementation plan
 
 Work one stage at a time, retain baseline evidence, and publish each validated
-change with its dependency pin. Prioritize stages 1 and 2 before evaluating a
-new line-search default.
+change with its dependency pin. Stages 1 and 2 are complete within their measured
+scope. Next, close the bounded review follow-ups below and perform stage 4's
+diagnosis before implementing stage 3. Keep the stage numbers stable for links
+and existing validation records; they no longer describe execution order.
+
+**Review follow-ups (2026-09-22).** Align the dense factorization-exception
+path with the documented safe fallback: it currently resets the matrix and
+returns false, which terminates a lone BFGS strategy or escalates a configured
+chain. Either implement the promised finite `-grad` fallback with a current
+iterate/gradient anchor, or explicitly retain and document escalation. Pin the
+chosen behavior with fault injection for both lone and chained configurations.
+This branch was not exercised by the recorded scene failures. Add stage 2
+regressions for `fDelta`/consecutive-count behavior after retuning and for a
+generation change during a failed line search before the next strategy runs.
+Add direct generation assertions for committed versus no-op quadrature
+refinement and adaptive stiffness changes; existing broad suites do not assert
+these new signals. Preserve the completed stages' scoped status, rather than
+claiming that every exceptional path has been validated.
 
 1. **Done (2026-09-22): safeguard curvature updates in PolySolve.**
    Published as PolySolve
@@ -243,7 +260,7 @@ new line-search default.
    pairs belong to one objective generation; the current retuning law and
    Newton controls remain intact.
 
-3. **Add an optional Wolfe search that respects feasibility.** Implement or
+3. **After stage 4 diagnosis, add an optional Wolfe search that respects feasibility.** Implement or
    adapt a bracket-and-zoom / More-Thuente search, with explicit Armijo and slope
    tests and a finite evaluation budget. Reuse `solution_changed`, validity,
    CCD and trial-cap handling. Growth beyond a previously swept interval must
@@ -253,18 +270,36 @@ new line-search default.
    exit cleanup on exceptions and finite-energy prechecks. Test needing alpha
    greater than one, cap below the curvature threshold, nonfinite trials,
    zero CCD step, new contacts, energy roundoff and objective-version changes.
-   Compare with safeguarded RobustArmijo before proposing a default change.
+   A generation change invalidates stored endpoint energies and slopes as well
+   as quasi-Newton history: abort/restart that search under one objective, with
+   a bounded restart budget and cleanup. Compare with safeguarded RobustArmijo
+   before proposing a default change. Positive accepted curvature alone does
+   not establish the Wolfe curvature condition or rule out a benefit from growth.
 
-4. **Measure contact convergence with useful diagnostics.** Repeat the public
+4. **Next: measure contact convergence with useful diagnostics.** First reuse
+   the stage 2 records as the baseline. The final quasistatic L-BFGS pass has
+   100 accepted pairs, no skips or objective changes, and accepts alpha 1 with
+   no search shrinkage, yet its reported gradient norm is 1.10001 against a
+   2.27951e-6 target when the soft budget interrupts it. This establishes an
+   unresolved plateau, not its cause. Capture accepted endpoint slopes, the
+   initial inverse-Hessian scale and direction-to-gradient norm ratio alongside
+   the metrics below, so tiny directions can be distinguished from rejected
+   line-search steps. Repeat the public
    quasistatic/transient pair, then the other three public smokes and a fixed-
    objective contact control. Record final rescaled residuals, termination
    criteria, accepted displacement, alpha relative to the feasible cap, pair
    curvature/scale, objective versions, skip/reset/fallback counts and whether a
    restart came from alpha or the soft iteration budget. A diagnostic experiment
    can isolate the 100-iteration history reset, but production restart/controller
-   defaults remain a separate decision. Test conditioning/initial scaling only
-   after history correctness. Acceptance is actual configured convergence, not
-   an interrupted solve or an increased iteration allowance alone.
+   defaults remain a separate decision. Compare a bounded uninterrupted pass
+   against the existing restart policy from the same saved starting state;
+   identify any simultaneous trim/objective changes so the comparison does not
+   attribute their effect to history retention. Test conditioning/initial scaling
+   one factor at a time at unchanged tolerances. Report failures, completed time
+   steps, residuals and cost separately. Diagnostic completion requires evidence
+   that selects the next experiment; a solver repair is accepted only on actual
+   configured convergence, not an interrupted solve or an increased allowance
+   alone. Do not change the production soft budget merely to make a run finish.
 
 5. **Clarify forward-method support and strengthen test reporting.** Remove or
    explain the unsupported forward L-BFGS-B option while retaining legitimate

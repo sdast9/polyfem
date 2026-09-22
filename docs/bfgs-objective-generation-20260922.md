@@ -137,8 +137,11 @@ limit: the restart-limited plateau the audit separated out, which stage 4 owns.
 
 - This is a **report, not a detection**. A form that changes the function it
   evaluates without calling `note_objective_change` is still invisible, exactly
-  as before. The known sites are instrumented and pinned by tests; a new one
-  has to make the call, which `Form::objective_generation` documents.
+  as before. The known sites are instrumented; the new tests directly cover
+  contact refresh/trim and post-step retuning, while generation assertions for
+  quadrature commits and classic adaptive stiffness remain a
+  [review follow-up](bfgs-stage12-review-20260922.md). A new site has to make
+  the call, which `Form::objective_generation` documents.
 - The generation is a version, not physical state: it is never saved, restored
   or reset, so it is monotone within a process and comparisons across a
   rollback stay meaningful.
