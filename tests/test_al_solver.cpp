@@ -175,6 +175,79 @@ TEST_CASE("AL stops repeating unchanged stall restarts", "[al_solver]")
 	}
 }
 
+// BFGS audit stage 4: the stall callback has two independent triggers and the
+// restart message named only the first, so a solve the iteration budget
+// interrupted was reported -- and read -- as an alpha collapse. The trigger is
+// now recorded. Reporting only; no restart policy changed.
+TEST_CASE("AL records which condition actually triggered a stall restart", "[al_solver][stall_trigger]")
+{
+	const auto solve = [](const StallRestartOptions &opts, bool block_steps, bool retunes = true) {
+		QuarticProblem problem;
+		problem.block_steps = block_steps;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, opts, [retunes](const auto &) { return retunes; });
+		if (block_steps)
+			solver.direction_filter = [](const auto &, auto &) {};
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS(solver.solve_reduced(problem, sol, parameters(), linear, 1));
+		return solver.info();
+	};
+
+	SECTION("the soft iteration budget is not an alpha collapse")
+	{
+		// This is the public scenes' failure mode: the budget ends the pass
+		// while the line search is still accepting the full step.
+		const json info = solve(restart_options(0), false);
+		CHECK(info["stall_trigger"] == "soft_iteration_limit");
+		CHECK(info["stall_iteration"] == 1);
+		CHECK(info["stall_alpha"] == 1.0);
+	}
+
+	SECTION("small alpha is reported as alpha")
+	{
+		auto opts = restart_options(0);
+		opts.soft_iteration_limit = -1; // leave only the alpha patience
+		opts.alpha_threshold = 2.0;     // a test knob: every accepted alpha counts
+		opts.patience = 2;
+		const json info = solve(opts, false);
+		CHECK(info["stall_trigger"] == "alpha");
+		// The callback runs once per accepted iteration and reports the count
+		// completed before it, so a patience of 2 is reached at 1.
+		CHECK(info["stall_iteration"] == 1);
+		CHECK(info["stall_alpha"] == 1.0);
+	}
+
+	SECTION("both conditions at once are reported as both")
+	{
+		auto opts = restart_options(0); // soft_iteration_limit 1
+		opts.alpha_threshold = 2.0;
+		opts.patience = 2;
+		const json info = solve(opts, false);
+		CHECK(info["stall_trigger"] == "alpha_and_soft_iteration_limit");
+		CHECK(info["stall_iteration"] == 1);
+	}
+
+	SECTION("a line search that failed on every strategy is neither")
+	{
+		// The callback never sees this one: the solver threw instead. It
+		// needs restart budget, because a hard stall with none left is an
+		// ordinary failure that rethrows before any restart decision.
+		auto opts = restart_options(20);
+		const json info = solve(opts, true, /*retunes=*/false);
+		CHECK(info["stall_trigger"] == "line_search_failed_on_all_strategies");
+		CHECK(info["stall_iteration"] == -1);
+		CHECK(info["stall_alpha"].is_null());
+	}
+
+	SECTION("a hard stall with no restart budget left rethrows before the decision")
+	{
+		// Documented boundary: the trigger is recorded where a restart is
+		// decided, so the plain failure path carries the error instead.
+		const json info = solve(restart_options(0), true);
+		CHECK(info["outcome"] == "failed");
+		CHECK_FALSE(info.contains("stall_trigger"));
+	}
+}
+
 TEST_CASE("AL hard line search failures remain failures and clean shared solver", "[al_solver]")
 {
 	QuarticProblem problem;

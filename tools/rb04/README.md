@@ -146,7 +146,10 @@ for the first-contact .00131 quadrature discrepancy and non-exhaustive event lim
 
 The same opt-in also writes `solver-attempts.jsonl`: one row per PolySolve
 minimize start, accepted Newton update (trial sweep norms, forms' step bound,
-line-search validity trials, accepted fraction) and rejected proposal. The
+line-search validity trials, accepted fraction) and rejected proposal. Its own
+schema is `polyfem.solver-attempt`, version 2 since the BFGS audit's stage 4
+added `solver`: PolySolve's per-iteration nonlinear diagnostics on an accepted
+row, null unless `solver/nonlinear/advanced/iteration_diagnostics` is on. The
 endpoint record carries `attempt_summary`, `proposed_displacement`, the retained
 `contact.candidate_count` statistics, the right-endpoint work increments
 (`support_work_increment`, `external_work_increment`,

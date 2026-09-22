@@ -1931,16 +1931,25 @@ namespace polyfem::varform
 		const auto info_number = [](const json *info, const char *key) {
 			return info && info->contains(key) && (*info)[key].is_number() ? (*info)[key].get<double>() : std::numeric_limits<double>::quiet_NaN();
 		};
+		// BFGS audit stage 4: PolySolve's opt-in per-iteration diagnostics
+		// (solver/nonlinear/advanced/iteration_diagnostics) ride in the same
+		// solver info as the energy and the gradient norm. Null when that
+		// option is off, which is the default.
+		const auto solver_diagnostics = [](const json *info) -> json {
+			if (info && info->contains("iteration_diagnostics") && (*info)["iteration_diagnostics"].is_object())
+				return (*info)["iteration_diagnostics"];
+			return nullptr;
+		};
 		const auto trial_json = [&]() -> json {
 			return {{"norm", attempts.trial_norm}, {"linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"validity_checks", attempts.iteration_validity_checks}, {"validity_rejections", attempts.iteration_validity_rejections}, {"scope", "Sweep handed to the contact broad phase after the finite-energy stage; step_bound is the forms' inversion/CCD fraction of it"}};
 		};
 		// PolySolve's solver info at post_step holds the objective and gradient
 		// norm of the iterate the direction was computed from (x0), not of
 		// the accepted point; the start row carries the start energy only.
-		const auto write_attempt = [&](const std::string &kind, int iteration, const json &trial, const json &accepted, double energy, double grad_norm) {
+		const auto write_attempt = [&](const std::string &kind, int iteration, const json &trial, const json &accepted, double energy, double grad_norm, const json &solver = json(nullptr)) {
 			if (!attempts.stream.is_open())
 				return;
-			const json row = {{"schema", io::schemas::SOLVER_ATTEMPT}, {"version", io::schemas::SOLVER_ATTEMPT_VERSION}, {"run_id", diagnostic_run_id_}, {"step", step}, {"phase", diagnostic_phase}, {"minimize_index", attempts.minimize_index}, {"iteration", iteration}, {"kind", kind}, {"trial", trial}, {"accepted", accepted}, {"energy_objective_at_x0", finite_or_null(energy)}, {"gradient_norm_objective_at_x0", finite_or_null(grad_norm)}, {"units", "internal length; objective units at the iterate the proposal was computed from; Euclidean/Linf norms over full node-major DOFs"}};
+			const json row = {{"schema", io::schemas::SOLVER_ATTEMPT}, {"version", io::schemas::SOLVER_ATTEMPT_VERSION}, {"run_id", diagnostic_run_id_}, {"step", step}, {"phase", diagnostic_phase}, {"minimize_index", attempts.minimize_index}, {"iteration", iteration}, {"kind", kind}, {"trial", trial}, {"accepted", accepted}, {"energy_objective_at_x0", finite_or_null(energy)}, {"gradient_norm_objective_at_x0", finite_or_null(grad_norm)}, {"solver", solver}, {"units", "internal length; objective units at the iterate the proposal was computed from; Euclidean/Linf norms over full node-major DOFs"}};
 			// Flushed per row: an uncaught solver exception terminates the
 			// process without unwinding, so a buffered stream would lose the
 			// failed attempt's history.
@@ -2034,7 +2043,7 @@ namespace polyfem::varform
 							++attempts.line_search_truncated;
 						attempts.last_proposal = {{"trial_norm", attempts.trial_norm}, {"trial_linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"accepted_fraction_of_trial", finite_or_null(fraction)}, {"accepted_norm", dx.norm()}, {"iteration", iteration}, {"minimize_index", attempts.minimize_index}, {"scope", "Last Newton proposal accepted before this record; the per-iteration stream is solver-attempts.jsonl"}};
 						++attempts.accepted_iterations;
-						write_attempt("accepted", iteration, trial, accepted, energy, grad_norm);
+						write_attempt("accepted", iteration, trial, accepted, energy, grad_norm, solver_diagnostics(o.solver_info));
 						attempts.has_proposal = false;
 						attempts.iteration_validity_checks = attempts.iteration_validity_rejections = 0;
 						attempts.iterate_iteration = iteration;

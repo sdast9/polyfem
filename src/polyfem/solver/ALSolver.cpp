@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
+#include <string>
 
 namespace polyfem::solver
 {
@@ -191,6 +193,14 @@ namespace polyfem::solver
 			bool stalled = false;
 			int stall_count = 0;
 
+			// BFGS audit stage 4: the callback has two independent triggers
+			// and the restart message named only the first, so a solve
+			// interrupted by the soft iteration budget was reported as an
+			// alpha collapse. Record which one actually fired.
+			std::string stall_trigger = "none";
+			int stall_iteration = -1;
+			double stall_alpha = std::numeric_limits<double>::quiet_NaN();
+
 			const auto scale = nl_problem.normalize_forms();
 			auto nl_solver = nl_solverin == nullptr ? polysolve::nonlinear::Solver::create(
 														  nl_solver_params, linear_solver, characteristic_length * scale, logger())
@@ -210,9 +220,17 @@ namespace polyfem::solver
 					else
 						stall_count = 0;
 
-					stalled = stall_count >= stall_opts.patience
-							  || (stall_opts.soft_iteration_limit > 0
-								  && int(crit.iterations) >= stall_opts.soft_iteration_limit);
+					const bool alpha_stall = stall_count >= stall_opts.patience;
+					const bool budget_stall = stall_opts.soft_iteration_limit > 0
+											  && int(crit.iterations) >= stall_opts.soft_iteration_limit;
+					stalled = alpha_stall || budget_stall;
+					if (stalled)
+					{
+						stall_trigger = alpha_stall ? (budget_stall ? "alpha_and_soft_iteration_limit" : "alpha")
+													: "soft_iteration_limit";
+						stall_iteration = int(crit.iterations);
+						stall_alpha = crit.alpha;
+					}
 					return stalled;
 				});
 			}
@@ -285,14 +303,41 @@ namespace polyfem::solver
 			nl_solver->set_iteration_callback(nullptr);
 			nl_solver->set_direction_filter(nullptr);
 
+			// BFGS audit stage 4: what ended this attempt, for the record.
+			// A hard stall is a line search that failed on every strategy,
+			// which the callback never sees; "none" means the solver stopped
+			// on its own criteria.
+			solve_info_["stall_trigger"] = hard_stall ? "line_search_failed_on_all_strategies" : stall_trigger;
+			solve_info_["stall_iteration"] = stall_iteration;
+			solve_info_["stall_alpha"] = std::isfinite(stall_alpha) ? json(stall_alpha) : json(nullptr);
+
 			if (!stalled && !hard_stall)
 				return SubsolveOutcome::Interrupted;
+
+			// Name the trigger rather than the first of the two conditions.
+			// Reading a soft-budget interruption as an alpha collapse sent
+			// the audit looking at the line search instead of the plateau.
+			const std::string stall_description =
+				hard_stall
+					? std::string("line search failed on every strategy")
+				: stall_trigger == "soft_iteration_limit"
+					? fmt::format(
+						  "soft iteration budget reached at iteration {} (limit {}), alpha {:g}",
+						  stall_iteration, stall_opts.soft_iteration_limit, stall_alpha)
+				: stall_trigger == "alpha_and_soft_iteration_limit"
+					? fmt::format(
+						  "alpha < {:g} for {} iterations and the soft iteration budget, at iteration {} (limit {}), alpha {:g}",
+						  stall_opts.alpha_threshold, stall_opts.patience, stall_iteration,
+						  stall_opts.soft_iteration_limit, stall_alpha)
+					: fmt::format(
+						  "alpha < {:g} for {} iterations, at iteration {} (alpha {:g})",
+						  stall_opts.alpha_threshold, stall_opts.patience, stall_iteration, stall_alpha);
 
 			if (restarts >= stall_opts.max_restarts)
 			{
 				logger().warn(
-					"Line-search stall persisted after {} restart(s); subsolve interrupted (not converged)",
-					restarts);
+					"Line-search stall persisted after {} restart(s) ({}); subsolve interrupted (not converged)",
+					restarts, stall_description);
 				return SubsolveOutcome::Interrupted;
 			}
 
@@ -313,8 +358,8 @@ namespace polyfem::solver
 			// Identity when the problem is in full size
 			const Eigen::VectorXd full_sol = nl_problem.reduced_to_full(tmp_sol);
 			logger().warn(
-				"Line-search stall detected (alpha < {:g} for {} iterations); retuning barrier stiffness and restarting ({}/{})",
-				stall_opts.alpha_threshold, stall_opts.patience, restarts, stall_opts.max_restarts);
+				"Line-search stall detected (trigger: {}); retuning barrier stiffness and restarting ({}/{})",
+				stall_description, restarts, stall_opts.max_restarts);
 
 			// on_stall is responsible for retuning the barrier stiffness at
 			// full_sol (the update_barrier_stiffness callback may capture a

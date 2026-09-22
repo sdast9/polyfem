@@ -20,8 +20,10 @@ namespace polyfem::io
 		/// RB-04 coefficient operations, coefficient-events.jsonl.
 		constexpr const char *COEFFICIENT_EVENT = "polyfem.coefficient-event";
 		constexpr int COEFFICIENT_EVENT_VERSION = 1;
-		/// RB-04 remainder: per-iteration attempt observation, solver-attempts.jsonl.
+		/// RB-04 remainder: per-iteration attempt observation, solver-attempts.jsonl
+		/// (version 2 since the BFGS audit's stage 4 added the `solver` field,
+		/// PolySolve's opt-in per-iteration nonlinear diagnostics).
 		constexpr const char *SOLVER_ATTEMPT = "polyfem.solver-attempt";
-		constexpr int SOLVER_ATTEMPT_VERSION = 1;
+		constexpr int SOLVER_ATTEMPT_VERSION = 2;
 	} // namespace schemas
 } // namespace polyfem::io

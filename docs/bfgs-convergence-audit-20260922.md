@@ -1,12 +1,16 @@
 # BFGS convergence audit and repair plan
 
-Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stages 1
-and 2 of the plan below (curvature safeguards, objective-generation history
-reset) implemented and validated — see the
-[stage 1](bfgs-curvature-safeguard-20260922.md) and
-[stage 2](bfgs-objective-generation-20260922.md) records; stages 3 to 5 remain
-planned. The [stage 1–2 review](bfgs-stage12-review-20260922.md) recommends
-stage 4 diagnostics next, before stage 3 implementation.**
+Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stages 1,
+2 and 4 of the plan below (curvature safeguards, objective-generation history
+reset, contact diagnostics) implemented and validated — see the
+[stage 1](bfgs-curvature-safeguard-20260922.md),
+[stage 2](bfgs-objective-generation-20260922.md) and
+[stage 4](bfgs-contact-diagnostics-20260922.md) records; stages 3 and 5 remain
+planned. Stage 4 found the public L-BFGS failures to be a controller/allowance
+mismatch, not a solver defect: with only the semi-implicit stall controller's
+100-iteration soft budget removed, all five public smokes converge under L-BFGS
+on their configured criterion. Making that budget method-aware is a production
+default decision and is pending the user's.**
 
 The BFGS variants have implementation and integration issues that can impair
 convergence. The line search is part of the problem, but replacing Armijo alone
@@ -215,6 +219,8 @@ chosen behavior with fault injection for both lone and chained configurations.
 This branch was not exercised by the recorded scene failures. Add stage 2
 regressions for `fDelta`/consecutive-count behavior after retuning and for a
 generation change during a failed line search before the next strategy runs.
+(Stage 4 closed the third follow-up: the interruption trigger is now recorded,
+and the inverse scaling, endpoint slopes and restart effects are measured.)
 Add direct generation assertions for committed versus no-op quadrature
 refinement and adaptive stiffness changes; existing broad suites do not assert
 these new signals. Preserve the completed stages' scoped status, rather than
@@ -260,7 +266,9 @@ claiming that every exceptional path has been validated.
    pairs belong to one objective generation; the current retuning law and
    Newton controls remain intact.
 
-3. **After stage 4 diagnosis, add an optional Wolfe search that respects feasibility.** Implement or
+3. **Next, informed by stage 4: add an optional Wolfe search that respects feasibility.**
+   Stage 4 measured where its value is: target the bracket-and-grow half.
+   Implement or
    adapt a bracket-and-zoom / More-Thuente search, with explicit Armijo and slope
    tests and a finite evaluation budget. Reuse `solution_changed`, validity,
    CCD and trial-cap handling. Growth beyond a previously swept interval must
@@ -276,7 +284,25 @@ claiming that every exceptional path has been validated.
    before proposing a default change. Positive accepted curvature alone does
    not establish the Wolfe curvature condition or rule out a benefit from growth.
 
-4. **Next: measure contact convergence with useful diagnostics.** First reuse
+4. **Done (2026-09-22): measure contact convergence with useful diagnostics.**
+   Published with the record in
+   [bfgs-contact-diagnostics-20260922.md](bfgs-contact-diagnostics-20260922.md).
+   The plateau is not a line search, a curvature policy or a collapsed
+   direction: on `quasistatic-semi` under L-BFGS the line search accepts
+   `alpha = 1` without backtracking in 3,707 of 4,054 accepted iterations, no
+   secant pair is refused, the gradient-descent fallback is never reached, and
+   the direction-to-gradient ratio matches Newton's on the same scene. Every
+   one of the 136 measured L-BFGS restarts came from the **soft iteration
+   budget**, which the old message reported as an alpha collapse. Removing only
+   that budget converges all five public smokes on the configured
+   relative-gradient criterion, at the same solution Newton reaches; raising
+   `max_iterations` alone does not. `quasistatic-adaptive` has the separate,
+   simpler cause of PolySolve's default `max_iterations: 500`. The measurement
+   also settles the open question under item 3: strong Wolfe already holds at
+   the accepted alpha in 98 % of iterations, while 78 % sit at `alpha = 1` with
+   no feasibility cap and a still-negative endpoint slope — so stage 3's value
+   here is in its growth half, not its rejection half. The original text of
+   this item: First reuse
    the stage 2 records as the baseline. The final quasistatic L-BFGS pass has
    100 accepted pairs, no skips or objective changes, and accepts alpha 1 with
    no search shrinkage, yet its reported gradient norm is 1.10001 against a

@@ -273,7 +273,7 @@ start of a minimize as an accepted iterate with no pending proposal and numbers
 updates from 1, so `accepted_iterations` equals PolySolve's `iterations`.
 
 With the same opt-in flag the active VarForm appends `solver-attempts.jsonl`
-(schema `polyfem.solver-attempt`, version 1), flushed per row so that a fatal
+(schema `polyfem.solver-attempt`, version 2), flushed per row so that a fatal
 solver exception leaves a complete history. Each row carries the run ID, step,
 phase (`augmented_lagrangian`, `reduced`, `lagging`), `minimize_index` (count
 of PolySolve minimize calls in this attempt), `iteration` and `kind`:
@@ -293,6 +293,19 @@ solver info at `post_step`: the objective and gradient norm at the iterate the
 direction was computed from, not at the accepted point. Norms are Euclidean and
 Linf over full node-major DOFs in internal length units. The stream is solver
 bookkeeping; it certifies nothing physical.
+
+`solver` (version 2, BFGS audit stage 4) carries PolySolve's own per-iteration
+diagnostics on an `accepted` row, and is `null` on every other row and whenever
+`solver/nonlinear/advanced/iteration_diagnostics` is off — which is the
+default, because the record costs one extra gradient evaluation per accepted
+iteration. It names the strategy that produced the direction and separates an
+L-BFGS history direction from either kind of steepest-descent fallback
+(`strategy_state.direction_source`), reports the direction's norm against the
+gradient's and against the previous accepted direction's, the secant pair and
+the initial inverse-Hessian scale, the line search's feasible bound and the
+accepted alpha as a fraction of it, the accepted endpoint's gradient and slope,
+and the strategy transitions since the previous accepted iterate. It is
+observational: enabling it changes no acceptance or stopping decision.
 
 ### Endpoint record additions
 

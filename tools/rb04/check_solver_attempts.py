@@ -31,7 +31,7 @@ def check_run(directory):
     assert len({r['run_id'] for r in rows}) == 1 and rows[0]['run_id'] == endpoints[0]['run_id']
     by_step = defaultdict(list)
     for row in rows:
-        assert row['schema'] == 'polyfem.solver-attempt' and row['version'] == 1
+        assert row['schema'] == 'polyfem.solver-attempt' and row['version'] == 2
         assert row['kind'] in ('start', 'accepted', 'rejected', 'aborted')
         by_step[row['step']].append(row)
     summary = {'name': Path(directory).name, 'steps': []}
