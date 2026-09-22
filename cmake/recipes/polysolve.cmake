@@ -4,7 +4,8 @@
 # objective directional-derivative correction and the RB-19 line-search
 # gradient-norm fallback with a finite characteristic-energy bound, merged with
 # polyfem/polysolve@a7727e33 (residual problems, Eigen 5.0.1). The pin
-# follows the fork's iteration-callback branch; bce32a39 only enables its CI.
+# follows the fork's iteration-callback branch; 427e1458 also corrects dense
+# BFGS to apply the current secant update before computing its direction.
 # License: MIT
 
 if(TARGET polysolve)
@@ -14,4 +15,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#bce32a39a2c8f0a64cb8ffa85b89f0ee773df0ec")
+CPMAddPackage("gh:sdast9/polysolve#427e1458123120044bb7dfed89e6673f2fb0dd12")

@@ -1,0 +1,383 @@
+{
+  "date": "2026-09-22",
+  "scope": "BFGS audit; dense update-order correction only",
+  "baseline_revisions": {
+    "polyfem": "baac15c5f3812aef983d577ef721b89b1b617ca0",
+    "polysolve-merged": "bce32a39a2c8f0a64cb8ffa85b89f0ee773df0ec",
+    "ipc-toolkit-fork": "482b9eab2f81bbc5ee59586f80ffb041bcd488dd"
+  },
+  "polysolve_fix": "427e1458123120044bb7dfed89e6673f2fb0dd12",
+  "evidence_directory": "outputs/bfgs-audit/20260922T102120Z",
+  "baseline_probe": {
+    "build_exit_code": 0,
+    "run_exit_code": 0,
+    "executable_sha256": "b6f00adc0d019043289b5194a4fd168b1a432ef24def748608079fb801655ffd",
+    "results_sha256": "09a7005f8e41a800749278c89d739a64db253bf04b41761ae9107f3bd2b3dcd3"
+  },
+  "after_order_fix_probe": {
+    "build_exit_code": 0,
+    "run_exit_code": 0,
+    "executable_sha256": "3655635fa66994822c4935d9f89a946a1e277bad92398bc7f26d2522163abdb2",
+    "results_sha256": "abe350232a63414dcbd3cca4e6aeecda36845420eaededd9f1542270e1526b6b"
+  },
+  "regression_before": {
+    "cases": 2,
+    "assertions": 28,
+    "failed_cases": 2,
+    "failed_assertions": 4,
+    "exit_code": 4
+  },
+  "polysolve_nonlinear_after": {
+    "cases": 13,
+    "assertions": 1254,
+    "exit_code": 0
+  },
+  "polyfem_affected_after": {
+    "selector": "[al_solver],[direction_filter]",
+    "cases": 26,
+    "assertions": 4060,
+    "exit_code": 0
+  },
+  "polyfem_build": {
+    "targets": [
+      "PolyFEM_bin",
+      "unit_tests"
+    ],
+    "exit_code": 0,
+    "initial_sandbox_attempt": "dependency-cache lock was outside writable roots"
+  },
+  "hda_e2e": {
+    "test": "houdini_HDAs/tests/test_polyfem_hda.py",
+    "exit_code": 0,
+    "initial_attempt": "gmsh import missing; rerun used existing /opt/homebrew/lib module"
+  },
+  "baseline_scenes": {
+    "binary_sha256": "198efad95bc2b2c813ea3f552ad4d5b7bde121b4ba46fff51755f1275b02e2b5",
+    "runs": [
+      {
+        "scene": "quasistatic-semi",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/scenes/quasistatic-semi-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "54289470cf9d3cac5d91c94676ae425afc4acdd03ff65858ef95ba1f24e17225",
+        "source_input_sha256": "5459ff354994685b25d23d66ae4c01278bbeb68b6f426f06e166b78de32cf64a",
+        "assets_sha256": {
+          "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+          "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+        },
+        "exit_code": 0,
+        "wall_seconds": 5.231529125012457,
+        "log_sha256": "422ff413d80999658c60d87a6ebe1e94c3a41b18a56a3db475e95ba79a8b0453",
+        "error_lines": 0,
+        "non_descent_fallbacks": 0,
+        "direction_failures": 0,
+        "ls_failures": 0,
+        "restarts": 0,
+        "frames": 5
+      },
+      {
+        "scene": "quasistatic-semi",
+        "method": "L-BFGS",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/scenes/quasistatic-semi-L-BFGS/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "1ea7f1aac6eff0ad4f0265e9db9b3c7d24186856075e657b14ff35b11c837b33",
+        "source_input_sha256": "5459ff354994685b25d23d66ae4c01278bbeb68b6f426f06e166b78de32cf64a",
+        "assets_sha256": {
+          "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+          "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+        },
+        "exit_code": 1,
+        "wall_seconds": 12.46929212496616,
+        "log_sha256": "f4c565391f5a13c0c5cf9913746ca51f5c333e5d24e25f912ba976f2a3a578d6",
+        "error_lines": 22,
+        "non_descent_fallbacks": 0,
+        "direction_failures": 0,
+        "ls_failures": 0,
+        "restarts": 20,
+        "frames": 1
+      },
+      {
+        "scene": "quasistatic-semi",
+        "method": "BFGS",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/scenes/quasistatic-semi-BFGS/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "88968962b1c4232e68303b90b442334888c172e563f083f1b231e8a9f74b7d79",
+        "source_input_sha256": "5459ff354994685b25d23d66ae4c01278bbeb68b6f426f06e166b78de32cf64a",
+        "assets_sha256": {
+          "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+          "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+        },
+        "exit_code": null,
+        "timeout_seconds": 90,
+        "wall_seconds": 90.01488387503196,
+        "log_sha256": "ac2633ada8e99c40290a20a3720ac8ad1c511a4fd427628de7a3583639c9554e",
+        "error_lines": 15,
+        "non_descent_fallbacks": 0,
+        "direction_failures": 0,
+        "ls_failures": 0,
+        "restarts": 15,
+        "frames": 1
+      },
+      {
+        "scene": "transient-semi",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/scenes/transient-semi-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "a9f5c38007d4a3e1c9fb474ba19a6869ab9fbd2fbac9ba98f1aa7012a3b9f13f",
+        "source_input_sha256": "3bb5cc35c6f4edc50d24069f4fe4a8f600382b7139194390b1d30093340b0dc6",
+        "assets_sha256": {
+          "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+          "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+        },
+        "exit_code": 0,
+        "wall_seconds": 5.610079500009306,
+        "log_sha256": "e057ba5f734965f44565fbc5a15507ab4f2bb7ed182984cb4bb57204152e8435",
+        "error_lines": 0,
+        "non_descent_fallbacks": 0,
+        "direction_failures": 0,
+        "ls_failures": 0,
+        "restarts": 0,
+        "frames": 5
+      },
+      {
+        "scene": "transient-semi",
+        "method": "L-BFGS",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/scenes/transient-semi-L-BFGS/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "3f2b3216f6babed126bba03b69cdf72580df5003a13295cde44071ef01166363",
+        "source_input_sha256": "3bb5cc35c6f4edc50d24069f4fe4a8f600382b7139194390b1d30093340b0dc6",
+        "assets_sha256": {
+          "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+          "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+        },
+        "exit_code": 1,
+        "wall_seconds": 14.306080334004946,
+        "log_sha256": "f101e375e9f1f9a5004275abbc07d086aa62ff7cbf5b85a9f1e3de89f3661b83",
+        "error_lines": 22,
+        "non_descent_fallbacks": 0,
+        "direction_failures": 0,
+        "ls_failures": 0,
+        "restarts": 20,
+        "frames": 1
+      },
+      {
+        "scene": "transient-semi",
+        "method": "BFGS",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/scenes/transient-semi-BFGS/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "1980b907c9ddceee9ab26303d8779c03c78c5f5173eacbbd5f5ac0f4a21d4ad8",
+        "source_input_sha256": "3bb5cc35c6f4edc50d24069f4fe4a8f600382b7139194390b1d30093340b0dc6",
+        "assets_sha256": {
+          "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+          "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+        },
+        "exit_code": null,
+        "timeout_seconds": 90,
+        "wall_seconds": 90.01611479197163,
+        "log_sha256": "0bbed5a5f975819c927eff3982fb186d9afe559c95d184c45f2671efffbd8438",
+        "error_lines": 15,
+        "non_descent_fallbacks": 0,
+        "direction_failures": 0,
+        "ls_failures": 0,
+        "restarts": 15,
+        "frames": 1
+      }
+    ]
+  },
+  "integration_after_order_fix": {
+    "binary_sha256": "3d3d4e7238339a119b80fcc0f6b00a4815b7985a8d0169c8a3dd9ac8e65ee39f",
+    "runs": [
+      {
+        "scene": "quasistatic-semi",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/quasistatic-semi-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "a12b87d6a6e3e7e7ae5c4f8bf927c839a1e3be1e8c15afe48d7879bc73b60830",
+        "exit_code": 0,
+        "wall_seconds": 5.90948270901572,
+        "log_sha256": "32ed687e288908ccb539bf0f9fa256069b653c71d57282df1d2656c9fa12041f",
+        "error_lines": 0,
+        "restarts": 0,
+        "frames": 5,
+        "baseline_vtu_identical": true
+      },
+      {
+        "scene": "transient-semi",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/transient-semi-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "c9025e77ef376bf9b2afd344e0b8a3308a5de8d8e760c8a596493e3a5a93a0eb",
+        "exit_code": 0,
+        "wall_seconds": 5.475098124938086,
+        "log_sha256": "124839e744859b3753c334dec447b82c7bc61e2c1ccdcadd615d46dccd215ab5",
+        "error_lines": 0,
+        "restarts": 0,
+        "frames": 5,
+        "baseline_vtu_identical": true
+      },
+      {
+        "scene": "quasistatic-adaptive",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/quasistatic-adaptive-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "5a8e5139a898bd586262575126e061687113b28151504b1f6b677c7b91fa352b",
+        "exit_code": 0,
+        "wall_seconds": 10.06520900002215,
+        "log_sha256": "fe135ff6b06674032c2bfab7f4b0f63c0a94194e5d452ead8fc859c7dfbd3d2b",
+        "error_lines": 0,
+        "restarts": 0,
+        "frames": 5
+      },
+      {
+        "scene": "quasistatic-semi-friction",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/quasistatic-semi-friction-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "4395b51254a66aa0c65d17048e1829f34287e5fd3f328e06871c8910d9ef60ef",
+        "exit_code": 0,
+        "wall_seconds": 5.546471000066958,
+        "log_sha256": "8fbffd66bf8159a0faef26812f0fea8328709d3ff4119445b934c48d90cfdcd3",
+        "error_lines": 0,
+        "restarts": 0,
+        "frames": 5
+      },
+      {
+        "scene": "quasistatic-semi-alhess",
+        "method": "Newton",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/quasistatic-semi-alhess-Newton/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "e041db39f5aa840ef1ee89c69acdee2ad577dd684abb37a0c10a3c6186002be0",
+        "exit_code": 0,
+        "wall_seconds": 5.415304583031684,
+        "log_sha256": "00fd12bbb36a4a0fd9f07b7696f23ed74fe17abc339f86413186023beaa22042",
+        "error_lines": 0,
+        "restarts": 0,
+        "frames": 5
+      },
+      {
+        "scene": "quasistatic-semi",
+        "method": "BFGS",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/quasistatic-semi-BFGS/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "b09881654bd469124545fcc36ed7b2d76e3d3f78b10cbee547a0f804121fe3e3",
+        "exit_code": 1,
+        "wall_seconds": 71.39193316700403,
+        "log_sha256": "f054b84a207c43334999ea12433621a924954bde9b5bc75d48f26be50c274f62",
+        "error_lines": 22,
+        "restarts": 20,
+        "frames": 1
+      },
+      {
+        "scene": "transient-semi",
+        "method": "BFGS",
+        "command": [
+          "$WORKSPACE/polyfem/build/PolyFEM_bin",
+          "--json",
+          "$WORKSPACE/outputs/bfgs-audit/20260922T102120Z/integration/transient-semi-BFGS/input.json",
+          "--max_threads",
+          "1",
+          "--log_level",
+          "debug"
+        ],
+        "input_sha256": "12d43e930b72200dc4553e79fa63b2b4d6223addfe90cdc6c105a6a38a3445b3",
+        "exit_code": 1,
+        "wall_seconds": 68.62823699996807,
+        "log_sha256": "a6466710a725f7b608159e5d0d946a86ee23acedd683a0abae99b3a05b4e1687",
+        "error_lines": 22,
+        "restarts": 20,
+        "frames": 1
+      }
+    ]
+  },
+  "logs_sha256": {
+    "before-tests.log": "89f7cd4219fa8d3ba49d2f5a826c6b80ebb5a5d00a86dfde73b0b29c9cee5cde",
+    "after-tests.log": "94dd491393b73198c36fc098df6dbd910530b0d4d7fedb8cf0e6ea09b4025958",
+    "polyfem-tests.log": "7f031c5950baf400bcfdadb8ece1b46bfe31091d69ecf01c5c58489e0a899e32",
+    "polyfem-build-retry.log": "44c1f39a1167d79e3d4dd1a3910de29645e7866ea708c92cc81e2cb996410bd9",
+    "hda-e2e-with-gmsh.log": "963b532f6ffe4791ed9836caa676cc4623b0367c4c1b7a8fbcd41e551046bbd2"
+  }
+}

@@ -11,9 +11,15 @@ PolyFEM is a polyvalent C++ FEM library.
 
 ### sdast9 fork
 
-State as of **September 21, 2026** (`main`). The dated project state lives in
+State as of **September 22, 2026** (`main`). The dated project state lives in
 the parent workspace's README; this section keeps the repository's own claims
 current.
+
+- **BFGS convergence audit (September 22, 2026):** the dense-BFGS direction now
+  uses the latest secant update (PolySolve `427e1458`). Unsafe curvature updates,
+  contact-objective history invalidation and a feasibility-aware Wolfe search
+  remain in the [evidence-backed repair plan](docs/bfgs-convergence-audit-20260922.md).
+  The ordering correction alone does not establish contact-scene convergence.
 
 - **Continuous integration** runs on this fork:
   [Build](https://github.com/sdast9/polyfem/actions/workflows/continuous.yml)
