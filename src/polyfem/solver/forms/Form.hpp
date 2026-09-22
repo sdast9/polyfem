@@ -1,5 +1,6 @@
 #pragma once
 
+#include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/Types.hpp>
 #include <polysolve/nonlinear/PostStepData.hpp>
 
@@ -120,6 +121,20 @@ namespace polyfem::solver
 		/// @param new_x New solution
 		virtual void solution_changed(const Eigen::VectorXd &new_x) {}
 
+		/// @brief How many times this form has stopped being the same function
+		///
+		/// A form that retunes itself during a solve -- a barrier stiffness or
+		/// trim that moves in post_step, a quadrature that is refined -- is a
+		/// different function afterwards, and a quasi-Newton secant pair that
+		/// spans the change is a secant of neither. The problem sums this over
+		/// its forms so that the nonlinear solver can discard such a pair
+		/// (polysolve::nonlinear::Problem::objective_generation).
+		///
+		/// It counts real changes to the function only. Moving the coordinates
+		/// and rebuilding a cache for the same function -- the active collision
+		/// set, the assembly cache -- do not count.
+		uint64_t objective_generation() const { return objective_generation_; }
+
 		/// @brief Update time-dependent fields
 		/// @param t Current time
 		/// @param x Current solution at time t
@@ -212,10 +227,23 @@ namespace polyfem::solver
 
 		void restore_base_state(const FormState &state)
 		{
+			// A rolled-back weight or scale is a different function than the
+			// one the abandoned attempt was minimizing (RB-06 restores between
+			// solves, so this is recorded rather than relied upon).
+			if (state.weight != weight_ || state.scale != scale_ || state.enabled != enabled_)
+				note_objective_change("state restored");
 			weight_ = state.weight;
 			scale_ = state.scale;
 			enabled_ = state.enabled;
 			project_to_psd_ = state.project_to_psd;
+		}
+
+		/// @brief Record that this form is no longer the same function
+		/// @param what Short description of what changed, for the debug log
+		void note_objective_change(const std::string &what) const
+		{
+			++objective_generation_;
+			logger().debug("[{}] objective changed ({}); generation {}", name(), what, objective_generation_);
 		}
 
 		/// @brief The captured state as this form's own state type; a state
@@ -232,6 +260,11 @@ namespace polyfem::solver
 		bool project_to_psd_ = false; ///< If true, the form's second derivative is projected to be positive semidefinite
 
 		double weight_ = 1; ///< weight of the form (e.g., AL penalty weight or Δt²)
+
+		/// @brief Counts the changes to the function this form evaluates; it
+		///        is a version, not physical state, so it is never saved,
+		///        restored or reset (see objective_generation).
+		mutable uint64_t objective_generation_ = 0;
 
 		bool enabled_ = true; ///< If true, the form is enabled
 

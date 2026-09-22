@@ -11,6 +11,7 @@ set(test_sources
   test_hex_basis_layout.cpp
   test_semi_implicit_coefficients.cpp
   test_kappa_continuity.cpp
+  test_objective_generation.cpp
   test_friction_lag.cpp
   test_resource_containment.cpp
   test_step_rollback.cpp

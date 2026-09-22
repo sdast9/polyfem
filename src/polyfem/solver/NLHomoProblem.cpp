@@ -115,6 +115,14 @@ namespace polyfem::solver
 
 		return val;
 	}
+	uint64_t NLHomoProblem::objective_generation() const
+	{
+		uint64_t generation = NLProblem::objective_generation();
+		for (const auto &form : homo_forms)
+			generation += form->objective_generation();
+		return generation;
+	}
+
 	void NLHomoProblem::gradient(const TVector &x, TVector &gradv)
 	{
 		FullNLProblem::gradient(reduced_to_full(x), gradv);

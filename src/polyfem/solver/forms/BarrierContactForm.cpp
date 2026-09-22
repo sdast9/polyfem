@@ -333,6 +333,9 @@ namespace polyfem::solver
 			logger().debug("Barrier stiffness trim: {:g} -> {:g}", barrier_stiffness_, new_trim);
 			barrier_stiffness_ = new_trim;
 			iters_since_trim_ = 0;
+			// The trim multiplies every contact's barrier (and, in the
+			// follow-stiffness friction lag, the friction potential with it).
+			note_objective_change("barrier stiffness trim");
 		}
 	}
 
@@ -595,6 +598,11 @@ namespace polyfem::solver
 		}
 
 		++diagnostic_refresh_id_;
+
+		// The per-contact coefficients are re-estimated against a new frozen
+		// Hessian, so the barrier is a different function of the coordinates
+		// from here on, whatever the trim did.
+		note_objective_change("semi-implicit stiffness refresh");
 
 		// Re-anchor the in-solve emergency climbing budget.
 		trim_solve_anchor_ = barrier_stiffness_;
@@ -1114,6 +1122,7 @@ namespace polyfem::solver
 				barrier_stiffness_, new_trim);
 			barrier_stiffness_ = new_trim;
 			iters_since_trim_ = 0;
+			note_objective_change("gradient-balance trim calibration");
 		}
 		return true;
 	}
@@ -1670,6 +1679,7 @@ namespace polyfem::solver
 					polyfem::logger().debug(
 						"updated barrier stiffness from {:g} to {:g} (max barrier stiffness: )",
 						prev_barrier_stiffness, barrier_stiffness(), max_barrier_stiffness_);
+					note_objective_change("adaptive barrier stiffness");
 				}
 			}
 			else

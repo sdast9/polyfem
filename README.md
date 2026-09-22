@@ -19,11 +19,14 @@ current.
   uses the latest secant update (PolySolve `427e1458`), and both BFGS strategies
   now validate a secant pair before it enters their approximation, refusing it
   by name and restarting from steepest descent when it carries no usable
-  curvature (PolySolve `30f3a3a8`, [stage 1 record](docs/bfgs-curvature-safeguard-20260922.md)).
-  Contact-objective history invalidation and a feasibility-aware Wolfe search
+  curvature (PolySolve `30f3a3a8`, [stage 1 record](docs/bfgs-curvature-safeguard-20260922.md)),
+  and a form that retunes itself mid-solve now says so, so the history that
+  would span the change is discarded before the next pair is formed (PolySolve
+  `440cd55c`, [stage 2 record](docs/bfgs-objective-generation-20260922.md)).
+  A feasibility-aware Wolfe search and the contact convergence measurement
   remain in the [evidence-backed repair plan](docs/bfgs-convergence-audit-20260922.md).
-  Neither correction establishes contact-scene convergence: the two public
-  scenes fail exactly as before, and neither refused a single pair.
+  None of this establishes contact-scene convergence: the two public scenes
+  with L-BFGS now complete their first time step and fail at the second.
 
 - **Continuous integration** runs on this fork:
   [Build](https://github.com/sdast9/polyfem/actions/workflows/continuous.yml)

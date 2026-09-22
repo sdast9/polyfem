@@ -1,8 +1,10 @@
 # BFGS convergence audit and repair plan
 
-Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stage 1 of
-the plan below (curvature safeguards) implemented and validated — see the
-[stage 1 record](bfgs-curvature-safeguard-20260922.md); stages 2 to 5 remain
+Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stages 1
+and 2 of the plan below (curvature safeguards, objective-generation history
+reset) implemented and validated — see the
+[stage 1](bfgs-curvature-safeguard-20260922.md) and
+[stage 2](bfgs-objective-generation-20260922.md) records; stages 3 to 5 remain
 planned.**
 
 The BFGS variants have implementation and integration issues that can impair
@@ -79,7 +81,7 @@ non-finite or ascent direction, and report every accepted and refused pair. Both
 objectives above now converge with the strategy alone. L-BFGS-B was left on its
 own filter, for the reasons given there.
 
-### 2. High priority: history can mix different contact objectives
+### 2. Repaired in stage 2: history could mix different contact objectives
 
 PolyFEM `BarrierContactForm::post_step` can refresh a formerly empty coefficient
 snapshot, bump global trim, perform an optional periodic refresh, or update
@@ -101,6 +103,14 @@ scene failure to a particular retune. RB-02 had already documented the missing
 reset as a limit in [its validation record](rb-02-validation.md).
 New `minimize` calls and return from fallback strategies do reset history; the
 gap concerns changes inside a minimization call.
+
+**Stage 2 repaired this**, in [its own record](bfgs-objective-generation-20260922.md):
+every form counts the changes to its own objective, the problem sums them, and
+the solver discards the approximation and the stored iterate and gradient
+before the next pair is formed. The public scenes retune themselves three or
+four times per Newton solve, and with L-BFGS they now complete their first time
+step instead of failing at it. It is a report, not a detection: a form that
+retunes without saying so is still invisible.
 
 ### 3. High priority integration gap: no Wolfe-capable line search
 
@@ -217,7 +227,12 @@ new line-search default.
    from stationarity, no invalid pair in history, pure-strategy regression
    convergence at unchanged tolerances, and unaffected valid-pair controls.
 
-2. **Reset history when the objective actually changes.** Add a problem-level
+2. **Done (2026-09-22): reset history when the objective actually changes.**
+   Published as PolySolve
+   [`440cd55cdaa0`](https://github.com/sdast9/polysolve/commit/440cd55cdaa09bef079578b128bfe7f6f1e869af)
+   with the record in
+   [bfgs-objective-generation-20260922.md](bfgs-objective-generation-20260922.md).
+   The original text of this item: Add a problem-level
    objective generation counter or equivalent explicit signal. Propagate real
    stiffness/trim/friction-objective changes through FullNLProblem/NLProblem;
    invalidate quasi-Newton history before forming the next pair. Reset related

@@ -187,5 +187,10 @@ namespace polyfem::solver
 		{
 			throw std::runtime_error("Unknown contact form");
 		}
+
+		// The lagged normal forces and sliding bases are what the friction
+		// potential is built from: rebuilding them is a new function. This
+		// happens between minimizations, in the lagging loop.
+		note_objective_change("friction lag update");
 	}
 } // namespace polyfem::solver

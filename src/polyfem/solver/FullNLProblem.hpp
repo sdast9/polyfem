@@ -74,6 +74,14 @@ namespace polyfem::solver
 
 		virtual void solution_changed(const TVector &new_x) override;
 
+		/// @brief The forms' objective generations, summed
+		///
+		/// Changes exactly when one of the forms stops being the same
+		/// function, which is what the nonlinear solver needs in order to
+		/// discard a quasi-Newton pair that would span the change. Summing
+		/// keeps it monotone and needs no coordination between the forms.
+		uint64_t objective_generation() const override;
+
 		virtual void init_lagging(const TVector &x);
 		virtual void update_lagging(const TVector &x, const int iter_num);
 		int max_lagging_iterations() const;

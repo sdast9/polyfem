@@ -256,6 +256,17 @@ namespace polyfem::solver
 			f->solution_changed(x);
 	}
 
+	uint64_t FullNLProblem::objective_generation() const
+	{
+		uint64_t generation = 0;
+		// Disabled forms are included: enabling one is itself a change, and a
+		// form that retunes while disabled would otherwise reappear with a
+		// history from before its own retune.
+		for (const auto &f : forms_)
+			generation += f->objective_generation();
+		return generation;
+	}
+
 	void FullNLProblem::post_step(const polysolve::nonlinear::PostStepData &data)
 	{
 		for (auto &f : forms_)

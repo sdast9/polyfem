@@ -7,7 +7,9 @@
 # follows the fork's iteration-callback branch; 427e1458 also corrects dense
 # BFGS to apply the current secant update before computing its direction, and
 # 30f3a3a8 validates the secant pairs before they enter either approximation
-# (BFGS audit stage 1, docs/bfgs-curvature-safeguard-20260922.md).
+# (BFGS audit stage 1, docs/bfgs-curvature-safeguard-20260922.md) and 440cd55c
+# discards that history when the problem reports a changed objective (stage 2,
+# docs/bfgs-objective-generation-20260922.md).
 # License: MIT
 
 if(TARGET polysolve)
@@ -17,4 +19,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#30f3a3a8b0aa291da1c7f738e86bc134a8a269a1")
+CPMAddPackage("gh:sdast9/polysolve#440cd55cdaa09bef079578b128bfe7f6f1e869af")

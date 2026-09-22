@@ -53,6 +53,10 @@ namespace polyfem::solver
 
 		void solution_changed(const TVector &new_x) override;
 
+		/// @brief The forms' generations plus the penalty (AL) forms', which
+		///        are part of the objective this problem minimizes.
+		uint64_t objective_generation() const override;
+
 		void init_lagging(const TVector &x) override;
 		void update_lagging(const TVector &x, const int iter_num) override;
 

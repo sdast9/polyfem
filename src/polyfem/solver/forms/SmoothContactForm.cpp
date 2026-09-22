@@ -115,6 +115,7 @@ namespace polyfem::solver
 					polyfem::logger().debug(
 						"updated barrier stiffness from {:g} to {:g}",
 						prev_barrier_stiffness, barrier_stiffness());
+					note_objective_change("adaptive barrier stiffness");
 				}
 			}
 			else

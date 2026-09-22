@@ -721,6 +721,16 @@ namespace polyfem::solver
 		}
 	}
 
+	uint64_t NLProblem::objective_generation() const
+	{
+		uint64_t generation = FullNLProblem::objective_generation();
+		// The penalty forms are the same objects penalty_problem_ holds, and
+		// they are part of this objective whichever coordinates it is in.
+		for (const auto &f : penalty_forms_)
+			generation += f->objective_generation();
+		return generation;
+	}
+
 	void NLProblem::solution_changed(const TVector &newX)
 	{
 		FullNLProblem::solution_changed(reduced_to_full(newX));
