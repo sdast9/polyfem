@@ -20,6 +20,7 @@ namespace polyfem::solver
 		enum class Kind
 		{
 			Proposal,      ///< line_search_begin: the trial sweep [x0, x1] about to be handed to the contact broad phase (observed before the forms build it, so a failing build still leaves its trial on record -- RB-05)
+			Extension,     ///< line_search_extend: the same line search lengthens its sweep to [x0, x1] (a growing search, BFGS audit stage 3); observed before the forms rebuild it, and priced by the StepBound that follows
 			StepBound,     ///< max_step_size: the fraction of [x0, x1] the forms (inversion check, CCD) allow
 			Validity,      ///< is_step_valid: one line-search trial [x0, x1] and the forms' verdict
 			LineSearchEnd, ///< line_search_end: the swept candidate cache is released
@@ -31,6 +32,8 @@ namespace polyfem::solver
 		/// Proposal, Validity, LineSearchEnd with no StepBound (the RB-07
 		/// snap-fraction probe, probe_step_bound, is deliberately unobserved
 		/// so that a feasibility check never reads as a Newton trial).
+		/// A growing line search (PolySolve's Wolfe) adds Extension, StepBound
+		/// pairs inside the same iteration, before its LineSearchEnd.
 		/// PolySolve's post_step reports the number of iterations completed
 		/// before the call, so the start point and the first update both
 		/// carry 0.
@@ -66,6 +69,9 @@ namespace polyfem::solver
 		virtual double probe_step_bound(const TVector &x0, const TVector &x1);
 
 		virtual void line_search_begin(const TVector &x0, const TVector &x1) override;
+		/// The forms rebuild exactly as for line_search_begin; only the
+		/// observation differs (Extension instead of Proposal).
+		virtual void line_search_extend(const TVector &x0, const TVector &x1) override;
 		virtual void line_search_end() override;
 		virtual void post_step(const polysolve::nonlinear::PostStepData &data) override;
 
@@ -135,5 +141,8 @@ namespace polyfem::solver
 		void observe(const IterationObservation &observation);
 		std::function<void(const IterationObservation &)> iteration_observer_ = nullptr;
 		bool iteration_observer_failed_ = false;
+		/// Set while line_search_extend passes through the (possibly
+		/// overridden, coordinate-mapping) line_search_begin chain.
+		bool extending_line_search_ = false;
 	};
 } // namespace polyfem::solver

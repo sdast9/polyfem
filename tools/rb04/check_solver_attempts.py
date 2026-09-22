@@ -31,7 +31,7 @@ def check_run(directory):
     assert len({r['run_id'] for r in rows}) == 1 and rows[0]['run_id'] == endpoints[0]['run_id']
     by_step = defaultdict(list)
     for row in rows:
-        assert row['schema'] == 'polyfem.solver-attempt' and row['version'] == 2
+        assert row['schema'] == 'polyfem.solver-attempt' and row['version'] == 3
         assert row['kind'] in ('start', 'accepted', 'rejected', 'aborted')
         by_step[row['step']].append(row)
     summary = {'name': Path(directory).name, 'steps': []}
@@ -61,6 +61,7 @@ def check_run(directory):
             assert accepted['fraction_of_trial'] <= trial['step_bound'] + 1e-9
             assert abs(accepted['norm'] - accepted['fraction_of_trial'] * trial['norm']) <= 1e-9 * (1 + trial['norm'])
             assert trial['validity_checks'] >= trial['validity_rejections'] >= 0
+            assert trial['extensions'] == 0 or trial['norm'] > trial['unextended_norm']
         for row in rejected_rows:
             assert row['trial']['step_bound'] is not None and row['accepted'] is None
         aborted_rows = [r for r in step_rows if r['kind'] == 'aborted']
@@ -81,7 +82,11 @@ def check_run(directory):
         # ALSolver's feasibility checks also build a swept candidate set; an
         # aborted proposal counts only if its broad phase completed the build.
         built_aborted = sum(r['trial']['broad_phase_built'] for r in aborted_rows)
-        assert candidates['builds'] == len(accepted_rows) + len(rejected_rows) + attempt['feasibility_checks'] + built_aborted, (candidates, len(accepted_rows), len(rejected_rows), attempt['feasibility_checks'], built_aborted)
+        # BFGS audit stage 3: a growing line search rebuilds the candidates
+        # for each longer sweep, inside the row of the iteration it belongs to.
+        extension_builds = sum(r['trial']['extension_builds'] for r in accepted_rows + rejected_rows + aborted_rows)
+        assert attempt['line_search_extensions'] == sum(r['trial']['extensions'] for r in accepted_rows + rejected_rows + aborted_rows)
+        assert candidates['builds'] == len(accepted_rows) + len(rejected_rows) + attempt['feasibility_checks'] + built_aborted + extension_builds, (candidates, len(accepted_rows), len(rejected_rows), attempt['feasibility_checks'], built_aborted, extension_builds)
         if candidates['builds'] > 0:
             assert candidates['max'] >= candidates['last'] > 0
             assert endpoint['contact']['candidate_count']['value'] == candidates['last']

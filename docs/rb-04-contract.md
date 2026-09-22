@@ -273,7 +273,7 @@ start of a minimize as an accepted iterate with no pending proposal and numbers
 updates from 1, so `accepted_iterations` equals PolySolve's `iterations`.
 
 With the same opt-in flag the active VarForm appends `solver-attempts.jsonl`
-(schema `polyfem.solver-attempt`, version 2), flushed per row so that a fatal
+(schema `polyfem.solver-attempt`, version 3), flushed per row so that a fatal
 solver exception leaves a complete history. Each row carries the run ID, step,
 phase (`augmented_lagrangian`, `reduced`, `lagging`), `minimize_index` (count
 of PolySolve minimize calls in this attempt), `iteration` and `kind`:
@@ -307,6 +307,19 @@ accepted alpha as a fraction of it, the accepted endpoint's gradient and slope,
 and the strategy transitions since the previous accepted iterate. It is
 observational: enabling it changes no acceptance or stopping decision.
 
+`trial.extensions`, `trial.extension_builds`, `trial.extensions_refused` and
+`trial.unextended_norm` (version 3, BFGS audit stage 3). A growing line search
+(PolySolve's opt-in `Wolfe`) lengthens its sweep inside one iteration through
+`line_search_extend`, observed as an `Extension`: the forms rebuild their
+candidates for the longer interval and a `StepBound` prices it. A priced
+extension replaces the row's trial (`norm`, `linf`, `step_bound` are then of
+the longest priced sweep, and `unextended_norm` is the first one), so
+`0 < fraction_of_trial ≤ step_bound` still holds; `extension_builds` counts the
+broad-phase rebuilds, and `extensions_refused` the extensions the problem could
+not price, whose sweep the row does not adopt. Without a growing search every
+count is 0 and `unextended_norm` equals `norm`. Before version 3 a second sweep
+of the same iteration would have been filed as a `rejected` row.
+
 ### Endpoint record additions
 
 - `attempt_summary`: `minimize_calls`, `accepted_iterations`,
@@ -314,7 +327,8 @@ observational: enabling it changes no acceptance or stopping decision.
   iterations whose forms' bound was below 1), `line_search_truncated`
   (accepted fraction below the bound, i.e. energy backtracking beyond it),
   `validity_checks`/`validity_rejections`, `stall_retunes` (calls of the
-  stall retune hook in this attempt) and `broad_phase_candidates`
+  stall retune hook in this attempt), `line_search_extensions` (priced
+  extensions, version 3) and `broad_phase_candidates`
   (`builds`, `last`, `max`). AL weights and restart counts remain in
   `termination` and the coefficient-event stream.
 - `proposed_displacement`: the last Newton proposal accepted before the record
@@ -325,7 +339,8 @@ observational: enabling it changes no acceptance or stopping decision.
   (`value` = last build, `max`, `builds`), since the swept cache is cleared at
   `line_search_end` and cannot be read at the endpoint. The statistics are
   reset at the start of every `solve_tensor_nonlinear` call; a form that built
-  no candidates reports the reason. `builds` counts the feasibility checks too.
+  no candidates reports the reason. `builds` counts the feasibility checks and
+  the extension rebuilds too.
 - Failed attempts: `last_internal_iterate` (`value` in full coordinates,
   `iteration`, `minimize_index`) is the last accepted Newton iterate observed
   inside the failed attempt. `endpoint` remains the retained caller

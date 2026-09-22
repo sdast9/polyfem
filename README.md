@@ -23,10 +23,17 @@ current.
   and a form that retunes itself mid-solve now says so, so the history that
   would span the change is discarded before the next pair is formed (PolySolve
   `440cd55c`, [stage 2 record](docs/bfgs-objective-generation-20260922.md)).
-  A feasibility-aware Wolfe search and the contact convergence measurement
-  remain in the [evidence-backed repair plan](docs/bfgs-convergence-audit-20260922.md).
-  None of this establishes contact-scene convergence: the two public scenes
-  with L-BFGS now complete their first time step and fail at the second.
+  Stage 4 ([record](docs/bfgs-contact-diagnostics-20260922.md)) found the
+  public L-BFGS failures to be the stall controller's 100-iteration soft budget,
+  not the solver; whether that budget becomes method-aware is pending the
+  user's decision. Stage 3 ([record](docs/bfgs-wolfe-line-search-20260922.md))
+  added an opt-in strong Wolfe search (`line_search/method: "Wolfe"`) whose
+  growth has the problem rebuild and price every longer interval first; on the
+  public scenes it changes L-BFGS's iteration count by −21 % to +11 %, so no
+  default changes. Stage 5 remains in the
+  [evidence-backed repair plan](docs/bfgs-convergence-audit-20260922.md).
+  None of this establishes contact-scene convergence at production settings:
+  the two public scenes with L-BFGS still stop on the soft budget.
 
 - **Continuous integration** runs on this fork:
   [Build](https://github.com/sdast9/polyfem/actions/workflows/continuous.yml)

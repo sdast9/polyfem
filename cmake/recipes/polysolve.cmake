@@ -9,9 +9,11 @@
 # 30f3a3a8 validates the secant pairs before they enter either approximation
 # (BFGS audit stage 1, docs/bfgs-curvature-safeguard-20260922.md), 440cd55c
 # discards that history when the problem reports a changed objective (stage 2,
-# docs/bfgs-objective-generation-20260922.md) and fcab19f0 adds the opt-in
+# docs/bfgs-objective-generation-20260922.md), fcab19f0 adds the opt-in
 # per-iteration nonlinear diagnostics stage 4 measured the contact scenes with
-# (docs/bfgs-contact-diagnostics-20260922.md).
+# (docs/bfgs-contact-diagnostics-20260922.md) and fc62a67b adds the opt-in
+# feasibility-respecting Wolfe line search and line_search_extend (stage 3,
+# docs/bfgs-wolfe-line-search-20260922.md).
 # License: MIT
 
 if(TARGET polysolve)
@@ -21,4 +23,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#fcab19f03fe0e7a6b11d48585e57f77f940b8684")
+CPMAddPackage("gh:sdast9/polysolve#fc62a6791f2136806fb36bd620459bca91bf5c89")

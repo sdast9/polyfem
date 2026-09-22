@@ -149,7 +149,10 @@ minimize start, accepted Newton update (trial sweep norms, forms' step bound,
 line-search validity trials, accepted fraction) and rejected proposal. Its own
 schema is `polyfem.solver-attempt`, version 2 since the BFGS audit's stage 4
 added `solver`: PolySolve's per-iteration nonlinear diagnostics on an accepted
-row, null unless `solver/nonlinear/advanced/iteration_diagnostics` is on. The
+row, null unless `solver/nonlinear/advanced/iteration_diagnostics` is on;
+version 3 since stage 3 added the `trial.extension*` counts of a growing
+(Wolfe) line search, whose rebuilds `check_solver_attempts.py` adds to the
+broad-phase build identity. The
 endpoint record carries `attempt_summary`, `proposed_displacement`, the retained
 `contact.candidate_count` statistics, the right-endpoint work increments
 (`support_work_increment`, `external_work_increment`,

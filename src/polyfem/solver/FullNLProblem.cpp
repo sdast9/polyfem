@@ -102,13 +102,30 @@ namespace polyfem::solver
 		// contact broad phase is the first large allocation of an iteration,
 		// and a failing build must not take the record of its trial with it.
 		IterationObservation observation;
-		observation.kind = IterationObservation::Kind::Proposal;
+		observation.kind = extending_line_search_ ? IterationObservation::Kind::Extension : IterationObservation::Kind::Proposal;
 		observation.x0 = &x0;
 		observation.x1 = &x1;
 		observe(observation);
 
 		for (auto &f : forms_)
 			f->line_search_begin(x0, x1);
+	}
+
+	void FullNLProblem::line_search_extend(const TVector &x0, const TVector &x1)
+	{
+		// Through the virtual line_search_begin, so that a derived problem's
+		// coordinate mapping (reduced to full) applies to the longer sweep too.
+		extending_line_search_ = true;
+		try
+		{
+			line_search_begin(x0, x1);
+		}
+		catch (...)
+		{
+			extending_line_search_ = false;
+			throw;
+		}
+		extending_line_search_ = false;
 	}
 
 	void FullNLProblem::line_search_end()

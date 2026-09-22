@@ -1920,6 +1920,21 @@ namespace polyfem::varform
 			Eigen::VectorXd proposal_x0, trial; ///< trial = x1 - x0 of the sweep handed to the broad phase
 			double trial_norm = 0, trial_linf = 0, step_bound = std::numeric_limits<double>::quiet_NaN();
 			int iteration_validity_checks = 0, iteration_validity_rejections = 0;
+			// The validity trials of a line search, counted at its end: those
+			// observed after it (the finite-energy stage of the next direction,
+			// when the search failed) belong to the next proposal.
+			bool line_search_ended = false;
+			int ended_validity_checks = 0, ended_validity_rejections = 0;
+			// BFGS audit stage 3: a growing line search lengthens its sweep
+			// inside the same iteration. The pending extension becomes the
+			// trial once its StepBound prices it; one that is never priced
+			// was refused and leaves the priced trial in place.
+			double unextended_trial_norm = 0;
+			int extensions = 0, extension_builds = 0, extensions_refused = 0;
+			bool pending_extension = false;
+			size_t extension_builds_before = 0;
+			Eigen::VectorXd extension_x0, extension_trial;
+			int line_search_extensions = 0; ///< over the attempt: priced extensions
 			// Last accepted iterate.
 			bool has_iterate = false;
 			Eigen::VectorXd iterate;
@@ -1941,7 +1956,27 @@ namespace polyfem::varform
 			return nullptr;
 		};
 		const auto trial_json = [&]() -> json {
-			return {{"norm", attempts.trial_norm}, {"linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"validity_checks", attempts.iteration_validity_checks}, {"validity_rejections", attempts.iteration_validity_rejections}, {"scope", "Sweep handed to the contact broad phase after the finite-energy stage; step_bound is the forms' inversion/CCD fraction of it"}};
+			return {{"norm", attempts.trial_norm}, {"linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"validity_checks", attempts.iteration_validity_checks}, {"validity_rejections", attempts.iteration_validity_rejections}, {"extensions", attempts.extensions}, {"extension_builds", attempts.extension_builds}, {"extensions_refused", attempts.extensions_refused}, {"unextended_norm", attempts.unextended_trial_norm}, {"scope", "Sweep handed to the contact broad phase after the finite-energy stage, lengthened by each priced extension of a growing line search (unextended_norm is the first sweep); step_bound is the forms' inversion/CCD fraction of it"}};
+		};
+		// Settles an extension at the next observation: whether the broad
+		// phase completed its rebuild, and whether a StepBound priced it.
+		const auto resolve_extension = [&](const bool priced) {
+			if (!attempts.pending_extension)
+				return;
+			attempts.pending_extension = false;
+			if (solve_data_.contact_form && solve_data_.contact_form->candidate_statistics().builds > attempts.extension_builds_before)
+				++attempts.extension_builds;
+			if (!priced)
+			{
+				++attempts.extensions_refused;
+				return;
+			}
+			attempts.proposal_x0 = attempts.extension_x0;
+			attempts.trial = attempts.extension_trial;
+			attempts.trial_norm = attempts.trial.norm();
+			attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
+			++attempts.extensions;
+			++attempts.line_search_extensions;
 		};
 		// PolySolve's solver info at post_step holds the objective and gradient
 		// norm of the iterate the direction was computed from (x0), not of
@@ -1959,16 +1994,26 @@ namespace polyfem::varform
 		// followed was rejected by the line search; one without a step bound
 		// was an ALSolver feasibility check, not a Newton proposal.
 		const auto flush_pending_proposal = [&]() {
+			resolve_extension(false);
 			if (!attempts.has_proposal)
 				return;
 			if (std::isfinite(attempts.step_bound))
 			{
+				const int checks = attempts.line_search_ended ? attempts.ended_validity_checks : attempts.iteration_validity_checks;
+				const int rejections = attempts.line_search_ended ? attempts.ended_validity_rejections : attempts.iteration_validity_rejections;
+				json trial = trial_json();
+				trial["validity_checks"] = checks;
+				trial["validity_rejections"] = rejections;
 				++attempts.rejected_proposals;
-				write_attempt("rejected", attempts.has_iterate ? attempts.iterate_iteration : 0, trial_json(), nullptr, NaN, NaN);
+				write_attempt("rejected", attempts.has_iterate ? attempts.iterate_iteration : 0, trial, nullptr, NaN, NaN);
+				// Counted once: what remains is the next proposal's.
+				attempts.iteration_validity_checks -= checks;
+				attempts.iteration_validity_rejections -= rejections;
 			}
 			else
 				++attempts.feasibility_checks;
 			attempts.has_proposal = false;
+			attempts.line_search_ended = false;
 		};
 		if (auto contact = solve_data_.contact_form)
 			contact->reset_candidate_statistics();
@@ -1979,6 +2024,8 @@ namespace polyfem::varform
 				logger().warn("Could not open solver-attempts.jsonl; attempt stream disabled for step {}", step);
 			solve_data_.nl_problem->set_iteration_observer([&](const solver::IterationObservation &o) {
 				using Kind = solver::IterationObservation::Kind;
+				if (o.kind != Kind::StepBound)
+					resolve_extension(false);
 				switch (o.kind)
 				{
 				case Kind::Validity:
@@ -2002,8 +2049,34 @@ namespace polyfem::varform
 					attempts.trial_norm = attempts.trial.norm();
 					attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
 					attempts.step_bound = NaN;
+					attempts.unextended_trial_norm = attempts.trial_norm;
+					attempts.extensions = attempts.extension_builds = attempts.extensions_refused = 0;
+					break;
+				case Kind::Extension:
+					// Only a line search in progress (a priced proposal) can
+					// grow; anything else is read as a proposal of its own.
+					if (!attempts.has_proposal || !std::isfinite(attempts.step_bound))
+					{
+						flush_pending_proposal();
+						attempts.has_proposal = true;
+						attempts.proposal_builds = solve_data_.contact_form ? solve_data_.contact_form->candidate_statistics().builds : 0;
+						attempts.proposal_x0 = *o.x0;
+						attempts.trial = *o.x1 - *o.x0;
+						attempts.trial_norm = attempts.trial.norm();
+						attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
+						attempts.step_bound = NaN;
+						attempts.unextended_trial_norm = attempts.trial_norm;
+						attempts.extensions = attempts.extension_builds = attempts.extensions_refused = 0;
+						break;
+					}
+					attempts.pending_extension = true;
+					attempts.extension_builds_before = solve_data_.contact_form ? solve_data_.contact_form->candidate_statistics().builds : 0;
+					attempts.extension_x0 = *o.x0;
+					attempts.extension_trial = *o.x1 - *o.x0;
 					break;
 				case Kind::StepBound:
+					// Of the extended sweep when it prices an extension.
+					resolve_extension(true);
 					attempts.step_bound = o.step_bound;
 					break;
 				case Kind::LineSearchEnd:
@@ -2011,12 +2084,25 @@ namespace polyfem::varform
 					// reported; only a feasibility check is closed here.
 					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
 						flush_pending_proposal();
+					else if (attempts.has_proposal)
+					{
+						attempts.line_search_ended = true;
+						attempts.ended_validity_checks = attempts.iteration_validity_checks;
+						attempts.ended_validity_rejections = attempts.iteration_validity_rejections;
+					}
 					break;
 				case Kind::Accepted:
 				{
 					const double energy = info_number(o.solver_info, "energy");
 					const double grad_norm = info_number(o.solver_info, "gradNorm");
-					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
+					// PolySolve reports its start point with status NotStarted.
+					// A proposal still pending then was abandoned by a minimize
+					// that failed (a line search that failed on its last
+					// strategy, which a stall restart caught); it is not the
+					// predecessor of this point.
+					const bool minimize_start = o.solver_info && o.solver_info->contains("status")
+												&& (*o.solver_info)["status"] == json(polysolve::nonlinear::Status::NotStarted);
+					if (attempts.has_proposal && (!std::isfinite(attempts.step_bound) || minimize_start))
 						flush_pending_proposal();
 					if (!attempts.has_proposal)
 					{
@@ -2045,6 +2131,7 @@ namespace polyfem::varform
 						++attempts.accepted_iterations;
 						write_attempt("accepted", iteration, trial, accepted, energy, grad_norm, solver_diagnostics(o.solver_info));
 						attempts.has_proposal = false;
+						attempts.line_search_ended = false;
 						attempts.iteration_validity_checks = attempts.iteration_validity_rejections = 0;
 						attempts.iterate_iteration = iteration;
 					}
@@ -2140,7 +2227,7 @@ namespace polyfem::varform
 					else
 						candidates["intermediates"] = nullptr;
 				}
-				observations["summary"] = {{"minimize_calls", attempts.minimize_index}, {"accepted_iterations", attempts.accepted_iterations}, {"rejected_proposals", attempts.rejected_proposals}, {"aborted_proposals", attempts.aborted_proposals}, {"feasibility_checks", attempts.feasibility_checks}, {"line_search_truncated", attempts.line_search_truncated}, {"step_bound_limited", attempts.step_bound_limited}, {"validity_checks", attempts.validity_checks}, {"validity_rejections", attempts.validity_rejections}, {"stall_retunes", attempts.stall_retunes}, {"broad_phase_candidates", candidates}, {"scope", "All PolySolve minimize calls of this attempt (AL, reduced, lagging); restarts and AL weights are in termination and the coefficient-event stream"}};
+				observations["summary"] = {{"minimize_calls", attempts.minimize_index}, {"accepted_iterations", attempts.accepted_iterations}, {"rejected_proposals", attempts.rejected_proposals}, {"aborted_proposals", attempts.aborted_proposals}, {"feasibility_checks", attempts.feasibility_checks}, {"line_search_truncated", attempts.line_search_truncated}, {"step_bound_limited", attempts.step_bound_limited}, {"validity_checks", attempts.validity_checks}, {"validity_rejections", attempts.validity_rejections}, {"stall_retunes", attempts.stall_retunes}, {"line_search_extensions", attempts.line_search_extensions}, {"broad_phase_candidates", candidates}, {"scope", "All PolySolve minimize calls of this attempt (AL, reduced, lagging); restarts and AL weights are in termination and the coefficient-event stream"}};
 				if (attempts.last_proposal.is_object())
 					observations["proposed_displacement"] = attempts.last_proposal;
 				if (outcome != "accepted" && attempts.has_iterate && attempts.iterate.allFinite())
@@ -2385,6 +2472,7 @@ namespace polyfem::varform
 			// (a broad-phase resource failure, an allocation failure). Record
 			// it with its trial norms and whether the broad phase completed
 			// its build, instead of letting the flush misfile it.
+			resolve_extension(false);
 			if (attempts.has_proposal)
 			{
 				json trial = trial_json();

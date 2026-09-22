@@ -1,16 +1,20 @@
 # BFGS convergence audit and repair plan
 
-Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stages 1,
-2 and 4 of the plan below (curvature safeguards, objective-generation history
-reset, contact diagnostics) implemented and validated — see the
+Date: 2026-09-22. **Status: dense-BFGS update-order defect repaired; stages 1
+to 4 of the plan below (curvature safeguards, objective-generation history
+reset, an opt-in feasibility-respecting Wolfe search, contact diagnostics)
+implemented and validated — see the
 [stage 1](bfgs-curvature-safeguard-20260922.md),
-[stage 2](bfgs-objective-generation-20260922.md) and
-[stage 4](bfgs-contact-diagnostics-20260922.md) records; stages 3 and 5 remain
+[stage 2](bfgs-objective-generation-20260922.md),
+[stage 3](bfgs-wolfe-line-search-20260922.md) and
+[stage 4](bfgs-contact-diagnostics-20260922.md) records; stage 5 remains
 planned. Stage 4 found the public L-BFGS failures to be a controller/allowance
 mismatch, not a solver defect: with only the semi-implicit stall controller's
 100-iteration soft budget removed, all five public smokes converge under L-BFGS
 on their configured criterion. Making that budget method-aware is a production
-default decision and is pending the user's.**
+default decision and is pending the user's. Stage 3 bounded what a line search
+can add there: the Wolfe search (opt-in, no default changed) moves L-BFGS's
+iteration count by −21 % to +11 %, against a 220–940× gap to Newton.**
 
 The BFGS variants have implementation and integration issues that can impair
 convergence. The line search is part of the problem, but replacing Armijo alone
@@ -117,7 +121,16 @@ four times per Newton solve, and with L-BFGS they now complete their first time
 step instead of failing at it. It is a report, not a detection: a form that
 retunes without saying so is still invisible.
 
-### 3. High priority integration gap: no Wolfe-capable line search
+### 3. Addressed in stage 3: no Wolfe-capable line search
+
+**Stage 3 added one, opt-in** (`line_search/method: "Wolfe"`), in
+[its own record](bfgs-wolfe-line-search-20260922.md): bracket-and-zoom with
+growth that has the problem rebuild and price every longer interval first, a
+stated capped-step outcome, Hager–Zhang approximate Wolfe acceptance where the
+energy's own noise hides the decrease, bounded restarts on an objective change,
+and RobustArmijo as the fallback. On the public scenes it never falls back and
+changes L-BFGS's iteration count by −21 % to +11 %; no default change is
+proposed. The original text of this finding:
 
 PolySolve exposes Armijo, RobustArmijo, Backtracking, ResidualBacktracking and
 None. Its backtracking loop only reduces the starting alpha and has no endpoint
@@ -205,9 +218,8 @@ fail on the still-open issues.
 ## Remaining implementation plan
 
 Work one stage at a time, retain baseline evidence, and publish each validated
-change with its dependency pin. Stages 1 and 2 are complete within their measured
-scope. Next, close the bounded review follow-ups below and perform stage 4's
-diagnosis before implementing stage 3. Keep the stage numbers stable for links
+change with its dependency pin. Stages 1 to 4 are complete within their measured
+scope; stage 5 and the bounded review follow-ups below remain. Keep the stage numbers stable for links
 and existing validation records; they no longer describe execution order.
 
 **Review follow-ups (2026-09-22).** Align the dense factorization-exception
@@ -266,9 +278,20 @@ claiming that every exceptional path has been validated.
    pairs belong to one objective generation; the current retuning law and
    Newton controls remain intact.
 
-3. **Next, informed by stage 4: add an optional Wolfe search that respects feasibility.**
-   Stage 4 measured where its value is: target the bracket-and-grow half.
-   Implement or
+3. **Done (2026-09-22): add an optional Wolfe search that respects feasibility.**
+   Recorded in [bfgs-wolfe-line-search-20260922.md](bfgs-wolfe-line-search-20260922.md).
+   Stage 4 had pointed at the bracket-and-grow half; read against `c2`, its own
+   slope data shows growth is admissible for a textbook `c2 = 0.9` search in
+   only 0.06–0.3 % of iterations, and measured, 8 growth sweeps occur in 8,732
+   iterations. Swept over `c2` = 0.9 / 0.5 / 0.1 on all five smokes, L-BFGS's
+   iteration count moves by −21 % to +11 %, never by the orders of magnitude
+   separating it from Newton; production settings still fail on the soft
+   budget and dense BFGS fails identically under every search. Energy noise
+   above the RB-19 roundoff bound made a textbook zoom fail under Newton;
+   Hager–Zhang's approximate Wolfe slack is what makes it work. The validation
+   also repaired two pre-existing RB-04 attempt-stream defects on the
+   line-search-failure path. No default change is proposed. The original text
+   of this item: Implement or
    adapt a bracket-and-zoom / More-Thuente search, with explicit Armijo and slope
    tests and a finite evaluation budget. Reuse `solution_changed`, validity,
    CCD and trial-cap handling. Growth beyond a previously swept interval must
