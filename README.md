@@ -46,7 +46,11 @@ current.
   them report convergence with 5–100 % error. A Hessian-preconditioned L-BFGS
   on an unpinned PolySolve branch reaches Newton's answers, 1.3–1.6× faster
   where a factorization dominates an iteration and no faster on small or
-  truncation-dominated scenes.
+  truncation-dominated scenes. Since 2026-09-23 the slope and step-length
+  tolerances end only a Newton solve ([record](docs/slope-tolerance-repair-20260923.md)),
+  so the other methods fail by name instead of reporting a wrong solution; the
+  barrier-trim/AL-weight efficiency work is planned in
+  [contact-efficiency-plan-20260923.md](docs/contact-efficiency-plan-20260923.md).
 
 - **Continuous integration** runs on this fork:
   [Build](https://github.com/sdast9/polyfem/actions/workflows/continuous.yml)
@@ -75,7 +79,7 @@ current.
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
 - **Dependencies:** the recipes pin `sdast9/ipc-toolkit@482b9eab`
-  (branch `semi-implicit-stiffness`), `sdast9/polysolve@bce32a39` (branch
+  (branch `semi-implicit-stiffness`), `sdast9/polysolve@448f1b8e` (branch
   `iteration-callback`) and the test data `sdast9/polyfem-data@e6ed5cf`
   (branch `fable-fixtures`; `main` mirrors upstream `polyfem/polyfem-data`);
   both code forks' `Build` workflows run on those branches

@@ -250,10 +250,17 @@ namespace polyfem::solver
 				// PolySolve also uses NotDescentDirection for its configured
 				// negative slope tolerance. A genuinely non-descending Newton
 				// direction throws above; distinguish the finite negative case.
+				// The slope is a Newton decrement only for a direction that
+				// solves with the Hessian: for L-BFGS, BFGS, ADAM or gradient
+				// descent it is met far from the minimizer (5-100 % solution
+				// error measured, docs/qn-contact-investigation-20260922.md).
+				// PolySolve no longer stops those strategies on it; this
+				// keeps the contract explicit on this side as well.
 				const double slope = nl_solver->current_criteria().xDeltaDotGrad;
 				const bool slope_tolerance = status == Status::NotDescentDirection
 											 && nl_solver->stop_criteria().xDeltaDotGrad < 0
-											 && std::isfinite(slope) && slope < 0;
+											 && std::isfinite(slope) && slope < 0
+											 && nl_solver->direction_solves_with_hessian();
 				const bool converged = slope_tolerance || status == Status::GradNormTolerance
 									   || status == Status::RelGradNormTolerance
 									   || (nl_solver->allow_non_grad_convergence

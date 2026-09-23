@@ -15,7 +15,9 @@
 # feasibility-respecting Wolfe line search and line_search_extend (stage 3,
 # docs/bfgs-wolfe-line-search-20260922.md) and c874cd59 names the methods a
 # forward solve cannot run and repairs ADAM's first step (stage 5,
-# docs/bfgs-forward-methods-20260922.md).
+# docs/bfgs-forward-methods-20260922.md); 448f1b8e applies the slope and
+# step-length tolerances only under a Hessian-based direction
+# (docs/slope-tolerance-repair-20260923.md).
 # License: MIT
 
 if(TARGET polysolve)
@@ -25,4 +27,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#c874cd59ca68afa6e7fc6b044581bd37bc2c536a")
+CPMAddPackage("gh:sdast9/polysolve#448f1b8e0da72101d17dcbf1f49da5f647fe0315")

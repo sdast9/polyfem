@@ -180,7 +180,14 @@ What the rows say:
 | Accepted-iteration counting | the manifest's `termination.iterations` counts only the final sub-solve; the tables count every accepted iteration across stall restarts (R1 step 1: the user's "20 iterations, 5 restarts" ≈ 190 here) |
 | User's own L-BFGS + Wolfe settings on R4 (baseline binary, 20-min cap) | still in step 1 after 1,270 iterations; energy 5.5e-5 at 1,200 s where Newton was at 2.6e-7; 45 stall restarts |
 
-## Recommendations (decisions for the user; none taken)
+## Recommendations (decisions for the user)
+
+**Taken 2026-09-23:** 1 and 2 — repaired and published
+([record](slope-tolerance-repair-20260923.md)): the slope tolerance and the
+step-length tolerances end only a Hessian-based (Newton) solve, and the asset
+warns about non-Newton methods on contact scenes instead of withdrawing them.
+4 has a plan: [contact-efficiency-plan-20260923.md](contact-efficiency-plan-20260923.md).
+3 is open.
 
 1. **Stop the false convergence** — a correctness repair, independent of the
    rest: accept the slope tolerance as convergence only for strategies whose
