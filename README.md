@@ -38,6 +38,15 @@ current.
   their bounded review follow-ups open.
   None of this establishes contact-scene convergence at production settings:
   the two public scenes with L-BFGS still stop on the soft budget.
+  A follow-up on the user's real 3D scenes
+  ([record](docs/qn-contact-investigation-20260922.md), no source change)
+  found plain L-BFGS, BFGS and ADAM fundamentally unsuited to them — the
+  Hessian's condition number is ≥ 3.5e13, and the line-search truncation binds
+  Newton, not them — and found that the directional-derivative tolerance lets
+  them report convergence with 5–100 % error. A Hessian-preconditioned L-BFGS
+  on an unpinned PolySolve branch reaches Newton's answers, 1.3–1.6× faster
+  where a factorization dominates an iteration and no faster on small or
+  truncation-dominated scenes.
 
 - **Continuous integration** runs on this fork:
   [Build](https://github.com/sdast9/polyfem/actions/workflows/continuous.yml)
