@@ -1,7 +1,15 @@
 # Contact-solve efficiency: barrier trim, stall trigger and AL weight — plan
 
-Date: 2026-09-23. **Status: plan, nothing implemented.** Items are EF-01 …
+Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
+([record](ef-01-trim-survey.md)); EF-02 … EF-06 not started. Items are EF-01 …
 EF-06; EF-01 is measurement only and is the prerequisite of the rest.
+
+EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
+The endpoint gradient balance is an identity (it returns the trim in force), so
+EF-02's estimate must come from the first stall's off-equilibrium κ_gb or from a
+force-weighted gap target, which merges EF-02 with EF-03; EF-05 has no case on
+these scenes; R3 fails at step 39 at every trim (published binary too) and needs
+its own item. See the record's "Consequences for the plan".
 
 ## Why
 

@@ -441,3 +441,73 @@ TEST_CASE("Coefficient event accounting observes outer mutations without changin
 	CHECK_THROWS_WITH(observed.refresh_semi_implicit_stiffness(x, false), "Injected provider failure");
 	CHECK(events.back()["operation_threw"] == true);
 }
+
+TEST_CASE("Trim predictor records observe the trim controller without changing it", "[trim_predictors]")
+{
+	// EF-01 (docs/ef-01-trim-survey.md): one vertex-edge contact at gap .2 (d-hat
+	// 1) under a driving force toward the edge.
+	const auto mesh = make_mesh();
+	ReferenceForm observed(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	ReferenceForm control(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	const auto hessian = [](const Eigen::VectorXd &, StiffnessMatrix &h) {
+		h.resize(6, 6);
+		h.setIdentity();
+		h *= 100.;
+	};
+	const auto gradient = [](const Eigen::VectorXd &, Eigen::VectorXd &g) {
+		g = Eigen::VectorXd::Zero(6);
+		g[5] = 3.;
+	};
+	for (auto *form : {&observed, &control})
+	{
+		form->set_system_hessian_provider(hessian);
+		form->set_system_gradient_provider(gradient);
+		form->set_weight(.5);
+	}
+	std::vector<json> records;
+	observed.set_trim_predictor_observer([&](const json &r) { records.push_back(r); });
+	for (auto *form : {&observed, &control})
+	{
+		form->init(zero);
+		form->refresh_semi_implicit_stiffness(zero);
+	}
+	REQUIRE(records.size() == 1);
+	const json r = records.back();
+	CHECK(r["event"] == "refresh");
+	CHECK(r["sequence"] == 1);
+	CHECK(r["active_count"] == 1);
+	CHECK(r["trim"].get<double>() == observed.barrier_stiffness());
+	CHECK(r["gap"]["rms"].get<double>() == Catch::Approx(.2));
+	CHECK(r["gap"]["rms"].get<double>() == Catch::Approx(observed.gap_statistics(mesh.rest_positions())["rms_over_dhat"].get<double>()));
+	CHECK(r["force_weighted"]["mean_gap"].get<double>() == Catch::Approx(.2));
+	CHECK(r["multiplicity"]["count"] == 3);
+	CHECK(r["multiplicity"]["max"].get<double>() == 1.);
+
+	// The two-sided balance is calibrate_trim's quotient -<gB,gE> / (w |gB|^2).
+	const Eigen::VectorXd gb = mesh.to_full_dof(observed.barrier_potential().gradient(observed.collision_set(), mesh, mesh.rest_positions()));
+	Eigen::VectorXd ge;
+	gradient(zero, ge);
+	CHECK(r["gradient_balance"]["kappa_gb"].get<double>() == Catch::Approx(-gb.dot(ge) / (.5 * gb.squaredNorm())));
+	CHECK(r["gradient_balance"]["cos_opposition"].get<double>() == Catch::Approx(-gb.dot(ge) / (gb.norm() * ge.norm())));
+	CHECK(r["hessian_diagonal_ratio"]["distribution"]["count"].get<int>() > 0);
+	CHECK(r["hessian_diagonal_ratio"]["trim_for_unit_median"].get<double>() > 0);
+
+	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
+	CHECK(observed.diagnostic_state() == control.diagnostic_state());
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	observed.retune_on_stall(zero, 2.);
+	control.retune_on_stall(zero, 2.);
+	REQUIRE(records.size() == 2);
+	CHECK(records.back()["event"] == "stall_retune");
+	CHECK(records.back()["trim"].get<double>() == observed.barrier_stiffness());
+	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	// A failing observer is reported, never propagated into the solve.
+	observed.set_trim_predictor_observer([](const json &) { throw std::runtime_error("Injected observer failure"); });
+	CHECK_NOTHROW(observed.refresh_semi_implicit_stiffness(zero));
+	control.refresh_semi_implicit_stiffness(zero);
+	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+}

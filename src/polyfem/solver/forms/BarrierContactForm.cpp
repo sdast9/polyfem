@@ -371,6 +371,7 @@ namespace polyfem::solver
 			if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
 				bump_trim(1.0 / factor);
 		}
+		emit_trim_predictors(x, "stall_retune", /*full=*/true);
 		// The refresh re-evaluated every active coefficient at x; compare the
 		// memoized values against the previous snapshot so a stall at an
 		// unchanged iterate with an unmoved trim is reported as "no change".
@@ -623,6 +624,11 @@ namespace polyfem::solver
 				"Refreshed semi-implicit barrier stiffness over {} contacts: min={:g} mean={:g} max={:g} (trim={:g})",
 				collision_set_.size(), min_kappa, mean_kappa, max_kappa, barrier_stiffness_);
 		}
+
+		// A retune refresh (no controller) is reported by retune_on_stall
+		// once it has moved the trim.
+		if (run_trim_controller)
+			emit_trim_predictors(x, published_endpoint ? "refresh_endpoint" : "refresh", /*full=*/true);
 	}
 
 	std::array<long, 5> BarrierContactForm::stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const
@@ -1511,6 +1517,198 @@ namespace polyfem::solver
 		return result;
 	}
 
+	namespace
+	{
+		// Nearest-rank quantile of an ascending vector (non-empty).
+		double sorted_quantile(const std::vector<double> &sorted, const double p)
+		{
+			const double pos = p * double(sorted.size() - 1);
+			return sorted[std::min(sorted.size() - 1, size_t(pos + 0.5))];
+		}
+
+		json distribution(std::vector<double> values)
+		{
+			if (values.empty())
+				return json{{"count", 0}};
+			std::sort(values.begin(), values.end());
+			double sum = 0;
+			for (const double v : values)
+				sum += v;
+			return json{{"count", values.size()}, {"mean", sum / values.size()}, {"min", values.front()}, {"p10", sorted_quantile(values, 0.1)}, {"p50", sorted_quantile(values, 0.5)}, {"p90", sorted_quantile(values, 0.9)}, {"max", values.back()}};
+		}
+	} // namespace
+
+	void BarrierContactForm::emit_trim_predictors(const Eigen::VectorXd &x, const char *event, const bool full, const int iteration)
+	{
+		if (!trim_predictor_observer_ || !uses_semi_implicit_stiffness())
+			return;
+		// Observational: a failed record is reported and never reaches the solve.
+		try
+		{
+			json record = trim_predictors(x, full);
+			record["event"] = event;
+			record["sequence"] = ++trim_predictor_sequence_;
+			record["iteration"] = iteration >= 0 ? json(iteration) : json(nullptr);
+			trim_predictor_observer_(record);
+		}
+		catch (const std::exception &e)
+		{
+			logger().warn("Trim predictor record failed: {}", e.what());
+		}
+	}
+
+	json BarrierContactForm::trim_predictors(const Eigen::VectorXd &x, const bool full) const
+	{
+		const Eigen::MatrixXd V = compute_displaced_surface(x);
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const double dhat_sq = dhat_ * dhat_;
+
+		json r = {{"trim", barrier_stiffness_}, {"form_weight", weight_}, {"dhat", dhat_}, {"refresh_id", diagnostic_refresh_id_}, {"collision_count", collision_set_.size()}};
+
+		// Per active collision (distance <= dhat, the controller's filter):
+		// gap / dhat and the norm of its local barrier gradient (collision
+		// weight and per-contact coefficient included; the common factor
+		// weight * trim cancels in the force weighting).
+		std::vector<std::pair<double, double>> gap_force;
+		std::vector<int> multiplicity(collision_mesh_.num_vertices(), 0);
+		double sum_d2 = 0;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const ipc::VectorMax12d dof = collision_set_[i].dof(V, E, F);
+			const double d2 = collision_set_[i].compute_distance(dof);
+			if (!(d2 <= dhat_sq))
+				continue;
+			sum_d2 += d2;
+			gap_force.emplace_back(std::sqrt(d2) / dhat_, barrier_potential_.gradient(collision_set_[i], dof).norm());
+			const auto vids = collision_set_[i].vertex_ids(E, F);
+			for (int a = 0; a < collision_set_[i].num_vertices(); ++a)
+				if (vids[a] >= 0)
+					++multiplicity[vids[a]];
+		}
+		const size_t n = gap_force.size();
+		r["active_count"] = n;
+		if (n > 0)
+		{
+			std::sort(gap_force.begin(), gap_force.end());
+			std::vector<double> gaps(n);
+			double total_force = 0, weighted_gap = 0, weighted_gap_sq = 0;
+			for (size_t i = 0; i < n; ++i)
+			{
+				gaps[i] = gap_force[i].first;
+				total_force += gap_force[i].second;
+				weighted_gap += gap_force[i].second * gap_force[i].first;
+				weighted_gap_sq += gap_force[i].second * gap_force[i].first * gap_force[i].first;
+			}
+			json gap = distribution(gaps);
+			gap["rms"] = std::sqrt(sum_d2 / n) / dhat_;
+			gap["units"] = "distance / dhat; rms is the controller's band statistic";
+			r["gap"] = gap;
+
+			json weighted = {{"total_local_gradient_norm", total_force}, {"scope", "Weights: norm of each active collision's local barrier gradient (proportional to its contact force)"}};
+			if (total_force > 0 && std::isfinite(total_force))
+			{
+				weighted["mean_gap"] = weighted_gap / total_force;
+				weighted["rms_gap"] = std::sqrt(weighted_gap_sq / total_force);
+				// Gap below which the given share of the force is carried,
+				// and the share carried by the smallest-gap tenth of pairs.
+				json at_fraction = json::object();
+				double cumulative = 0;
+				size_t k = 0;
+				for (const double fraction : {0.5, 0.9})
+				{
+					while (k < n && cumulative + gap_force[k].second < fraction * total_force)
+						cumulative += gap_force[k++].second;
+					at_fraction[fraction == 0.5 ? "0.5" : "0.9"] = gap_force[std::min(k, n - 1)].first;
+				}
+				weighted["gap_at_force_fraction"] = at_fraction;
+				double decile = 0;
+				for (size_t i = 0; i < std::max<size_t>(1, n / 10); ++i)
+					decile += gap_force[i].second;
+				weighted["force_share_of_closest_tenth"] = decile / total_force;
+			}
+			r["force_weighted"] = weighted;
+		}
+		{
+			std::vector<double> counts;
+			double sum = 0, sum_sq = 0;
+			for (const int m : multiplicity)
+				if (m > 0)
+				{
+					counts.push_back(m);
+					sum += m;
+					sum_sq += double(m) * m;
+				}
+			json mult = distribution(counts);
+			mult["scope"] = "Active collisions incident to each surface vertex in contact";
+			if (sum > 0)
+				mult["incidence_weighted_mean"] = sum_sq / sum;
+			r["multiplicity"] = mult;
+		}
+
+		if (!full)
+			return r;
+
+		// Two-sided gradient balance: the value calibrate_trim computes, before
+		// its cosine gate and its upward-only application.
+		json balance = {{"scope", "calibrate_trim's least-squares balance against the non-contact energy gradient (no AL term); reported whether or not the gate passes"}};
+		if (system_gradient_provider_ && !collision_set_.empty())
+		{
+			Eigen::VectorXd grad_energy;
+			system_gradient_provider_(x, grad_energy);
+			const Eigen::VectorXd grad_barrier = collision_mesh_.to_full_dof(
+				barrier_potential_.gradient(collision_set_, collision_mesh_, V));
+			const double gb = grad_barrier.norm(), ge = grad_energy.norm();
+			balance["energy_gradient_norm"] = ge;
+			balance["barrier_gradient_norm_unweighted"] = gb;
+			if (gb > 0 && ge > 0 && grad_barrier.size() == grad_energy.size())
+			{
+				const double c = -grad_barrier.dot(grad_energy) / (gb * ge);
+				balance["cos_opposition"] = c;
+				balance["kappa_gb"] = c * ge / (weight_ * gb);
+				balance["gate_passes"] = std::isfinite(c) && c >= 0.1;
+			}
+		}
+		r["gradient_balance"] = balance;
+
+		// Barrier (current trim, objective units) over elastic+inertia
+		// Hessian diagonals at the refresh snapshot, on DOFs the barrier
+		// touches. kappa_hessian_ is assembled at the last refresh, which is
+		// x for every full record.
+		json ratio = {{"scope", "diag(weight*trim*barrier Hessian, no PSD projection) / diag(system Hessian of the last refresh) on full DOFs with a positive barrier diagonal"}};
+		if (!collision_set_.empty() && kappa_hessian_.rows() > 0)
+		{
+			const StiffnessMatrix hb = collision_mesh_.to_full_dof(
+				barrier_potential_.hessian(collision_set_, collision_mesh_, V, ipc::PSDProjectionMethod::NONE));
+			const Eigen::VectorXd db = hb.diagonal() * (weight_ * barrier_stiffness_);
+			const Eigen::VectorXd de = kappa_hessian_.diagonal();
+			std::vector<double> ratios;
+			double sum_b = 0, sum_e = 0;
+			for (int j = 0; j < std::min<int>(db.size(), de.size()); ++j)
+				if (db[j] > 0 && de[j] > 0 && std::isfinite(db[j]))
+				{
+					ratios.push_back(db[j] / de[j]);
+					sum_b += db[j];
+					sum_e += de[j];
+				}
+			ratio["distribution"] = distribution(ratios);
+			if (!ratios.empty())
+			{
+				std::sort(ratios.begin(), ratios.end());
+				const double median = sorted_quantile(ratios, 0.5);
+				ratio["sum_ratio"] = sum_b / sum_e;
+				ratio["trim_for_unit_median"] = barrier_stiffness_ / median;
+				ratio["trim_for_unit_sum"] = barrier_stiffness_ * sum_e / sum_b;
+			}
+		}
+		r["hessian_diagonal_ratio"] = ratio;
+
+		// The first-contact conditioning cap's formula, unclamped.
+		if (kappa_median_ > 0 && kappa_hessian_max_ > 0)
+			r["conditioning_cap_trim"] = conditioning_cap_ * kappa_hessian_max_ / (weight_ * kappa_median_ * dhat_sq);
+		return r;
+	}
+
 	double BarrierContactForm::value_unweighted(const Eigen::VectorXd &x) const
 	{
 		return barrier_potential_(collision_set_, collision_mesh_, compute_displaced_surface(x));
@@ -1663,6 +1861,8 @@ namespace polyfem::solver
 			// the objective mid-solve; default 0 = disabled).
 			if (refresh_interval_ > 0 && ++iters_since_refresh_ >= refresh_interval_)
 				refresh_semi_implicit_stiffness(data.x);
+
+			emit_trim_predictors(data.x, "iteration", /*full=*/false, data.iter_num);
 		}
 		else if (use_adaptive_barrier_stiffness_)
 		{

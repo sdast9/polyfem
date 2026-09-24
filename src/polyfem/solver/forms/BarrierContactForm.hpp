@@ -89,6 +89,17 @@ namespace polyfem::solver
 		/// Callback failures cannot change solver behavior. Direct initialization
 		/// setters and coordinate-only feature transitions are outside this stream.
 		void set_coefficient_observer(std::function<void(const json &)> observer) { coefficient_observer_ = std::move(observer); }
+		/// EF-01 (contact-efficiency plan, 2026-09-23): opt-in observer of trim
+		/// predictor candidates, called after every semi-implicit refresh, stall
+		/// retune and post-step controller update. Observational only: the
+		/// record is computed from const state and the injected providers, and
+		/// nothing is evaluated while no observer is set.
+		void set_trim_predictor_observer(std::function<void(const json &)> observer) { trim_predictor_observer_ = std::move(observer); }
+		/// The EF-01 record at x: gap distribution and the force-weighted gap of
+		/// the active collisions, contact multiplicity per surface vertex, and
+		/// (full) the two-sided gradient-balance trim, the barrier-to-elastic
+		/// Hessian diagonal ratio on contact DOFs and the conditioning-cap trim.
+		json trim_predictors(const Eigen::VectorXd &x, bool full) const;
 
 		const ipc::BarrierPotential &barrier_potential() const { return barrier_potential_; }
 
@@ -253,6 +264,9 @@ namespace polyfem::solver
 
 		class CoefficientEventScope;
 		std::function<void(const json &)> coefficient_observer_;
+		std::function<void(const json &)> trim_predictor_observer_;
+		uint64_t trim_predictor_sequence_ = 0;
+		void emit_trim_predictors(const Eigen::VectorXd &x, const char *event, bool full, int iteration = -1);
 		int coefficient_event_depth_ = 0;
 		uint64_t coefficient_event_id_ = 0;
 		/// @brief Compute the contact barrier potential value

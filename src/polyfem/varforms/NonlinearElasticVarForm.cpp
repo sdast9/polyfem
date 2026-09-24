@@ -175,6 +175,26 @@ namespace polyfem::varform
 		auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form);
 		if (!barrier)
 			return;
+		// EF-01: trim predictor candidates, independent of the (heavy)
+		// physical diagnostics.
+		if (args["output"].value("trim_predictors", false))
+		{
+			ensure_diagnostic_run_id();
+			barrier->set_trim_predictor_observer([this, step, phase](const json &event) {
+				json record = event;
+				record["schema"] = io::schemas::TRIM_PREDICTORS;
+				record["version"] = io::schemas::TRIM_PREDICTORS_VERSION;
+				record["run_id"] = diagnostic_run_id_;
+				record["step"] = step;
+				record["phase"] = phase;
+				std::ofstream file(resolve_output_path("trim-predictors.jsonl"), std::ios::app);
+				file << record.dump() << std::endl;
+				if (!file)
+					throw std::runtime_error("Could not write trim predictor record");
+			});
+		}
+		else
+			barrier->set_trim_predictor_observer(nullptr);
 		if (!args["output"].value("physical_diagnostics", false))
 		{
 			barrier->set_coefficient_observer(nullptr);

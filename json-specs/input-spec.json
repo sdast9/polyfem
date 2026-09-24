@@ -2752,6 +2752,7 @@
             "physical_diagnostics",
             "physical_diagnostics_contact_path",
             "physical_balance_tolerance",
+            "trim_predictors",
             "manifest"
         ],
         "doc": "output settings"
@@ -2785,6 +2786,12 @@
         "type": "float",
         "default": 1e-6,
         "doc": "With physical_diagnostics, the relative tolerance of the record's physical_balance_pass: the endpoint free-residual norm (updated friction lag) and the global external-force balance on the body, both against the run's peak total absolute external force (RB-09 decision 2026-09-13). Observational; it does not stop or change the solve."
+    },
+    {
+        "pointer": "/output/trim_predictors",
+        "type": "bool",
+        "default": false,
+        "doc": "Opt-in EF-01 research stream trim-predictors.jsonl: at every semi-implicit refresh, stall retune and post-step, the active-gap distribution, force-weighted gap, contact multiplicity and (at refreshes) the two-sided gradient-balance trim and barrier/elastic Hessian diagonal ratio. Observational; it does not change the solve."
     },
     {
         "pointer": "/output/stats",

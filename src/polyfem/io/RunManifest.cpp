@@ -441,15 +441,18 @@ namespace polyfem::io
 		diagnostics["physical_diagnostics"] = output.value("physical_diagnostics", false);
 		diagnostics["physical_diagnostics_contact_path"] = output.value("physical_diagnostics_contact_path", false);
 		diagnostics["physical_balance_tolerance"] = output.value("physical_balance_tolerance", 1e-6);
+		diagnostics["trim_predictors"] = output.value("trim_predictors", false);
 		diagnostics["schemas"] = {
 			{schemas::RUN_MANIFEST, schemas::RUN_MANIFEST_VERSION},
 			{schemas::BUILD_INFO, schemas::BUILD_INFO_VERSION},
 			{schemas::PHYSICAL_DIAGNOSTICS, schemas::PHYSICAL_DIAGNOSTICS_VERSION},
 			{schemas::COEFFICIENT_EVENT, schemas::COEFFICIENT_EVENT_VERSION},
-			{schemas::SOLVER_ATTEMPT, schemas::SOLVER_ATTEMPT_VERSION}};
+			{schemas::SOLVER_ATTEMPT, schemas::SOLVER_ATTEMPT_VERSION},
+			{schemas::TRIM_PREDICTORS, schemas::TRIM_PREDICTORS_VERSION}};
 		diagnostics["files"] = {
 			{"manifest", path},
 			{"physical_diagnostics", output.value("physical_diagnostics", false) ? json("physical-diagnostics.jsonl, coefficient-events.jsonl, solver-attempts.jsonl in the output directory") : json(nullptr)},
+			{"trim_predictors", output.value("trim_predictors", false) ? json("trim-predictors.jsonl in the output directory") : json(nullptr)},
 			{"output_json", output.value("json", std::string()).empty() ? json(nullptr) : output["json"]},
 			{"log", output["log"].value("path", std::string()).empty() ? json(nullptr) : output["log"]["path"]}};
 		m["diagnostics"] = diagnostics;

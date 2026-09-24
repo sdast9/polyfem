@@ -27,5 +27,9 @@ namespace polyfem::io
 		/// trial, which the `extensions*` and `unextended_norm` fields record).
 		constexpr const char *SOLVER_ATTEMPT = "polyfem.solver-attempt";
 		constexpr int SOLVER_ATTEMPT_VERSION = 3;
+		/// EF-01 trim predictor candidates, trim-predictors.jsonl (opt-in
+		/// output/trim_predictors; docs/ef-01-trim-survey.md).
+		constexpr const char *TRIM_PREDICTORS = "polyfem.trim-predictors";
+		constexpr int TRIM_PREDICTORS_VERSION = 1;
 	} // namespace schemas
 } // namespace polyfem::io
