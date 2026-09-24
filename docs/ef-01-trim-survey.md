@@ -9,7 +9,9 @@ Evidence: `outputs/ef-01/20260923T145726Z/` (not in the repository): 110 runs
 under `runs/`, excluded runs with reasons under `runs-excluded/`, the sequence
 scripts and logs, `tables.md` / `metrics.json` (reduced), and the two binaries
 in `bin/` (`PolyFEM_bin-9f8f25881`, sha256 `39920e02…`, the published head;
-`PolyFEM_bin-ef01`, sha256 `1df8e4cb…`, this change).
+`PolyFEM_bin-ef01`, sha256 `1df8e4cb…`, this change on `9f8f25881`). Published
+as `b1f41fc63`, rebased onto `ad3416238` (paraviewo HDF5 chunking, output
+only; these runs write no HDF5).
 
 ## What changed in the code
 
