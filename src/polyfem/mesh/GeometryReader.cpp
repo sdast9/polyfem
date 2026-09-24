@@ -634,17 +634,25 @@ namespace polyfem::mesh
 						log_and_throw_error("Invalid surface_selection for obstacle, needs to be an integer!");
 
 					const int id = geometry["surface_selection"];
+					// A dirichlet_boundary entry may be a file path (a string) rather
+					// than an {"id", "value"} object; it prescribes no obstacle id.
+					const auto has_id = [](const json &disp) {
+						return disp.is_object() && disp.contains("id");
+					};
 					const auto matches_explicitly = [&](const json &disp) {
-						if (disp["id"].is_number_integer() && disp["id"].get<int>() == id)
+						if (!has_id(disp))
+							return false;
+						const json &disp_ids = disp["id"];
+						if (disp_ids.is_number_integer() && disp_ids.get<int>() == id)
 							return true;
-						if (disp["id"].is_array())
-							for (const json &disp_id : disp["id"])
+						if (disp_ids.is_array())
+							for (const json &disp_id : disp_ids)
 								if (disp_id.is_number_integer() && disp_id.get<int>() == id)
 									return true;
 						return false;
 					};
 					const auto matches = [&](const json &disp) {
-						return (disp["id"].is_string() && disp["id"].get<std::string>() == "all") || matches_explicitly(disp);
+						return (has_id(disp) && disp["id"].is_string() && disp["id"].get<std::string>() == "all") || matches_explicitly(disp);
 					};
 					// obstacle_displacements takes precedence over dirichlet_boundary
 					// (an "all" Dirichlet entry is the FE mesh's default, not a
@@ -666,10 +674,10 @@ namespace polyfem::mesh
 							break;
 						}
 					if (from_dirichlet && from_displacements && matches_explicitly(*from_dirichlet) && matches_explicitly(*from_displacements)
-						&& (*from_dirichlet)["value"] != (*from_displacements)["value"])
+						&& from_dirichlet->at("value") != from_displacements->at("value"))
 						log_and_throw_error(
 							"Obstacle surface id {} is prescribed twice with different values: dirichlet_boundary gives {} and obstacle_displacements gives {}; keep one of them",
-							id, (*from_dirichlet)["value"].dump(), (*from_displacements)["value"].dump());
+							id, from_dirichlet->at("value").dump(), from_displacements->at("value").dump());
 					if (from_displacements)
 						displacement = *from_displacements;
 					else if (from_dirichlet)

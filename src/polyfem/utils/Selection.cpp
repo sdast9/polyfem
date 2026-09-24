@@ -31,10 +31,12 @@ namespace polyfem::utils
 			res = std::make_shared<AxisPlaneSelection>(selection, mesh_bbox);
 		else if (selection.contains("normal"))
 			res = std::make_shared<PlaneSelection>(selection, mesh_bbox);
-		else if (selection["id"].is_string()) // assume ID is a file path
+		// "id" is optional (e.g. {"file": ...}); const json::operator[] on a
+		// missing key is undefined behaviour, so check for it first.
+		else if (selection.contains("id") && selection["id"].is_string()) // assume ID is a file path
 			res = std::make_shared<FileSelection>(
 				resolve_path(selection["id"], root_path), selection.value("id_offset", 0));
-		else if (selection["id"].is_number_integer()) // assume ID is uniform
+		else if (selection.contains("id") && selection["id"].is_number_integer()) // assume ID is uniform
 			res = std::make_shared<UniformSelection>(selection["id"]);
 		else if (selection.contains("file"))
 			res = std::make_shared<FileSelection>(resolve_path(selection["file"], root_path));
@@ -84,9 +86,9 @@ namespace polyfem::utils
 	BoxSelection::BoxSelection(
 		const json &selection,
 		const Selection::BBox &mesh_bbox)
-		: Selection(selection["id"].get<int>())
+		: Selection(selection.at("id").get<int>())
 	{
-		auto bboxj = selection["box"];
+		auto bboxj = selection.at("box");
 
 		const int dim = bboxj[0].size();
 		assert(bboxj[1].size() == dim);
@@ -161,10 +163,10 @@ namespace polyfem::utils
 	SphereSelection::SphereSelection(
 		const json &selection,
 		const Selection::BBox &mesh_bbox)
-		: Selection(selection["id"].get<int>())
+		: Selection(selection.at("id").get<int>())
 	{
-		center_ = selection["center"];
-		radius2_ = selection["radius"];
+		center_ = selection.at("center");
+		radius2_ = selection.at("radius");
 
 		if (selection.value("relative", false))
 		{
@@ -175,7 +177,7 @@ namespace polyfem::utils
 
 		radius2_ *= radius2_;
 
-		id_ = selection["id"];
+		id_ = selection.at("id");
 	}
 
 	bool SphereSelection::inside(const size_t p_id, const std::vector<int> &vs, const RowVectorNd &p) const
@@ -190,11 +192,11 @@ namespace polyfem::utils
 	CylinderSelection::CylinderSelection(
 		const json &selection,
 		const Selection::BBox &mesh_bbox)
-		: Selection(selection["id"].get<int>())
+		: Selection(selection.at("id").get<int>())
 	{
-		point_ = selection["p1"];
-		RowVectorNd p2 = selection["p2"];
-		radius2_ = selection["radius"];
+		point_ = selection.at("p1");
+		RowVectorNd p2 = selection.at("p2");
+		radius2_ = selection.at("radius");
 
 		if (selection.value("relative", false))
 		{
@@ -208,7 +210,7 @@ namespace polyfem::utils
 		height_ = (point_ - p2).norm();
 		axis_ = (p2 - point_).normalized();
 
-		id_ = selection["id"];
+		id_ = selection.at("id");
 	}
 
 	bool CylinderSelection::inside(const size_t p_id, const std::vector<int> &vs, const RowVectorNd &p) const
@@ -231,13 +233,13 @@ namespace polyfem::utils
 	AxisPlaneSelection::AxisPlaneSelection(
 		const json &selection,
 		const Selection::BBox &mesh_bbox)
-		: Selection(selection["id"].get<int>())
+		: Selection(selection.at("id").get<int>())
 	{
-		position_ = selection["position"];
+		position_ = selection.at("position");
 
-		if (selection["axis"].is_string())
+		if (selection.at("axis").is_string())
 		{
-			std::string axis = selection["axis"];
+			std::string axis = selection.at("axis");
 			int sign = axis[0] == '-' ? -1 : 1;
 			int dim = std::tolower(axis.back()) - 'x' + 1;
 			assert(dim >= 1 && dim <= 3);
@@ -245,8 +247,8 @@ namespace polyfem::utils
 		}
 		else
 		{
-			assert(selection["axis"].is_number_integer());
-			axis_ = selection["axis"];
+			assert(selection.at("axis").is_number_integer());
+			axis_ = selection.at("axis");
 			assert(std::abs(axis_) >= 1 && std::abs(axis_) <= 3);
 		}
 
@@ -272,13 +274,13 @@ namespace polyfem::utils
 	PlaneSelection::PlaneSelection(
 		const json &selection,
 		const Selection::BBox &mesh_bbox)
-		: Selection(selection["id"].get<int>())
+		: Selection(selection.at("id").get<int>())
 	{
-		normal_ = selection["normal"];
+		normal_ = selection.at("normal");
 		normal_.normalize();
 		if (selection.contains("point"))
 		{
-			point_ = selection["point"];
+			point_ = selection.at("point");
 			if (selection.value("relative", false))
 				point_ = (mesh_bbox[1] - mesh_bbox[0]).cwiseProduct(point_) + mesh_bbox[0];
 		}
