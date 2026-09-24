@@ -1755,7 +1755,9 @@
             "min_iterations",
             "soft_iteration_limit",
             "max_restarts",
-            "stall_trim_factor"
+            "stall_trim_factor",
+            "alpha_basis",
+            "feasible_ratio_threshold"
         ],
         "doc": "Stall detection and restart options for the semi-implicit barrier stiffness mode."
     },
@@ -1800,6 +1802,24 @@
         "default": 2.0,
         "type": "float",
         "doc": "Factor applied to the global trim when a stall restart is triggered."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/restart/alpha_basis",
+        "default": "absolute",
+        "type": "string",
+        "options": [
+            "absolute",
+            "feasible_bound"
+        ],
+        "doc": "What a small line-search step is judged against (EF-04, docs/ef-04-stall-trigger.md). \"absolute\" (the historical trigger): every accepted step size below alpha_threshold counts towards the patience. \"feasible_bound\" (opt-in): a small step counts only when the line search backtracked below the bound the problem set -- finite energy, CCD and the trial-displacement cap -- i.e. accepted/feasible step < feasible_ratio_threshold; a step accepted at that bound resets the count, because a restart cannot lengthen a step that geometry truncated. The soft iteration limit and hard line-search failures are unaffected."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/restart/feasible_ratio_threshold",
+        "default": 0.999,
+        "type": "float",
+        "min": 0,
+        "max": 1,
+        "doc": "With alpha_basis \"feasible_bound\": a small step whose accepted/feasible step-size ratio is at or above this value counts as bounded, not stalled. 0.999 exempts only steps accepted at the bound (a single backtracking halving gives 0.5); lower values also exempt steps that backtracked a little below it."
     },
     {
         "pointer": "/solver/contact/CCD",

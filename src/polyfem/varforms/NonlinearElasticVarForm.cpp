@@ -2319,12 +2319,7 @@ namespace polyfem::varform
 				barrier_form != nullptr && barrier_form->uses_semi_implicit_stiffness())
 			{
 				const json &restart_opts = args["solver"]["contact"]["semi_implicit"]["restart"];
-				stall_opts.enabled = restart_opts["enabled"];
-				stall_opts.alpha_threshold = restart_opts["alpha_threshold"];
-				stall_opts.patience = restart_opts["patience"];
-				stall_opts.min_iterations = restart_opts["min_iterations"];
-				stall_opts.soft_iteration_limit = restart_opts["soft_iteration_limit"];
-				stall_opts.max_restarts = restart_opts["max_restarts"];
+				stall_opts = solver::StallRestartOptions::from_json(restart_opts);
 
 				const double stall_trim_factor = restart_opts["stall_trim_factor"];
 				on_stall = [this, barrier_form, stall_trim_factor, step, &attempts](const Eigen::VectorXd &x) {

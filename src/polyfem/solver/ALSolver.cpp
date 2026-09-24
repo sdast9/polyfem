@@ -10,6 +10,33 @@
 
 namespace polyfem::solver
 {
+	StallRestartOptions StallRestartOptions::from_json(const json &restart)
+	{
+		StallRestartOptions opts;
+		opts.enabled = restart["enabled"];
+		opts.alpha_threshold = restart["alpha_threshold"];
+		opts.patience = restart["patience"];
+		opts.min_iterations = restart["min_iterations"];
+		opts.soft_iteration_limit = restart["soft_iteration_limit"];
+		opts.max_restarts = restart["max_restarts"];
+		const std::string basis = restart.value("alpha_basis", std::string("absolute"));
+		if (basis == "absolute")
+			opts.alpha_basis = AlphaBasis::Absolute;
+		else if (basis == "feasible_bound")
+			opts.alpha_basis = AlphaBasis::FeasibleBound;
+		else
+			log_and_throw_error("solver/contact/semi_implicit/restart/alpha_basis: unknown value \"{}\" (absolute or feasible_bound)", basis);
+		opts.feasible_ratio_threshold = restart.value("feasible_ratio_threshold", opts.feasible_ratio_threshold);
+		if (!(opts.feasible_ratio_threshold > 0 && opts.feasible_ratio_threshold <= 1))
+			log_and_throw_error("solver/contact/semi_implicit/restart/feasible_ratio_threshold must lie in (0, 1], got {}", opts.feasible_ratio_threshold);
+		return opts;
+	}
+
+	std::string StallRestartOptions::alpha_basis_name(const AlphaBasis basis)
+	{
+		return basis == AlphaBasis::FeasibleBound ? "feasible_bound" : "absolute";
+	}
+
 	ALBudgetOptions ALBudgetOptions::from_json(const json &al_args)
 	{
 		ALBudgetOptions budget;
@@ -186,6 +213,22 @@ namespace polyfem::solver
 		// would re-run an identical problem, so it interrupts instead.
 		int unchanged_restarts = 0, consecutive_unchanged = 0;
 
+		// EF-04: small-alpha iterations of this subsolve (all attempts) and,
+		// under the feasible-bound basis, how many of them the bound explains.
+		// Recorded only in that opt-in mode, so the default record is unchanged.
+		const bool feasible_basis = stall_opts.alpha_basis == StallRestartOptions::AlphaBasis::FeasibleBound;
+		int small_alpha = 0, small_alpha_at_bound = 0, small_alpha_unclassified = 0;
+		const auto record_alpha_basis = [&]() {
+			if (!detect_stalls || !feasible_basis)
+				return;
+			solve_info_["stall_alpha_basis"] = {
+				{"basis", StallRestartOptions::alpha_basis_name(stall_opts.alpha_basis)},
+				{"feasible_ratio_threshold", stall_opts.feasible_ratio_threshold},
+				{"small_alpha_iterations", small_alpha},
+				{"at_feasible_bound", small_alpha_at_bound},
+				{"unclassified", small_alpha_unclassified}};
+		};
+
 		int restarts = 0;
 		while (true)
 		{
@@ -215,7 +258,27 @@ namespace polyfem::solver
 					if (int(crit.iterations) < stall_opts.min_iterations)
 						return false;
 
-					if (std::isfinite(crit.alpha) && crit.alpha < stall_opts.alpha_threshold)
+					bool counts = std::isfinite(crit.alpha) && crit.alpha < stall_opts.alpha_threshold;
+					if (counts)
+						++small_alpha;
+					if (counts && feasible_basis)
+					{
+						// The accepted step's line search, still current:
+						// the callback runs after it and before the next.
+						const auto &ls = nl_solver->line_search();
+						const json ratio = ls ? ls->diagnostics().value("accepted_over_feasible", json(nullptr)) : json(nullptr);
+						if (ratio.is_number() && std::isfinite(ratio.get<double>()))
+						{
+							if (ratio.get<double>() >= stall_opts.feasible_ratio_threshold)
+							{
+								counts = false; // CCD / the trial cap / finite energy bounded it
+								++small_alpha_at_bound;
+							}
+						}
+						else
+							++small_alpha_unclassified; // no bound reported: judge absolutely
+					}
+					if (counts)
 						++stall_count;
 					else
 						stall_count = 0;
@@ -273,6 +336,7 @@ namespace polyfem::solver
 				solve_info_["directional_derivative"] = slope;
 				solve_info_["restarts"] = restarts;
 				solve_info_["unchanged_restarts"] = unchanged_restarts;
+				record_alpha_basis();
 				if (converged)
 				{
 					nl_solver->set_iteration_callback(nullptr);
@@ -283,6 +347,7 @@ namespace polyfem::solver
 			catch (const std::runtime_error &e)
 			{
 				solve_info_ = {{"outcome", "failed"}, {"error", e.what()}, {"restarts", restarts}, {"unchanged_restarts", unchanged_restarts}};
+				record_alpha_basis();
 				// nl_solverin may be shared with later solves
 				nl_solver->set_iteration_callback(nullptr);
 				nl_solver->set_direction_filter(nullptr);

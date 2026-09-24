@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <polyfem/solver/ALSolver.hpp>
@@ -246,6 +247,142 @@ TEST_CASE("AL records which condition actually triggered a stall restart", "[al_
 		CHECK(info["outcome"] == "failed");
 		CHECK_FALSE(info.contains("stall_trigger"));
 	}
+}
+
+// EF-04: the alpha trigger judged the accepted step size absolutely, so a run
+// of steps that CCD or the trial cap truncated -- accepted exactly at that
+// bound -- read as a stall and restarted (with a coefficient refresh) although
+// the line search never backtracked. The opt-in feasible-bound basis counts a
+// small step only when the line search went below the bound.
+namespace
+{
+	// Newton on the quartic, with the step bounded to 1e-3 of the proposal
+	// while the iterate is still near its start (the first ~6 iterations):
+	// every one of those steps is accepted at the bound.
+	class BoundedQuarticProblem : public QuarticProblem
+	{
+	public:
+		double max_step_size(const TVector &x0, const TVector &x1) override
+		{
+			return x0[0] > 9.98 ? 1e-3 : NLProblem::max_step_size(x0, x1);
+		}
+	};
+
+	// 0.5 x^2 with its curvature understated 1e4 times: the Newton step
+	// overshoots and Backtracking halves it 13 times, far below a bound of 1.
+	class SoftCurvature : public Form
+	{
+	public:
+		std::string name() const override { return "soft_curvature"; }
+		double value_unweighted(const Eigen::VectorXd &x) const override { return 0.5 * x[0] * x[0]; }
+		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &g) const override
+		{
+			g = Eigen::VectorXd::Constant(1, x[0]);
+		}
+		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &h) const override
+		{
+			h.resize(1, 1);
+			h.coeffRef(0, 0) = 1e-4;
+		}
+	};
+
+	class SoftCurvatureProblem : public NLProblem
+	{
+	public:
+		SoftCurvatureProblem() : NLProblem(1, 0, {std::make_shared<SoftCurvature>()}, {}, nullptr, 1, 1, QuarticProblem::mass(), 1) {}
+	};
+
+	StallRestartOptions alpha_only(StallRestartOptions::AlphaBasis basis)
+	{
+		auto opts = restart_options(0);
+		opts.soft_iteration_limit = -1;
+		opts.alpha_threshold = 0.01;
+		opts.patience = 2;
+		opts.alpha_basis = basis;
+		return opts;
+	}
+} // namespace
+
+TEST_CASE("Stall alpha basis: steps accepted at the feasible bound are not stalls", "[al_solver][stall_trigger][ef04]")
+{
+	using Basis = StallRestartOptions::AlphaBasis;
+
+	SECTION("absolute basis (default) restarts on bounded steps")
+	{
+		BoundedQuarticProblem problem;
+		int retunes = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, alpha_only(Basis::Absolute), [&](const auto &) { ++retunes; return true; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
+		CHECK(solver.info()["stall_trigger"] == "alpha");
+		CHECK(solver.info()["stall_alpha"] == Catch::Approx(1e-3));
+		// The default record is unchanged: no basis block.
+		CHECK_FALSE(solver.info().contains("stall_alpha_basis"));
+	}
+
+	SECTION("feasible-bound basis lets the bounded steps through to convergence")
+	{
+		BoundedQuarticProblem problem;
+		int retunes = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, alpha_only(Basis::FeasibleBound), [&](const auto &) { ++retunes; return true; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, parameters(), linear, 1));
+		CHECK(std::abs(std::pow(sol(0, 0), 3)) < 1e-12);
+		CHECK(retunes == 0);
+		const json &basis = solver.info()["stall_alpha_basis"];
+		CHECK(basis["basis"] == "feasible_bound");
+		CHECK(basis["small_alpha_iterations"].get<int>() >= 5);
+		CHECK(basis["at_feasible_bound"] == basis["small_alpha_iterations"]);
+		CHECK(basis["unclassified"] == 0);
+	}
+
+	SECTION("feasible-bound basis still restarts when the line search backtracked")
+	{
+		SoftCurvatureProblem problem;
+		int retunes = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, alpha_only(Basis::FeasibleBound), [&](const auto &) { ++retunes; return true; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
+		CHECK(solver.info()["stall_trigger"] == "alpha");
+		CHECK(solver.info()["stall_alpha"].get<double>() < 2e-4);
+		const json &basis = solver.info()["stall_alpha_basis"];
+		CHECK(basis["small_alpha_iterations"] == 2);
+		CHECK(basis["at_feasible_bound"] == 0);
+	}
+
+	SECTION("a lower ratio threshold also exempts steps that backtracked a little")
+	{
+		// Backtracking to 2^-13 of a bound of 1: exempt only below 1.22e-4.
+		SoftCurvatureProblem problem;
+		auto opts = alpha_only(Basis::FeasibleBound);
+		opts.feasible_ratio_threshold = 1e-4;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, opts, [](const auto &) { return true; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, parameters(), linear, 1));
+		CHECK(solver.info()["stall_alpha_basis"]["at_feasible_bound"].get<int>() > 2);
+	}
+}
+
+TEST_CASE("Stall restart options read the alpha basis and refuse bad values", "[al_solver][stall_trigger][ef04]")
+{
+	json restart = {{"enabled", true}, {"alpha_threshold", 0.01}, {"patience", 5}, {"min_iterations", 5}, {"soft_iteration_limit", 100}, {"max_restarts", 20}, {"stall_trim_factor", 2.0}};
+	auto opts = StallRestartOptions::from_json(restart);
+	CHECK(opts.alpha_basis == StallRestartOptions::AlphaBasis::Absolute);
+	CHECK(opts.feasible_ratio_threshold == 0.999);
+	CHECK(opts.alpha_threshold == 0.01);
+	CHECK(opts.soft_iteration_limit == 100);
+
+	restart["alpha_basis"] = "feasible_bound";
+	restart["feasible_ratio_threshold"] = 0.5;
+	opts = StallRestartOptions::from_json(restart);
+	CHECK(opts.alpha_basis == StallRestartOptions::AlphaBasis::FeasibleBound);
+	CHECK(opts.feasible_ratio_threshold == 0.5);
+
+	restart["feasible_ratio_threshold"] = 0.0;
+	CHECK_THROWS_WITH(StallRestartOptions::from_json(restart), ContainsSubstring("feasible_ratio_threshold"));
+	restart["feasible_ratio_threshold"] = 0.999;
+	restart["alpha_basis"] = "relative";
+	CHECK_THROWS_WITH(StallRestartOptions::from_json(restart), ContainsSubstring("alpha_basis"));
 }
 
 TEST_CASE("AL hard line search failures remain failures and clean shared solver", "[al_solver]")

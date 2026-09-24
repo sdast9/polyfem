@@ -1,7 +1,8 @@
 # Contact-solve efficiency: barrier trim, stall trigger and AL weight — plan
 
 Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
-([record](ef-01-trim-survey.md)); EF-02 … EF-06 not started. Items are EF-01 …
+([record](ef-01-trim-survey.md)); **EF-04 done 2026-09-24**
+([record](ef-04-stall-trigger.md)); EF-02, EF-03, EF-05, EF-06 not started. Items are EF-01 …
 EF-06; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
@@ -10,6 +11,15 @@ EF-02's estimate must come from the first stall's off-equilibrium κ_gb or from 
 force-weighted gap target, which merges EF-02 with EF-03; EF-05 has no case on
 these scenes; R3 fails at step 39 at every trim (published binary too) and needs
 its own item. See the record's "Consequences for the plan".
+
+EF-04 outcome in brief: H-E holds as a statement about the trigger (16 of 17
+production R4 alpha restarts fired on steps accepted at the feasible bound),
+but counting only steps that backtracked below the bound
+(`restart/alpha_basis: feasible_bound`, opt-in) makes no scene cheaper — the
+soft iteration budget takes over the retunes and R4's cost stays the trim
+walk (852–879 against 726–828 iterations; R1, BBT, the smokes and the pinned
+optima unchanged). Default kept absolute; the option is there for EF-02/03 and
+EF-06 to revisit.
 
 ## Why
 
@@ -103,6 +113,10 @@ with binary hashes, and a statement of which hypotheses survived. No default,
 controller or law change.
 
 ## EF-04 — Stall trigger relative to the feasible bound (small, independent)
+
+**Done 2026-09-24** — [record](ef-04-stall-trigger.md). Opt-in
+`solver/contact/semi_implicit/restart/alpha_basis` / `feasible_ratio_threshold`;
+no measured benefit; default unchanged (the user's decision).
 
 Count a step toward the alpha patience only when the line search backtracked
 below the feasible bound (accepted α / feasible α < threshold), not when α is

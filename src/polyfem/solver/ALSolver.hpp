@@ -21,12 +21,31 @@ namespace polyfem::solver
 	///        nonlinear solve with retuned barrier stiffness.
 	struct StallRestartOptions
 	{
+		/// @brief EF-04: what a small alpha is measured against. Absolute (the
+		///        historical trigger): every accepted alpha below the threshold
+		///        counts. FeasibleBound: a small alpha counts only when the line
+		///        search backtracked below the bound the problem set (finite
+		///        energy, CCD and the trial-displacement cap), i.e. accepted /
+		///        feasible < feasible_ratio_threshold; a step accepted at that
+		///        bound resets the count like a large one.
+		enum class AlphaBasis
+		{
+			Absolute,
+			FeasibleBound
+		};
+
 		bool enabled = false;
 		double alpha_threshold = 1e-4; ///< Line-search alphas below this count towards a stall
 		int patience = 5;              ///< Consecutive small-alpha iterations before a stall
 		int min_iterations = 5;        ///< Do not judge stalls before this many iterations
 		int soft_iteration_limit = -1; ///< Restart after this many iterations (-1 to disable)
 		int max_restarts = 5;          ///< Maximum number of restarts per solve
+		AlphaBasis alpha_basis = AlphaBasis::Absolute;
+		double feasible_ratio_threshold = 0.999; ///< FeasibleBound: accepted/feasible alpha below this counts
+
+		/// @brief Reads solver/contact/semi_implicit/restart (spec-completed).
+		static StallRestartOptions from_json(const json &restart);
+		static std::string alpha_basis_name(AlphaBasis basis);
 	};
 
 	/// @brief RB-07: opt-in bounds on the augmented-Lagrangian feasibility
