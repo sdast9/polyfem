@@ -2,7 +2,8 @@
 
 Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
 ([record](ef-01-trim-survey.md)); **EF-04 done 2026-09-24**
-([record](ef-04-stall-trigger.md)); EF-02, EF-03, EF-05, EF-06 not started. Items are EF-01 …
+([record](ef-04-stall-trigger.md); retested 2026-09-25,
+[EF-04b](ef-04b-feasible-bound-retest.md)); EF-02, EF-03, EF-05, EF-06 not started. Items are EF-01 …
 EF-06; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
@@ -20,6 +21,17 @@ soft iteration budget takes over the retunes and R4's cost stays the trim
 walk (852–879 against 726–828 iterations; R1, BBT, the smokes and the pinned
 optima unchanged). Default kept absolute; the option is there for EF-02/03 and
 EF-06 to revisit.
+
+EF-04b (retest, 2026-09-25): no benefit in any regime left open. R4 step 1's
+cost follows when the trim walk starts (iterations ≈ 299 + 1.26 × first
+departure from 1, r = 0.91, 15 runs), which neither basis moves, at soft
+budgets 100/200/400/off (absolute 780 ± 60, feasible bound 777 ± 70); with the
+soft budget off, feasible bound leaves one 745-iteration attempt that the
+exported AL cap (500) fails. Pinned multi-step R4 and BBT unchanged, held-out
+BB −3–5 %, IT +13–17 % on a non-reproducible trajectory. EF-02/03 not landed
+(untested). EF-06's variant B no longer converges R1 under either basis: its
+qn-contact convergence was the slope tolerance that `448f1b8`/`9f8f25881`
+withdrew for non-Hessian directions — EF-06 must settle that criterion first.
 
 ## Why
 
@@ -116,7 +128,10 @@ controller or law change.
 
 **Done 2026-09-24** — [record](ef-04-stall-trigger.md). Opt-in
 `solver/contact/semi_implicit/restart/alpha_basis` / `feasible_ratio_threshold`;
-no measured benefit; default unchanged (the user's decision).
+no measured benefit; default unchanged (the user's decision). Retested
+2026-09-25 at other soft budgets, pinned multi-step, held-out scenes and with
+EF-06's preconditioned L-BFGS ([EF-04b](ef-04b-feasible-bound-retest.md)): no
+benefit; recommendation unchanged.
 
 Count a step toward the alpha patience only when the line search backtracked
 below the feasible bound (accepted α / feasible α < threshold), not when α is
@@ -154,7 +169,11 @@ snap residuals.
 ## EF-06 — Re-evaluate the preconditioned L-BFGS (optional, last)
 
 The experimental variant B (PolySolve branch `qn-contact-experiment`) was held
-back mainly by the stall trigger and the trim walk. Repeat its R1/R4 comparison
+back mainly by the stall trigger and the trim walk. (EF-04b, 2026-09-25: merged
+onto the current pin `448f1b8` it no longer converges R1 step 1 under either
+trigger basis — its earlier R1 convergence was the slope tolerance, which the
+repair now accepts only for Hessian directions. Decide first whether a
+Hessian-preconditioned direction qualifies.) Repeat its R1/R4 comparison
 after EF-02–04 before deciding whether to productionize it.
 
 ## Order and decisions
