@@ -2,10 +2,12 @@
 
 Date: 2026-09-20
 Status: **characterized — limits documented; closed by the user's decision
-of 2026-09-20: no code change** (see [Decision](#decision-root-finding-method)).
+of 2026-09-20: no code change** (see [Decision](#decision-root-finding-method));
+**remedy adopted 2026-09-25** (the user pulled option 1 forward: Tight-Inclusion
+1.1.0's bucket DFS, see [Adoption](#adoption-tight-inclusion-110-2026-09-25)).
 The allocation is named and measured; the remedy is upstream's replacement
-of the algorithm (Tight-Inclusion 1.1.0), measured here in isolation and
-left for the next dependency sync; `Max Threads` remains the workaround.
+of the algorithm (Tight-Inclusion 1.1.0), measured here in isolation, then
+adopted ahead of the dependency sync.
 Selected stage: 1 (locate the allocation without a rebuild) → candidate
 measurement for stage 2 (isolated worktree, nothing published) → record.
 The plan's hypothesis — a fixed per-thread block in PolyFEM's contact form or
@@ -294,7 +296,8 @@ worktree) and `run-matrix.sh`, compared with `tool/ab_compare.py`.
 
 ## Next session handoff
 
-Nothing pending under RB-24. At the next dependency sync (the upstream
+**Done 2026-09-25** — see [Adoption](#adoption-tight-inclusion-110-2026-09-25).
+Nothing pending under RB-24. The handoff as written on 2026-09-20: at the next dependency sync (the upstream
 toolkit already pins Tight-Inclusion 1.1.0, so a toolkit sync brings the
 bucket DFS with it): re-run the five smokes (single-threaded golden:
 bit-identical expected, F5), `tools/rb05/run_scene_limits.py`, `tools/rb02`
@@ -304,3 +307,60 @@ record. RB-12's threaded-friction limit may be revisited in the light of
 F3/F5 then. Until the sync, a lower *Max Threads* on large floor-contact
 scenes is the workaround (peak RSS ≈ base + capped queries in flight ×
 156 MB).
+
+## Adoption: Tight-Inclusion 1.1.0 (2026-09-25)
+
+**Decision (user, 2026-09-25):** take option 1 now rather than at the next
+dependency sync.
+
+**Change.** IPC toolkit fork `75600955` (`semi-implicit-stiffness`): the
+Tight-Inclusion pin 1.0.6 → 1.1.0 — the same one-line edit as F5's candidate
+(`candidate-pin.patch`) — plus upstream `bb36e293`'s Python-binding change
+(`BUCKET_DEPTH_FIRST_SEARCH` exposed and the default of
+`ipctk.tight_inclusion.edge_edge_ccd` / `point_triangle_ccd`, so the bindings
+match the C++ default; PolyFEM does not build them). The toolkit passes no
+root-finding method, so every edge-edge and point-triangle CCD query uses the
+bucket DFS. PolyFEM: the toolkit pin → `75600955`, and the run manifest's
+`libraries` table gains `tight_inclusion` — the version CPM added, because the
+library's own `project()` version reads 1.0.4 in both the 1.0.6 and the 1.1.0
+tags (its `TIGHT_INCLUSION_VER` macro cannot tell them apart). `[run_manifest]`
+checks that the entry is present and ≥ 1.1. No contact setting, tolerance,
+`max_iterations`, thread default or resource limit changed.
+
+**Evidence:** `outputs/rb-24-adopt/20260925T150323Z/` (not in the repository):
+`bin/` (`PolyFEM_bin-baseline` `070c7b9b…` = the published `b92e2dd0a`
+sources; `PolyFEM_bin-ti110` `e75ce40d…` = the pin change, on which the
+matrices ran; `PolyFEM_bin-final` `550806ac…` = the published change, which
+adds only the manifest entry — the probe's outputs are byte-identical to
+`-ti110`'s), `seq-validate.sh` and its log, `probe-{A,B}/`, `smokes-{A,B}/`
+with `ab-summary.md`, `repeat-B/`, `rb05-scene-limits/`, `rb02/`,
+`unit-suite-final.log`, `hda-tests.log`. Shared build, all runs sequential, on
+AC power.
+
+| check | result |
+| --- | --- |
+| RB-24 probe (RB-12 `rss-probe-2`), peak RSS 1 / 18 threads | 222 → **92 MB** / 2,456 → **609 MB** (≈ 131 → ≈ 30 MB per added thread); wall 1.81 → 0.91 s / 1.01 → 0.69 s — F5 reproduced |
+| five public smokes, 1 thread, baseline vs 1.1.0 | same solver path, ‖du‖∞ = **0** on all five; peak RSS 220–223 → 93–151 MB; wall −13 to −34 % |
+| five public smokes, default threads | same path on four, `quasistatic-adaptive` differs from step 1 (‖du‖∞ 2.4e-16); ‖du‖∞ ≤ 7.3e-16 on all; peak RSS 2,246–2,562 → 511–823 MB |
+| RB-12 repeat matrix (`quasistatic-semi`, `-friction`, `@dt=0.0625` × {default, 1} × 5, `--verify`) | 0 violations; five cells one path each (‖du‖ ≤ 1.6e-15); `quasistatic-semi@dt=0.0625` threaded took **two paths** from step 11 with endpoints 3.2–6.0e-16 apart; peak RSS 507–872 MB threaded, 93–144 MB serial |
+| RB-05 `run_scene_limits.py` | every case exits as expected (sweep 3, unsupported 1, `bvh-automatic` 0; generous / default = unlimited) |
+| RB-02 coefficient probe (`tools/rb02`) | **270/270** |
+| full unit suite (`unit_tests-final`, own cwd) | 388 cases / **386 passed**, 5,177,857 assertions / 2 failed: the two known golden scenes, `multi-material/stretch-cubes` (pre-existing, RB-22) and `gcp-contact/cube-on-floor` (CI-06: ≈ 0.3 % H1 against the stored reference) |
+| HDA tests (`houdini_HDAs/tests`, 13 files, Houdini 22.0.429 `hython`, shared build) | all **PASS** |
+
+`gcp-contact/cube-on-floor` is not reproducible run to run under either
+binary even though the golden harness runs it single-threaded (`cof/`, through
+CI-03's `run_manifest_env`): H1 error 0.098335–0.098493 over five baseline runs
+and 0.098284–0.098490 over four with 1.1.0 — the same spread and the same
+failure, so the change is not visible there.
+
+F5 found one path in every repeat cell; this matrix has one cell with two, so
+the bucket DFS does **not** make threaded runs reproducible — it removes most
+of the scheduling-dependent capped queries, and the branches that remain end at
+the roundoff floor (RB-12 once measured 1.7e-4 between threaded friction
+branches under the BFS). RB-12's threaded limit stands as written.
+
+**Workaround retired.** A lower *Max Threads* is no longer needed for memory on
+floor-contact scenes; the remaining per-capped-query cost is proportional to
+the pending boxes of one bucket (F5), tens of MB, not 156 MB.
+

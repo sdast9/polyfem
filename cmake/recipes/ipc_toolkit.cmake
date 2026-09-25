@@ -8,8 +8,10 @@
 # least", never wrapped), a hash grid the key cannot index is refused by
 # name (BroadPhaseUnrepresentable) and non-finite positions are refused
 # before any conversion (RBR-02; 482b9eab is a tests-only follow-up for the
-# Windows lane, library sources identical). The pin follows the fork's
-# semi-implicit-stiffness branch.
+# Windows lane, library sources identical); since 75600955 it pins
+# Tight-Inclusion 1.1.0, whose default bucket depth-first root finder bounds
+# the memory of iteration-capped CCD queries (RB-24). The pin follows the
+# fork's semi-implicit-stiffness branch.
 # License: MIT
 
 if(TARGET ipc::toolkit)
@@ -19,4 +21,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#482b9eab2f81bbc5ee59586f80ffb041bcd488dd")
+CPMAddPackage("gh:sdast9/ipc-toolkit#7560095572cd62792dc773c2690437d57412761c")

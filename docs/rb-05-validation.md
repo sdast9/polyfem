@@ -375,6 +375,11 @@ algorithm change upstream made in Tight-Inclusion 1.1.0 (measured there:
 4× less). By the user's decision of 2026-09-20 nothing changed; the
 exit-status-3 containment above stays a broad-phase contract and a lower
 *Max Threads* remains the workaround for large floor-contact scenes.
+**Adopted 2026-09-25** (RB-24's [Adoption](rb-24-validation.md#adoption-tight-inclusion-110-2026-09-25)):
+with Tight-Inclusion 1.1.0's bucket DFS the probe's peak RSS is 92 MB single-threaded
+and 609 MB at 18 threads (was 222 / 2,456; ≈ 30 MB per added thread, was ≈ 131),
+a capped query holds only one bucket's pending boxes, and `run_scene_limits.py`
+exits as before; the *Max Threads* workaround is no longer needed for memory.
 
 ## RBR-02 — checked arithmetic in the broad-phase resource accounting (2026-09-20)
 

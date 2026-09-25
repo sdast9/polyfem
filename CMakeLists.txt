@@ -228,6 +228,13 @@ target_link_libraries(polyfem PUBLIC igl::core igl::predicates)
 # IPC Toolkit
 include(ipc_toolkit)
 target_link_libraries(polyfem PUBLIC ipc::toolkit)
+# The run manifest names the Tight-Inclusion version (the toolkit's CCD root
+# finder, RB-24): the one CPM added, because the library's own project()
+# version reads 1.0.4 in both its 1.0.6 and 1.1.0 tags.
+CPMGetPackageVersion(Tight-Inclusion POLYFEM_TIGHT_INCLUSION_VERSION)
+if(POLYFEM_TIGHT_INCLUSION_VERSION)
+    target_compile_definitions(polyfem PRIVATE POLYFEM_TIGHT_INCLUSION_VERSION="${POLYFEM_TIGHT_INCLUSION_VERSION}")
+endif()
 
 # Threading
 if(POLYFEM_THREADING STREQUAL "CPP")

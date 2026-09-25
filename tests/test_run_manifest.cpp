@@ -17,6 +17,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <array>
+#include <cstdio>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -312,6 +313,14 @@ TEST_CASE("A run's manifest records identity, input hashes, steps and completion
 		CHECK(m["steps"].empty());
 		CHECK(m["solver"]["model"]["value"].is_null());
 		CHECK(m["build"] == io::build_info());
+		{
+			// RB-24: the CCD root finder's version; 1.1.0 made the bucket
+			// depth-first search (bounded memory per capped query) the default.
+			REQUIRE(m["libraries"]["tight_inclusion"].is_string());
+			int major = 0, minor = 0;
+			REQUIRE(std::sscanf(m["libraries"]["tight_inclusion"].get<std::string>().c_str(), "%d.%d", &major, &minor) == 2);
+			CHECK((major > 1 || (major == 1 && minor >= 1)));
+		}
 		CHECK(m["input"]["effective_sha256"] == io::RunManifest::canonical_sha256(state.args));
 		{
 			json portable = state.args;

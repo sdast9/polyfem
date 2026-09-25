@@ -200,6 +200,12 @@ namespace polyfem::io
 #elif defined(TBB_VERSION_MAJOR)
 			result["tbb"] = fmt::format("{}.{}", TBB_VERSION_MAJOR, TBB_VERSION_MINOR);
 #endif
+#if defined(POLYFEM_TIGHT_INCLUSION_VERSION)
+			// The CCD root finder, as the build added it (CMakeLists.txt):
+			// 1.1.0 made the bucket depth-first search the default, which the
+			// toolkit uses (RB-24).
+			result["tight_inclusion"] = POLYFEM_TIGHT_INCLUSION_VERSION;
+#endif
 			return result;
 		}
 
