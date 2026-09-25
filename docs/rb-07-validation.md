@@ -2,9 +2,8 @@
 
 Date: 2026-09-15
 Status: **validated within stated scope** (the opt-in mechanism, off by
-default) — **production default: decision pending** (enabling an exit by
-default needs the user's choice, see
-[Decision](#decision-required-production-default)); **the budget's
+default) — **production default decided 2026-09-25: off** (the user kept both
+exits opt-in, see [Decision](#decision-required-production-default)); **the budget's
 carried-state storage is bounded since 2026-09-21 —
 [RBR-03](#rbr-03--bounded-carried-state-storage-for-the-budget-2026-09-21)**
 Selected stage: reproduction → proposal of a stage budget and a stagnation
@@ -272,6 +271,12 @@ the snap length is what is implemented.
   any threaded comparison); Windows/Linux lanes (CI on push).
 
 ## Decision required: production default
+
+**Decided 2026-09-25 (user): keep both exits off by default.** The user's
+real scenes finish their AL stage in one pass (R4 step 1: "feasible snap after
+1 pass", contact-efficiency plan E1); the unbounded loop is shown only by the
+synthetic infeasible motions below. The budget stays available as an opt-in
+(`solver/augmented_lagrangian/budget`), without a Houdini control.
 
 Both exits are **off by default**, which is the plan's authorized
 implementation. Enabling one by default is the user's choice; the measured

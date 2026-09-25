@@ -4,8 +4,10 @@ Date: 2026-09-24. Item EF-04 of the
 [contact-efficiency plan](contact-efficiency-plan-20260923.md). **Status:
 done — implemented opt-in, measured; no default change.** The mechanism the
 plan names (H-E) is confirmed; removing it does not make any measured scene
-cheaper, so the default stays the historical absolute trigger. The default is
-the user's decision; this record is its evidence.
+cheaper, so the default stays the historical absolute trigger. **Decided
+2026-09-25 (user): the default stays `absolute`** after the
+[EF-04b retest](ef-04b-feasible-bound-retest.md); `feasible_bound` remains an
+opt-in, not exposed in the Houdini asset.
 
 Evidence: `outputs/ef-04/20260924T200652Z/` (not in the repository): `runs/`
 (one directory per run, `row.json` with the command, overrides and binary

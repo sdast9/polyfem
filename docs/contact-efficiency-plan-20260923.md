@@ -3,7 +3,9 @@
 Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
 ([record](ef-01-trim-survey.md)); **EF-04 done 2026-09-24**
 ([record](ef-04-stall-trigger.md); retested 2026-09-25,
-[EF-04b](ef-04b-feasible-bound-retest.md)); EF-02, EF-03, EF-05, EF-06 not started. Items are EF-01 …
+[EF-04b](ef-04b-feasible-bound-retest.md); default `absolute` decided by the
+user 2026-09-25); **EF-06 retired 2026-09-25** (user: L-BFGS no longer
+pursued); EF-02, EF-03, EF-05, EF-06 not started. Items are EF-01 …
 EF-06; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
@@ -131,7 +133,7 @@ controller or law change.
 no measured benefit; default unchanged (the user's decision). Retested
 2026-09-25 at other soft budgets, pinned multi-step, held-out scenes and with
 EF-06's preconditioned L-BFGS ([EF-04b](ef-04b-feasible-bound-retest.md)): no
-benefit; recommendation unchanged.
+benefit; **the user kept the `absolute` default (2026-09-25).**
 
 Count a step toward the alpha patience only when the line search backtracked
 below the feasible bound (accepted α / feasible α < threshold), not when α is
@@ -168,6 +170,9 @@ snap residuals.
 
 ## EF-06 — Re-evaluate the preconditioned L-BFGS (optional, last)
 
+**Retired 2026-09-25 (user decision):** L-BFGS is no longer pursued; the
+slope-tolerance rule stays Newton-only and variant B is not productionized.
+
 The experimental variant B (PolySolve branch `qn-contact-experiment`) was held
 back mainly by the stall trigger and the trim walk. (EF-04b, 2026-09-25: merged
 onto the current pin `448f1b8` it no longer converges R1 step 1 under either
@@ -178,7 +183,7 @@ after EF-02–04 before deciding whether to productionize it.
 
 ## Order and decisions
 
-EF-01 → EF-04 → EF-02 → EF-03 → EF-05 → EF-06. EF-01 and EF-04 need no model
+EF-01 → EF-04 → EF-02 → EF-03 → EF-05 (EF-06 retired 2026-09-25). EF-01 and EF-04 need no model
 decision. EF-02, EF-03 and EF-05 change the retained controller or its inputs
 and stay opt-in; making any of them a default is the user's decision, with the
 EF-01 matrix as its evidence.

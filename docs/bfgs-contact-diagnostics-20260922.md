@@ -233,7 +233,10 @@ iterations, and L-BFGS needs thousands. Whether those defaults should become
 method-aware is a **production default decision and therefore the user's**, in
 the same way RB-07's and RB-08's were. The audit's own rule — do not change the
 production soft budget merely to make a run finish — is why this record stops
-here rather than shipping the change.
+here rather than shipping the change. **Decided 2026-09-25 (user): leave the
+soft budget method-independent** (L-BFGS is no longer pursued; on the real
+scenes it fails on conditioning, see the
+[quasi-Newton investigation](qn-contact-investigation-20260922.md)).
 
 For the record, the shape of the option if it is wanted: leave the alpha-stall
 threshold, patience and retune exactly as they are (they never misfired in any

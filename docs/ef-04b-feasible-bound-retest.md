@@ -6,7 +6,8 @@ Date: 2026-09-25. Follow-up to [EF-04](ef-04-stall-trigger.md) of the
 EF-04 left open does `restart/alpha_basis: feasible_bound` reduce cost beyond
 run-to-run noise, and under the current convergence contract the preconditioned
 L-BFGS it was meant to unblock does not converge R1 under either basis.
-Recommendation: keep the `absolute` default (the user's decision).
+Recommendation: keep the `absolute` default. **Decided 2026-09-25 (user):
+keep `absolute`.**
 
 Evidence: `outputs/ef-04b/20260925T022808Z/` (not in the repository): `runs/`
 (one directory per run, `row.json` with the command, overrides and binary
@@ -209,7 +210,8 @@ item's.
 * **One setting where it is harmful:** with the soft budget off, the basis
   leaves R4 a single 745-iteration attempt, which the scenes' exported AL cap
   (500) turns into a step failure.
-* **EF-06 is blocked elsewhere.** Variant B's R1 convergence in the qn-contact
+* **EF-06 is blocked elsewhere** (and retired by the user's decision of
+  2026-09-25, below). Variant B's R1 convergence in the qn-contact
   investigation was the slope tolerance that `448f1b8`/`9f8f25881` withdrew
   for non-Hessian directions; under the current contract neither B nor fixed
   refresh converges R1 under either basis. Whether a Hessian-preconditioned
@@ -218,8 +220,12 @@ item's.
 
 **Recommendation to the user:** keep the `absolute` default and leave
 `feasible_bound` opt-in and unexposed in the Houdini asset. Revisit only if
-EF-02/03 lands (start near the optimum) or EF-06 settles its convergence
-criterion — the two regimes still untested.
+EF-02/03 lands (start near the optimum).
+
+**Decisions (user, 2026-09-25):** the default stays `absolute`. The user is no
+longer pursuing L-BFGS: the slope-tolerance rule stays as it is (Newton family
+only), so EF-06 is retired and the preconditioned-L-BFGS branch stays
+unpinned and unproductionized.
 
 ## Reproduce
 

@@ -187,7 +187,11 @@ What the rows say:
 step-length tolerances end only a Hessian-based (Newton) solve, and the asset
 warns about non-Newton methods on contact scenes instead of withdrawing them.
 4 has a plan: [contact-efficiency-plan-20260923.md](contact-efficiency-plan-20260923.md).
-3 is open.
+3 **decided 2026-09-25 (user): not pursued** — L-BFGS is no longer of
+interest; the slope-tolerance rule stays Newton-only, variant B stays on the
+unpinned branch, and the plan's EF-06 is retired (its retest under the repaired
+rule, [EF-04b](ef-04b-feasible-bound-retest.md) §5, found variant B no longer
+converges R1).
 
 1. **Stop the false convergence** — a correctness repair, independent of the
    rest: accept the slope tolerance as convergence only for strategies whose

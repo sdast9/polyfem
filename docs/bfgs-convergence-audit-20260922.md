@@ -12,8 +12,10 @@ forward-method support and test reporting) implemented and validated — see the
 follow-ups below remain open. Stage 4 found the public L-BFGS failures to be a controller/allowance
 mismatch, not a solver defect: with only the semi-implicit stall controller's
 100-iteration soft budget removed, all five public smokes converge under L-BFGS
-on their configured criterion. Making that budget method-aware is a production
-default decision and is pending the user's. Stage 3 bounded what a line search
+on their configured criterion. Making that budget method-aware was a production
+default decision: **decided 2026-09-25 (user): leave it as is** — one soft
+budget for every method (plain L-BFGS fails the user's real contact scenes on
+conditioning regardless, and L-BFGS is no longer pursued). Stage 3 bounded what a line search
 can add there: the Wolfe search (opt-in, no default changed) moves L-BFGS's
 iteration count by −21 % to +11 %, against a 220–940× gap to Newton.**
 
