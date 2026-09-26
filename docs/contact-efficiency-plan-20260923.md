@@ -5,7 +5,9 @@ Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
 ([record](ef-04-stall-trigger.md); retested 2026-09-25,
 [EF-04b](ef-04b-feasible-bound-retest.md); default `absolute` decided by the
 user 2026-09-25); **EF-06 retired 2026-09-25** (user: L-BFGS no longer
-pursued); EF-02, EF-03, EF-05, EF-06 not started. Items are EF-01 …
+pursued); **EF-02/03 implemented and measured together 2026-09-26, opt-in; strict adoption gates unmet**
+([record](ef-02-03-trim-controller.md)); EF-05 not pursued after the negative
+EF-01 sensitivity result. Items are EF-01 …
 EF-06; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
@@ -30,8 +32,9 @@ departure from 1, r = 0.91, 15 runs), which neither basis moves, at soft
 budgets 100/200/400/off (absolute 780 ± 60, feasible bound 777 ± 70); with the
 soft budget off, feasible bound leaves one 745-iteration attempt that the
 exported AL cap (500) fails. Pinned multi-step R4 and BBT unchanged, held-out
-BB −3–5 %, IT +13–17 % on a non-reproducible trajectory. EF-02/03 not landed
-(untested). EF-06's variant B no longer converges R1 under either basis: its
+BB −3–5 %, IT +13–17 % on a non-reproducible trajectory. EF-02/03 were not
+landed at that retest; their subsequent experiment is recorded below.
+EF-06's variant B no longer converges R1 under either basis: its
 qn-contact convergence was the slope tolerance that `448f1b8`/`9f8f25881`
 withdrew for non-Hessian directions — EF-06 must settle that criterion first.
 
@@ -142,7 +145,7 @@ smokes: restarts by cause, iterations, wall, byte-identity of scenes that never
 cap. Opt-in first; the default is the user's. (Also removes the obstacle that
 failed fixed-interval preconditioned L-BFGS on R1.)
 
-## EF-02 — Step-start trim estimate (after EF-01)
+## EF-02 — Step-start trim estimate (merged with EF-03; measured opt-in)
 
 Implement the best EF-01 predictor at the first refresh of a step (and at
 first contact) as a two-sided, bounded initialization — the band and collapse
@@ -153,13 +156,35 @@ matrix and the held-out scenes, no new failures, iterations ≤ production on
 every scene, accuracy within the Newton-vs-Newton envelope and RB-09's gap
 error, `physical_balance_pass` unchanged, RB-02 probe 270/270.
 
-## EF-03 — Band statistic and downward step (after EF-01; controller change)
+**Outcome, 2026-09-26:** the guarded off-equilibrium seed reaches 2^-12 at
+the first accepted R4 observation, replacing the production walk of 314–409
+observations. R4 step 1 falls from 657–703 to 99–107 iterations; five steps
+from 1050–1110 to 392–485. All matrix runs finish and every scene's total
+iteration count is no worse. However, multi-step R4 exceeds the fresh
+production repeat spread, and balance flags change on BBT and IT. Thus the
+strict acceptance above is **not met**. The implementation remains an
+experiment: `initial_trim_estimate: false` and `band_statistic: rms` stay the
+defaults. See [the combined record](ef-02-03-trim-controller.md) for accuracy,
+reference coverage, negative candidates, regression checks and recommendation.
+
+## EF-03 — Force-weighted global band (merged with EF-02; measured opt-in)
 
 If H-B survives: an opt-in load-aware statistic and a proportional downward
 step (the upward branch already has `collapse_bump_factor`; the downward one is
 a fixed ×½). Re-read RB-16's evidence first: it tested update factor and
 hysteresis on springs and FEM fixtures and retained the global band. Same
 acceptance as EF-02, plus band occupancy and oscillation counts.
+
+**Outcome, 2026-09-26:** opt-in `band_statistic: force_weighted` uses a
+[.35,.50] target, .025 dead zone, bounded factor-four proportional updates,
+and the retained collapse feedback. A scalar-response veto prevents a band
+softening from immediately undoing collapse protection, removing the v2
+smoke cost regression. R4 occupancy improves markedly; R1 and BB remain
+mostly outside the target, and IT reversals rise from 22 to 60. RB-02 is
+270/270, the full suite has only the two known goldens, all 13 HDA scripts
+pass, and all 25 option-off smoke VTUs are byte-identical. The accuracy and
+unchanged-balance gates still prevent an adoption recommendation. No HDA
+control, coefficient-law, stall-trigger or AL-budget default changed.
 
 ## EF-05 — AL weight (only if EF-01.2 shows sensitivity)
 

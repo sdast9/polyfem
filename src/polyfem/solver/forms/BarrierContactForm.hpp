@@ -1,4 +1,5 @@
 #pragma once
+#include "TrimController.hpp"
 
 #include "ContactForm.hpp"
 
@@ -54,6 +55,7 @@ namespace polyfem::solver
 		/// @param iter_num Optimization iteration number
 		/// @param x Current solution
 		void post_step(const polysolve::nonlinear::PostStepData &data) override;
+		void update_quantities(double t, const Eigen::VectorXd &x) override;
 
 		bool use_convergent_formulation() const override { return use_area_weighting() && use_improved_max_operator() && use_physical_barrier(); }
 
@@ -250,6 +252,9 @@ namespace polyfem::solver
 			int kappa_fallback_count = 0, kappa_abs_fallback_count = 0, kappa_global_fallback_count = 0;
 			int kappa_interpolated_count = 0, kappa_direction_fallback_count = 0;
 			bool kappa_snapshot_had_contacts = false;
+			bool trim_seed_pending = true;
+			int force_band_age = 0;
+			json trim_decision;
 			double trim_solve_anchor = 1, kappa_hessian_max = 0;
 		};
 		std::unique_ptr<FormState> save_state() const override;
@@ -412,6 +417,15 @@ namespace polyfem::solver
 		/// @brief Newton-iteration cadence of the in-solve downward trim step
 		///        (gap pinned above the band); 0 disables it.
 		int controller_interval_ = 30;
+		bool force_weighted_controller_ = false, initial_trim_estimate_ = false;
+		bool trim_seed_pending_ = true;
+		int force_band_age_ = 0;
+		ForceWeightedTrim force_trim_;
+		json trim_decision_;
+		double force_weighted_gap(const Eigen::MatrixXd &surface) const;
+		bool estimate_initial_trim(const Eigen::VectorXd &x, double severity);
+		void apply_force_band(const Eigen::VectorXd &x, double severity, const char *source);
+
 		/// @brief Trial-step displacement cap, in barrier supports. Only
 		///        applied while the semi-implicit stiffness mode is active.
 		double trial_displacement_cap_ = 50.0;

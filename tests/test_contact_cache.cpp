@@ -3,6 +3,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
+#include <polysolve/nonlinear/PostStepData.hpp>
 
 #include <algorithm>
 #include <array>
@@ -30,10 +31,10 @@ namespace
 	class ReferenceForm : public BarrierContactForm
 	{
 	public:
-		ReferenceForm(const ipc::CollisionMesh &mesh, double support, BarrierStiffnessMode mode)
+		ReferenceForm(const ipc::CollisionMesh &mesh, double support, BarrierStiffnessMode mode, const json &options = json::object())
 			: BarrierContactForm(mesh, support, 1., false, false, false, false, false, false,
 								 ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, mode,
-								 json::object(), Eigen::VectorXd::Ones(3))
+								 options, Eigen::VectorXd::Ones(3))
 		{
 			set_system_hessian_provider([](const Eigen::VectorXd &, StiffnessMatrix &h) {
 				h.resize(6, 6);
@@ -510,4 +511,137 @@ TEST_CASE("Trim predictor records observe the trim controller without changing i
 	control.refresh_semi_implicit_stiffness(zero);
 	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
 	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+}
+
+TEST_CASE("Force weighted trim statistic is scale invariant and rejects invalid forces", "[trim_controller]")
+{
+	ForceWeightedGap unequal;
+	unequal.add(.2, 1.);
+	unequal.add(.8, 3.);
+	CHECK(unequal.mean() == Catch::Approx(.65));
+	ForceWeightedGap gap;
+	CHECK(std::isnan(gap.mean()));
+	gap.add(.2, 1e308);
+	gap.add(.8, 1e308);
+	CHECK(gap.mean() == Catch::Approx(.5));
+	ForceWeightedGap weak;
+	weak.add(.2, 1e-300);
+	weak.add(.8, 1e-300);
+	CHECK(weak.mean() == Catch::Approx(gap.mean()));
+	gap.add(.9, 0);
+	CHECK(gap.mean() == Catch::Approx(.5));
+	gap.add(.1, std::numeric_limits<double>::infinity());
+	CHECK(std::isnan(gap.mean()));
+}
+
+TEST_CASE("Force band is bounded two sided with a dead zone and a guarded seed", "[trim_controller]")
+{
+	ForceWeightedTrim c;
+	CHECK(c.factor(.9) == .25);
+	CHECK(c.factor(.01) == 4.);
+	CHECK(c.factor(.51) == 1.);
+	CHECK(c.factor(.34) == 1.);
+	CHECK(c.factor(.53) < 1.);
+	CHECK(c.factor(.32) > 1.);
+	CHECK(c.factor(0) == 1.);
+	CHECK(c.factor(1) == 1.);
+	CHECK(c.factor(std::numeric_limits<double>::quiet_NaN()) == 1.);
+	CHECK(c.seed_factor(1., 1e-8, .9, false) == 1. / 4096.);
+	CHECK(c.seed_factor(1., 1e8, .9, false) == 4096.);
+	CHECK(c.seed_factor(1., .001, .79, false) == 1.);
+	CHECK(c.seed_factor(1., .001, .9, true) == 1.);
+	CHECK(c.seed_factor(1., 2., .9, true) == 2.);
+	CHECK_FALSE(c.safe_band_step(.365, .79, std::sqrt(.5)));
+	CHECK(c.safe_band_step(.8, .79, std::sqrt(.5)));
+	CHECK(c.safe_band_step(.25, .99, std::sqrt(.5)));
+	CHECK_FALSE(c.safe_band_step(.5, .7, std::sqrt(.5)));
+	CHECK(c.safe_band_step(2., .1, std::sqrt(.5)));
+	CHECK_FALSE(c.safe_band_step(.5, std::numeric_limits<double>::quiet_NaN(), std::sqrt(.5)));
+}
+
+TEST_CASE("Force trim uses real contact force and preserves collapse and rollback", "[trim_controller]")
+{
+	auto mesh = make_mesh();
+	const json opts = {{"band_statistic", "force_weighted"}, {"initial_trim_estimate", true}};
+	ReferenceForm f(mesh, 1., BarrierStiffnessMode::SemiImplicit, opts);
+	Eigen::VectorXd x = zero;
+	x[5] = .7; // actual gap .9
+	f.init(x);
+	f.refresh_semi_implicit_stiffness(x, false);
+	const Eigen::VectorXd gb = mesh.to_full_dof(f.barrier_potential().gradient(f.collision_set(), mesh, mesh.rest_positions() + Eigen::Map<const Eigen::Matrix<double, 3, 2, Eigen::RowMajor>>(x.data())));
+	f.set_system_gradient_provider([gb](const Eigen::VectorXd &, Eigen::VectorXd &ge) { ge = -.001 * gb; });
+	std::vector<json> records;
+	f.set_trim_predictor_observer([&](const json &r) { records.push_back(r); });
+	const auto saved = f.save_state();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() == Catch::Approx(.001));
+	REQUIRE(records.size() >= 2);
+	CHECK(records.front()["controller_decision"]["accepted"] == true);
+	CHECK(records.front()["force_weighted"]["mean_gap"].get<double>() == Catch::Approx(.9));
+	const double seeded = f.barrier_stiffness();
+	f.restore_state(*saved, x);
+	records.clear();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() == seeded);
+	CHECK(records.front()["controller_decision"]["accepted"] == true);
+
+	// One small contact is enough to suppress lowering: same form at gap .02.
+	f.update_quantities(1., zero);
+	x[5] = -.18;
+	f.init(x);
+	const double before = f.barrier_stiffness();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() >= before);
+}
+
+TEST_CASE("Force trim option errors are named and rejected", "[trim_controller]")
+{
+	const auto mesh = make_mesh();
+	for (const json &opts : {json{{"band_statistic", "invalid"}}, json{{"force_band_interval", 0}},
+							 json{{"force_band_lower", .6}}, json{{"force_band_hysteresis", .7}}, json{{"initial_trim_cosine", 0.}}})
+		CHECK_THROWS(ReferenceForm(mesh, 1., BarrierStiffnessMode::SemiImplicit, opts));
+}
+
+TEST_CASE("Force band cadence survives rollback and does not move coefficients", "[trim_controller][rollback]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm f(mesh, 1., BarrierStiffnessMode::SemiImplicit,
+					{{"band_statistic", "force_weighted"}, {"force_band_interval", 10}});
+	Eigen::VectorXd x = zero;
+	x[5] = .7;
+	f.init(x);
+	f.refresh_semi_implicit_stiffness(x, false);
+	const double before = f.barrier_stiffness();
+	const double k = f.collision_set()[0].stiffness_scale;
+	const json info = json::object();
+	for (int i = 1; i < 10; ++i)
+		f.post_step(polysolve::nonlinear::PostStepData(i, info, x, zero));
+	CHECK(f.barrier_stiffness() == before);
+	auto saved = f.save_state();
+	f.post_step(polysolve::nonlinear::PostStepData(10, info, x, zero));
+	CHECK(f.barrier_stiffness() == before / 4);
+	CHECK(f.collision_set()[0].stiffness_scale == k);
+	f.restore_state(*saved, x);
+	f.post_step(polysolve::nonlinear::PostStepData(10, info, x, zero));
+	CHECK(f.barrier_stiffness() == before / 4);
+	CHECK(f.collision_set()[0].stiffness_scale == k);
+}
+
+TEST_CASE("Force band cannot immediately undo collapse protection", "[trim_controller]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm f(mesh, 1., BarrierStiffnessMode::SemiImplicit,
+					{{"band_statistic", "force_weighted"}});
+	Eigen::VectorXd x = zero;
+	x[5] = .59; // gap .79, above current collapse threshold
+	f.init(x);
+	f.refresh_semi_implicit_stiffness(x, false);
+	std::vector<json> records;
+	f.set_trim_predictor_observer([&](const json &r) { records.push_back(r); });
+	const double before = f.barrier_stiffness();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() == before);
+	REQUIRE(!records.empty());
+	CHECK(records.front()["controller_decision"]["collapse_guard"] == true);
+	CHECK(records.front()["controller_decision"]["proposed_factor"].get<double>() < 1.);
 }

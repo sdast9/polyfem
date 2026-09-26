@@ -273,6 +273,26 @@ namespace polyfem::solver
 				kappa_spread_ = semi_implicit_opts.value("kappa_spread", kappa_spread_);
 				conditioning_cap_ = semi_implicit_opts.value("conditioning_cap", conditioning_cap_);
 				controller_interval_ = semi_implicit_opts.value("controller_interval", controller_interval_);
+				const auto mode = semi_implicit_opts.value("band_statistic", std::string("rms"));
+				if (mode != "rms" && mode != "force_weighted")
+					log_and_throw_error("semi_implicit.band_statistic must be rms or force_weighted");
+				force_weighted_controller_ = mode == "force_weighted";
+				initial_trim_estimate_ = semi_implicit_opts.value("initial_trim_estimate", false);
+				force_trim_.lower = semi_implicit_opts.value("force_band_lower", force_trim_.lower);
+				force_trim_.upper = semi_implicit_opts.value("force_band_upper", force_trim_.upper);
+				force_trim_.hysteresis = semi_implicit_opts.value("force_band_hysteresis", force_trim_.hysteresis);
+				force_trim_.max_factor = semi_implicit_opts.value("force_band_max_factor", force_trim_.max_factor);
+				force_trim_.interval = semi_implicit_opts.value("force_band_interval", force_trim_.interval);
+				force_trim_.seed_max_factor = semi_implicit_opts.value("initial_trim_max_factor", force_trim_.seed_max_factor);
+				force_trim_.seed_cosine = semi_implicit_opts.value("initial_trim_cosine", force_trim_.seed_cosine);
+				if (!(force_trim_.lower > 0 && force_trim_.lower < force_trim_.upper && force_trim_.upper < 1
+					  && force_trim_.hysteresis >= 0 && force_trim_.hysteresis < force_trim_.lower
+					  && force_trim_.upper + force_trim_.hysteresis < 1
+					  && force_trim_.max_factor > 1 && std::isfinite(force_trim_.max_factor)
+					  && force_trim_.seed_max_factor >= 1 && std::isfinite(force_trim_.seed_max_factor)
+					  && force_trim_.seed_cosine > 0 && force_trim_.seed_cosine <= 1 && force_trim_.interval > 0))
+					log_and_throw_error("Invalid semi_implicit force band or initial trim estimate parameters");
+
 				if (semi_implicit_opts.value("constraint_floor", 0.0) != 0.0)
 					logger().warn("solver.contact.semi_implicit.constraint_floor has been retired and is ignored; barrier deletion and floor projection are no longer supported.");
 				trial_displacement_cap_ = semi_implicit_opts.value("trial_displacement_cap", trial_displacement_cap_);
@@ -301,6 +321,72 @@ namespace polyfem::solver
 			if (!(trim_lower_ < trim_upper_))
 				log_and_throw_error("Semi-implicit barrier stiffness requires trim_lower < trim_upper!");
 		}
+	}
+
+	void BarrierContactForm::update_quantities(const double t, const Eigen::VectorXd &x)
+	{
+		ContactForm::update_quantities(t, x);
+		trim_seed_pending_ = true;
+		trim_decision_ = nullptr;
+	}
+
+	double BarrierContactForm::force_weighted_gap(const Eigen::MatrixXd &surface) const
+	{
+		ForceWeightedGap statistic;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const auto dof = collision_set_[i].dof(surface, collision_mesh_.edges(), collision_mesh_.faces());
+			const double d2 = collision_set_[i].compute_distance(dof);
+			if (d2 <= dhat_ * dhat_)
+				statistic.add(std::sqrt(d2) / dhat_, barrier_potential_.gradient(collision_set_[i], dof).stableNorm());
+		}
+		return statistic.mean();
+	}
+
+	bool BarrierContactForm::estimate_initial_trim(const Eigen::VectorXd &x, const double severity)
+	{
+		if (!initial_trim_estimate_ || !trim_seed_pending_ || !system_gradient_provider_ || collision_set_.empty())
+			return false;
+		Eigen::VectorXd ge;
+		system_gradient_provider_(x, ge);
+		const Eigen::VectorXd gb = collision_mesh_.to_full_dof(barrier_potential_.gradient(collision_set_, collision_mesh_, compute_displaced_surface(x)));
+		const double bn = gb.stableNorm(), en = ge.stableNorm();
+		if (!(bn > 0 && en > 0) || gb.size() != ge.size())
+			return false;
+		const double cosine = -(gb / bn).dot(ge / en);
+		const double estimate = cosine * (en / bn) / weight_;
+		const bool collapse = !std::isfinite(severity) || severity < trim_lower_ * dhat_ * dhat_;
+		const double factor = force_trim_.seed_factor(barrier_stiffness_, estimate, cosine, collapse);
+		const double before = barrier_stiffness_;
+		// A rejected first-refresh signal may become informative at the first stall.
+		const bool accepted = std::isfinite(estimate) && estimate > 0 && std::isfinite(cosine)
+							  && cosine >= force_trim_.seed_cosine && !(collapse && estimate < before);
+		if (accepted)
+		{
+			trim_seed_pending_ = false;
+			bump_trim(factor);
+		}
+		trim_decision_ = {{"source", "initial_estimate"}, {"before", before}, {"after", barrier_stiffness_}, {"cosine", cosine}, {"estimate", estimate}, {"collapse_guard", collapse}, {"accepted", accepted}};
+		emit_trim_predictors(x, "initial_estimate", false);
+		return accepted;
+	}
+
+	void BarrierContactForm::apply_force_band(const Eigen::VectorXd &x, const double severity, const char *source)
+	{
+		force_band_age_ = 0;
+		const double gap = force_weighted_gap(compute_displaced_surface(x));
+		const double proposed_factor = force_trim_.factor(gap);
+		double factor = proposed_factor;
+		const bool guarded = !ForceWeightedTrim::safe_band_step(factor, std::sqrt(severity) / dhat_, std::sqrt(trim_lower_));
+		if (guarded && factor < 1)
+			factor = 1;
+		const double before = barrier_stiffness_;
+		// The non-emergency upward branch shares the existing in-solve budget.
+		if (factor > 1)
+			factor = std::min(factor, std::max(1., trim_solve_anchor_ * 256. / before));
+		bump_trim(factor);
+		trim_decision_ = {{"source", source}, {"before", before}, {"after", barrier_stiffness_}, {"mean_gap", gap}, {"proposed_factor", proposed_factor}, {"factor", factor}, {"collapse_guard", guarded}, {"collapse_proxy_gap", std::sqrt(severity) / dhat_}};
+		emit_trim_predictors(x, "force_band", false);
 	}
 
 	double BarrierContactForm::collapse_severity(const double avg_d2, const double min_d2) const
@@ -362,6 +448,11 @@ namespace polyfem::solver
 
 		if (std::isfinite(severity) && severity < trim_lower_ * dhat_ * dhat_)
 			bump_trim(std::max(factor, collapse_bump_factor(severity)));
+		else if (estimate_initial_trim(x, severity))
+		{
+		}
+		else if (force_weighted_controller_)
+			apply_force_band(x, severity, "stall");
 		else if (!calibrate_trim(x))
 		{
 			// Only soften blindly when the gap is pinned above the band
@@ -560,6 +651,13 @@ namespace polyfem::solver
 			if (std::isfinite(severity) && severity < trim_lower_ * dhat_sq)
 			{
 				bump_trim(collapse_bump_factor(severity));
+			}
+			else if (!published_endpoint && estimate_initial_trim(x, severity))
+			{
+			}
+			else if (force_weighted_controller_)
+			{
+				apply_force_band(x, severity, published_endpoint ? "refresh_endpoint" : "refresh");
 			}
 			else if (!calibrate_trim(x))
 			{
@@ -1226,6 +1324,9 @@ namespace polyfem::solver
 		state.kappa_direction_fallback_count = kappa_direction_fallback_count_;
 		state.kappa_snapshot_had_contacts = kappa_snapshot_had_contacts_;
 		state.trim_solve_anchor = trim_solve_anchor_;
+		state.trim_seed_pending = trim_seed_pending_;
+		state.force_band_age = force_band_age_;
+		state.trim_decision = trim_decision_;
 		state.kappa_hessian_max = kappa_hessian_max_;
 	}
 
@@ -1254,6 +1355,9 @@ namespace polyfem::solver
 		kappa_direction_fallback_count_ = state.kappa_direction_fallback_count;
 		kappa_snapshot_had_contacts_ = state.kappa_snapshot_had_contacts;
 		trim_solve_anchor_ = state.trim_solve_anchor;
+		trim_seed_pending_ = state.trim_seed_pending;
+		force_band_age_ = state.force_band_age;
+		trim_decision_ = state.trim_decision;
 		kappa_hessian_max_ = state.kappa_hessian_max;
 		// Transient flags of a refresh in progress; a state is never captured
 		// inside one, and a rollback never lands inside one.
@@ -1477,6 +1581,23 @@ namespace polyfem::solver
 			model["coefficient_law"] = stiffness_mode_ == BarrierStiffnessMode::Adaptive
 										   ? "Classic IPC adaptive stiffness (Li et al. 2020)"
 										   : "User-provided fixed stiffness";
+		if (uses_semi_implicit_stiffness() && (force_weighted_controller_ || initial_trim_estimate_))
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in EF-02/03 controller experiment active";
+			if (force_weighted_controller_)
+				model["coefficient_law"]["controller"]["kind"] = "Opt-in global force-weighted gap band (EF-02/03)";
+			model["coefficient_law"]["controller"]["ef02_03"] = {
+				{"band_statistic", force_weighted_controller_ ? "force_weighted" : "rms"},
+				{"downward_guard", "veto a band proposal whose scalar barrier-force response crosses the retained collapse threshold"},
+				{"lower", force_trim_.lower},
+				{"upper", force_trim_.upper},
+				{"hysteresis", force_trim_.hysteresis},
+				{"max_factor", force_trim_.max_factor},
+				{"interval", force_trim_.interval},
+				{"initial_trim_estimate", initial_trim_estimate_},
+				{"seed_max_factor", force_trim_.seed_max_factor},
+				{"seed_cosine", force_trim_.seed_cosine}};
+		}
 		return model;
 	}
 
@@ -1547,6 +1668,8 @@ namespace polyfem::solver
 		{
 			json record = trim_predictors(x, full);
 			record["event"] = event;
+			if (force_weighted_controller_ || initial_trim_estimate_)
+				record["controller_decision"] = trim_decision_;
 			record["sequence"] = ++trim_predictor_sequence_;
 			record["iteration"] = iteration >= 0 ? json(iteration) : json(nullptr);
 			trim_predictor_observer_(record);
@@ -1804,6 +1927,7 @@ namespace polyfem::solver
 		if (data.iter_num == 0)
 			return;
 		CoefficientEventScope event(*this, data.x, "post_step");
+		trim_decision_ = nullptr;
 
 		if (uses_semi_implicit_stiffness())
 		{
@@ -1824,6 +1948,8 @@ namespace polyfem::solver
 				collision_mesh_, displaced_surface, dhat_);
 			const double severity = collapse_severity(avg_d2, curr_distance);
 			++iters_since_trim_;
+			if (force_weighted_controller_)
+				++force_band_age_;
 			if (std::isfinite(severity))
 			{
 				constexpr int emergency_cooldown = 3;
@@ -1843,6 +1969,14 @@ namespace polyfem::solver
 						trim_solve_anchor_ * max_in_solve_climb / barrier_stiffness_;
 					if (allowed > 1)
 						bump_trim(std::min(collapse_bump_factor(severity), allowed));
+				}
+				else if (initial_trim_estimate_ && trim_seed_pending_ && estimate_initial_trim(data.x, severity))
+				{
+				}
+				else if (force_weighted_controller_)
+				{
+					if (force_band_age_ >= force_trim_.interval)
+						apply_force_band(data.x, severity, "iteration");
 				}
 				else if (
 					controller_interval_ > 0

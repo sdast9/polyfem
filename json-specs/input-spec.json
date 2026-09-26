@@ -1625,6 +1625,15 @@
             "kappa_spread",
             "conditioning_cap",
             "controller_interval",
+            "band_statistic",
+            "initial_trim_estimate",
+            "force_band_lower",
+            "force_band_upper",
+            "force_band_hysteresis",
+            "force_band_max_factor",
+            "force_band_interval",
+            "initial_trim_max_factor",
+            "initial_trim_cosine",
             "gap_floor",
             "constraint_floor",
             "trial_displacement_cap",
@@ -1737,6 +1746,60 @@
         "default": 1e3,
         "type": "float",
         "doc": "When a refresh finds the contact unloaded (no gradient-balance signal), cap the barrier's effective interface stiffness at gaps ~dhat (trim * kappa * weight * dhat^2, force/length) at conditioning_cap times the max absolute entry of the system Hessian. Dimensionless and length-unit independent. Bounds the Newton system's dynamic range until the load provides a force-balance calibration."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/band_statistic",
+        "default": "rms",
+        "type": "string",
+        "doc": "Opt-in EF-03 statistic: rms (production) or force_weighted."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_estimate",
+        "default": false,
+        "type": "bool",
+        "doc": "Opt-in EF-02 bounded two-sided cosine-gated initialization; collapse blocks lowering."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_lower",
+        "default": 0.35,
+        "type": "float",
+        "doc": "Lower target in distance/dhat."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_upper",
+        "default": 0.5,
+        "type": "float",
+        "doc": "Upper target in distance/dhat."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_hysteresis",
+        "default": 0.025,
+        "type": "float",
+        "doc": "Absolute expanded-band dead zone in distance/dhat."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_max_factor",
+        "default": 4.0,
+        "type": "float",
+        "doc": "Maximum multiplicative change per force-band update."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_interval",
+        "default": 10,
+        "type": "int",
+        "doc": "Accepted-iteration cadence for the force-weighted band."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_max_factor",
+        "default": 4096.0,
+        "type": "float",
+        "doc": "Maximum multiplicative change of the step seed."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_cosine",
+        "default": 0.8,
+        "type": "float",
+        "doc": "Minimum gradient opposition cosine for the step seed."
     },
     {
         "pointer": "/solver/contact/semi_implicit/controller_interval",
