@@ -944,7 +944,10 @@ namespace polyfem::varform
 		const int global_t = output_file_index(t);
 		const std::string state_path = resolve_output_path(fmt::format(args["output"]["data"]["state"], global_t));
 		if (!state_path.empty() && time_integrator)
+		{
 			time_integrator->save_state(state_path);
+			save_restart_form_state(state_path);
+		}
 		else if (time_integrator && t == 1 && !args["output"]["restart_json"].get<std::string>().empty())
 			logger().warn("Restart JSON is written without output/data/state: a restart from it would begin at the rest configuration with zero velocity.");
 

@@ -211,6 +211,13 @@ namespace polyfem::solver
 		std::unique_ptr<FormState> save_state() const override;
 		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
 
+		/// @brief Restart: append the stiffness state that carries across
+		///        time steps to a step's state file (datasets "contact_*").
+		virtual void write_restart_state(const std::string &path) const;
+		/// @brief Restart: read that state back at the restored coordinates
+		///        x. Returns false (state untouched) when the file has none.
+		virtual bool read_restart_state(const std::string &path, const Eigen::VectorXd &x);
+
 	protected:
 		void save_contact_state(State &state) const;
 		void restore_contact_state(const State &state);

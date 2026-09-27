@@ -1,5 +1,6 @@
 #include "BarrierContactForm.hpp"
 
+#include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MaybeParallelFor.hpp>
 #include <polyfem/utils/Timer.hpp>
@@ -1381,6 +1382,159 @@ namespace polyfem::solver
 		// parameter-state change, not mechanical work.
 		CoefficientEventScope event(*this, x, "rollback");
 		restore_barrier_state(barrier_state);
+	}
+
+	namespace
+	{
+		using CoefficientKey = std::array<long, 5>;
+		// Restart layout version of the "contact_si_*" datasets.
+		constexpr double restart_state_version = 1;
+
+		Eigen::MatrixXd coefficient_rows(const std::map<CoefficientKey, double> &map)
+		{
+			Eigen::MatrixXd rows(map.size(), 6);
+			int r = 0;
+			for (const auto &[key, value] : map)
+			{
+				for (int j = 0; j < 5; ++j)
+					rows(r, j) = double(key[j]); // exact: ids are far below 2^53
+				rows(r++, 5) = value;
+			}
+			return rows;
+		}
+
+		Eigen::MatrixXd key_rows(const std::set<CoefficientKey> &keys)
+		{
+			Eigen::MatrixXd rows(keys.size(), 5);
+			int r = 0;
+			for (const auto &key : keys)
+			{
+				for (int j = 0; j < 5; ++j)
+					rows(r, j) = double(key[j]);
+				++r;
+			}
+			return rows;
+		}
+
+		CoefficientKey row_key(const Eigen::MatrixXd &rows, const int r)
+		{
+			CoefficientKey key;
+			for (int j = 0; j < 5; ++j)
+				key[j] = long(rows(r, j));
+			return key;
+		}
+
+		// Empty tables are not written (zero-size datasets); their count says so.
+		Eigen::MatrixXd read_rows(const std::string &path, const std::string &name, const size_t count, const int cols)
+		{
+			Eigen::MatrixXd rows;
+			if (count == 0)
+				return Eigen::MatrixXd(0, cols);
+			if (!io::read_matrix(path, name, rows) || size_t(rows.rows()) != count || rows.cols() != cols)
+				log_and_throw_error("Restart state {}: {} is missing or not {}x{}", path, name, count, cols);
+			return rows;
+		}
+	} // namespace
+
+	void BarrierContactForm::write_restart_state(const std::string &path) const
+	{
+		ContactForm::write_restart_state(path);
+		if (!uses_semi_implicit_stiffness())
+			return;
+
+		const std::vector<double> scalars = {
+			restart_state_version,
+			double(kappa_cache_.size()), double(prev_kappa_cache_.size()),
+			double(endpoint_kappa_.size()), double(continued_keys_.size()),
+			kappa_cap_, kappa_floor_, kappa_median_, kappa_hessian_max_, trim_solve_anchor_,
+			double(iters_since_refresh_), double(iters_since_trim_), double(force_band_age_),
+			double(trim_seed_pending_), double(kappa_snapshot_had_contacts_),
+			double(kappa_continued_count_), double(kappa_fresh_count_),
+			double(kappa_fallback_count_), double(kappa_abs_fallback_count_),
+			double(kappa_global_fallback_count_), double(kappa_interpolated_count_),
+			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_)};
+		io::write_matrix(path, "contact_si_scalars", Eigen::MatrixXd(Eigen::Map<const Eigen::MatrixXd>(scalars.data(), 1, scalars.size())), false);
+		if (!kappa_cache_.empty())
+			io::write_matrix(path, "contact_si_kappa_cache", coefficient_rows(kappa_cache_), false);
+		if (!prev_kappa_cache_.empty())
+			io::write_matrix(path, "contact_si_prev_kappa_cache", coefficient_rows(prev_kappa_cache_), false);
+		if (!endpoint_kappa_.empty())
+			io::write_matrix(path, "contact_si_endpoint_kappa", coefficient_rows(endpoint_kappa_), false);
+		if (!continued_keys_.empty())
+			io::write_matrix(path, "contact_si_continued_keys", key_rows(continued_keys_), false);
+	}
+
+	bool BarrierContactForm::read_restart_state(const std::string &path, const Eigen::VectorXd &x)
+	{
+		if (!uses_semi_implicit_stiffness())
+			return ContactForm::read_restart_state(path, x);
+
+		Eigen::MatrixXd s;
+		if (!io::read_matrix(path, "contact_si_scalars", s))
+			return false;
+		if (s.size() != 23 || s(0) != restart_state_version)
+			log_and_throw_error("Restart state {}: contact_si_scalars has {} entries (version {}), expected 23 (version {})", path, s.size(), s.size() > 0 ? s(0) : -1.0, restart_state_version);
+		ContactForm::read_restart_state(path, x);
+
+		const Eigen::MatrixXd cache = read_rows(path, "contact_si_kappa_cache", size_t(s(1)), 6);
+		const Eigen::MatrixXd prev_cache = read_rows(path, "contact_si_prev_kappa_cache", size_t(s(2)), 6);
+		const Eigen::MatrixXd endpoint = read_rows(path, "contact_si_endpoint_kappa", size_t(s(3)), 6);
+		const Eigen::MatrixXd continued = read_rows(path, "contact_si_continued_keys", size_t(s(4)), 5);
+
+		const auto fill = [](const Eigen::MatrixXd &rows, std::map<CoefficientKey, double> &map) {
+			map.clear();
+			for (int r = 0; r < rows.rows(); ++r)
+				map.emplace(row_key(rows, r), rows(r, 5));
+		};
+		fill(cache, kappa_cache_);
+		fill(prev_cache, prev_kappa_cache_);
+		fill(endpoint, endpoint_kappa_);
+		continued_keys_.clear();
+		for (int r = 0; r < continued.rows(); ++r)
+			continued_keys_.insert(row_key(continued, r));
+
+		kappa_cap_ = s(5);
+		kappa_floor_ = s(6);
+		kappa_median_ = s(7);
+		const double saved_hessian_max = s(8);
+		trim_solve_anchor_ = s(9);
+		iters_since_refresh_ = int(s(10));
+		iters_since_trim_ = int(s(11));
+		force_band_age_ = int(s(12));
+		trim_seed_pending_ = s(13) != 0;
+		kappa_snapshot_had_contacts_ = s(14) != 0;
+		kappa_continued_count_ = int(s(15));
+		kappa_fresh_count_ = int(s(16));
+		kappa_fallback_count_ = int(s(17));
+		kappa_abs_fallback_count_ = int(s(18));
+		kappa_global_fallback_count_ = int(s(19));
+		kappa_interpolated_count_ = int(s(20));
+		kappa_direction_fallback_count_ = int(s(21));
+		diagnostic_refresh_id_ = uint64_t(s(22));
+		trim_decision_ = nullptr;
+		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+
+		// The snapshot was taken at the saved step's endpoint, i.e. at x.
+		kappa_surface_ = compute_displaced_surface(x);
+		if (system_hessian_provider_)
+		{
+			system_hessian_provider_(x, kappa_hessian_);
+			kappa_hessian_max_ = 0.0;
+			for (int k = 0; k < kappa_hessian_.outerSize(); k++)
+				for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
+					kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+			if (kappa_hessian_max_ != saved_hessian_max)
+				logger().warn(
+					"Restart state {}: the frozen Hessian rebuilt at the restored coordinates has max |H| {:g}, the saved run had {:g}; the restart does not continue the saved snapshot exactly",
+					path, kappa_hessian_max_, saved_hessian_max);
+		}
+		update_collision_set(kappa_surface_);
+		note_objective_change("restart state restored");
+		logger().info(
+			"Restored semi-implicit contact state from {}: trim {:g}, {} coefficients ({} continued)",
+			path, barrier_stiffness_, kappa_cache_.size(), continued_keys_.size());
+		return true;
 	}
 
 	void BarrierContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)

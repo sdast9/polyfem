@@ -1492,6 +1492,7 @@ namespace polyfem::varform
 				sol.conservativeResize(Eigen::NoChange, 1);
 		}
 		init_solve(sol, t0 + dt, initial_condition_override);
+		restore_restart_form_state(sol);
 		configure_coefficient_diagnostics(0, "initial_state_after_setup");
 		if (post_step)
 			post_step(0, sol);
@@ -1670,6 +1671,33 @@ namespace polyfem::varform
 			solve_data_.contact_form->save_ccd_debug_meshes = args["output"]["advanced"]["save_ccd_debug_meshes"];
 			solve_data_.contact_form->apply_resource_limits(solver::resource_limits_from_args(args["solver"]["contact"]["CCD"]));
 		}
+	}
+
+	void NonlinearElasticVarForm::save_restart_form_state(const std::string &state_path) const
+	{
+		if (solve_data_.contact_form)
+			solve_data_.contact_form->write_restart_state(state_path);
+		if (solve_data_.friction_form)
+			solve_data_.friction_form->write_restart_state(state_path);
+	}
+
+	void NonlinearElasticVarForm::restore_restart_form_state(const Eigen::MatrixXd &sol)
+	{
+		const std::string state = args["input"]["data"]["state"];
+		if (state.empty() || !solve_data_.contact_form)
+			return;
+		const std::string state_path = resolve_input_path(state);
+		if (!solve_data_.contact_form->read_restart_state(state_path, sol.col(0)))
+		{
+			logger().warn(
+				"Restart state {} has no contact stiffness state (written before it was saved); the contact controller starts fresh, so the run will not continue the saved one exactly.",
+				state_path);
+			return;
+		}
+		// After the contact state: the friction lag was rebuilt by init_solve
+		// at the same coordinates; only its force magnitudes are history.
+		if (solve_data_.friction_form && !solve_data_.friction_form->read_restart_state(state_path, sol.col(0)))
+			logger().warn("Restart state {}: friction lag not restored; the resumed friction may differ from the saved run.", state_path);
 	}
 
 	void NonlinearElasticVarForm::init_solve(

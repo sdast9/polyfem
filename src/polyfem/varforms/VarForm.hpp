@@ -203,6 +203,10 @@ namespace polyfem
 				const time_integrator::ImplicitTimeIntegrator *time_integrator,
 				const bool rest_mesh_written = false) const;
 
+			/// @brief Restart: append form state that carries across steps to
+			///        the step's state file, after the integrator history.
+			virtual void save_restart_form_state(const std::string &state_path) const {}
+
 			void ensure_output_sampler() const;
 			void save_restart_json(const double t0, const double dt, const int t, const bool rest_mesh_written) const;
 			void save_timestep(const double time, const int t, const double t0, const double dt, const Eigen::MatrixXd &solution) const;

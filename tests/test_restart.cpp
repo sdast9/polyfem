@@ -1,11 +1,13 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <polyfem/State.hpp>
 #include <polyfem/Common.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/StringUtils.hpp>
+#include <polyfem/io/MatrixIO.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -130,8 +132,10 @@ TEST_CASE("restart", "[.][restart]")
 
 // Resume from the restart JSON the solver writes, as a user would. A
 // tend + time_steps input must keep its dt (not re-derive it from the restart
-// time), the JSON must not depend on the launch directory, and the PVD must
-// keep the original frame times.
+// time), the JSON must not depend on the launch directory, the PVD must keep
+// the original frame times, and the contact stiffness history (classic
+// adaptive stiffness; semi-implicit trim, coefficient caches and the realized
+// friction lag) must continue, so the resumed run matches to roundoff.
 #ifdef NDEBUG
 TEST_CASE("restart from restart json", "[restart]")
 #else
@@ -141,7 +145,10 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	const std::string scene_file = POLYFEM_DATA_DIR "/contact/examples/3D/unit-tests/2-cubes.json";
 	constexpr int total_time_steps = 6;
 	constexpr int restart_step = 3;
-	constexpr double margin = 1e-3;
+	// Only the step times differ (t0 + k dt vs the original indexing, one ulp).
+	constexpr double margin = 1e-10;
+	const bool semi_implicit = GENERATE(false, true);
+	CAPTURE(semi_implicit);
 
 	const std::filesystem::path outdir = std::filesystem::current_path() / "DELETE_ME_restart_json_test_output";
 	const std::filesystem::path full_outdir = outdir / "full";
@@ -159,6 +166,9 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	args["/output/directory"_json_pointer] = full_outdir.string();
 	args["/output/data/state"_json_pointer] = "state_{:d}.hdf5";
 	args["/output/restart_json"_json_pointer] = "restart_{:d}.json";
+	args["/solver/contact/barrier_stiffness"_json_pointer] = semi_implicit ? "semi_implicit" : "adaptive";
+	if (semi_implicit)
+		args["/contact/friction_coefficient"_json_pointer] = 0.3;
 
 	const std::filesystem::path params_file = outdir / "params.json";
 	args["root_path"] = params_file.string();
@@ -177,6 +187,13 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	CHECK(restart_args["/time/dt"_json_pointer].get<double>() == full_dt);
 	CHECK(restart_args["/time/time_steps"_json_pointer].get<int>() == total_time_steps - restart_step);
 	CHECK(restart_args["/time/tend"_json_pointer].is_null());
+	{
+		const std::string state = restart_args["/input/data/state"_json_pointer];
+		Eigen::MatrixXd saved;
+		CHECK(io::read_matrix(state, "contact_scalars", saved));
+		CHECK(io::read_matrix(state, "contact_si_scalars", saved) == semi_implicit);
+		CHECK(io::read_matrix(state, "friction_scalars", saved) == semi_implicit);
+	}
 
 	restart_args["/output/directory"_json_pointer] = restart_outdir.string();
 	restart_args["/output/advanced/save_time_sequence"_json_pointer] = true;

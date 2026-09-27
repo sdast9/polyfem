@@ -68,6 +68,10 @@ namespace polyfem::varform
 			ipc::CollisionMesh &collision_mesh);
 
 	protected:
+		void save_restart_form_state(const std::string &state_path) const override;
+		/// @brief Restart: restore the contact stiffness state saved with the
+		///        input state file, at the restored solution sol.
+		void restore_restart_form_state(const Eigen::MatrixXd &sol);
 		void reset() override;
 		void load_mesh(const mesh::Mesh &mesh, const json &args) override;
 		void build_basis(mesh::Mesh &mesh, const bool iso_parametric, const json &args) override;

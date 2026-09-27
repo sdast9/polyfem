@@ -8,6 +8,7 @@
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/MaybeParallelFor.hpp>
 
+#include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/io/OBJWriter.hpp>
 
 #include <ipc/barrier/adaptive_stiffness.hpp>
@@ -142,6 +143,26 @@ namespace polyfem::solver
 		use_cached_candidates_ = state.use_cached_candidates;
 		candidates_ = state.candidates;
 		candidate_statistics_ = state.candidate_statistics;
+	}
+
+	void ContactForm::write_restart_state(const std::string &path) const
+	{
+		Eigen::MatrixXd scalars(1, 3);
+		scalars << barrier_stiffness_, max_barrier_stiffness_, prev_distance_;
+		io::write_matrix(path, "contact_scalars", scalars, /*replace=*/false);
+	}
+
+	bool ContactForm::read_restart_state(const std::string &path, const Eigen::VectorXd &)
+	{
+		Eigen::MatrixXd scalars;
+		if (!io::read_matrix(path, "contact_scalars", scalars))
+			return false;
+		if (scalars.size() != 3)
+			log_and_throw_error("Restart state {}: contact_scalars has {} entries, expected 3", path, scalars.size());
+		barrier_stiffness_ = scalars(0);
+		max_barrier_stiffness_ = scalars(1);
+		prev_distance_ = scalars(2);
+		return true;
 	}
 
 	std::unique_ptr<FormState> ContactForm::save_state() const

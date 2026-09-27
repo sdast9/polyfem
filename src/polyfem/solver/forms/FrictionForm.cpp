@@ -2,6 +2,8 @@
 #include "BarrierContactForm.hpp"
 #include "SmoothContactForm.hpp"
 
+#include <polyfem/io/MatrixIO.hpp>
+#include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/Timer.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 
@@ -140,6 +142,45 @@ namespace polyfem::solver
 		friction_collision_set_ = friction_state.friction_collision_set;
 		lagged_trim_ = friction_state.lagged_trim;
 		lag_x_ = friction_state.lag_x;
+	}
+
+	void FrictionForm::write_restart_state(const std::string &path) const
+	{
+		Eigen::MatrixXd scalars(1, 2);
+		scalars << lagged_trim_, double(friction_collision_set_.size());
+		io::write_matrix(path, "friction_scalars", scalars, /*replace=*/false);
+		if (friction_collision_set_.size() == 0)
+			return;
+		Eigen::MatrixXd forces(friction_collision_set_.size(), 1);
+		for (size_t i = 0; i < friction_collision_set_.size(); ++i)
+			forces(i) = friction_collision_set_[i].normal_force_magnitude;
+		io::write_matrix(path, "friction_normal_force", forces, /*replace=*/false);
+	}
+
+	bool FrictionForm::read_restart_state(const std::string &path, const Eigen::VectorXd &x)
+	{
+		Eigen::MatrixXd scalars;
+		if (!io::read_matrix(path, "friction_scalars", scalars))
+			return false;
+		if (scalars.size() != 2)
+			log_and_throw_error("Restart state {}: friction_scalars has {} entries, expected 2", path, scalars.size());
+		const size_t count = size_t(scalars(1));
+		if (count != friction_collision_set_.size())
+		{
+			logger().warn(
+				"Restart state {}: {} lagged friction collisions saved, {} rebuilt at the restored coordinates; keeping the rebuilt lag",
+				path, count, friction_collision_set_.size());
+			return false;
+		}
+		Eigen::MatrixXd forces;
+		if (count > 0 && (!io::read_matrix(path, "friction_normal_force", forces) || size_t(forces.size()) != count))
+			log_and_throw_error("Restart state {}: friction_normal_force is missing or not {} entries", path, count);
+		for (size_t i = 0; i < count; ++i)
+			friction_collision_set_[i].normal_force_magnitude = forces(i);
+		lagged_trim_ = scalars(0);
+		lag_x_ = x;
+		note_objective_change("restart state restored");
+		return true;
 	}
 
 	void FrictionForm::update_lagging(const Eigen::VectorXd &x, const int iter_num)

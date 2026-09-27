@@ -55,13 +55,12 @@ In-place resume (`PolyFEM_bin -j <output>/restart_3.json`, no `-o`, from
 `/tmp`) reproduces the same numbers and leaves `sim.pvd` byte-identical to
 the uninterrupted run's.
 
-**Contact runs are not continued exactly.** The state file holds only the
-integrator history (u, v, a). The semi-implicit contact form's memory — the
-global trim and the memoized per-contact coefficients — starts fresh, so the
-resumed run re-derives them (trim 1 → 4 in step 4 versus the uninterrupted
-run's trim 4 carried in; first-refresh κ 1.89e12 versus 1.52e12). Exact
-continuation would need that form state serialized with the integrator state;
-not attempted here.
+**Contact runs were not continued exactly** by that first change (`7dd45a606`):
+the state file held only the integrator history (u, v, a), so the
+semi-implicit contact form's memory — the global trim and the memoized
+per-contact coefficients — started fresh (trim 1 → 4 in step 4 versus the
+uninterrupted run's trim 4 carried in; first-refresh κ 1.89e12 versus 1.52e12).
+The follow-up below serializes it.
 
 Unit tests: new `[restart]` case "restart from restart json" resumes from the
 solver's own `restart_3.json` of a `tend` + `time_steps` 2-cubes scene and
@@ -79,3 +78,70 @@ restart JSON produces the new warning once (`warn-check/`).
 Scenes without `file_index_offset` (every fresh run) pass `t0 - 0` to the PVD
 writer and write the same restart fields except `time`, so ordinary outputs
 are unchanged.
+
+## Follow-up: the contact controller's memory is part of the state
+
+Each step's state file now also holds, after `u`/`v`/`a`:
+
+* `contact_scalars` — the contact form's global stiffness (the trim in
+  semi-implicit mode), its adaptive bound and previous distance (classic
+  adaptive IPC stiffness carries these across steps too);
+* `contact_si_*` (semi-implicit only, layout version 1) — the per-contact
+  coefficient cache, the previous snapshot's cache, the endpoint
+  (continuation) coefficients and continued keys, the batch cap/floor/median,
+  the trim anchor, controller counters, the first-contact flag and the
+  refresh id. Empty tables are not written; their counts are in
+  `contact_si_scalars`.
+* `friction_scalars` / `friction_normal_force` — the lagged trim and the
+  lagged normal force of every friction collision. With the default
+  `friction_lag: realized_force` the step-end lag carries the forces that
+  acted during the step (built before the endpoint refresh), which a resumed
+  run cannot recompute.
+
+A restarted transient run reads them right after its own initialization
+(`NonlinearElasticVarForm::restore_restart_form_state`). The snapshot surface,
+frozen Hessian and collision set are functions of the saved displacement, so
+they are rebuilt at the restored coordinates (the rebuilt max |H| is compared
+with the saved one and a mismatch is reported); the friction set's structure
+is rebuilt the same way and receives the saved force magnitudes (a different
+collision count is reported and the rebuilt lag kept). A state file without
+these datasets — every file written before this change — resumes with a fresh
+controller and a warning. Fresh runs are unchanged: their `sol.txt` is
+byte-identical to the previous binary's (contact and no-contact cases).
+
+Remaining difference: the resumed run computes step times as
+`t0_restart + k·dt`, the original as `t0 + (offset + k)·dt`, which can differ
+by one ulp (step 5: 0.9999999999999999 versus 1). The first resumed step is
+bit-identical; later steps differ at roundoff. Such a difference can still
+flip a threshold decision (at the step-5 endpoint the uninterrupted contact
+run refreshed over 51 contacts, the resumed one over 49; the final solutions
+still agree to 1e-16).
+
+Results (`m-*`, `state2-*`; 6 steps straight through versus 3 + resume):
+
+| Case | max \|A − B\| (final u) | before this follow-up |
+| --- | --- | --- |
+| ImplicitEuler, semi-implicit contact | 1.1e-16 | 1.08e-4 |
+| BDF2, semi-implicit contact | 1.0e-15 | — |
+| Quasistatic, semi-implicit contact | 1.0e-15 | 1.08e-4 |
+| ImplicitEuler, semi-implicit contact + friction 0.3 | 1.0e-15 | 9.2e-4 |
+| BDF2, semi-implicit contact + friction 0.3 | 2.7e-15 | — |
+| ImplicitEuler, classic adaptive stiffness | 1.0e-15 | — |
+| ImplicitEuler, no contact | 1.0e-15 | 1.0e-15 |
+
+Classic adaptive stiffness with friction (μ 0.3 and 0.1) could not be
+compared: the uninterrupted run already fails at step 5 (Newton iteration
+limit), identically with the previous binary and with `3c40ae557`.
+
+The `[restart]` case "restart from restart json" now runs both classic
+adaptive stiffness and semi-implicit contact with friction 0.3, checks that
+the state file carries the new datasets, and requires the resumed solution to
+match within 1e-10 (was 1e-3). With the restore call disabled it fails
+(difference 6.0e-4); with it both cases pass.
+
+Regression selection on this binary (tags in `unit-selection2-tags.txt`:
+output, restart, rollback, time integrators, contact/friction forms, friction
+lag, kappa continuity, semi-implicit coefficients, trim controller and
+predictors, stall trigger, coefficient events, continuation, objective
+generation, parent identity, EF-04 and the previous selection): 94 cases,
+11,380 assertions pass (`unit-selection2.log`).
