@@ -17,7 +17,10 @@
 # forward solve cannot run and repairs ADAM's first step (stage 5,
 # docs/bfgs-forward-methods-20260922.md); 448f1b8e applies the slope and
 # step-length tolerances only under a Hessian-based direction
-# (docs/slope-tolerance-repair-20260923.md).
+# (docs/slope-tolerance-repair-20260923.md). 6099b9cd merges upstream
+# da4e7fe (hybrid linear solvers and large-index support), with a pinned
+# Hypre thread-mpi-backend snapshot and native default/large-index validation;
+# the nonlinear source tree is unchanged from 448f1b8e.
 # License: MIT
 
 if(TARGET polysolve)
@@ -27,4 +30,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#448f1b8e0da72101d17dcbf1f49da5f647fe0315")
+CPMAddPackage("gh:sdast9/polysolve#6099b9cddbab7d856c57de95e2642b87a1348b7b")
