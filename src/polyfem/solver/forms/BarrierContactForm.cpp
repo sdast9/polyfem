@@ -119,7 +119,7 @@ namespace polyfem::solver
 		/// gradient/Hessian and poisons the Newton direction for the whole
 		/// mesh; CCD already guarantees non-penetration, so a bounded
 		/// push-back is safe.
-		class FlooredClampedLogBarrier : public ipc::ClampedLogBarrier
+		class FlooredClampedLogBarrier : public ipc::ClampedLogBarrier<>
 		{
 		public:
 			FlooredClampedLogBarrier(const double floor_sq) : floor_sq_(floor_sq) {}
@@ -127,15 +127,15 @@ namespace polyfem::solver
 			double operator()(const double d, const double dhat) const override
 			{
 				if (d >= floor_sq_)
-					return ipc::ClampedLogBarrier::operator()(d, dhat);
-				return ipc::ClampedLogBarrier::operator()(floor_sq_, dhat)
-					   + ipc::ClampedLogBarrier::first_derivative(floor_sq_, dhat)
+					return ipc::ClampedLogBarrier<>::operator()(d, dhat);
+				return ipc::ClampedLogBarrier<>::operator()(floor_sq_, dhat)
+					   + ipc::ClampedLogBarrier<>::first_derivative(floor_sq_, dhat)
 							 * (d - floor_sq_);
 			}
 
 			double first_derivative(const double d, const double dhat) const override
 			{
-				return ipc::ClampedLogBarrier::first_derivative(
+				return ipc::ClampedLogBarrier<>::first_derivative(
 					std::max(d, floor_sq_), dhat);
 			}
 
@@ -143,7 +143,7 @@ namespace polyfem::solver
 			{
 				return d < floor_sq_
 						   ? 0.0
-						   : ipc::ClampedLogBarrier::second_derivative(d, dhat);
+						   : ipc::ClampedLogBarrier<>::second_derivative(d, dhat);
 			}
 
 		private:

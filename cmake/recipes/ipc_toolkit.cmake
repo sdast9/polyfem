@@ -11,7 +11,9 @@
 # Windows lane, library sources identical); since 75600955 it pins
 # Tight-Inclusion 1.1.0, whose default bucket depth-first root finder bounds
 # the memory of iteration-capped CCD queries (RB-24). The pin follows the
-# fork's semi-implicit-stiffness branch.
+# fork's semi-implicit-stiffness branch. cf99893b merges upstream 869e489e
+# (block assembly, templated/SIMD geometry and CPU/CUDA LBVH), preserving
+# the fork contracts and refusing unsupported CUDA LBVH resource budgets.
 # License: MIT
 
 if(TARGET ipc::toolkit)
@@ -21,4 +23,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#7560095572cd62792dc773c2690437d57412761c")
+CPMAddPackage("gh:sdast9/ipc-toolkit#cf99893be74fe296e6b771b8e22ba4562942e77e")

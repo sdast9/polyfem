@@ -43,10 +43,10 @@ above. Initial missing-header and fixture-loading failures remain in the logs.
 The rank checks establish residual accuracy, not performance scaling. CUDA
 execution is untested on this Mac. Native Linux/Windows CI is a separate
 result. In [PolySolve CI run 36295825495](https://github.com/sdast9/polysolve/actions/runs/36295825495),
-the Linux/macOS Release jobs with both index widths and the Hybrid Release
-job passed. At the recorded snapshot, eight other jobs remained in progress.
-Linux Debug with large indices OFF passed 64/65 tests but aborted in
-`nonlinear-easier` at `Armijo.cpp:24`, asserting `armijo_criteria <= 0`.
+all seven Release jobs passed (Linux/macOS/Windows with both index widths,
+plus Hybrid Release). All seven Debug jobs failed in `nonlinear-easier`: six
+retrieved job logs show the `Armijo.cpp:24` assertion `armijo_criteria <= 0`;
+the Hybrid Debug log shows the same test aborting without the assertion text. Linux Debug with large indices OFF passed the other 64/65 tests.
 The nonlinear source tree and that test are identical to the baseline; this
 does not prove the failure is pre-existing. Baseline CI run 35871632819 stopped
 at the missing LBFGSpp header repaired here, so it supplies no comparable
@@ -67,7 +67,7 @@ Consumer evidence: `tests-polyfem.log`, `rb02/probe-results.json`,
 `smoke-identity/identity.json`, `hda-e2e.log` and
 `polyfem-build-info-tested.json`. `polyfem-build-info-final.json` records the
 subsequent metadata-only rebuild at the clean published source revision.
-CI evidence: `polysolve-ci-final-check.json`, `ci-linux-debug-off-api.log`
-and `ci-baseline-linux-debug.log`.
+CI evidence: `polysolve-ci-later-check.json` (completed run),
+`ci-linux-debug-off-api.log`, `ci-job-*.log` and `ci-baseline-linux-debug.log`.
 The companion's detailed record is `docs/upstream-integration-20260926.md`
 in the PolySolve repository.
