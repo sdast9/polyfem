@@ -7,8 +7,9 @@ Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
 user 2026-09-25); **EF-06 retired 2026-09-25** (user: L-BFGS no longer
 pursued); **EF-02/03 implemented and measured together 2026-09-26, opt-in; strict adoption gates unmet**
 ([record](ef-02-03-trim-controller.md)); EF-05 not pursued after the negative
-EF-01 sensitivity result. Items are EF-01 …
-EF-06; EF-01 is measurement only and is the prerequisite of the rest.
+EF-01 sensitivity result; **EF-07 opened 2026-09-27** (the EF-02/03 opt-in
+controller loops on the ball-burst production scene). Items are EF-01 …
+EF-07; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
 The endpoint gradient balance is an identity (it returns the trim in force), so
@@ -206,9 +207,94 @@ repair now accepts only for Hessian directions. Decide first whether a
 Hessian-preconditioned direction qualifies.) Repeat its R1/R4 comparison
 after EF-02–04 before deciding whether to productionize it.
 
+## EF-07 — Force-weighted band and initial estimate without a controller loop
+
+Opened 2026-09-27 at the user's request. **Goal:** find out whether the EF-02/03
+opt-in controller (`band_statistic: force_weighted`, `initial_trim_estimate:
+true`) can keep its cost benefit without the trim limit cycle it entered on the
+ball-burst scene, and if so, with what change.
+
+**Trigger.** The user's ball-burst run (Restorelle mesh + E 1e12 ball, 217,480
+nodes, d̂ 1e-6, dt 0.3, frictionless, both options on, `max_restarts: 2000`)
+slowed from 94 Newton iterations at step 1 to ~1,000 at steps 40–41 and then
+looped in step 42: 2,000+ iterations, 156 stall restarts in 80 minutes, 317
+trim changes (209 up, 114 down), the trim swinging over ten decades (3e-4 …
+1.5e6), active contacts swinging 110 ↔ 17,590 between restarts, and 631
+linear-solve residual failures once the trim was extreme. Evidence (the full
+log was overwritten; a step-42 extract, per-step table and reconstructed
+params survive): `outputs/ef-07/20260927-ball-burst-evidence/`. The user's
+rerun of the same scene with the production `rms` band and no estimate is
+the control.
+
+**What the evidence already shows** (to be confirmed with decision records):
+
+* Two statistics steer the trim in opposite directions. The collapse proxy
+  (`collapse_severity`: min of the mean d² and 100 · min d²) fires on a single
+  pair below ≈ 0.071 d̂ and bumps the trim up (×2 per ≥ 3 iterations in-solve,
+  ×max(2, collapse factor) at a stall). The force-weighted band reads the
+  load-carrying gap, which sat at ~0.8 d̂ (above the [.35, .50] target), and
+  softens by up to ×4 per 10 iterations whenever the collapse veto lets it.
+* The minimum gap did not respond to the trim: 0.035–0.07 d̂ in every step,
+  including step 42's ten-decade sweep. The collapse branch is fed by a signal
+  the trim cannot move — plausibly contacts born mid-iteration at a
+  CCD-limited separation (new mid-solve contacts grew 1.6k → 100k → 422k per
+  step), a kinematically pinched pair, or a facet crease of the coarse ball
+  (988 nodes; mesh h_avg 55 µm). Not yet identified.
+* The in-solve climb is capped at 256× `trim_solve_anchor_`, but every stall
+  refresh re-anchors it, so across restarts the excursion is unbounded. Every
+  trim change is an objective change (1,929 generations before step 42), which
+  discards Newton's history and makes the next stall likelier.
+* Whether the initial estimate participates (it is re-armed at every step's
+  `update_quantities` and may fire at a stall with a seed factor up to 4096)
+  is unknown: the run had `output/trim_predictors` off.
+
+**Method.**
+
+1. *Reproduce cheaply.* Rerun ball-burst with the reconstructed params on the
+   current binary (restart state now carries the controller, PolyFEM
+   `c133948cf`), `output/trim_predictors: true`, per-step state files and
+   default `max_restarts: 20`, until the loop appears; then resume the step
+   before it from its `restart.json` so each experiment is one step, not a
+   day. Keep the production-controller rerun as the control. Record wall time
+   and power state (EF-04 lesson: sleep beats caffeinate).
+2. *Attribute.* From the predictor/decision records: which branch moved the
+   trim each time (collapse, band, estimate, stall), reversal count per solve,
+   and which pair sets the minimum gap and whether its gap responds to trim.
+   Look for the same pattern (with smaller amplitude) on the EF-01 matrix
+   scenes' existing EF-02/03 runs.
+3. *Candidates* (opt-in, one at a time, each with its own measurement):
+   a responsiveness veto (stop collapse bumps when the collapse gap did not
+   rise after the last bump); a collapse proxy consistent with the band
+   (force-weighted or quantile, not a single pair, or excluding pairs born in
+   the current iteration); a per-step bound on the total excursion across
+   stall restarts (anchor at the step start, not at each refresh); a reversal
+   lockout (no direction change within N iterations / at most K reversals per
+   solve); a once-per-step estimate. Keep the protection E3's comment asks for
+   (a lowered trim must not starve contacts about to fail).
+4. *Accept.* The looping ball-burst step completes with bounded restarts (≤
+   default 20) and bounded trim excursion; on the EF-01 matrix + BB + IT no new
+   failures, iterations ≤ the EF-02/03 v3 candidate (and ≤ production where v3
+   was), accuracy within the Newton-vs-Newton envelope and RB-09's gap error,
+   `physical_balance_pass` unchanged, band occupancy and reversal counts
+   reported. RB-02 probe 270/270, five smokes byte-identical with the options
+   off, affected unit selection, all 13 HDA scripts.
+
+**Boundaries.** Opt-in only; `rms` and `initial_trim_estimate: false` stay the
+defaults, and adopting anything is the user's decision. The per-contact
+coefficient law, CCD and the trial-displacement cap, the stall trigger's
+default basis, RB-08's no-automatic-retry and the retired floor stay as they
+are. The model-side causes seen on this scene (E 1e12 ball driving ~1 % of κ
+to the `kappa_spread` cap, the coarse ball, `save_ccd_debug_meshes`,
+`max_restarts: 2000`) are recorded, not fixed here; separate any finding that
+belongs to them. Teseo is not run. A separate change to the band statistic
+itself (collision-weighted mean, `docs/band-statistic-weighting-20260927.md`)
+was in progress in the shared tree when EF-07 opened; measure on top of it
+once it is published, and park EF-07 edits to `BarrierContactForm` until then
+(shared-tree rule: add files by name).
+
 ## Order and decisions
 
-EF-01 → EF-04 → EF-02 → EF-03 → EF-05 (EF-06 retired 2026-09-25). EF-01 and EF-04 need no model
+EF-01 → EF-04 → EF-02 → EF-03 → EF-05 (EF-06 retired 2026-09-25) → EF-07. EF-01 and EF-04 need no model
 decision. EF-02, EF-03 and EF-05 change the retained controller or its inputs
 and stay opt-in; making any of them a default is the user's decision, with the
 EF-01 matrix as its evidence.
