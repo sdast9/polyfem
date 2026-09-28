@@ -68,10 +68,13 @@ that this diagnosis used. Its material was identified from the stored
 deformation gradient and Cauchy stress: **IncompressibleOgden, c = [1000],
 m = [13], k = 1e7** (median relative stress error 0.09–0.11 against 0.79–0.99
 for the NeoHookean; the NeoHookean run's step 38 is the control, 0.15 against
-1.32), the values saved in every Houdini scene of the case. Copies of steps
-39/100/200, the identification script and a reconstructed input (material
-replaced, other settings assumed unchanged — they were not saved) are in
-`r3-ogden-evidence/` in the parent workspace.
+1.32), the values saved in every Houdini scene of the case. The scene
+`test_cases/inflation/kristin_sim.hipnc` still holds the run's full settings:
+exported with the current asset, they match the NeoHookean input in every
+setting except the material (t_end 15, 200 steps, dt 0.075; three keys the
+current asset writes at their defaults are new). Copies of steps 39/100/200,
+the identification script and that export (`params-ogden-from-scene.json`)
+are in `r3-ogden-evidence/` in the parent workspace.
 
 This is not a like-for-like material swap. PolyFEM's IncompressibleOgden
 (W = Σ c/m² (Σ λ̃ᵐ − 3) + k/2 (ln J)²) has initial shear modulus c/2 =
@@ -85,7 +88,7 @@ say the NeoHookean failure is a solver defect, nor which difference matters.
 A global pressure limit or bifurcation, mesh independence, the causal split
 between constitutive, structural and contact effects, and a constrained
 tangent eigenanalysis were not done. The Ogden run is located (above) but not yet
-reproduced from the reconstructed input. The next discriminator is a
+reproduced from its exported input. The next discriminator is a
 controlled comparison with that input (same geometry, loading, time and
 contact settings), comparing both the
 deviatoric and the volumetric large-strain response against this NeoHookean
