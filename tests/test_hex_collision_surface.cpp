@@ -741,3 +741,42 @@ TEST_CASE("Pure P1 and P2 tetrahedral collision surfaces are unchanged by the mi
 	CHECK(s.n_faces == 40 * (order == 1 ? 1 : 4));
 	check_surface_against_fe(b, st);
 }
+
+// The CI-04 fixture itself (extraction only; its solve runs in the
+// `standard` group): 437 of its 7,610 boundary faces were skipped.
+TEST_CASE("The CI-04 fixture's mixed P1/P2 collision surface is complete and exact", "[ci04][collision_surface]")
+{
+	const std::string scene = std::string(POLYFEM_DATA_DIR) + "/multi-material/stretch-cubes.json";
+	std::ifstream file(scene);
+	REQUIRE(file.good());
+	json in_args = json::parse(file);
+	in_args["root_path"] = scene;
+	in_args.erase("output");
+	in_args["/output/log/level"_json_pointer] = "error";
+
+	const Built b = build(in_args);
+	REQUIRE(b.mesh != nullptr);
+
+	const MixedInterfaceStats st = inspect_mixed_interface(b);
+	for (const auto &kv : st.owned_nodes)
+		WARN(kv.second << " constrained faces with " << kv.first << " owned nodes");
+	CHECK(st.orders == std::set<int>{1, 2});
+	CHECK(st.boundary_faces == 7610);
+	CHECK(st.owned_nodes.count(5) == 1);
+	CHECK(st.owned_nodes.at(5) == 437);
+	CHECK(st.max_weight_error < 1e-12);
+	CHECK(st.max_edge_field_error < 1e-12);
+
+	const SurfaceStats s = analyze(*b.mesh, b.debug.n_bases);
+	CHECK(s.closed);
+	CHECK(s.edge_manifold);
+	CHECK(s.vertex_manifold);
+	CHECK(s.positive_area);
+	CHECK(s.intersection_free);
+	CHECK(s.empty_rows == 0);
+	CHECK(s.selector_rows == s.n_vertices);
+	CHECK(s.interpolated_rows == 0);
+	WARN(s.components << " components, " << s.n_vertices << " vertices, " << s.n_faces << " faces");
+	CHECK(s.euler == 2 * s.components);
+	check_surface_against_fe(b, st);
+}
