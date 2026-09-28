@@ -90,3 +90,7 @@ scripts/*.json
 diff-data/
 pref-data/
 polyspline-data/
+
+# Per-task isolated inputs/evidence (CLAUDE.md); not committed unless a
+# record needs specific files copied out explicitly.
+/outputs/
