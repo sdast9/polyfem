@@ -59,14 +59,35 @@ expected to carry the scene through a constitutive loss of ellipticity near a
 structural inflation limit, and none should be tuned to do so. R3 stays
 outside the EF acceptance matrices (as in EF-02/03 and EF-07).
 
+## The completed Ogden run (located 2026-09-28)
+
+The run the user completed is in `test_cases/inflation/output/`: steps 39–200
+(dt 0.075, t 2.925–15.0 s) written on 2026-09-21 between 12:10 and 13:27:55;
+its steps 0–38 and manifest were overwritten by the NeoHookean run of 13:56
+that this diagnosis used. Its material was identified from the stored
+deformation gradient and Cauchy stress: **IncompressibleOgden, c = [1000],
+m = [13], k = 1e7** (median relative stress error 0.09–0.11 against 0.79–0.99
+for the NeoHookean; the NeoHookean run's step 38 is the control, 0.15 against
+1.32), the values saved in every Houdini scene of the case. Copies of steps
+39/100/200, the identification script and a reconstructed input (material
+replaced, other settings assumed unchanged — they were not saved) are in
+`r3-ogden-evidence/` in the parent workspace.
+
+This is not a like-for-like material swap. PolyFEM's IncompressibleOgden
+(W = Σ c/m² (Σ λ̃ᵐ − 3) + k/2 (ln J)²) has initial shear modulus c/2 =
+500 Pa, about 700× softer than the NeoHookean's 345 kPa, with strong
+stiffening from m = 13 and a larger volumetric modulus. Its completion shows
+that this material carries the inflation to 1.5 MPa; it does not by itself
+say the NeoHookean failure is a solver defect, nor which difference matters.
+
 ## Not established / next
 
 A global pressure limit or bifurcation, mesh independence, the causal split
 between constitutive, structural and contact effects, and a constrained
-tangent eigenanalysis were not done. The user reports completing the scene
-with an Ogden material; that input has not yet been supplied or reproduced.
-The next discriminator is a controlled comparison with that exact Ogden
-input (same geometry, loading, time and contact settings), comparing both the
+tangent eigenanalysis were not done. The Ogden run is located (above) but not yet
+reproduced from the reconstructed input. The next discriminator is a
+controlled comparison with that input (same geometry, loading, time and
+contact settings), comparing both the
 deviatoric and the volumetric large-strain response against this NeoHookean
 law, the pressure–volume path and the local stability margin. No material or
 default change follows from this diagnosis; do not pick Ogden coefficients
