@@ -441,8 +441,7 @@ namespace polyfem::solver
 		if (collision_set_.empty())
 			return false; // stall unrelated to contact; nothing to retune
 
-		const double avg_d2 = collision_set_.compute_avg_distance(
-			collision_mesh_, kappa_surface_, dhat_);
+		const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_).mean_sq;
 		const double min_d2 = collision_set_.compute_minimum_distance(
 			collision_mesh_, kappa_surface_);
 		const double severity = collapse_severity(avg_d2, min_d2);
@@ -642,8 +641,7 @@ namespace polyfem::solver
 		// stiffness plus the band's downward step.
 		if (run_trim_controller && !collision_set_.empty())
 		{
-			const double avg_d2 = collision_set_.compute_avg_distance(
-				collision_mesh_, kappa_surface_, dhat_);
+			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_).mean_sq;
 			const double min_d2 = collision_set_.compute_minimum_distance(
 				collision_mesh_, kappa_surface_);
 			const double severity = collapse_severity(avg_d2, min_d2);
@@ -1727,7 +1725,7 @@ namespace polyfem::solver
 				{"force_continuation", force_continuation_},
 				{"continuation_max_ratio", continuation_max_ratio_},
 				{"friction_lag", friction_lag_realized_ ? "realized_force" : "follow_stiffness"},
-				{"controller", {{"kind", "global trim band on the realized mean gap (docs/rb-16-validation.md closure)"}, {"trim_lower", trim_lower_}, {"trim_upper", trim_upper_}, {"trim_factor", trim_factor_}, {"trim_min", trim_min_}, {"trim_max", trim_max_}, {"controller_interval", controller_interval_}, {"refresh_interval", refresh_interval_}, {"kappa_min", kappa_min_}, {"kappa_spread", kappa_spread_}, {"conditioning_cap", conditioning_cap_}, {"trial_displacement_cap", trial_displacement_cap_}}},
+				{"controller", {{"kind", "global trim band on the realized collision-weighted rms gap (docs/rb-16-validation.md closure; weighting docs/band-statistic-weighting-20260927.md)"}, {"band_statistic", "sqrt(sum(w d^2) / sum(w)) over the active collisions (distance <= dhat), w = collision weight"}, {"trim_lower", trim_lower_}, {"trim_upper", trim_upper_}, {"trim_factor", trim_factor_}, {"trim_min", trim_min_}, {"trim_max", trim_max_}, {"controller_interval", controller_interval_}, {"refresh_interval", refresh_interval_}, {"kappa_min", kappa_min_}, {"kappa_spread", kappa_spread_}, {"conditioning_cap", conditioning_cap_}, {"trial_displacement_cap", trial_displacement_cap_}}},
 				{"reference_state", "Coefficients are refreshed at solve starts, stall restarts and published endpoints; the sequence of refresh/retune/continuation events is the opt-in coefficient-events.jsonl stream (output/physical_diagnostics), summarised per step by refresh_id and the continued/fresh counts"},
 				{"constraint_floor", "retired (docs/pf-02-floor-removal.md); a positive setting is ignored"}};
 		}
@@ -1753,6 +1751,39 @@ namespace polyfem::solver
 				{"seed_cosine", force_trim_.seed_cosine}};
 		}
 		return model;
+	}
+
+	BarrierContactForm::BandStatistic BarrierContactForm::band_statistic(
+		const ipc::NormalCollisions &collisions,
+		const ipc::CollisionMesh &mesh,
+		const Eigen::MatrixXd &displaced_surface,
+		const double dhat)
+	{
+		assert(displaced_surface.rows() == mesh.num_vertices());
+		const Eigen::MatrixXi &edges = mesh.edges();
+		const Eigen::MatrixXi &faces = mesh.faces();
+		const double dhat_sq = dhat * dhat;
+		BandStatistic result;
+		double sum_d2 = 0, sum_wd2 = 0;
+		for (size_t i = 0; i < collisions.size(); ++i)
+		{
+			const double d2 = collisions[i].compute_distance(collisions[i].dof(displaced_surface, edges, faces));
+			if (!(d2 <= dhat_sq)) // inactive or nonfinite
+				continue;
+			++result.active_count;
+			sum_d2 += d2;
+			const double w = collisions[i].weight;
+			if (std::isfinite(w) && w > 0)
+			{
+				result.total_weight += w;
+				sum_wd2 += w * d2;
+			}
+		}
+		if (result.active_count == 0)
+			return result;
+		result.weighted = result.total_weight > 0 && std::isfinite(result.total_weight);
+		result.mean_sq = result.weighted ? sum_wd2 / result.total_weight : sum_d2 / double(result.active_count);
+		return result;
 	}
 
 	json BarrierContactForm::gap_statistics(const Eigen::MatrixXd &displaced_surface) const
@@ -1788,7 +1819,13 @@ namespace polyfem::solver
 		result["max"] = hi;
 		result["mean_over_dhat"] = mean / dhat_;
 		result["rms_over_dhat"] = rms / dhat_;
-		result["rms_note"] = "rms = sqrt(mean squared distance), the statistic the trim controller compares with the band";
+		result["rms_note"] = "rms = sqrt(mean squared distance), one sample per collision";
+		const BandStatistic band = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_);
+		result["band_rms"] = std::sqrt(band.mean_sq);
+		result["band_rms_over_dhat"] = std::sqrt(band.mean_sq) / dhat_;
+		result["band_total_weight"] = band.total_weight;
+		result["band_weighted"] = band.weighted;
+		result["band_note"] = "band_rms = sqrt(sum(w d^2) / sum(w)) over the active collisions' weights, the statistic the trim controller compares with the band";
 		return result;
 	}
 
@@ -1879,7 +1916,8 @@ namespace polyfem::solver
 			}
 			json gap = distribution(gaps);
 			gap["rms"] = std::sqrt(sum_d2 / n) / dhat_;
-			gap["units"] = "distance / dhat; rms is the controller's band statistic";
+			gap["band_rms"] = std::sqrt(band_statistic(collision_set_, collision_mesh_, V, dhat_).mean_sq) / dhat_;
+			gap["units"] = "distance / dhat; rms is one sample per collision, band_rms the collision-weighted statistic the controller compares with the band";
 			r["gap"] = gap;
 
 			json weighted = {{"total_local_gradient_norm", total_force}, {"scope", "Weights: norm of each active collision's local barrier gradient (proportional to its contact force)"}};
@@ -2098,8 +2136,7 @@ namespace polyfem::solver
 			// downward step when the gap stays pinned above it (barrier
 			// dominating the elasticity). Only the global trim moves
 			// mid-solve; the per-contact snapshot stays frozen.
-			const double avg_d2 = collision_set_.compute_avg_distance(
-				collision_mesh_, displaced_surface, dhat_);
+			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_).mean_sq;
 			const double severity = collapse_severity(avg_d2, curr_distance);
 			++iters_since_trim_;
 			if (force_weighted_controller_)
@@ -2139,7 +2176,7 @@ namespace polyfem::solver
 					bump_trim(1.0 / trim_factor_);
 
 				polyfem::logger().debug(
-					"Semi-implicit barrier stiffness: trim={:g}, sqrt(avg d2)/dhat={:g}, sqrt(min d2)/dhat={:g}",
+					"Semi-implicit barrier stiffness: trim={:g}, band rms/dhat={:g}, sqrt(min d2)/dhat={:g}",
 					barrier_stiffness(),
 					std::isfinite(avg_d2) ? sqrt(avg_d2) / dhat_ : -1.0,
 					std::isfinite(curr_distance) ? sqrt(curr_distance) / dhat_ : -1.0);

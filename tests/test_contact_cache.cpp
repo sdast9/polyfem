@@ -7,7 +7,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <future>
+#include <tuple>
 #include <vector>
 
 using namespace polyfem;
@@ -644,4 +646,60 @@ TEST_CASE("Force band cannot immediately undo collapse protection", "[trim_contr
 	REQUIRE(!records.empty());
 	CHECK(records.front()["controller_decision"]["collapse_guard"] == true);
 	CHECK(records.front()["controller_decision"]["proposed_factor"].get<double>() < 1.);
+}
+
+TEST_CASE("The trim band statistic does not depend on how a distance-type tie is resolved", "[contact_cache][trim_band]")
+{
+	// docs/band-statistic-weighting-20260927.md: a vertex exactly over the
+	// edge shared by two triangles is one merged edge-vertex collision, or a
+	// face-vertex plus an edge-vertex collision when roundoff puts it inside
+	// one triangle. IPC adds the weights of merged candidates, so the energy is
+	// the same either way; the trim controller's statistic must be too. (The
+	// public friction smoke's cube has five vertices on its slab's diagonal.)
+	const double dhat = .01, h = .5 * dhat;
+	const auto build = [&](const double offset) {
+		Eigen::MatrixXd V(7, 3);
+		V << -1, -1, 0, // slab: two triangles sharing the diagonal x = y
+			2, -1, 0,
+			2, 2, 0,
+			-1, 2, 0,
+			.5 + offset, .5, h, // over the diagonal
+			.9, .2, .4 * h,
+			.95, .6, .7 * h;
+		Eigen::MatrixXi F(3, 3);
+		F << 0, 1, 2, 0, 2, 3, 4, 5, 6;
+		Eigen::MatrixXi E(8, 2);
+		E << 0, 1, 1, 2, 2, 0, 2, 3, 3, 0, 4, 5, 5, 6, 6, 4;
+		ipc::CollisionMesh mesh(V, E, F);
+		ipc::NormalCollisions collisions;
+		collisions.set_use_area_weighting(true);
+		collisions.build(mesh, V, dhat);
+		return std::make_tuple(mesh, V, collisions);
+	};
+	const auto [mesh_tie, V_tie, on_edge] = build(0.);
+	const auto [mesh_off, V_off, inside] = build(1e-12);
+
+	// The two resolutions really differ in their collision count...
+	REQUIRE(on_edge.size() != inside.size());
+	const auto tie = BarrierContactForm::band_statistic(on_edge, mesh_tie, V_tie, dhat);
+	const auto off = BarrierContactForm::band_statistic(inside, mesh_off, V_off, dhat);
+	CHECK(tie.active_count == on_edge.size());
+	CHECK(off.active_count == inside.size());
+	CHECK(tie.weighted);
+	CHECK(off.weighted);
+	CHECK(tie.total_weight == Catch::Approx(off.total_weight).epsilon(1e-12));
+	// ...and so does a count-based mean, but not the band statistic.
+	const double count_tie = on_edge.compute_avg_distance(mesh_tie, V_tie, dhat);
+	const double count_off = inside.compute_avg_distance(mesh_off, V_off, dhat);
+	CHECK(std::abs(count_tie - count_off) > 1e-3 * count_tie);
+	CHECK(tie.mean_sq == Catch::Approx(off.mean_sq).epsilon(1e-10));
+	CHECK(std::sqrt(tie.mean_sq) > .4 * h);
+	CHECK(std::sqrt(tie.mean_sq) < h);
+
+	// No active collision: no statistic.
+	Eigen::MatrixXd lifted = V_tie;
+	lifted.col(2).tail(3).array() += 1.;
+	const auto none = BarrierContactForm::band_statistic(on_edge, mesh_tie, lifted, dhat);
+	CHECK(none.active_count == 0);
+	CHECK(std::isinf(none.mean_sq));
 }

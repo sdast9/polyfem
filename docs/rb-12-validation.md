@@ -219,6 +219,13 @@ Findings.
 - Single-threaded runs are bit-reproducible on this platform for all three
   fixtures (15/15 runs per matrix identical to the last bit, including the
   16-step fine-load case), with identical solver paths and contact states.
+- *Note (2026-09-27):* the active-count spread and the friction trim branch
+  below were later traced to collision multiplicity at an exact distance-type
+  tie (cube vertices over the slab's shared diagonal): a tie resolves into one
+  or two collisions with the same total weight, which the count-based band
+  mean saw and the energy did not. The band statistic is weighted by
+  collision weight since then
+  ([band-statistic-weighting-20260927.md](band-statistic-weighting-20260927.md)).
 - Threaded frictionless runs reach the same endpoint to roundoff
   (≤ 6.9e-16) even when their paths differ by an iteration at the
   tolerance floor and their active-collision counts differ by ±2 (contacts

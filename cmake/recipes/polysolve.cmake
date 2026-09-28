@@ -20,7 +20,10 @@
 # (docs/slope-tolerance-repair-20260923.md). 6099b9cd merges upstream
 # da4e7fe (hybrid linear solvers and large-index support), with a pinned
 # Hypre thread-mpi-backend snapshot and native default/large-index validation;
-# the nonlinear source tree is unchanged from 448f1b8e.
+# the nonlinear source tree is unchanged from 448f1b8e. 6a8c2cc9 makes Armijo
+# (and RobustArmijo, Wolfe's fallback) refuse an uphill direction as a failed
+# search instead of asserting (ADAM directions are unscreened;
+# docs/armijo-uphill-direction-20260927.md in the PolySolve repository).
 # License: MIT
 
 if(TARGET polysolve)
@@ -30,4 +33,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#6099b9cddbab7d856c57de95e2642b87a1348b7b")
+CPMAddPackage("gh:sdast9/polysolve#6a8c2cc9e6141a86476476cb685315a02d8f0ca7")

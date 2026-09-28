@@ -81,12 +81,40 @@ namespace polyfem::solver
 		///        counts are in diagnostic_state()). Constants of the build, so
 		///        the manifest names the law the binary actually carries.
 		json model_description() const;
-		/// Distances of the active collisions (within dhat, the same filter as
-		/// the controller's compute_avg_distance) at the given displaced
-		/// surface: count, mean, rms, min, max and the ratios to dhat. RB-09:
-		/// the contact-model error of a force quantity is about the mean gap
-		/// divided by the imposed compression, so the mean gap is reported.
+		/// Distances of the active collisions (within dhat, the controller's
+		/// filter) at the given displaced surface: count, mean, rms, min, max
+		/// and the ratios to dhat, one sample per collision; plus band_rms, the
+		/// collision-weighted statistic the trim controller compares with the
+		/// band (see band_statistic). RB-09: the contact-model error of a force
+		/// quantity is about the mean gap divided by the imposed compression,
+		/// so the mean gap is reported.
 		json gap_statistics(const Eigen::MatrixXd &displaced_surface) const;
+
+		/// The trim band's gap statistic (2026-09-27): the mean squared
+		/// distance of the active collisions (distance <= dhat) weighted by
+		/// each collision's weight, sum(w d^2) / sum(w). IPC merges the
+		/// candidates that resolve to the same vertex-vertex, edge-vertex or
+		/// edge-edge pair into one collision whose weight is the sum of theirs,
+		/// so the energy does not depend on how a tie between distance types
+		/// is resolved; neither does this mean, while a count-based mean does
+		/// (a vertex exactly over a shared edge is one merged edge-vertex
+		/// collision or two face-vertex/edge-vertex collisions depending on
+		/// roundoff, docs/band-statistic-weighting-20260927.md). Collisions with a
+		/// nonpositive or nonfinite weight carry no barrier energy and are
+		/// left out; when every active collision has such a weight the
+		/// unweighted mean is used. Summed in collision order (deterministic).
+		struct BandStatistic
+		{
+			double mean_sq = std::numeric_limits<double>::infinity(); ///< infinity when no collision is active
+			size_t active_count = 0;
+			double total_weight = 0;
+			bool weighted = false; ///< false only for the unweighted fallback
+		};
+		static BandStatistic band_statistic(
+			const ipc::NormalCollisions &collisions,
+			const ipc::CollisionMesh &mesh,
+			const Eigen::MatrixXd &displaced_surface,
+			const double dhat);
 		/// Observer for outer refresh/calibration/stall/post-step operations.
 		/// Callback failures cannot change solver behavior. Direct initialization
 		/// setters and coordinate-only feature transitions are outside this stream.

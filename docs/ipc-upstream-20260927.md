@@ -59,6 +59,19 @@ violations; the strict cross-binary roundoff comparison still fails for
 friction and is retained as such. Exact friction-output preservation is an
 unresolved integration limit.
 
+**Correction (2026-09-27, later).** The explanation above is incomplete. The
+step-4 decision is taken at Newton iteration 1 by the trim band, whose
+count-based rms gap straddled the band edge (0.70537 vs 0.70796 `dhat`, edge
+0.7071) because five cube vertices sit exactly over the slab's shared diagonal
+and upstream's rewritten `point_triangle_distance_type` resolves that tie into
+a different number of merged collisions (energy unchanged, count changed).
+Old/new binaries took trim 16 / 8 in 8 of 8 threaded repeats each. The band
+statistic is now weighted by collision weight and no longer depends on the tie
+resolution (0.7142 `dhat` at that decision); see
+[band-statistic-weighting-20260927.md](band-statistic-weighting-20260927.md).
+The full-suite cap of 1,800 s was also too short: complete suites on this
+machine take about 60-65 minutes.
+
 The full PolyFEM unit suite reached its 1,800-second cap while processing
 `contact/examples/2D/unit-tests/5-squares.json`. No assertion failure was
 reported before the cap, but this is **not a complete suite pass**. The
