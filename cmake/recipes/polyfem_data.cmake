@@ -2,7 +2,9 @@
 # upstream https://github.com/polyfem/polyfem-data set plus this fork's fixture
 # changes -- CI-03 (2026-09-21): three historical friction fixtures state the
 # lag budget their references were generated under and get current-defaults
-# twins; see docs/ci-03-validation.md)
+# twins; see docs/ci-03-validation.md -- CI-05 (2026-09-28): the microstructure
+# fixture gains an explicit max_candidate_emissions budget; the automatic
+# global broad-phase default is unchanged; see docs/ci-portability-plan.md)
 # License: MIT
 
 if(TARGET polyfem::data)
@@ -32,7 +34,7 @@ else()
         PREFIX ${FETCHCONTENT_BASE_DIR}/polyfem-test-data
         SOURCE_DIR ${POLYFEM_DATA_DIR}
         GIT_REPOSITORY https://github.com/sdast9/polyfem-data
-        GIT_TAG e6ed5cf2d6514ef2595d28a23400521e2b3c717c
+        GIT_TAG 8e8861309d6318c0dcfdc20f78fb2f38cffb7a16
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ""
         INSTALL_COMMAND ""
