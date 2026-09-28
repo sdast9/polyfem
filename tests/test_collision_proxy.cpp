@@ -5,6 +5,7 @@
 #include <polyfem/State.hpp>
 #include <polyfem/varforms/VarForm.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
+#include <polyfem/utils/Logger.hpp>
 
 #include "VarFormTestAccess.hpp"
 
@@ -229,6 +230,42 @@ TEST_CASE("build collision proxy", "[build_collision_proxy]")
 	CHECK((proxy_vertices + U_proxy - expected_squished_proxy).cwiseAbs().maxCoeff() < 1e-12);
 
 	// REQUIRE(igl::writePLY("deformed_proxy.ply", proxy_vertices + U_proxy, proxy_faces));
+}
+
+// Reproduces a locale crash: the "Done (took ..." debug line after a
+// max_edge_length collision proxy build used to eagerly fmt::format its
+// vertex/triangle counts through std::locale("en_US.UTF-8") for {:L}
+// thousands separators. That locale construction happened before the
+// logger decided whether debug output was enabled, so it threw
+// std::runtime_error on any machine without en_US.UTF-8 generated even with
+// debug logging on. The counts are now formatted with plain {}.
+TEST_CASE("build collision proxy via max_edge_length does not require a locale", "[build_collision_proxy]")
+{
+	const auto state = get_state();
+	const polyfem::test::VarFormDebugData debug =
+		polyfem::test::VarFormTestAccess::debug_data(*state->variational_formulation);
+	REQUIRE(debug.mesh != nullptr);
+	REQUIRE(debug.bases != nullptr);
+	REQUIRE(debug.geometry_bases != nullptr);
+	REQUIRE(debug.total_local_boundary != nullptr);
+
+	const spdlog::level::level_enum previous_level = polyfem::logger().level();
+	polyfem::logger().set_level(spdlog::level::debug);
+
+	polyfem::json args;
+	args["/contact/collision_mesh/enabled"_json_pointer] = true;
+	args["/contact/collision_mesh/max_edge_length"_json_pointer] = 0.1;
+	args["/contact/collision_mesh/tessellation_type"_json_pointer] = "regular";
+
+	const polyfem::mesh::Obstacle obstacle;
+	const Eigen::VectorXi in_node_to_node;
+	ipc::CollisionMesh collision_mesh;
+
+	CHECK_NOTHROW(polyfem::varform::NonlinearElasticVarForm::build_collision_mesh(
+		*debug.mesh, debug.n_bases, *debug.bases, *debug.geometry_bases, *debug.total_local_boundary,
+		obstacle, args, [](const std::string &p) { return p; }, in_node_to_node, collision_mesh));
+
+	polyfem::logger().set_level(previous_level);
 }
 
 TEST_CASE("build collision proxy displacement map", "[build_collision_proxy]")

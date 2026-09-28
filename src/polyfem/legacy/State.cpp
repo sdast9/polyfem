@@ -1375,11 +1375,10 @@ namespace polyfem::legacy
 				if (collision_triangles.size())
 					igl::edges(collision_triangles, collision_edges);
 				timer.stop();
-				logger().debug(fmt::format(
-					std::locale("en_US.UTF-8"),
-					"Done (took {:g}s, {:L} vertices, {:L} triangles)",
+				logger().debug(
+					"Done (took {:g}s, {} vertices, {} triangles)",
 					timer.getElapsedTime(),
-					collision_vertices.rows(), collision_triangles.rows()));
+					collision_vertices.rows(), collision_triangles.rows());
 			}
 			else
 			{
