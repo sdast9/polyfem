@@ -280,6 +280,42 @@ branch appeared once in ten threaded friction runs — the sampling is
 small); no cross-platform repeat comparison (the GitHub runners run the
 CLI contract, not this matrix).
 
+### Linux x86_64 repeat matrix (CI-07 item 9, 2026-09-28)
+
+**Status: measured — closes item 9's Linux half.** Cloud container, Intel
+Xeon @ 2.10 GHz, 4 vCPU, 15 GiB RAM, GCC 13.3.0, Release, TBB, `nproc` 4
+(host record `outputs/ci-linux-evidence/20260928T105712Z/host.txt`); binary
+`PolyFEM_bin` sha256 `67ae71090eca…5713`, sources polyfem
+`7b9e44526ff2` (branch `cloud/linux-evidence`), ipc_toolkit `cf99893be74f`,
+polysolve `43ca2e661069`. Exactly the two invocations CI-07 item 9
+specifies, evidence in `outputs/ci-07-item9/20260928T161716Z/`
+(`serial/summary.json,.md` and `threaded-pair/summary.json,.md`):
+
+| Cell | Completed | Distinct paths | Same-path max ‖du‖ | Branch divergence | Peak RSS MB | Wall s |
+| --- | --- | --- | --- | --- | --- | --- |
+| `quasistatic-semi --threads 1 --repeats 3 --verify` (serial) | 3/3 | 1 | **0** (bit-identical) | none | 174.6 (constant) | 10.8–11.2 |
+| `quasistatic-semi --threads default --repeats 2` (threaded pair, `threads_effective` 4) | 2/2 | 1 | **0** (bit-identical) | none | 180.3–196.2 | 9.5–10.2 |
+
+Both cells report 0 violations under `--verify`. The threaded pair (4
+effective threads on this 4-vCPU host, versus stage 2's 18 on the macOS
+host) is bit-identical rather than reproducing stage 2's roundoff-level
+path differences — expected: with only 4 threads the reduction order has
+far fewer interleavings to disagree on, so the absence of divergence here
+is a consequence of thread count, not a stronger reproducibility claim than
+stage 2's. A per-step discrete-state spread is present in the threaded
+cell (active collisions 45–47, candidates 389–754, iterations 5–9, trim
+2–8 across steps 1–4 — the roundoff-sensitive contact state stage 2 already
+treats as a spread, not a path element) despite the identical history and
+endpoint. `friction_iterations`/friction fixtures were not run here (item
+9 only asks for `quasistatic-semi`); the 1.7e-4 threaded-friction spread
+documented above from the macOS matrix stands as the cross-platform
+comparison point and is not contradicted or reproduced by this Linux run.
+
+This closes CI-07 item 9's Linux requirement (serial run + a threaded
+pair, `summary.json`/`summary.md` produced). The Windows half and a true
+cross-compiler comparison against the macOS AppleClang numbers above
+remain open; see [ci-portability-plan.md](ci-portability-plan.md#ci-07--workflow-triggers-test-selection-and-reproducible-builds).
+
 ## Stage 3 — CI and release integration (2026-09-14)
 
 **Status: published (`f5f59db26`, `4f5acc773`, `fffc722b9`); closed
