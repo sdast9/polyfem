@@ -1,0 +1,98 @@
+Host record for CI-05/06/07 Linux x86_64 evidence, cloud session, 2026-09-28
+CPU model: Intel(R) Xeon(R) Processor @ 2.10GHz
+nproc: 4
+RAM: 15Gi total
+Compiler: GNU 13.3.0 (Ubuntu 24.04), CMake 3.28.3, Ninja
+OS: Linux 6.18.44-fc-v37, x86_64
+Branch: cloud/linux-evidence
+
+--- PolyFEM_bin --build_info ---
+{
+  "build": {
+    "cmake": "3.28.3",
+    "compiler": "GNU 13.3.0",
+    "compiler_path": "/usr/bin/c++",
+    "configuration": "Release",
+    "cxx_flags": " -fopenmp",
+    "cxx_flags_configuration": "-O3 -DNDEBUG",
+    "generator": "Ninja",
+    "host_system": "Linux-6.18.44-fc-v37",
+    "options": {
+      "POLYFEM_CODE_COVERAGE": "OFF",
+      "POLYFEM_PORTABLE_BUILD": "ON",
+      "POLYFEM_WITH_CLIPPER": "ON",
+      "POLYFEM_WITH_CUDA": "OFF",
+      "POLYFEM_WITH_ITR": "OFF",
+      "POLYFEM_WITH_MISO": "OFF",
+      "POLYFEM_WITH_MMG": "ON",
+      "POLYFEM_WITH_OPTIMIZATION": "ON",
+      "POLYFEM_WITH_PYTHON": "ON",
+      "POLYFEM_WITH_TESTS": "ON",
+      "POLYFEM_WITH_TRIANGLE": "ON"
+    },
+    "target_system": "Linux-x86_64",
+    "threading": "TBB"
+  },
+  "schema": "polyfem.build-info",
+  "sources": {
+    "ipc_toolkit": {
+      "branch": "HEAD",
+      "commit": "cf99893be74fe296e6b771b8e22ba4562942e77e",
+      "commit_time": "2026-09-27T08:05:53-04:00",
+      "declared_pin": "cf99893be74fe296e6b771b8e22ba4562942e77e",
+      "declared_repository": "sdast9/ipc-toolkit",
+      "dirty": false,
+      "git_toplevel": "/root/.cache/CPM/ipc-toolkit/a4d8",
+      "is_toplevel": true,
+      "matches_declared_pin": true,
+      "patch_sha256": null,
+      "path": "/root/.cache/CPM/ipc-toolkit/a4d8",
+      "source_override": null,
+      "state": "git",
+      "tracked_changes": 0,
+      "untracked_count": 0,
+      "untracked_first": [],
+      "untracked_hashed": 0
+    },
+    "polyfem": {
+      "branch": "cloud/linux-evidence",
+      "commit": "7b9e44526ff227dfd748496fab9002d0d33ed1a8",
+      "commit_time": "2026-09-28T10:21:28+00:00",
+      "declared_pin": null,
+      "declared_repository": null,
+      "dirty": false,
+      "git_toplevel": "/home/user/polyfem",
+      "is_toplevel": true,
+      "matches_declared_pin": null,
+      "patch_sha256": null,
+      "path": "/home/user/polyfem",
+      "source_override": null,
+      "state": "git",
+      "tracked_changes": 0,
+      "untracked_count": 0,
+      "untracked_first": [],
+      "untracked_hashed": 0
+    },
+    "polysolve": {
+      "branch": "HEAD",
+      "commit": "43ca2e661069ba3971e16ec4c26969ea1f1d41cc",
+      "commit_time": "2026-09-27T21:15:11-04:00",
+      "declared_pin": "43ca2e661069ba3971e16ec4c26969ea1f1d41cc",
+      "declared_repository": "sdast9/polysolve",
+      "dirty": false,
+      "git_toplevel": "/root/.cache/CPM/polysolve/c365",
+      "is_toplevel": true,
+      "matches_declared_pin": true,
+      "patch_sha256": null,
+      "path": "/root/.cache/CPM/polysolve/c365",
+      "source_override": null,
+      "state": "git",
+      "tracked_changes": 0,
+      "untracked_count": 0,
+      "untracked_first": [],
+      "untracked_hashed": 0
+    }
+  },
+  "test_data_declared_pin": "e6ed5cf2d6514ef2595d28a23400521e2b3c717c",
+  "version": 1
+}
