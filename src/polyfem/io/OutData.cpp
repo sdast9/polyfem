@@ -195,6 +195,103 @@ namespace polyfem::io
 				skip_face(report, b, lb.element_id(), lb.global_primitive_id(j), reason);
 		}
 
+		// CI-04: a boundary face of a P2 tetrahedron whose edges touch a P1
+		// element. On a conforming mesh an edge takes the lowest order of the
+		// elements around it, so the P2 element's node on such an edge has no
+		// DOF of its own: its basis is stitched to the edge's two endpoint
+		// vertices (the P1 hat functions evaluated at the midpoint). The
+		// displacement is therefore linear along that edge, exactly like the
+		// P1 face on the other side, which runs straight from endpoint to
+		// endpoint. The face is tessellated over its owned nodes with every
+		// constrained edge kept straight: the result conforms to the P1
+		// neighbor (no T-junction), and every surface vertex is still an FE
+		// node, so the identity collision-to-FE map is unchanged. Anything
+		// else -- a constrained vertex, a constraint that is not an affine
+		// combination of the edge's endpoints, a non-P2 face -- is refused
+		// with the reason. Emits triangles in the orientation of the plain
+		// P2 pattern, (0, 3, 5) (3, 1, 4) (4, 2, 5) (3, 4, 5); a face with all
+		// three edges constrained gives (0, 1, 2), as before.
+		bool tessellate_constrained_p2_face(
+			const basis::ElementBases &b,
+			const Eigen::VectorXi &nodes,
+			std::vector<std::tuple<int, int, int>> &tris,
+			std::string &reason)
+		{
+			if (nodes.size() != 6)
+			{
+				reason = fmt::format("simplex face with {} nodes of which some are constrained (mixed-order interface); only P2 faces with stitched edge nodes are supported", nodes.size());
+				return false;
+			}
+
+			static constexpr int edge_v[3][2] = {{0, 1}, {1, 2}, {2, 0}};
+			std::array<int, 3> v, m;
+			for (int i = 0; i < 3; ++i)
+			{
+				const std::vector<basis::Local2Global> &glob = b.bases[nodes(i)].global();
+				if (glob.size() != 1)
+				{
+					reason = "P2 face with a constrained vertex node";
+					return false;
+				}
+				v[i] = glob.front().index;
+			}
+			for (int k = 0; k < 3; ++k)
+			{
+				const std::vector<basis::Local2Global> &glob = b.bases[nodes(3 + k)].global();
+				if (glob.size() == 1)
+				{
+					m[k] = glob.front().index;
+					continue;
+				}
+				m[k] = -1;
+				// the stitched node must be an affine combination of this
+				// edge's two endpoints with positive weights
+				const int va = v[edge_v[k][0]], vb = v[edge_v[k][1]];
+				double wa = 0, wb = 0;
+				bool on_edge = !glob.empty();
+				for (const basis::Local2Global &g : glob)
+				{
+					if (g.index == va)
+						wa += g.val;
+					else if (g.index == vb)
+						wb += g.val;
+					else
+						on_edge = false;
+				}
+				if (!on_edge || !(wa > 0) || !(wb > 0) || std::abs(wa + wb - 1) > 1e-10)
+				{
+					reason = fmt::format("P2 face with a constrained edge node that is not an affine combination of its edge's endpoints ({} entries)", glob.size());
+					return false;
+				}
+			}
+
+			const int n_owned = int(m[0] >= 0) + int(m[1] >= 0) + int(m[2] >= 0);
+			assert(n_owned < 3);
+			if (n_owned == 0)
+				tris.emplace_back(v[0], v[1], v[2]);
+			else if (n_owned == 1)
+			{
+				// owned node on edge o = (p, q); r opposite: polygon p, m, q, r
+				const int o = m[0] >= 0 ? 0 : (m[1] >= 0 ? 1 : 2);
+				const int p = v[o], q = v[(o + 1) % 3], r = v[(o + 2) % 3];
+				tris.emplace_back(p, m[o], r);
+				tris.emplace_back(m[o], q, r);
+			}
+			else
+			{
+				// constrained edge k = (a, b): polygon a, b, m_bc, c, m_ca; the
+				// corner at c as in the P2 pattern, the trapezoid a b m_bc m_ca
+				// split along a -- m_bc
+				const int k = m[0] < 0 ? 0 : (m[1] < 0 ? 1 : 2);
+				const int a = v[k], bb = v[(k + 1) % 3], c = v[(k + 2) % 3];
+				const int mbc = m[(k + 1) % 3], mca = m[(k + 2) % 3];
+				tris.emplace_back(mbc, c, mca);
+				tris.emplace_back(a, bb, mbc);
+				tris.emplace_back(a, mbc, mca);
+			}
+			return true;
+		}
+
 		void init_report(OutGeometryData::BoundaryExtractionReport &report, const std::vector<mesh::LocalBoundary> &total_local_boundary)
 		{
 			report = OutGeometryData::BoundaryExtractionReport();
@@ -1459,12 +1556,16 @@ namespace polyfem::io
 					if (is_follower)
 						continue;
 
+					bool has_constrained = false;
 					for (long n = 0; n < nodes.size(); ++n)
 					{
 						const basis::Basis &bs = b.bases[nodes(n)];
 						const std::vector<basis::Local2Global> &glob = bs.global();
 						if (glob.size() != 1)
+						{
+							has_constrained = true;
 							continue;
+						}
 
 						int gindex = glob.front().index;
 						node_positions_vec.resize(std::max(int(node_positions_vec.size()), gindex + 1));
@@ -1472,7 +1573,18 @@ namespace polyfem::io
 						loc_nodes.push_back(gindex);
 					}
 
-					if (loc_nodes.size() == 3)
+					if (has_constrained && mesh3d.is_conforming())
+					{
+						// mixed-order interface of a conforming mesh (CI-04);
+						// non-conforming meshes keep the paths below
+						std::string reason;
+						if (!tessellate_constrained_p2_face(b, nodes, tris, reason))
+						{
+							skip_face(rep, b, lb.element_id(), eid, reason);
+							continue;
+						}
+					}
+					else if (loc_nodes.size() == 3)
 					{
 						tris.emplace_back(loc_nodes[0], loc_nodes[1], loc_nodes[2]);
 					}

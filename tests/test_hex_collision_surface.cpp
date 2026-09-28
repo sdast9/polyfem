@@ -18,7 +18,10 @@
 
 #include <polyfem/State.hpp>
 #include <polyfem/io/OutData.hpp>
+#include <polyfem/autogen/auto_p_bases.hpp>
 #include <polyfem/autogen/auto_q_bases.hpp>
+#include <polyfem/assembler/AssemblyValues.hpp>
+#include <polyfem/mesh/mesh3D/Mesh3D.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
 #include "VarFormTestAccess.hpp"
@@ -33,6 +36,8 @@
 
 #include <ipc/ipc.hpp>
 
+#include <algorithm>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <set>
@@ -567,4 +572,172 @@ TEST_CASE("Q3 hex proxies are geometrically valid once the basis is repaired", "
 	check_closed_sphere(s);
 	CHECK(s.n_vertices == 164);
 	CHECK(s.n_faces == 18 * 18);
+}
+
+// CI-04: mixed P1/P2 tetrahedra. On a conforming mesh each edge takes the
+// lowest order around it, so a P2 element's node on an edge shared with a
+// P1 element has no DOF: its basis is stitched to the edge's two endpoint
+// vertices. The default extraction used to skip every boundary face of a P2
+// element carrying such a node (4 or 5 owned nodes out of 6), and the RB-22
+// completeness check refused the scene (multi-material/stretch-cubes.json:
+// 437 of 7,610 faces). These faces are now tessellated over their owned
+// nodes with the constrained edges kept straight, conforming to the P1 face
+// across the edge; every surface vertex remains an FE node.
+namespace
+{
+	// quad_test/tet.msh with the elements whose centroid lies in x < 0.5 at
+	// P2 (body 2) and the rest at P1
+	json mixed_tet_args()
+	{
+		json in_args = tet_args(1);
+		in_args["/geometry/0/volume_selection"_json_pointer] = json::array({json{{"id", 2}, {"box", json::array({json::array({0., 0., 0.}), json::array({0.5, 1., 1.})})}, {"relative", true}}});
+		in_args["/space/discr_order"_json_pointer] = json::array({json{{"id", 2}, {"order", 2}}});
+		return in_args;
+	}
+
+	struct MixedInterfaceStats
+	{
+		int boundary_faces = 0, constrained_faces = 0, constrained_edges = 0;
+		std::map<int, int> owned_nodes; // owned nodes per constrained face -> faces
+		std::set<int> orders;
+		double fe_area = 0, max_weight_error = 0, max_edge_field_error = 0;
+	};
+
+	// Walks the boundary faces through the FE bases: the stitched weights of
+	// every constrained edge node, and the FE field of a random nodal vector
+	// along each constrained edge against the straight collision edge.
+	MixedInterfaceStats inspect_mixed_interface(const Built &b)
+	{
+		MixedInterfaceStats st;
+		const mesh::Mesh3D &mesh = dynamic_cast<const mesh::Mesh3D &>(*b.debug.mesh);
+		const std::vector<basis::ElementBases> &bases = *b.debug.bases;
+		Eigen::MatrixXd p2_nodes;
+		autogen::p_nodes_3d(2, p2_nodes);
+
+		const Eigen::VectorXd U = Eigen::VectorXd::Random(b.debug.n_bases);
+		const auto field = [&](const basis::ElementBases &eb, const Eigen::RowVector3d &uv) {
+			std::vector<assembler::AssemblyValues> vals;
+			eb.evaluate_bases(uv, vals);
+			double u = 0;
+			for (size_t j = 0; j < vals.size(); ++j)
+				for (const basis::Local2Global &g : eb.bases[j].global())
+					u += vals[j].val(0) * g.val * U[g.index];
+			return u;
+		};
+
+		static constexpr int edge_v[3][2] = {{0, 1}, {1, 2}, {2, 0}};
+		for (const mesh::LocalBoundary &lb : *b.debug.total_local_boundary)
+		{
+			const basis::ElementBases &eb = bases[lb.element_id()];
+			st.orders.insert(eb.bases.front().order());
+			for (int j = 0; j < lb.size(); ++j)
+			{
+				const int eid = lb.global_primitive_id(j);
+				++st.boundary_faces;
+				Eigen::Vector3d x[3];
+				for (int i = 0; i < 3; ++i)
+					x[i] = mesh.point(mesh.face_vertex(eid, i)).transpose();
+				st.fe_area += 0.5 * (x[1] - x[0]).cross(x[2] - x[0]).norm();
+
+				const Eigen::VectorXi nodes = eb.local_nodes_for_primitive(eid, mesh);
+				int owned = 0;
+				for (long n = 0; n < nodes.size(); ++n)
+					owned += eb.bases[nodes(n)].global().size() == 1;
+				if (owned == nodes.size())
+					continue;
+				++st.constrained_faces;
+				++st.owned_nodes[owned];
+				REQUIRE(nodes.size() == 6);
+
+				for (int k = 0; k < 3; ++k)
+				{
+					const std::vector<basis::Local2Global> &glob = eb.bases[nodes(3 + k)].global();
+					if (glob.size() == 1)
+						continue;
+					++st.constrained_edges;
+					const int va = eb.bases[nodes(edge_v[k][0])].global().front().index;
+					const int vb = eb.bases[nodes(edge_v[k][1])].global().front().index;
+					double wa = 0, wb = 0, other = 0;
+					for (const basis::Local2Global &g : glob)
+						(g.index == va ? wa : (g.index == vb ? wb : other)) += std::abs(g.val);
+					st.max_weight_error = std::max({st.max_weight_error, std::abs(wa - 0.5), std::abs(wb - 0.5), other});
+
+					const Eigen::RowVector3d ra = p2_nodes.row(nodes(edge_v[k][0]));
+					const Eigen::RowVector3d rb = p2_nodes.row(nodes(edge_v[k][1]));
+					for (const double t : {0.25, 0.5, 0.75})
+						st.max_edge_field_error = std::max(
+							st.max_edge_field_error,
+							std::abs(field(eb, (1 - t) * ra + t * rb) - ((1 - t) * U[va] + t * U[vb])));
+				}
+			}
+		}
+		return st;
+	}
+
+	// coverage and map consistency of the built collision surface: its area
+	// equals the (straight) FE boundary area, and the displacement map applied
+	// to the FE node positions reproduces the surface vertices
+	void check_surface_against_fe(const Built &b, const MixedInterfaceStats &st)
+	{
+		const ipc::CollisionMesh &cm = *b.mesh;
+		Eigen::VectorXd double_area;
+		igl::doublearea(cm.rest_positions(), cm.faces(), double_area);
+		CHECK(0.5 * double_area.sum() == Catch::Approx(st.fe_area).epsilon(1e-12));
+
+		Eigen::MatrixXd X = Eigen::MatrixXd::Zero(b.debug.n_bases, 3);
+		for (const basis::ElementBases &eb : *b.debug.bases)
+			for (const basis::Basis &bs : eb.bases)
+				if (bs.global().size() == 1)
+					X.row(bs.global().front().index) = bs.global().front().node;
+		const Eigen::MatrixXd mapped = cm.displacement_map() * X;
+		CHECK((mapped - cm.rest_positions()).cwiseAbs().maxCoeff() < 1e-14);
+	}
+} // namespace
+
+TEST_CASE("Mixed P1/P2 tetrahedra get a complete conforming collision surface", "[ci04][collision_surface]")
+{
+	const Built b = build(mixed_tet_args());
+	REQUIRE(b.mesh != nullptr);
+
+	const MixedInterfaceStats st = inspect_mixed_interface(b);
+	CHECK(st.orders == std::set<int>{1, 2});
+	CHECK(st.boundary_faces == 40);
+	// the interface reaches the boundary: P2 faces with one stitched edge (the
+	// 5-owned-node faces of the fixture) are present
+	CHECK(st.constrained_faces > 0);
+	CHECK(st.owned_nodes.count(5) == 1);
+	CHECK(st.max_weight_error < 1e-12);
+	CHECK(st.max_edge_field_error < 1e-12);
+
+	const SurfaceStats s = analyze(*b.mesh, b.debug.n_bases);
+	check_closed_sphere(s);
+	// identity map on the FE nodes: every row an exact selector
+	CHECK(s.selector_rows == s.n_vertices);
+	CHECK(s.interpolated_rows == 0);
+	check_surface_against_fe(b, st);
+
+	// the default extraction reports the surface complete
+	Eigen::MatrixXd V;
+	Eigen::MatrixXi E, F;
+	std::vector<Eigen::Triplet<double>> map;
+	io::OutGeometryData::BoundaryExtractionReport report;
+	io::OutGeometryData::extract_boundary_mesh(*b.debug.mesh, b.debug.n_bases, *b.debug.bases, *b.debug.total_local_boundary, V, E, F, map, &report);
+	CHECK(report.complete());
+	CHECK(report.n_boundary_faces == 40);
+	CHECK(map.empty());
+	CHECK(F.rows() == s.n_faces);
+}
+
+TEST_CASE("Pure P1 and P2 tetrahedral collision surfaces are unchanged by the mixed-order path", "[ci04][collision_surface]")
+{
+	const int order = GENERATE(1, 2);
+	CAPTURE(order);
+	const Built b = build(tet_args(order));
+	REQUIRE(b.mesh != nullptr);
+	const MixedInterfaceStats st = inspect_mixed_interface(b);
+	CHECK(st.constrained_faces == 0);
+	const SurfaceStats s = analyze(*b.mesh, b.debug.n_bases);
+	check_closed_sphere(s);
+	CHECK(s.n_faces == 40 * (order == 1 ? 1 : 4));
+	check_surface_against_fe(b, st);
 }
