@@ -69,6 +69,22 @@ and matching their pins):
 | Affected selection (IPC-integration tags + `[trim_band]`, `[physical_diagnostics]`, `[trim_predictors]`, `[al_budget]`) | 99 cases / 10,987 assertions pass |
 | RB-02 coefficient probe | 270 checks pass |
 | Five public smokes, single-threaded, vs saved `c133948cf` | all 25 VTUs byte-identical; no refused line-search direction |
+| Full unit suite on `61a7a4507` (this change + restart commit `c2a57e393`, PolySolve `43ca2e66`), 92 min | 398 cases: 395 pass; the two known `verify_run` scene failures (`gcp-contact/cube-on-floor`, `multi-material/stretch-cubes`) and `shape-transient-friction` (below) |
+
+`shape-transient-friction` (`[opt_gradient]`, fixed barrier stiffness 1e5, so
+the band statistic is not involved) is a regression of the IPC upstream
+adoption, found here because that integration's full suite hit its time cap:
+it passes on `a0a40ce92` and on an isolated build of `3c40ae557` (IPC
+`75600955`) and fails on one of `6570e0410` (IPC `cf99893b`) with the values
+of the shared build. The adjoint derivative is unchanged (404239.98534 before,
+404239.98533 after, 3e-14 relative); the central finite difference with step
+1e-6 moved from 404242.13 to 404222.51, so the relative error is 4.3e-5
+against upstream PolyFEM's tolerance 1.1e-5 (5.3e-6 before). Upstream PolyFEM
+still pins IPC `b40e9c07`, 27 commits before the merged `869e489e`, so its
+tolerance was tuned without these IPC changes. Open: whether the forward
+solves' change is benign finite-difference sensitivity or a defect (a
+step-size study and the triplet/MeshFEMSparse toggle would tell); no tolerance
+has been changed.
 
 The smokes are byte-identical because the statistic enters the solution only
 through discrete trim decisions and none changed on them. At the friction

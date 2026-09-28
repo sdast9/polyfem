@@ -70,7 +70,11 @@ statistic is now weighted by collision weight and no longer depends on the tie
 resolution (0.7142 `dhat` at that decision); see
 [band-statistic-weighting-20260927.md](band-statistic-weighting-20260927.md).
 The full-suite cap of 1,800 s was also too short: complete suites on this
-machine take about 60-65 minutes.
+machine take about 60-65 minutes. A complete suite on `61a7a4507` found one
+regression of this integration: `shape-transient-friction` (`[opt_gradient]`)
+fails its finite-difference tolerance (4.3e-5 vs 1.1e-5) because the finite
+difference moved while the adjoint derivative did not; bisected to
+`6570e0410` (see the band-statistic record).
 
 The full PolyFEM unit suite reached its 1,800-second cap while processing
 `contact/examples/2D/unit-tests/5-squares.json`. No assertion failure was
