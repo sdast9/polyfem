@@ -36,6 +36,17 @@ bool missing_tests_data(const json &j, const std::string &key)
 	return !j.contains(key) || (j.at(key).size() == 1 && j.at(key).contains("time_steps"));
 }
 
+// CI-06: reference regeneration (the `*` manifest prefix) must not silently
+// widen a scene's stored margin back to the global default; a scene that
+// pinned a wider margin (e.g. the GCP cube-on-floor contact) keeps it across
+// a regenerate unless someone edits the JSON by hand.
+double resolve_reference_margin(const json &in_args, const std::string &tests_key)
+{
+	if (in_args.contains(tests_key) && in_args.at(tests_key).contains("margin"))
+		return in_args.at(tests_key).at("margin").get<double>();
+	return 1e-5;
+}
+
 enum AuthenticateResult
 {
 	SUCCESS,
@@ -206,7 +217,7 @@ AuthenticateResult authenticate_json(const std::string &json_file, const bool co
 	if (run_result != SUCCESS)
 		return run_result;
 
-	out["margin"] = 1e-5;
+	out["margin"] = resolve_reference_margin(in_args, tests_key);
 	out["time_steps"] = time_steps;
 
 	std::vector<std::string> test_keys =
@@ -296,6 +307,18 @@ void run_data(const std::string &test_file, const std::string &dir)
 {
 	// Disabled on Windows CI, due to the requirement for Pardiso.
 	run_manifest(POLYFEM_TEST_DIR "/" + test_file + ".txt", dir);
+}
+
+TEST_CASE("CI-06 reference regeneration preserves an existing scene-specific margin", "[verify_run]")
+{
+	const json with_margin = R"({"tests": {"margin": 0.01, "err_l2": 1.0}})"_json;
+	CHECK(resolve_reference_margin(with_margin, "tests") == 0.01);
+
+	const json without_margin = R"({"tests": {"err_l2": 1.0}})"_json;
+	CHECK(resolve_reference_margin(without_margin, "tests") == 1e-5);
+
+	const json without_tests_key = json({});
+	CHECK(resolve_reference_margin(without_tests_key, "tests") == 1e-5);
 }
 
 // CI-03: the same authentication over any manifest and data directory, so an
