@@ -105,9 +105,13 @@ directions; `bisect/fd-step-study.patch`, uncommitted) shows:
 So MeshFEMSparse's summation order changes roundoff in the forward solves, and
 the test, whose trial 0 sits at the crossover of truncation and noise with a
 1.1e-5 tolerance, draws an unlucky value. The adjoint derivative agrees with
-well-conditioned differences to 4e-8. The test is left failing pending the
-user's choice (tighten its forward tolerance, or keep it as a known failure);
-no tolerance has been changed.
+well-conditioned differences to 4e-8.
+
+**Resolved (user decision 2026-09-28):** the test keeps its step (float 1e-6)
+and its 1.1e-5 check, and tightens only its forward solves to
+`grad_norm_tol` 2.5e-11 (`first_grad_norm_tol` 2.5e-13) through a new optional
+`run_test1` hook. With MeshFEMSparse on, the three directions agree to
+3.4e-6, 5e-9 and 2e-8 and the test passes.
 
 The smokes are byte-identical because the statistic enters the solution only
 through discrete trim decisions and none changed on them. At the friction
