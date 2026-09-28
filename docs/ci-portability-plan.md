@@ -32,7 +32,7 @@ At the 13:54 UTC metadata snapshot, the most recent 100 PolyFEM workflow runs co
 
 ## 2. Recommended work order
 
-CI-01, CI-02 and CI-03 are **complete** (CI-01/02: native validation read on 2026-09-15; CI-03: 2026-09-21, see the implementation updates above). CI-04 is implemented and validated locally (2026-09-28, [record](ci-04-validation.md)); native validation is pending. CI-05 through CI-09 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
+CI-01, CI-02 and CI-03 are **complete** (CI-01/02: native validation read on 2026-09-15; CI-03: 2026-09-21, see the implementation updates above). CI-04 is implemented and validated locally (2026-09-28, [record](ci-04-validation.md)); native validation is pending. CI-08's Linux x86_64 target and CI-09's portable smoke runner are implemented and validated locally (2026-09-28, branch `cloud/ci-08-linux`, [record](ci-08-validation.md)); CI-08's macOS/Windows targets and CI-09's Houdini-side integration remain open. CI-05, CI-06 and the rest of CI-07 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
 
 | Order / ID | Work | Completion evidence |
 | --- | --- | --- |
@@ -43,8 +43,8 @@ CI-01, CI-02 and CI-03 are **complete** (CI-01/02: native validation read on 202
 | 2 / CI-05 | Reconcile the microstructure workload with resource protection | Measured resource profile, successful supported run, and preserved budget-refusal coverage |
 | 2 / CI-06 | Resolve the GCP cube-on-floor reference contract | Repeated, controlled comparison with justified reference policy |
 | 3 / CI-07 | Close workflow and platform-coverage gaps | Active fork branches tested; common public integration tests run on each OS |
-| 4 / CI-08 | Package and test the actual solver executable | Relocatable packages run on clean target machines |
-| 4 / CI-09 | Validate the Houdini front-end on each OS | Export, launch, output import, failure handling, and paths with spaces pass |
+| 4 / CI-08 | Package and test the actual solver executable — **Linux x86_64 done 2026-09-28, branch `cloud/ci-08-linux`; macOS/Windows pending** | Relocatable packages run on clean target machines ([record](ci-08-validation.md): space path, scrubbed env, source/build renamed away, `cli_check.py` 0/1/3 all pass) |
+| 4 / CI-09 | Validate the Houdini front-end on each OS — **portable smoke runner done 2026-09-28; Houdini-side integration pending** | Export, launch, output import, failure handling, and paths with spaces pass ([record](ci-08-validation.md)) |
 
 CI-01 and CI-02 are one mechanical repair changeset. The scene items should remain separate, bounded changes with their own evidence and applicable RB records. Reaching green CI is an intermediate milestone; it does not establish a usable downloadable package or general physical accuracy.
 
@@ -183,6 +183,8 @@ Required changes:
 
 ### CI-08 — Installable solver packages
 
+**Implementation update, 2026-09-28 (Linux x86_64, [record](ci-08-validation.md), branch `cloud/ci-08-linux`):** `cmake/polyfem/polyfem_cli_package.cmake` adds install rules + a CPack TGZ configuration for `PolyFEM_bin` alone, following `app/CMakeLists.txt`'s existing pattern, without changing the developer build. Verified: `cmake --install` + `cpack` produce a 49 MB `PolyFEM-CLI-Linux-x86_64.tar.gz` (installed binary 142 MB); extracted into a space-containing path and run with the source **and** build trees renamed away and `env -i PATH=/usr/bin:/bin` from a plain `/tmp` working directory, `--build_info` and the `tools/rb12/cli_check.py` exit-status contract (0 completed / 1 refused-input / 3 resource-failure) all pass unchanged, as does the CI-09 smoke runner below and a Python-expression scene. Nothing dynamic beyond base-system libraries is linked (TBB and MKL are both static in this configuration), so nothing needed bundling into `lib/`; a `BUILD_RPATH` is still forced so a future configuration that does bundle a shared library keeps working. Measured (not decided): the binary requires **glibc ≥ 2.38** (Ubuntu 24.04 / Debian 13 / Fedora 39+; **not** Ubuntu 22.04), `-msse4.2` as the CPU baseline (`POLYFEM_PORTABLE_BUILD`), and the record lists the third-party licenses linked in — including two flagged for the user's decision before wider distribution: GPL-2.0-licensed SuiteSparse components (UMFPACK, SPQR, parts of CHOLMOD) and the Intel MKL redistribution notice. macOS and Windows targets remain open.
+
 The disabled [artifacts workflow](../.github/workflows/artifacts.yml) builds the GUI with tests and Python disabled. [app/CMakeLists.txt](../app/CMakeLists.txt) packages `polyfem_app`; it does not install the `PolyFEM_bin` CLI required by the Houdini workflow. A successful GUI artifact build alone would leave this distribution requirement unmet.
 
 Create a release path for the CLI and its required runtime libraries, with the GUI separately tested if it is offered. Test the extracted/installed package in a clean runner job, without the source tree, CPM cache, or build-directory library paths. Launch it from a directory containing spaces, run the public integration scenes, and verify exit status, JSON/VTU/PVD output, and unsupported-solver diagnostics. Check runtime library resolution, architecture, and redistribution notices.
@@ -199,6 +201,8 @@ GitHub's [runner reference](https://docs.github.com/en/actions/reference/runners
 Linux continuous CI enables `POLYFEM_PORTABLE_BUILD`, but the artifact workflow omits it. Apply a consistent declared CPU baseline to distributed binaries and dependencies; a build that works only on the compilation runner is not portable. Python expressions are a separate product capability: the present artifact workflow disables them, so a Python-free package must state that limit and a package offering expressions must validate its Python runtime explicitly.
 
 ### CI-09 — Houdini integration and launch paths
+
+**Implementation update, 2026-09-28 (portable smoke runner, branch `cloud/ci-08-linux`):** `tools/smoke/run_smoke.py` ([README](../tools/smoke/README.md)) replaces the developer-only `run-smoke.sh` referenced below: standard-library-only, takes an explicit `--binary`/`--scenes`/`--output` (refuses a non-empty output directory), runs each scene from an isolated per-scene input directory as an argument list (no shell), and returns a nonzero aggregate status if any scene fails or logs an `[error]` line. Verified against `scenes/semi-implicit` on the built and on the CI-08-packaged binary, and once with both `--binary` and `--output` containing spaces and non-ASCII characters ([record](ci-08-validation.md)). The Houdini-side integration (HDA load, export, launch quoting, licensed-environment tests) below remains open; this item only replaces the standalone runner the plan calls for.
 
 This is a source-level portability review, **not a recorded GitHub failure**: `sdast9/houdini-plugins` has no workflows/runs in the queried metadata.
 
