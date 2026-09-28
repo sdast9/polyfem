@@ -9,6 +9,8 @@
 #include <polyfem/utils/StringUtils.hpp>
 #include <polyfem/io/MatrixIO.hpp>
 
+#include <h5pp/h5pp.h>
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -218,4 +220,42 @@ TEST_CASE("restart from restart json", "[.][restart]")
 		CHECK(pvd.find(fmt::format("timestep=\"{:f}\" group=\"\" part=\"0\" file=\"step_{:d}.vtm\"", i * full_dt, i)) != std::string::npos);
 
 	std::filesystem::remove_all(outdir);
+}
+
+TEST_CASE("state file size stays near its payload", "[restart][matrix_io]")
+{
+	// h5pp's default square chunks (256 x 256) stored a 652,440 x 1 restart
+	// vector in 1.34 GB; row-block chunks keep the file near the payload.
+	const std::string path = (std::filesystem::temp_directory_path() / "polyfem_state_chunks.hdf5").string();
+	const int n = 652440;
+	const Eigen::MatrixXd u = Eigen::MatrixXd::Random(n, 1);
+	const Eigen::MatrixXd v = Eigen::MatrixXd::Random(n, 2);
+	const Eigen::MatrixXd small = Eigen::MatrixXd::Random(779, 6);
+	REQUIRE(io::write_matrix(path, "u", u, /*replace=*/true));
+	REQUIRE(io::write_matrix(path, "v", v, /*replace=*/false));
+	REQUIRE(io::write_matrix(path, "small", small, /*replace=*/false));
+
+	const double payload = double(u.size() + v.size() + small.size()) * sizeof(double);
+	CHECK(double(std::filesystem::file_size(path)) < 1.1 * payload + (1 << 20));
+	{
+		// Whole-row chunks of about 1 MiB, no filter (as before the fix).
+		h5pp::File file(path, h5pp::FileAccess::READONLY);
+		const auto u_info = file.getDatasetInfo("u");
+		const auto v_info = file.getDatasetInfo("v");
+		REQUIRE(u_info.dsetChunk.has_value());
+		CHECK(u_info.dsetChunk.value() == std::vector<hsize_t>{131072, 1});
+		REQUIRE(v_info.dsetChunk.has_value());
+		CHECK(v_info.dsetChunk.value() == std::vector<hsize_t>{65536, 2});
+		CHECK(H5Pget_nfilters(u_info.h5DsetCreate.value()) == 0);
+		CHECK(H5Pget_nfilters(v_info.h5DsetCreate.value()) == 0);
+	}
+
+	Eigen::MatrixXd u_read, v_read, small_read;
+	REQUIRE(io::read_matrix(path, "u", u_read));
+	REQUIRE(io::read_matrix(path, "v", v_read));
+	REQUIRE(io::read_matrix(path, "small", small_read));
+	CHECK(u_read == u);
+	CHECK(v_read == v);
+	CHECK(small_read == small);
+	std::filesystem::remove(path);
 }

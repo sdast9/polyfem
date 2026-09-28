@@ -145,3 +145,10 @@ lag, kappa continuity, semi-implicit coefficients, trim controller and
 predictors, stall trigger, coefficient events, continuation, objective
 generation, parent identity, EF-04 and the previous selection): 94 cases,
 11,380 assertions pass (`unit-selection2.log`).
+
+## Follow-up: state file size
+
+On large meshes each state file was mostly unused chunk space (4.0 GB per step
+on the 652,440-DOF ball-burst scene). The HDF5 matrix writer now sizes its
+chunks to the data, and resume behavior is unchanged; see
+[state-file-chunks-20260927.md](state-file-chunks-20260927.md).
