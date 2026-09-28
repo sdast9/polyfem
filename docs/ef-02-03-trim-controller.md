@@ -253,7 +253,9 @@ default was changed.
 R3, outside acceptance, accepts steps 1–38 and reaches the 1800-second cap
 on step 39 (467 accepted iterations there). It does not demonstrate a fix
 for the known step-39 problem; the timeout prevents asserting the same
-eventual named solver failure. No automatic retry was enabled.
+eventual named solver failure. No automatic retry was enabled. The step-39
+problem was later diagnosed as a material/structural one
+([r3-inflation-diagnosis-20260926.md](r3-inflation-diagnosis-20260926.md)).
 
 `power-audit.json` checks all 26 measured run windows: AC power at every
 start, no overlapping solver windows, and no sleep entry within a run.

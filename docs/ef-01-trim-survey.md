@@ -239,7 +239,9 @@ to test if that case matters.)
 * **EF-05** (AL weight): no case on these scenes; drop unless a scene needing
   several AL passes appears.
 * **R3 step 39** is a separate failure (every trim, published binary) and
-  needs its own item.
+  needs its own item. *Diagnosed 2026-09-26:* local loss of strong ellipticity
+  of the NeoHookean material during the inflation, near a structural limit —
+  see [r3-inflation-diagnosis-20260926.md](r3-inflation-diagnosis-20260926.md).
 * All of this remains opt-in until the user decides defaults (retained
   controller, 2026-09-11).
 

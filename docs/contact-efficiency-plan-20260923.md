@@ -17,8 +17,11 @@ EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
 The endpoint gradient balance is an identity (it returns the trim in force), so
 EF-02's estimate must come from the first stall's off-equilibrium κ_gb or from a
 force-weighted gap target, which merges EF-02 with EF-03; EF-05 has no case on
-these scenes; R3 fails at step 39 at every trim (published binary too) and needs
-its own item. See the record's "Consequences for the plan".
+these scenes; R3 fails at step 39 at every trim (published binary too); its
+own diagnosis (2026-09-26, [record](r3-inflation-diagnosis-20260926.md)) traces
+it to a local loss of strong ellipticity of the NeoHookean material during the
+inflation, near a structural inflation limit, not to the trim controller. See
+the record's "Consequences for the plan".
 
 EF-04 outcome in brief: H-E holds as a statement about the trigger (16 of 17
 production R4 alpha restarts fired on steps accepted at the feasible bound),
