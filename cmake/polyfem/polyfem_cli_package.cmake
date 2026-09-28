@@ -30,11 +30,10 @@ set(POLYFEM_CLI_RUNTIME_COMPONENT cli)
 # no-op) build-time RPATH so install-time relocation always has something
 # valid to rewrite, in case a future configuration (a different platform,
 # POLYFEM_THREADING, or a shared TBB) does bundle a runtime library.
-if(APPLE)
-    set_target_properties(${PROJECT_NAME}_bin PROPERTIES
-        BUILD_RPATH "@loader_path"
-        INSTALL_RPATH "@executable_path/../lib")
-elseif(UNIX)
+# Linux only: BUILD_RPATH replaces CMake's automatic build-tree RPATH, and the
+# macOS package is not validated yet (CI-08 macOS target open), so macOS
+# developer builds keep their automatic RPATH untouched.
+if(UNIX AND NOT APPLE)
     set_target_properties(${PROJECT_NAME}_bin PROPERTIES
         BUILD_RPATH "$ORIGIN"
         INSTALL_RPATH "$ORIGIN/../lib")
