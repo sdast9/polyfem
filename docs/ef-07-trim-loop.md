@@ -262,6 +262,20 @@ isolate a controller effect.
 | Affected unit selection | Pass: 86 cases / 9,705 assertions on `ef07-d`; `[ef07]` 9 cases / 123 assertions |
 | 13 HDA scripts | Pass: all 13 with Houdini 22.0.429 against `ef07-d` and `ef07-b` in isolated roots |
 
+## Decision (user, 2026-09-28)
+
+* The force-weighted band stays **experimental**; production `rms` is
+  recommended and remains the default.
+* It is exposed in the Houdini asset as an experimental choice
+  (houdini-plugins, see the asset's help); when chosen, the asset always
+  exports `collapse_guard_basis: pair`.
+* PolyFEM enforces the pair basis for the force-weighted band: `pair` is the
+  default of `collapse_guard_basis`, which acts only in that mode; an explicit
+  `proxy` reproduces the EF-02/03 guard with a warning. Production (`rms`)
+  runs and manifests are unchanged. `tools/ef02/sequence.py`'s `candidate`
+  mode now requests `proxy` so it keeps measuring EF-02/03 v3.
+* **Standing condition:** Before the force-weighted mode can be considered for adoption it first needs an agreed accuracy standard for trajectory-sensitive scenes, and repeat evidence on dynamic scenes not used for tuning.
+
 ## Conclusion and recommendation
 
 The EF-02/03 loop is understood: a pair the global trim cannot open, a

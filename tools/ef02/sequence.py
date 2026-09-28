@@ -41,7 +41,10 @@ def main():
                '--timeout', '2700' if scene == 'R4' else '3600', '--out', str(a.out), '--binary', str(a.binary)]
         if a.mode != 'production':
             cmd += ['--set', '/solver/contact/semi_implicit/band_statistic="force_weighted"',
-                    '--set', '/solver/contact/semi_implicit/initial_trim_estimate=true']
+                    '--set', '/solver/contact/semi_implicit/initial_trim_estimate=true',
+                    # EF-02/03 v3 as measured: the proxy guard (the default became pair
+                    # on 2026-09-28, docs/ef-07-trim-loop.md); --set overrides it.
+                    '--set', '/solver/contact/semi_implicit/collapse_guard_basis="proxy"']
             for extra in a.extra_set:
                 cmd += ['--set', extra]
         record = dict(label=label, command=cmd, binary_sha256=digest,

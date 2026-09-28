@@ -197,3 +197,20 @@ TEST_CASE("Minimum safe factor matches the band guard", "[trim_controller][ef07]
 	CHECK(ForceWeightedTrim::min_safe_factor(1.2, pair) == 0.);
 	CHECK(ForceWeightedTrim::min_safe_factor(.08, pair) == Catch::Approx(.8913).epsilon(1e-3));
 }
+
+TEST_CASE("The force-weighted band defaults to the pair-basis guard", "[trim_controller][ef07]")
+{
+	// User decision 2026-09-28: pair is enforced for the experimental
+	// force-weighted band; production rms has no band guard and its manifest
+	// carries no EF-07 block.
+	const auto mesh = one_pair_mesh();
+	const json fw = GuardForm(mesh, json{{"band_statistic", "force_weighted"}}).model_description();
+	REQUIRE(fw["coefficient_law"]["controller"].contains("ef07"));
+	CHECK(fw["coefficient_law"]["controller"]["ef07"]["collapse_guard_basis"] == "pair");
+	const json proxy = GuardForm(mesh, json{{"band_statistic", "force_weighted"}, {"collapse_guard_basis", "proxy"}}).model_description();
+	CHECK_FALSE(proxy["coefficient_law"]["controller"].contains("ef07"));
+	const json rms = GuardForm(mesh, json{{"band_statistic", "rms"}}).model_description();
+	CHECK_FALSE(rms["coefficient_law"]["controller"].contains("ef07"));
+	const json rms_default = GuardForm(mesh, json::object()).model_description();
+	CHECK_FALSE(rms_default["coefficient_law"]["controller"].contains("ef07"));
+}

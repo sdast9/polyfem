@@ -2,6 +2,8 @@
 
 Date: 2026-09-26. Status: implemented and measured as an opt-in experiment; strict adoption gates unmet; defaults unchanged.
 
+**Later (2026-09-28):** this mode loops on contact-dense scenes; see [EF-07](ef-07-trim-loop.md). By user decision it stays experimental, is exposed in Houdini as such, and always runs with `collapse_guard_basis: pair` (PolyFEM's default for this mode since then). Before the force-weighted mode can be considered for adoption it first needs an agreed accuracy standard for trajectory-sensitive scenes, and repeat evidence on dynamic scenes not used for tuning.
+
 ## Question
 
 Can an opt-in early estimate and a force-weighted proportional global band avoid

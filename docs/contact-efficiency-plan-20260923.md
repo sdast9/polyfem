@@ -301,3 +301,12 @@ EF-01 → EF-04 → EF-02 → EF-03 → EF-05 (EF-06 retired 2026-09-25) → EF-
 decision. EF-02, EF-03 and EF-05 change the retained controller or its inputs
 and stay opt-in; making any of them a default is the user's decision, with the
 EF-01 matrix as its evidence.
+
+**User decision 2026-09-28 (after EF-07).** The force-weighted band stays
+**experimental**; production `rms` is the recommended and default controller.
+It is exposed in the Houdini asset as an experimental choice. Whenever it is
+used, the EF-07 pair-basis guard (`collapse_guard_basis: pair`) is enforced:
+it is PolyFEM's default for the force-weighted band, and the asset always
+exports it (`proxy` remains only as an explicit, warned setting to reproduce
+the EF-02/03 records). **Standing condition:** Before the force-weighted mode can be considered for adoption it first needs an agreed accuracy standard for trajectory-sensitive scenes, and repeat evidence on dynamic scenes not used for tuning. This holds for every
+future proposal to adopt the force-weighted mode or make it a default.

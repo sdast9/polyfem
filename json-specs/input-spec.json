@@ -1810,10 +1810,10 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/collapse_guard_basis",
-        "default": "proxy",
+        "default": "pair",
         "type": "string",
-        "options": ["proxy", "pair"],
-        "doc": "EF-07 experiment (opt-in): gap the force band's downward guard is evaluated on. proxy (EF-02/03) = the collapse proxy sqrt(severity); pair = each collapse term on its own gap and threshold (the average against sqrt(trim_lower), the minimum pair against sqrt(trim_lower / 100))."
+        "options": ["pair", "proxy"],
+        "doc": "Only with band_statistic force_weighted (experimental): gap the force band's downward guard is evaluated on. pair (default since 2026-09-28, docs/ef-07-trim-loop.md) = each collapse term on its own gap and threshold (the average against sqrt(trim_lower), the minimum pair against sqrt(trim_lower / 100)); proxy = the EF-02/03 guard on the collapse proxy sqrt(severity), kept to reproduce the EF-02/03 records; it loops on contact-dense scenes and is warned about."
     },
     {
         "pointer": "/solver/contact/semi_implicit/collapse_guard_partial",

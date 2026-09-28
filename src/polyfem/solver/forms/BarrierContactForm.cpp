@@ -294,11 +294,16 @@ namespace polyfem::solver
 				force_trim_.interval = semi_implicit_opts.value("force_band_interval", force_trim_.interval);
 				force_trim_.seed_max_factor = semi_implicit_opts.value("initial_trim_max_factor", force_trim_.seed_max_factor);
 				force_trim_.seed_cosine = semi_implicit_opts.value("initial_trim_cosine", force_trim_.seed_cosine);
-				// EF-07 loop guards (opt-in experiment, docs/ef-07-trim-loop.md).
-				const auto basis = semi_implicit_opts.value("collapse_guard_basis", std::string("proxy"));
+				// EF-07 loop guards (docs/ef-07-trim-loop.md). The band's downward
+				// guard exists only in the force-weighted mode; there it is
+				// evaluated per collapse term (pair) unless the EF-02/03 proxy is
+				// requested explicitly (user decision 2026-09-28).
+				const auto basis = semi_implicit_opts.value("collapse_guard_basis", std::string("pair"));
 				if (basis != "proxy" && basis != "pair")
 					log_and_throw_error("semi_implicit.collapse_guard_basis must be proxy or pair");
-				loop_guard_.pair_guard = basis == "pair";
+				loop_guard_.pair_guard = force_weighted_controller_ && basis == "pair";
+				if (force_weighted_controller_ && basis == "proxy")
+					logger().warn("semi_implicit.collapse_guard_basis = proxy reproduces the EF-02/03 downward guard, which loops on contact-dense scenes (docs/ef-07-trim-loop.md); pair is the default for the force-weighted band");
 				loop_guard_.partial_guard = semi_implicit_opts.value("collapse_guard_partial", false);
 				loop_guard_.exclude_born = semi_implicit_opts.value("collapse_exclude_born", false);
 				loop_guard_.responsiveness_veto = semi_implicit_opts.value("collapse_responsiveness_veto", false);
