@@ -1,0 +1,30 @@
+=== Default fixture, single-threaded: refusal ===
+[2026-09-28 16:28:04.865] [polyfem] [error] Broad phase over trial step failed (Broad phase resource budget exceeded before allocation: HashGrid would need 65160487 candidate_emissions (limit 50000000); item pairs sharing a cell in one detect call before filtering and deduplication; 37739 vertex, 126321 edge and 89037 face items over a 9x8x9 grid of cell size 1.02146): trial Linf=0.98 (980 supports; clamp 1 -> swept Linf 0.98), median vertex sweep 0.98, 19240 vertices / 57768 edges / 38512 faces, broad phase HashGrid (budget: cell items 100000000, candidate emissions 50000000)
+[2026-09-28 16:28:05.118] [polyfem] [critical] Exit status 3 (resource limit; not a crash, the accepted steps on disk are intact).
+time: 
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:15.22
+	Maximum resident set size (kbytes): 1065076
+
+=== Budget fixture (max_candidate_emissions=70000000), 1 thread, 5/200 steps ===
+[2026-09-28 16:28:22.043] [polyfem] [info] Contact broad-phase resource limits (explicit): max_cell_items 100000000, max_candidate_emissions 70000000 (HashGrid)
+[2026-09-28 16:28:22.381] [polyfem] [info] Saving vtu to step_0.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:31:07.487] [polyfem] [info] Saving vtu to step_1.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:31:54.388] [polyfem] [info] Saving vtu to step_2.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:32:12.756] [polyfem] [info] Saving vtu to step_3.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:32:34.595] [polyfem] [info] Saving vtu to step_4.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:32:52.136] [polyfem] [info] Saving vtu to step_5.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+time: 
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 4:44.28
+	Maximum resident set size (kbytes): 1141944
+
+=== Budget fixture, 4 threads, 5/200 steps ===
+[2026-09-28 16:33:23.526] [polyfem] [info] Contact broad-phase resource limits (explicit): max_cell_items 100000000, max_candidate_emissions 70000000 (HashGrid)
+[2026-09-28 16:33:23.713] [polyfem] [info] Saving vtu to step_0.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:34:58.366] [polyfem] [info] Saving vtu to step_1.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:35:25.251] [polyfem] [info] Saving vtu to step_2.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:35:36.029] [polyfem] [info] Saving vtu to step_3.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:35:48.689] [polyfem] [info] Saving vtu to step_4.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+[2026-09-28 16:35:58.575] [polyfem] [info] Saving vtu to step_5.vtu; volume=true, surface=false, contact=true, points=false, wireframe=false
+time: 
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:56.05
+	Maximum resident set size (kbytes): 1383392
