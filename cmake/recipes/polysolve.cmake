@@ -23,7 +23,8 @@
 # the nonlinear source tree is unchanged from 448f1b8e. 6a8c2cc9 makes Armijo
 # (and RobustArmijo, Wolfe's fallback) refuse an uphill direction as a failed
 # search instead of asserting (ADAM directions are unscreened;
-# docs/armijo-uphill-direction-20260927.md in the PolySolve repository).
+# docs/armijo-uphill-direction-20260927.md in the PolySolve repository;
+# 43ca2e66 adds its CI result, docs only).
 # License: MIT
 
 if(TARGET polysolve)
@@ -33,4 +34,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#6a8c2cc9e6141a86476476cb685315a02d8f0ca7")
+CPMAddPackage("gh:sdast9/polysolve#43ca2e661069ba3971e16ec4c26969ea1f1d41cc")
