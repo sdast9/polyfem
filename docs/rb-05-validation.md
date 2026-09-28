@@ -643,3 +643,28 @@ peak RSS single- and 4-threaded. No default changed; see the plan's CI-05
 section and [ci-portability-plan.md](ci-portability-plan.md) for the full
 measurement and a recommended (not adopted) support policy.
 
+### Follow-up — fixture-specific budget published; reference mismatch found (2026-09-28)
+
+**User decision:** keep the automatic global default unchanged; carry the
+override only on the microstructure fixture itself, published to the data
+fork (`sdast9/polyfem-data@8e88613`, branch `fable-fixtures`,
+`contact/examples/3D/higher-order/microstructure.json` gains
+`solver/contact/CCD/resource_limits/max_candidate_emissions: 70000000`;
+nothing else changed) and pinned in `cmake/recipes/polyfem_data.cmake`
+(branch `cloud/locale-fix`). The global automatic default protecting
+ordinary scenes is untouched.
+
+Running the `triangle_data` ctest group on this pin (single-threaded, cloud
+Linux, with the locale fix from
+[docs/locale-log-formatting-20260928.md](locale-log-formatting-20260928.md)):
+the budget does what it was measured to do — no resource refusal, the scene
+runs — but the fixture's own reference comparison now **fails**
+(`err_l2` etc. ~0.9–1.6% relative error against the stored reference, well
+outside its `1e-5` margin), reproduced byte-identical across three
+independent fresh processes. **Not regenerated** per this session's
+instruction; see the CI-05 section of
+[docs/ci-portability-plan.md](ci-portability-plan.md#ci-05--resource-limit-rejects-the-microstructure-fixture)
+for the full numbers and next-step options. This does not change RB-05's
+scope or the global default; it is a new open question specific to this one
+fixture's reference under a bounded budget.
+
