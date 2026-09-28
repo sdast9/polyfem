@@ -1,0 +1,6 @@
+...
+
+The following tests FAILED:
+	229 - contact_2d (Failed)
+	362 - triangle_data (Failed)
+Errors while running CTest
