@@ -32,14 +32,14 @@ At the 13:54 UTC metadata snapshot, the most recent 100 PolyFEM workflow runs co
 
 ## 2. Recommended work order
 
-CI-01, CI-02 and CI-03 are **complete** (CI-01/02: native validation read on 2026-09-15; CI-03: 2026-09-21, see the implementation updates above). CI-04 through CI-09 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
+CI-01, CI-02 and CI-03 are **complete** (CI-01/02: native validation read on 2026-09-15; CI-03: 2026-09-21, see the implementation updates above). CI-04 is implemented and validated locally (2026-09-28, [record](ci-04-validation.md)); native validation is pending. CI-05 through CI-09 remain **open**; CI-07 carries two items handed over by RB-12. IDs are specific to this CI plan and do not rename the existing RB work.
 
 | Order / ID | Work | Completion evidence |
 | --- | --- | --- |
 | 1 / CI-01 | Repair GCC initialization and Windows test identifier | Both configurations compile on native GCC and MSVC |
 | 1 / CI-02 | Correct analytical floating-point expectations; apply pinned formatting | Focused tests pass on all three platforms; repository formatting check passes |
 | 2 / CI-03 | Make historical friction fixtures specify their intended policy — **complete 2026-09-21** | A/B comparison explains the new mismatches; historical and current-default coverage both pass ([record](ci-03-validation.md)) |
-| 2 / CI-04 | Repair mixed P1/P2 tetrahedral collision-surface extraction | Complete, valid surface and unchanged intended FE mapping; `standard` passes |
+| 2 / CI-04 | Repair mixed P1/P2 tetrahedral collision-surface extraction — **done in a cloud session 2026-09-28, branch `cloud/ci-04`; native lanes pending** | Complete, valid surface and unchanged intended FE mapping; `standard` passes ([record](ci-04-validation.md)) |
 | 2 / CI-05 | Reconcile the microstructure workload with resource protection | Measured resource profile, successful supported run, and preserved budget-refusal coverage |
 | 2 / CI-06 | Resolve the GCP cube-on-floor reference contract | Repeated, controlled comparison with justified reference policy |
 | 3 / CI-07 | Close workflow and platform-coverage gaps | Active fork branches tested; common public integration tests run on each OS |
@@ -121,7 +121,9 @@ Coordinate the explanation and validation with [RB-10](rb-10-validation.md). Thi
 
 ### CI-04 — Mixed P1/P2 tetrahedral contact boundary
 
-**Confirmed extraction rejection; repair not implemented.** `standard` fails on `multi-material/stretch-cubes.json`. The log reports **437 of 7,610 boundary faces skipped**, with a P2 tetrahedron having **five owned face nodes**. The fixture assigns orders 1, 2, and 1 to its three material regions. This is a mixed-order tetrahedral problem, distinct from the documented Q3 hexahedral defect.
+**Implementation update, 2026-09-28 ([record](ci-04-validation.md), branch `cloud/ci-04`):** the default extraction now tessellates P2 tet boundary faces whose edge nodes are stitched to a P1 neighbor (each stitched node is exactly ½·v_a + ½·v_b, so the edge stays straight and conforms to the P1 face). Every surface vertex is still an FE node and the identity map is unchanged. No proxy or routing change was needed. On the fixture, 0 of 7,610 faces are now skipped (437 before), the surface is closed, manifold, χ = 2 and intersection-free, map rows are exact selectors, and the FE field along stitched edges matches the straight edge to 1e-12. The 20-step contact solve completes, and `standard` passes locally (Linux GCC 13.3 Release). Pure P1/P2 tet, Q1/Q2 hex and the five smoke scenes are byte-identical. Stitched nodes of order ≥ 3 are still refused with a named reason. Native lanes are the remaining evidence.
+
+**Original finding: confirmed extraction rejection.** `standard` fails on `multi-material/stretch-cubes.json`. The log reports **437 of 7,610 boundary faces skipped**, with a P2 tetrahedron having **five owned face nodes**. The fixture assigns orders 1, 2, and 1 to its three material regions. This is a mixed-order tetrahedral problem, distinct from the documented Q3 hexahedral defect.
 
 In [OutData.cpp](../src/polyfem/io/OutData.cpp), the simplex extraction path omits basis entries whose `global().size() != 1`, then only triangulates 3, 6, 10, or 15 owned nodes. The new completeness check correctly refuses the resulting partial surface. Earlier success with missing collision faces is not an acceptable reference implementation.
 
