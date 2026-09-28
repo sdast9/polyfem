@@ -429,6 +429,10 @@ if(POLYFEM_TOPLEVEL_PROJECT)
         set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME}_bin)
     endif()
 
+    # CI-08: install rules + CPack packaging for the PolyFEM_bin CLI alone
+    # (does not affect the ordinary developer build; see the module).
+    include(polyfem_cli_package)
+
     if(POLYFEM_BUILD_DOCS)
         # check if Doxygen is installed
         find_package(Doxygen)
