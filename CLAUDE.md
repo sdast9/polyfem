@@ -15,6 +15,11 @@ is missing, then:
 The first build downloads every dependency and takes a long time; later builds
 are incremental (ccache). Run long builds and suites in the background.
 
+Run the semi-implicit scenes end to end and get one aggregate pass/fail status
+with `tools/smoke/run_smoke.py --binary build-cloud/PolyFEM_bin --output <fresh
+dir>` (standard library only; see `tools/smoke/README.md`). This is CI-09's
+portable replacement for the developer-only `run-smoke.sh`.
+
 Dependencies are pinned by SHA in `cmake/recipes/`: `polysolve.cmake` →
 `sdast9/polysolve` (work branch `iteration-callback`), `ipc_toolkit.cmake` →
 `sdast9/ipc-toolkit` (work branch `semi-implicit-stiffness`),
