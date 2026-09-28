@@ -117,16 +117,43 @@ factor. On the pair's own gap against its own threshold `sqrt(trim_lower/100)`
 softenings.
 
 **3. The pinched pair does not respond to the trim.** In every control-state
-resume the minimum gap is set by the same edge-edge pair (full vertex ids
-42242, 56495, 107873, 193974; all below the knit's 216,492 nodes under
-geometry-order numbering, so knit self-contact; its geometry was not
-inspected). It stayed the minimum across 44 of 47 trim moves (R1) and 73 of 77
+resume the minimum gap is set by the same edge-edge pair A (PolyFEM node ids
+42242–193974 × 56495–107873, both knit edges of ~40 µm; see point 3a). It
+stayed the minimum across 44 of 47 trim moves (R1) and 73 of 77
 (c0), and was born in the current iteration in only 2–12 % of records. Its gap
 by trim decade in R1: 0.055–0.061 at trim 1, 0.061–0.065 at 10, 0.065–0.066 at
 100, 0.066–0.068 at 1e3–1e5. A global trim scales every contact's force
 alike, so a pair squeezed between other contacts is not opened by it. Across
 stall restarts the in-solve 256× climb budget is re-anchored at each refresh,
-which is how R1 reached 6e5 (1.1e6× the step start).
+which is how R1 reached 6e5 (1.1e6× the step start). On R0's trajectory the
+pinned pair at steps 31–32 is a different one, pair B (90823–199920 ×
+122379–166336), the minimum in 485 of 502 records of the rms resume and 981 of
+1,471 of the partial-guard resume.
+
+**3a. The pinned pairs are not held by boundary conditions.** One resumed
+step 31 (`ef07-work/bc-probe/`, `ef07-b`, rms) exported PolyFEM's node
+positions and displacement in its internal numbering, which the pair ids use
+(the `.msh` vertex order is different: in it the same ids are millimetres
+apart). Nodes with exactly zero displacement are the clamped ones (18,218, the
+knit rim of sideset 10010101); the 988 ball nodes move with the prescribed cap.
+All eight nodes of pairs A and B are free, about 4.8 mm from the nearest
+clamped node, 0.55 mm (A) and 0.61 mm (B) from the nearest ball node, and
+carried about 3.0–3.1 mm by the push (knit median 1.1 mm). After step 31 their
+edge-edge gaps are 0.18 d̂ (A) and 0.12 d̂ (B). They are knit self-contact in
+the region the ball drags furthest, consistent with a yarn squeezed between
+neighbouring contacts; the surrounding geometry was not inspected.
+
+PolyFEM's forward solve builds its collision mesh from the whole boundary
+surface, without Dirichlet filtering, and leaves IPC's `can_collide` at its
+default (every primitive may collide with every other); only remeshing and
+shape optimization set a filter. So contacts between clamped primitives, or
+between a clamped and a free one, are built and evaluated: their forces on
+clamped degrees of freedom drop out of the solve, but they enter the trim
+controller's gap statistics. They did not drive this loop: in all 18,069
+trim-predictor records with the minimum-pair field (13 ball-burst runs), the
+minimum-gap pair had no clamped node. A pair of clamped primitives cannot
+respond to the trim, so one setting the minimum would cause the same kind of
+loop; how much they shift the band statistics was not measured.
 
 **4. Neither the estimate nor born-this-iteration pairs drive it.** The
 estimate moved the trim at most once per step in every run (while pending it
@@ -270,3 +297,6 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
   EF-07.
 * Opt-in `coefficient-events.jsonl` (physical diagnostics) grows past 10 GB
   per ball-burst step; it filled the disk once during this work.
+* Contacts between clamped primitives are part of the collision set and of
+  the controller's gap statistics (point 3a). Not a cause here; excluding them
+  from the statistics (or from the collision set) would be a separate change.
