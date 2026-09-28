@@ -81,10 +81,33 @@ of the shared build. The adjoint derivative is unchanged (404239.98534 before,
 1e-6 moved from 404242.13 to 404222.51, so the relative error is 4.3e-5
 against upstream PolyFEM's tolerance 1.1e-5 (5.3e-6 before). Upstream PolyFEM
 still pins IPC `b40e9c07`, 27 commits before the merged `869e489e`, so its
-tolerance was tuned without these IPC changes. Open: whether the forward
-solves' change is benign finite-difference sensitivity or a defect (a
-step-size study and the triplet/MeshFEMSparse toggle would tell); no tolerance
-has been changed.
+tolerance was tuned without these IPC changes.
+
+**Characterized (2026-09-28): finite-difference noise, not a derivative
+defect.** A step study on the isolated `6570e0410` build (same scene, seed and
+directions; `bisect/fd-step-study.patch`, uncommitted) shows:
+
+* truncation error falling as about 2.5e5 h² (2.5e-4 at h = 1e-5, 2.3e-5 at
+  3e-6), and below h ≈ 1e-6 a noise floor from the forward solves scattering
+  the relative error by up to ±4e-5;
+* the test's step is `float(1e-6)` = 9.99999997e-7. At exactly 1e-6 the
+  difference agrees to 3.1e-6 (passes), at the float step it is off by
+  4.3e-5, and at 3e-7 it agrees to 4.4e-8;
+* with the forward solve's gradient tolerance tightened from 2.5e-10 to
+  2.5e-11 or 2.5e-12, the test's step agrees to 3.4e-6 (passes);
+* the other two random directions have 40–150× larger derivatives and agree
+  to 1e-9 – 1e-6 at every step near 1e-6;
+* with IPC's `IPC_TOOLKIT_WITH_MESHFEM_SPARSE=OFF` (triplet assembly) the
+  merged IPC reproduces the pre-merge derivative and finite difference
+  bit-for-bit (404239.98533951573 / 404242.13287967740) and the test passes;
+  the triplet curve has the same noise scatter below 1e-6.
+
+So MeshFEMSparse's summation order changes roundoff in the forward solves, and
+the test, whose trial 0 sits at the crossover of truncation and noise with a
+1.1e-5 tolerance, draws an unlucky value. The adjoint derivative agrees with
+well-conditioned differences to 4e-8. The test is left failing pending the
+user's choice (tighten its forward tolerance, or keep it as a known failure);
+no tolerance has been changed.
 
 The smokes are byte-identical because the statistic enters the solution only
 through discrete trim decisions and none changed on them. At the friction
