@@ -22,6 +22,14 @@ namespace polyfem::solver
 		inline double lagrangian_weight() const { return k_al_; }
 		/// @brief RB-06: the multipliers (read-only, for state fingerprints and tests).
 		inline const Eigen::VectorXd &lagrange_multipliers() const { return lagr_mults_; }
+		/// @brief Restart: put back the multipliers saved with a state file
+		///        (they persist across steps, see State). The caller checks
+		///        the size.
+		inline void set_lagrange_multipliers(const Eigen::VectorXd &mults)
+		{
+			assert(mults.size() == lagr_mults_.size());
+			lagr_mults_ = mults;
+		}
 
 		inline const StiffnessMatrix &constraint_matrix() const { return A_; }
 		inline const Eigen::MatrixXd &constraint_value() const { return b_; }

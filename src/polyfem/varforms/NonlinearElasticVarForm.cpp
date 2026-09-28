@@ -1675,18 +1675,60 @@ namespace polyfem::varform
 
 	void NonlinearElasticVarForm::save_restart_form_state(const std::string &state_path) const
 	{
+		// Each step's AL stage starts from the multipliers the previous step
+		// left (they are never reset between steps), so they are history: a
+		// resumed run that starts them at zero begins its first step from a
+		// different objective.
+		io::write_matrix(state_path, "al_scalars", Eigen::MatrixXd(Eigen::MatrixXd::Constant(1, 1, double(solve_data_.al_form.size()))), /*replace=*/false);
+		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+		{
+			const Eigen::VectorXd &mults = solve_data_.al_form[i]->lagrange_multipliers();
+			if (mults.size() > 0)
+				io::write_matrix(state_path, fmt::format("al_multipliers_{}", i), Eigen::MatrixXd(mults), /*replace=*/false);
+		}
 		if (solve_data_.contact_form)
 			solve_data_.contact_form->write_restart_state(state_path);
 		if (solve_data_.friction_form)
 			solve_data_.friction_form->write_restart_state(state_path);
 	}
 
+	void NonlinearElasticVarForm::restore_restart_multipliers(const std::string &state_path)
+	{
+		Eigen::MatrixXd count;
+		if (!io::read_matrix(state_path, "al_scalars", count))
+		{
+			logger().warn(
+				"Restart state {} has no augmented-Lagrangian multipliers (written before they were saved); they start at zero, so the run will not continue the saved one exactly.",
+				state_path);
+			return;
+		}
+		if (count.size() != 1 || size_t(count(0)) != solve_data_.al_form.size())
+			log_and_throw_error(
+				"Restart state {}: {} augmented-Lagrangian forms saved, this run has {}",
+				state_path, count.size() == 1 ? count(0) : -1.0, solve_data_.al_form.size());
+		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+		{
+			auto &form = *solve_data_.al_form[i];
+			if (form.lagrange_multipliers().size() == 0)
+				continue;
+			Eigen::MatrixXd mults;
+			if (!io::read_matrix(state_path, fmt::format("al_multipliers_{}", i), mults) || mults.size() != form.lagrange_multipliers().size())
+				log_and_throw_error(
+					"Restart state {}: al_multipliers_{} is missing or not {} entries",
+					state_path, i, form.lagrange_multipliers().size());
+			form.set_lagrange_multipliers(Eigen::Map<const Eigen::VectorXd>(mults.data(), mults.size()));
+		}
+	}
+
 	void NonlinearElasticVarForm::restore_restart_form_state(const Eigen::MatrixXd &sol)
 	{
 		const std::string state = args["input"]["data"]["state"];
-		if (state.empty() || !solve_data_.contact_form)
+		if (state.empty())
 			return;
 		const std::string state_path = resolve_input_path(state);
+		restore_restart_multipliers(state_path);
+		if (!solve_data_.contact_form)
+			return;
 		if (!solve_data_.contact_form->read_restart_state(state_path, sol.col(0)))
 		{
 			logger().warn(

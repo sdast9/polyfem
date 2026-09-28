@@ -169,6 +169,11 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	args["/output/data/state"_json_pointer] = "state_{:d}.hdf5";
 	args["/output/restart_json"_json_pointer] = "restart_{:d}.json";
 	args["/solver/contact/barrier_stiffness"_json_pointer] = semi_implicit ? "semi_implicit" : "adaptive";
+	// The fixed face jumps 0.2 up in step 1 and again in step 4, more than
+	// an element height each, so those steps cannot snap onto it and run
+	// AL passes: the multipliers of step 1 are carried to the restart step
+	// and enter the first resumed step's AL stage.
+	args["/boundary_conditions/dirichlet_boundary/value"_json_pointer] = json::array({0, "if(t - 0.15, 0.2, 2*t) + if(t - 0.35, 0.2, 0)", 0});
 	if (semi_implicit)
 		args["/contact/friction_coefficient"_json_pointer] = 0.3;
 
@@ -195,6 +200,13 @@ TEST_CASE("restart from restart json", "[.][restart]")
 		CHECK(io::read_matrix(state, "contact_scalars", saved));
 		CHECK(io::read_matrix(state, "contact_si_scalars", saved) == semi_implicit);
 		CHECK(io::read_matrix(state, "friction_scalars", saved) == semi_implicit);
+		// The augmented-Lagrangian multipliers carry across steps; nonzero
+		// here, or the resume below would not test restoring them.
+		REQUIRE(io::read_matrix(state, "al_scalars", saved));
+		REQUIRE(saved.size() == 1);
+		REQUIRE(saved(0) >= 1);
+		REQUIRE(io::read_matrix(state, "al_multipliers_0", saved));
+		CHECK(saved.norm() > 0);
 	}
 
 	restart_args["/output/directory"_json_pointer] = restart_outdir.string();
@@ -210,6 +222,18 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	CHECK(full_sol.rows() == restart_sol.rows());
 	CAPTURE((full_sol - restart_sol).lpNorm<Eigen::Infinity>());
 	CHECK(full_sol.isApprox(restart_sol, margin));
+
+	// The first resumed step continues the saved state exactly: its step
+	// time is the same number, so every input of that solve is restored
+	// history or rebuilt from it (the AL multipliers included).
+	{
+		const std::string name = fmt::format("state_{:d}.hdf5", restart_step + 1);
+		Eigen::MatrixXd full_u, restart_u;
+		REQUIRE(io::read_matrix((full_outdir / name).string(), "u", full_u));
+		REQUIRE(io::read_matrix((restart_outdir / name).string(), "u", restart_u));
+		CAPTURE((full_u - restart_u).lpNorm<Eigen::Infinity>());
+		CHECK(full_u == restart_u);
+	}
 
 	// Frame i of the PVD is at i * dt, including the frames before the restart.
 	std::ifstream pvd_file(restart_outdir / "sim.pvd");

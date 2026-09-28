@@ -102,8 +102,9 @@ binaries and in the cross-resume. The restart record measured roundoff
 (1e-15) on the unrefined scene. On the refined scene the lagged friction does
 not converge in any step: "Lagging failed to converge with 2 iteration(s)"
 reports grad norms from 25 to 158 against a tolerance of 2e-3, and CHOLMOD
-reports indefinite matrices. The cause of the resume difference was not
-investigated; it is recorded here as an open observation.
+reports indefinite matrices. Resolved 2026-09-28: the restart state did not
+hold the augmented-Lagrangian multipliers, which carry across steps; see
+[restart-al-multipliers-20260928.md](restart-al-multipliers-20260928.md).
 
 **Published commit (rebased, compression pinned), `PolyFEM_bin-final`:**
 

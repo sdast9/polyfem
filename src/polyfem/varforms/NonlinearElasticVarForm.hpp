@@ -69,9 +69,13 @@ namespace polyfem::varform
 
 	protected:
 		void save_restart_form_state(const std::string &state_path) const override;
-		/// @brief Restart: restore the contact stiffness state saved with the
-		///        input state file, at the restored solution sol.
+		/// @brief Restart: restore the augmented-Lagrangian multipliers and
+		///        the contact stiffness state saved with the input state file,
+		///        at the restored solution sol.
 		void restore_restart_form_state(const Eigen::MatrixXd &sol);
+		/// @brief Restart: the augmented-Lagrangian multipliers (warns when
+		///        the file predates them).
+		void restore_restart_multipliers(const std::string &state_path);
 		void reset() override;
 		void load_mesh(const mesh::Mesh &mesh, const json &args) override;
 		void build_basis(mesh::Mesh &mesh, const bool iso_parametric, const json &args) override;

@@ -152,3 +152,11 @@ On large meshes each state file was mostly unused chunk space (4.0 GB per step
 on the 652,440-DOF ball-burst scene). The HDF5 matrix writer now sizes its
 chunks to the data, and resume behavior is unchanged; see
 [state-file-chunks-20260927.md](state-file-chunks-20260927.md).
+
+## Follow-up: augmented-Lagrangian multipliers
+
+The Dirichlet AL multipliers also carry across steps and were missing from
+the state file; a resume lost them whenever the restart step's AL stage had
+run passes (the refined smoke scene: 3.2e-4 at the end). They are saved and
+restored since 2026-09-28; see
+[restart-al-multipliers-20260928.md](restart-al-multipliers-20260928.md).
