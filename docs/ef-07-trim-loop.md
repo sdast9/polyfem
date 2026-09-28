@@ -307,8 +307,18 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
 
 * The cause of the production controller's R4 improvement since EF-02/03 was
   not isolated.
-* IT's run-to-run irreproducibility on this host (single-threaded) is outside
-  EF-07.
+* IT's run-to-run irreproducibility on this host (single-threaded): **cause
+  found 2026-09-28** ([record](it-reproducibility-20260928.md)).
+  `Eigen::AccelerateLDLT`'s internal threads ignore `--max_threads` and are
+  not bitwise deterministic, so identical runs differ from step 1 at 1e-16.
+  Loose descent-test stops then amplify this from step 12 (first stiff
+  contact solve), and the contact trajectory carries it to 17.7 %. With
+  `VECLIB_MAXIMUM_THREADS=1` or CHOLMOD, 200-step repeats are bit-identical,
+  so nothing else in single-threaded runs is nondeterministic. The fix
+  (set the variable when `max_threads == 1`) is proposed, and the user's
+  decision is pending. Even deterministic, two roundoff realizations differ by
+  up to 23.5 % and 3,807 vs 6,385 iterations, so the IT cross comparisons
+  above stay unassessable pairwise.
 * Opt-in `coefficient-events.jsonl` (physical diagnostics) grows past 10 GB
   per ball-burst step; it filled the disk once during this work.
 * Contacts between clamped primitives are part of the collision set and of
