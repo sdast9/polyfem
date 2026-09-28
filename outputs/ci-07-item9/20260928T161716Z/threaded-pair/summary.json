@@ -1,0 +1,725 @@
+{
+ "binary": "/home/user/polyfem/build-cloud/PolyFEM_bin",
+ "binary_sha256": "67ae71090ecae5f3171b1385c9fb8e31e3b576a429df70ca5bdf72f31c205713",
+ "repeats": 2,
+ "roundoff": 1e-12,
+ "threads": [
+  "default"
+ ],
+ "fixtures": [
+  "quasistatic-semi"
+ ],
+ "cells": {
+  "quasistatic-semi--threads-default": {
+   "fixture": "quasistatic-semi",
+   "threads": "default",
+   "runs": [
+    {
+     "exit": 0,
+     "wall_seconds": 10.21866104399669,
+     "timed_out": false,
+     "run_id": "2026-09-28T16:19:47Z-12999-4160b837",
+     "executable_sha256": "67ae71090ecae5f3171b1385c9fb8e31e3b576a429df70ca5bdf72f31c205713",
+     "effective_sha256": "b733fe5322462f4bc78a24258747b44c8afc4ff0280bd8841db66871e81c3e93",
+     "effective_sha256_without_paths": "ad8c5fc18317b1f96019b4ca6c2e61e64565120d53bbe6c83e17611224bfa70a",
+     "threads_effective": 4,
+     "status": "completed",
+     "peak_rss_mb": 180.3046875,
+     "sources": {
+      "ipc_toolkit": {
+       "commit": "cf99893be74fe296e6b771b8e22ba4562942e77e",
+       "dirty": false,
+       "patch_sha256": null
+      },
+      "polyfem": {
+       "commit": "7b9e44526ff227dfd748496fab9002d0d33ed1a8",
+       "dirty": false,
+       "patch_sha256": null
+      },
+      "polysolve": {
+       "commit": "43ca2e661069ba3971e16ec4c26969ea1f1d41cc",
+       "dirty": false,
+       "patch_sha256": null
+      }
+     },
+     "history": [
+      {
+       "step": 1,
+       "outcome": "accepted",
+       "iterations": [
+        9
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Relative gradient vector too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 2.0,
+       "refresh_id": 2,
+       "active_count": 45,
+       "batch_median": 7414120668568.912,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 0,
+       "fresh": 54,
+       "candidates_last": 754,
+       "candidates_max": 978,
+       "candidate_builds": 11
+      },
+      {
+       "step": 2,
+       "outcome": "accepted",
+       "iterations": [
+        6
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Gradient vector norm too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 4.0,
+       "refresh_id": 4,
+       "active_count": 47,
+       "batch_median": 7414120668568.912,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 45,
+       "fresh": 0,
+       "candidates_last": 512,
+       "candidates_max": 922,
+       "candidate_builds": 8
+      },
+      {
+       "step": 3,
+       "outcome": "accepted",
+       "iterations": [
+        6
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Gradient vector norm too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 8.0,
+       "refresh_id": 6,
+       "active_count": 46,
+       "batch_median": 7414120668568.912,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 47,
+       "fresh": 0,
+       "candidates_last": 406,
+       "candidates_max": 904,
+       "candidate_builds": 8
+      },
+      {
+       "step": 4,
+       "outcome": "accepted",
+       "iterations": [
+        5
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Relative gradient vector too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 8.0,
+       "refresh_id": 8,
+       "active_count": 46,
+       "batch_median": 7414120668568.912,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 46,
+       "fresh": 0,
+       "candidates_last": 389,
+       "candidates_max": 904,
+       "candidate_builds": 7
+      }
+     ],
+     "output_json": {
+      "num_threads": 4,
+      "peak_memory_mb": 180,
+      "time_solving": 2.06206,
+      "num_dofs": 387,
+      "num_bases": 129,
+      "num_vertices": 125
+     },
+     "physical": [
+      {
+       "step": 1,
+       "outcome": "accepted",
+       "elastic_energy": 11464.638203515366,
+       "barrier_energy": 53.74929081508573,
+       "kinetic_energy": null,
+       "free_residual_norm": 4.646708344709478e-05,
+       "min_det_F": 0.9735930005887271,
+       "support_work_increment": 33672.35789351894,
+       "external_work_increment": 33672.35789351894,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        2.7834845539552424e-11,
+        -6.00930416535386e-12,
+        4.6460991143248975e-05
+       ],
+       "reaction_fe_sum": [
+        3.8198777474462986e-11,
+        -1.6370904631912708e-11,
+        -538757.7262963031
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 4.902708560734491e-11,
+       "peak_external_force": 947783.9213051937,
+       "peak_rss_bytes": 189063168
+      },
+      {
+       "step": 2,
+       "outcome": "accepted",
+       "elastic_energy": 71797.96870066902,
+       "barrier_energy": 166.5369445742573,
+       "kinetic_energy": null,
+       "free_residual_norm": 6.59266254914559e-07,
+       "min_det_F": 0.9351471385054038,
+       "support_work_increment": 88400.56918504271,
+       "external_work_increment": 88400.56918504271,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        -2.144319166674301e-10,
+        2.580760050107721e-10,
+        1.7655984265729785e-06
+       ],
+       "reaction_fe_sum": [
+        8.003553375601768e-11,
+        -3.637978807091713e-11,
+        -1414409.1069606834
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 2.691510277839163e-13,
+       "peak_external_force": 2449428.7105001905,
+       "peak_rss_bytes": 189063168
+      },
+      {
+       "step": 3,
+       "outcome": "accepted",
+       "elastic_energy": 191292.31411087565,
+       "barrier_energy": 263.34607337345335,
+       "kinetic_energy": null,
+       "free_residual_norm": 1.3174205512969044e-07,
+       "min_det_F": 0.8962795855328367,
+       "support_work_increment": 152180.2061944464,
+       "external_work_increment": 152180.2061944464,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        -3.6770888556245054e-09,
+        3.7207428249527665e-09,
+        4.959292709827423e-07
+       ],
+       "reaction_fe_sum": [
+        1.4551915228366852e-11,
+        2.9103830456733704e-11,
+        -2434883.2991111423
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 3.180562204029178e-14,
+       "peak_external_force": 4142099.6251165234,
+       "peak_rss_bytes": 189063168
+      },
+      {
+       "step": 4,
+       "outcome": "accepted",
+       "elastic_energy": 379759.1862212056,
+       "barrier_energy": 501.3671372179644,
+       "kinetic_energy": null,
+       "free_residual_norm": 2.1181354146518974e-05,
+       "min_det_F": 0.8571425451096358,
+       "support_work_increment": 227407.0127315599,
+       "external_work_increment": 227407.0127315599,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        -2.9629735229796954e-06,
+        -2.9707736293183014e-06,
+        -2.5892426492646337e-05
+       ],
+       "reaction_fe_sum": [
+        -2.9668735805898905e-06,
+        -2.9668735805898905e-06,
+        -3638512.2037049583
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 3.492533972633238e-12,
+       "peak_external_force": 6064752.501333305,
+       "peak_rss_bytes": 189063168
+      }
+     ],
+     "error_lines": 0,
+     "stopped": null,
+     "input_sha256": {
+      "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+      "params.json": "3ff6309d44a59b6c086f6e971822e096f16034d6d7bb612f810c54b6421dc798",
+      "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+     }
+    },
+    {
+     "exit": 0,
+     "wall_seconds": 9.508475329999783,
+     "timed_out": false,
+     "run_id": "2026-09-28T16:19:57Z-13007-19ed5eea",
+     "executable_sha256": "67ae71090ecae5f3171b1385c9fb8e31e3b576a429df70ca5bdf72f31c205713",
+     "effective_sha256": "7c22cb59833584e21153c861494efcbf1f430514455b640185c16565c7a0d926",
+     "effective_sha256_without_paths": "ad8c5fc18317b1f96019b4ca6c2e61e64565120d53bbe6c83e17611224bfa70a",
+     "threads_effective": 4,
+     "status": "completed",
+     "peak_rss_mb": 196.1875,
+     "sources": {
+      "ipc_toolkit": {
+       "commit": "cf99893be74fe296e6b771b8e22ba4562942e77e",
+       "dirty": false,
+       "patch_sha256": null
+      },
+      "polyfem": {
+       "commit": "7b9e44526ff227dfd748496fab9002d0d33ed1a8",
+       "dirty": false,
+       "patch_sha256": null
+      },
+      "polysolve": {
+       "commit": "43ca2e661069ba3971e16ec4c26969ea1f1d41cc",
+       "dirty": false,
+       "patch_sha256": null
+      }
+     },
+     "history": [
+      {
+       "step": 1,
+       "outcome": "accepted",
+       "iterations": [
+        9
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Relative gradient vector too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 2.0,
+       "refresh_id": 2,
+       "active_count": 46,
+       "batch_median": 7414120668567.311,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 0,
+       "fresh": 54,
+       "candidates_last": 754,
+       "candidates_max": 978,
+       "candidate_builds": 11
+      },
+      {
+       "step": 2,
+       "outcome": "accepted",
+       "iterations": [
+        6
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Gradient vector norm too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 4.0,
+       "refresh_id": 4,
+       "active_count": 46,
+       "batch_median": 7414120668567.311,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 46,
+       "fresh": 0,
+       "candidates_last": 512,
+       "candidates_max": 922,
+       "candidate_builds": 8
+      },
+      {
+       "step": 3,
+       "outcome": "accepted",
+       "iterations": [
+        6
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Gradient vector norm too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 8.0,
+       "refresh_id": 6,
+       "active_count": 45,
+       "batch_median": 7414120668567.311,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 46,
+       "fresh": 0,
+       "candidates_last": 406,
+       "candidates_max": 904,
+       "candidate_builds": 8
+      },
+      {
+       "step": 4,
+       "outcome": "accepted",
+       "iterations": [
+        5
+       ],
+       "types": [
+        "rc"
+       ],
+       "reasons": [
+        "Relative gradient vector too small"
+       ],
+       "restarts": 0,
+       "unchanged_restarts": 0,
+       "stall_retunes": 0,
+       "lagging": "not applicable",
+       "trim": 8.0,
+       "refresh_id": 8,
+       "active_count": 47,
+       "batch_median": 7414120668567.311,
+       "fallbacks": [
+        0,
+        0,
+        0,
+        0
+       ],
+       "continued": 45,
+       "fresh": 0,
+       "candidates_last": 389,
+       "candidates_max": 904,
+       "candidate_builds": 7
+      }
+     ],
+     "output_json": {
+      "num_threads": 4,
+      "peak_memory_mb": 196,
+      "time_solving": 1.851295,
+      "num_dofs": 387,
+      "num_bases": 129,
+      "num_vertices": 125
+     },
+     "physical": [
+      {
+       "step": 1,
+       "outcome": "accepted",
+       "elastic_energy": 11464.638203515364,
+       "barrier_energy": 53.749290815087406,
+       "kinetic_energy": null,
+       "free_residual_norm": 4.646691893056114e-05,
+       "min_det_F": 0.9735930005887271,
+       "support_work_increment": 33672.35789351888,
+       "external_work_increment": 33672.35789351888,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        -4.4045123104300487e-10,
+        4.604612247050339e-10,
+        4.6461966121569276e-05
+       ],
+       "reaction_fe_sum": [
+        1.0913936421275139e-10,
+        -8.913048077374697e-11,
+        -538757.726296302
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 4.902691202713336e-11,
+       "peak_external_force": 947783.921305192,
+       "peak_rss_bytes": 205717504
+      },
+      {
+       "step": 2,
+       "outcome": "accepted",
+       "elastic_energy": 71797.96870066898,
+       "barrier_energy": 166.5369445742628,
+       "kinetic_energy": null,
+       "free_residual_norm": 6.589499227006666e-07,
+       "min_det_F": 0.9351471385054038,
+       "support_work_increment": 88400.5691850428,
+       "external_work_increment": 88400.5691850428,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        4.0933478828773755e-11,
+        -5.548628223556031e-11,
+        1.7640995793044567e-06
+       ],
+       "reaction_fe_sum": [
+        1.6007106751203537e-10,
+        -1.7462298274040222e-10,
+        -1414409.1069606848
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 2.6902188248054933e-13,
+       "peak_external_force": 2449428.7105001938,
+       "peak_rss_bytes": 205717504
+      },
+      {
+       "step": 3,
+       "outcome": "accepted",
+       "elastic_energy": 191292.31411087574,
+       "barrier_energy": 263.34607337346245,
+       "kinetic_energy": null,
+       "free_residual_norm": 1.332443376318944e-07,
+       "min_det_F": 0.8962795855328367,
+       "support_work_increment": 152180.20619444648,
+       "external_work_increment": 152180.20619444648,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        -1.896260926069196e-11,
+        -2.4702906387025297e-11,
+        5.026813596487045e-07
+       ],
+       "reaction_fe_sum": [
+        2.1827872842550278e-11,
+        -6.548361852765083e-11,
+        -2434883.2991111437
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 3.216830827147137e-14,
+       "peak_external_force": 4142099.625116525,
+       "peak_rss_bytes": 205717504
+      },
+      {
+       "step": 4,
+       "outcome": "accepted",
+       "elastic_energy": 379759.18622120563,
+       "barrier_energy": 501.36713721797986,
+       "kinetic_energy": null,
+       "free_residual_norm": 2.118180846432783e-05,
+       "min_det_F": 0.8571425451096358,
+       "support_work_increment": 227407.01273155992,
+       "external_work_increment": 227407.01273155992,
+       "frictional_dissipation_increment": 0.0,
+       "reaction_sum": [
+        -2.9657971616359174e-06,
+        -2.967979106927034e-06,
+        -2.5900022592395544e-05
+       ],
+       "reaction_fe_sum": [
+        -2.96669895760715e-06,
+        -2.9670773074030876e-06,
+        -3638512.203704959
+       ],
+       "physical_balance_pass": true,
+       "free_residual_ratio": 3.492608883820257e-12,
+       "peak_external_force": 6064752.501333306,
+       "peak_rss_bytes": 205717504
+      }
+     ],
+     "error_lines": 0,
+     "stopped": null,
+     "input_sha256": {
+      "cube.mesh": "1ddc87580f798f393895f58c0c752369a1b8473228757958c92bbff21aa91132",
+      "params.json": "3ff6309d44a59b6c086f6e971822e096f16034d6d7bb612f810c54b6421dc798",
+      "slab.obj": "d185a11a78a40d5f76a313a8e1cced9a7354d6fb4a445d6ce721d8aa51e6c498"
+     }
+    }
+   ],
+   "comparison": {
+    "runs": 2,
+    "completed": 2,
+    "distinct_histories": 1,
+    "identical_executable": true,
+    "identical_effective_input": true,
+    "wall_seconds": [
+     10.21866104399669,
+     9.508475329999783
+    ],
+    "peak_rss_mb": [
+     180.3046875,
+     196.1875
+    ],
+    "same_history_max_abs_du": 0.0,
+    "branch_divergences": [],
+    "violations": [],
+    "discrete_spread": [
+     {
+      "step": 1,
+      "active_count": [
+       45,
+       46
+      ],
+      "continued": [
+       0,
+       0
+      ],
+      "fresh": [
+       54,
+       54
+      ],
+      "candidates_last": [
+       754,
+       754
+      ],
+      "candidate_builds": [
+       11,
+       11
+      ],
+      "trim": [
+       2.0,
+       2.0
+      ],
+      "iterations_total": [
+       9,
+       9
+      ]
+     },
+     {
+      "step": 2,
+      "active_count": [
+       46,
+       47
+      ],
+      "continued": [
+       45,
+       46
+      ],
+      "fresh": [
+       0,
+       0
+      ],
+      "candidates_last": [
+       512,
+       512
+      ],
+      "candidate_builds": [
+       8,
+       8
+      ],
+      "trim": [
+       4.0,
+       4.0
+      ],
+      "iterations_total": [
+       6,
+       6
+      ]
+     },
+     {
+      "step": 3,
+      "active_count": [
+       45,
+       46
+      ],
+      "continued": [
+       46,
+       47
+      ],
+      "fresh": [
+       0,
+       0
+      ],
+      "candidates_last": [
+       406,
+       406
+      ],
+      "candidate_builds": [
+       8,
+       8
+      ],
+      "trim": [
+       8.0,
+       8.0
+      ],
+      "iterations_total": [
+       6,
+       6
+      ]
+     },
+     {
+      "step": 4,
+      "active_count": [
+       46,
+       47
+      ],
+      "continued": [
+       45,
+       46
+      ],
+      "fresh": [
+       0,
+       0
+      ],
+      "candidates_last": [
+       389,
+       389
+      ],
+      "candidate_builds": [
+       7,
+       7
+      ],
+      "trim": [
+       8.0,
+       8.0
+      ],
+      "iterations_total": [
+       5,
+       5
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "cross_thread": {}
+}
