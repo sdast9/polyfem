@@ -629,3 +629,17 @@ runs exist), so it was dispatched by hand (`ci/`):
   baseline run on `c24d803e`. This paragraph is the following documentation
   commit.
 
+## Cross-reference — CI-05, the microstructure fixture's default-budget refusal (2026-09-28)
+
+[CI-05](ci-portability-plan.md#ci-05--resource-limit-rejects-the-microstructure-fixture)
+confirmed on native Linux x86_64 that the automatic 50,000,000
+`max_candidate_emissions` default (this record's follow-up section) correctly
+refuses `contact/examples/3D/higher-order/microstructure.json` before
+allocation (65,160,487 needed, exit 3, peak RSS 1.04 GiB at the point of
+refusal) and measured that a fixture-specific override
+(`max_candidate_emissions: 70000000`, on an isolated copy outside `tests/`,
+the fixture itself unchanged) runs the scene successfully at 1.1–1.3 GiB
+peak RSS single- and 4-threaded. No default changed; see the plan's CI-05
+section and [ci-portability-plan.md](ci-portability-plan.md) for the full
+measurement and a recommended (not adopted) support policy.
+
