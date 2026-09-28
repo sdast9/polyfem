@@ -1634,6 +1634,13 @@
             "force_band_interval",
             "initial_trim_max_factor",
             "initial_trim_cosine",
+            "collapse_guard_basis",
+            "collapse_guard_partial",
+            "collapse_exclude_born",
+            "collapse_responsiveness_veto",
+            "trim_step_excursion",
+            "trim_reversal_limit",
+            "initial_trim_estimate_scope",
             "gap_floor",
             "constraint_floor",
             "trial_displacement_cap",
@@ -1800,6 +1807,50 @@
         "default": 0.8,
         "type": "float",
         "doc": "Minimum gradient opposition cosine for the step seed."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_guard_basis",
+        "default": "proxy",
+        "type": "string",
+        "options": ["proxy", "pair"],
+        "doc": "EF-07 experiment (opt-in): gap the force band's downward guard is evaluated on. proxy (EF-02/03) = the collapse proxy sqrt(severity); pair = each collapse term on its own gap and threshold (the average against sqrt(trim_lower), the minimum pair against sqrt(trim_lower / 100))."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_guard_partial",
+        "default": false,
+        "type": "bool",
+        "doc": "EF-07 experiment (opt-in): a band softening the downward guard vetoes is clamped to the smallest factor the scalar force law predicts keeps every collapse term above its threshold, instead of being cancelled."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_exclude_born",
+        "default": false,
+        "type": "bool",
+        "doc": "EF-07 experiment (opt-in): the in-solve collapse proxy's minimum-gap term ignores collisions that were not active at the previous accepted iterate or refresh."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_responsiveness_veto",
+        "default": false,
+        "type": "bool",
+        "doc": "EF-07 experiment (opt-in): within a time step, a collapse bump is skipped when the previous one did not lift the collapse gap by 10% and the gap has not fallen below half of its value at that bump."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/trim_step_excursion",
+        "default": 0,
+        "type": "float",
+        "doc": "EF-07 experiment (opt-in): 0 = off; B > 1 keeps the trim within [trim at the step start / B, trim at the step start * B] for the whole time step, across stall restarts."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/trim_reversal_limit",
+        "default": 0,
+        "type": "int",
+        "doc": "EF-07 experiment (opt-in): 0 = off; K > 0 = after K direction reversals of the trim within a time step, band and estimate moves may not reverse direction again (collapse bumps are exempt)."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_estimate_scope",
+        "default": "step",
+        "type": "string",
+        "options": ["step", "run"],
+        "doc": "EF-07 experiment (opt-in): with initial_trim_estimate, step (EF-02/03) re-arms the estimate at every time step; run accepts it at most once per run (not carried by restart state)."
     },
     {
         "pointer": "/solver/contact/semi_implicit/controller_interval",

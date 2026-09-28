@@ -6,6 +6,7 @@ set(test_sources
   test_al_solver.cpp
   test_direction_filter.cpp
   test_contact_cache.cpp
+  test_trim_loop_guard.cpp
   test_contact_stiffness_mapping.cpp
   test_hex_collision_surface.cpp
   test_hex_basis_layout.cpp

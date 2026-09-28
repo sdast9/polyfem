@@ -236,7 +236,21 @@ namespace polyfem::solver
 
 		/// @brief Multiply the global trim factor (barrier_stiffness_) by the
 		///        given factor, clamped to [trim_min, trim_max].
-		void bump_trim(const double factor);
+		void bump_trim(const double factor, TrimLoopGuard::Source source = TrimLoopGuard::Other);
+
+		/// @brief EF-07: squared minimum distance of the collisions that were
+		///        already active at the previous accepted iterate (or refresh);
+		///        infinity when there is none.
+		double min_distance_excluding_born(const Eigen::MatrixXd &displaced_surface) const;
+		/// @brief EF-07: the squared minimum distance the collapse proxy uses
+		///        (all collisions, or the persisting ones with exclude_born).
+		double collapse_min_distance(const Eigen::MatrixXd &displaced_surface, double all_min_d2) const;
+		/// @brief EF-07: the collapse branch (proportional upward bump) with
+		///        the responsiveness veto and decision record; returns whether
+		///        the trim moved.
+		bool collapse_bump(double factor, double avg_d2, double min_d2, double severity, const char *context);
+		/// @brief EF-07 diagnostics: stencil keys of the current collision set.
+		std::set<std::array<long, 5>> current_stencil_keys() const;
 
 		/// @brief Trim factor proportional to how far the average gap has
 		///        collapsed below the band (capped at 256 per bump).
@@ -284,6 +298,9 @@ namespace polyfem::solver
 			int force_band_age = 0;
 			json trim_decision;
 			double trim_solve_anchor = 1, kappa_hessian_max = 0;
+			TrimLoopGuard loop_guard;
+			bool trim_seed_used = false;
+			std::set<std::array<long, 5>> previous_iterate_keys, refresh_keys;
 		};
 		std::unique_ptr<FormState> save_state() const override;
 		/// @brief Restart: also writes the semi-implicit trim controller and
@@ -458,7 +475,16 @@ namespace polyfem::solver
 		json trim_decision_;
 		double force_weighted_gap(const Eigen::MatrixXd &surface) const;
 		bool estimate_initial_trim(const Eigen::VectorXd &x, double severity);
-		void apply_force_band(const Eigen::VectorXd &x, double severity, const char *source);
+		void apply_force_band(const Eigen::VectorXd &x, double avg_d2, double min_d2, double severity, const char *source);
+		/// @brief EF-07 opt-in loop guards and their per-step memory.
+		TrimLoopGuard loop_guard_;
+		/// @brief EF-07 estimate_once: an estimate was accepted in this run.
+		bool trim_seed_used_ = false;
+		/// @brief EF-07: stencil keys active at the previous accepted iterate
+		///        (or refresh) and at the last refresh; maintained only for the
+		///        exclude-born option and the trim-predictor stream.
+		std::set<std::array<long, 5>> previous_iterate_keys_, refresh_keys_;
+		bool track_collision_birth() const { return loop_guard_.exclude_born || bool(trim_predictor_observer_); }
 
 		/// @brief Trial-step displacement cap, in barrier supports. Only
 		///        applied while the semi-implicit stiffness mode is active.

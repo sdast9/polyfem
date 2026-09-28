@@ -7,8 +7,10 @@ Date: 2026-09-23. **Status: EF-01 done 2026-09-24**
 user 2026-09-25); **EF-06 retired 2026-09-25** (user: L-BFGS no longer
 pursued); **EF-02/03 implemented and measured together 2026-09-26, opt-in; strict adoption gates unmet**
 ([record](ef-02-03-trim-controller.md)); EF-05 not pursued after the negative
-EF-01 sensitivity result; **EF-07 opened 2026-09-27** (the EF-02/03 opt-in
-controller loops on the ball-burst production scene). Items are EF-01 …
+EF-01 sensitivity result; **EF-07 done 2026-09-28** ([record](ef-07-trim-loop.md):
+the EF-02/03 opt-in controller's ball-burst loop is diagnosed; the opt-in
+`collapse_guard_basis: pair` removes it; strict cost/accuracy gates unmet;
+defaults unchanged). Items are EF-01 …
 EF-07; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.
@@ -209,7 +211,8 @@ after EF-02–04 before deciding whether to productionize it.
 
 ## EF-07 — Force-weighted band and initial estimate without a controller loop
 
-Opened 2026-09-27 at the user's request. **Goal:** find out whether the EF-02/03
+Opened 2026-09-27 at the user's request. **Done 2026-09-28**, see
+[ef-07-trim-loop.md](ef-07-trim-loop.md). **Goal:** find out whether the EF-02/03
 opt-in controller (`band_statistic: force_weighted`, `initial_trim_estimate:
 true`) can keep its cost benefit without the trim limit cycle it entered on the
 ball-burst scene, and if so, with what change.

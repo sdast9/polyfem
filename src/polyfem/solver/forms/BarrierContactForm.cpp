@@ -24,6 +24,14 @@
 
 namespace polyfem::solver
 {
+	namespace
+	{
+		// The collapse proxy relaxes the minimum gap by this factor on the
+		// squared distance (collapse_severity): the minimum may sit well below
+		// the average in healthy states.
+		constexpr double min_gap_slack = 1e2;
+	} // namespace
+
 	class BarrierContactForm::CoefficientEventScope
 	{
 	public:
@@ -286,6 +294,23 @@ namespace polyfem::solver
 				force_trim_.interval = semi_implicit_opts.value("force_band_interval", force_trim_.interval);
 				force_trim_.seed_max_factor = semi_implicit_opts.value("initial_trim_max_factor", force_trim_.seed_max_factor);
 				force_trim_.seed_cosine = semi_implicit_opts.value("initial_trim_cosine", force_trim_.seed_cosine);
+				// EF-07 loop guards (opt-in experiment, docs/ef-07-trim-loop.md).
+				const auto basis = semi_implicit_opts.value("collapse_guard_basis", std::string("proxy"));
+				if (basis != "proxy" && basis != "pair")
+					log_and_throw_error("semi_implicit.collapse_guard_basis must be proxy or pair");
+				loop_guard_.pair_guard = basis == "pair";
+				loop_guard_.partial_guard = semi_implicit_opts.value("collapse_guard_partial", false);
+				loop_guard_.exclude_born = semi_implicit_opts.value("collapse_exclude_born", false);
+				loop_guard_.responsiveness_veto = semi_implicit_opts.value("collapse_responsiveness_veto", false);
+				loop_guard_.step_excursion = semi_implicit_opts.value("trim_step_excursion", 0.0);
+				loop_guard_.reversal_limit = semi_implicit_opts.value("trim_reversal_limit", 0);
+				const auto seed_scope = semi_implicit_opts.value("initial_trim_estimate_scope", std::string("step"));
+				if (seed_scope != "step" && seed_scope != "run")
+					log_and_throw_error("semi_implicit.initial_trim_estimate_scope must be step or run");
+				loop_guard_.estimate_once = seed_scope == "run";
+				if (!(loop_guard_.step_excursion == 0 || (loop_guard_.step_excursion > 1 && std::isfinite(loop_guard_.step_excursion)))
+					|| loop_guard_.reversal_limit < 0)
+					log_and_throw_error("semi_implicit.trim_step_excursion must be 0 or a finite value > 1 and trim_reversal_limit must be >= 0");
 				if (!(force_trim_.lower > 0 && force_trim_.lower < force_trim_.upper && force_trim_.upper < 1
 					  && force_trim_.hysteresis >= 0 && force_trim_.hysteresis < force_trim_.lower
 					  && force_trim_.upper + force_trim_.hysteresis < 1
@@ -327,8 +352,9 @@ namespace polyfem::solver
 	void BarrierContactForm::update_quantities(const double t, const Eigen::VectorXd &x)
 	{
 		ContactForm::update_quantities(t, x);
-		trim_seed_pending_ = true;
+		trim_seed_pending_ = !(loop_guard_.estimate_once && trim_seed_used_);
 		trim_decision_ = nullptr;
+		loop_guard_.new_step(barrier_stiffness_);
 	}
 
 	double BarrierContactForm::force_weighted_gap(const Eigen::MatrixXd &surface) const
@@ -365,28 +391,46 @@ namespace polyfem::solver
 		if (accepted)
 		{
 			trim_seed_pending_ = false;
-			bump_trim(factor);
+			trim_seed_used_ = true;
+			bump_trim(factor, TrimLoopGuard::Estimate);
 		}
 		trim_decision_ = {{"source", "initial_estimate"}, {"before", before}, {"after", barrier_stiffness_}, {"cosine", cosine}, {"estimate", estimate}, {"collapse_guard", collapse}, {"accepted", accepted}};
 		emit_trim_predictors(x, "initial_estimate", false);
 		return accepted;
 	}
 
-	void BarrierContactForm::apply_force_band(const Eigen::VectorXd &x, const double severity, const char *source)
+	void BarrierContactForm::apply_force_band(const Eigen::VectorXd &x, const double avg_d2, const double min_d2, const double severity, const char *source)
 	{
 		force_band_age_ = 0;
 		const double gap = force_weighted_gap(compute_displaced_surface(x));
 		const double proposed_factor = force_trim_.factor(gap);
 		double factor = proposed_factor;
-		const bool guarded = !ForceWeightedTrim::safe_band_step(factor, std::sqrt(severity) / dhat_, std::sqrt(trim_lower_));
+		// EF-02/03 guards the proxy sqrt(severity) against sqrt(trim_lower);
+		// when the slack-relaxed minimum binds, that is 10x the pair's gap
+		// and the scalar force law says nothing about the pair. EF-07's pair
+		// basis guards each term on its own gap and threshold.
+		const bool guarded = loop_guard_.pair_guard
+								 ? !(ForceWeightedTrim::safe_band_step(factor, std::sqrt(avg_d2) / dhat_, std::sqrt(trim_lower_))
+									 && ForceWeightedTrim::safe_band_step(factor, std::sqrt(min_d2) / dhat_, std::sqrt(trim_lower_ / min_gap_slack)))
+								 : !ForceWeightedTrim::safe_band_step(factor, std::sqrt(severity) / dhat_, std::sqrt(trim_lower_));
 		if (guarded && factor < 1)
-			factor = 1;
+		{
+			// EF-07 partial guard: soften only as far as the scalar force law
+			// keeps every collapse term above its threshold.
+			double floor = 1;
+			if (loop_guard_.partial_guard)
+				floor = loop_guard_.pair_guard
+							? std::max(ForceWeightedTrim::min_safe_factor(std::sqrt(avg_d2) / dhat_, std::sqrt(trim_lower_)),
+									   ForceWeightedTrim::min_safe_factor(std::sqrt(min_d2) / dhat_, std::sqrt(trim_lower_ / min_gap_slack)))
+							: ForceWeightedTrim::min_safe_factor(std::sqrt(severity) / dhat_, std::sqrt(trim_lower_));
+			factor = std::min(1., std::max(factor, floor));
+		}
 		const double before = barrier_stiffness_;
 		// The non-emergency upward branch shares the existing in-solve budget.
 		if (factor > 1)
 			factor = std::min(factor, std::max(1., trim_solve_anchor_ * 256. / before));
-		bump_trim(factor);
-		trim_decision_ = {{"source", source}, {"before", before}, {"after", barrier_stiffness_}, {"mean_gap", gap}, {"proposed_factor", proposed_factor}, {"factor", factor}, {"collapse_guard", guarded}, {"collapse_proxy_gap", std::sqrt(severity) / dhat_}};
+		bump_trim(factor, TrimLoopGuard::Band);
+		trim_decision_ = {{"source", source}, {"before", before}, {"after", barrier_stiffness_}, {"mean_gap", gap}, {"proposed_factor", proposed_factor}, {"factor", factor}, {"collapse_guard", guarded}, {"collapse_proxy_gap", std::sqrt(severity) / dhat_}, {"min_gap", std::sqrt(min_d2) / dhat_}, {"guard_basis", loop_guard_.pair_guard ? "pair" : "proxy"}};
 		emit_trim_predictors(x, "force_band", false);
 	}
 
@@ -396,7 +440,6 @@ namespace polyfem::solver
 		// the average collapsing: take the worse of the average gap and the
 		// minimum gap relaxed by min_gap_slack (the minimum may sit well
 		// below the average in healthy states).
-		constexpr double min_gap_slack = 1e2;
 		double severity = std::numeric_limits<double>::infinity();
 		if (std::isfinite(avg_d2))
 			severity = avg_d2;
@@ -412,9 +455,54 @@ namespace polyfem::solver
 		return std::min(256.0, std::max(trim_factor_, std::sqrt(trim_lower_ * dhat_ * dhat_ / avg_d2)));
 	}
 
-	void BarrierContactForm::bump_trim(const double factor)
+	std::set<std::array<long, 5>> BarrierContactForm::current_stencil_keys() const
 	{
-		const double new_trim = std::clamp(barrier_stiffness_ * factor, trim_min_, trim_max_);
+		std::set<std::array<long, 5>> keys;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			keys.insert(stencil_key(collision_set_, i));
+		return keys;
+	}
+
+	double BarrierContactForm::min_distance_excluding_born(const Eigen::MatrixXd &displaced_surface) const
+	{
+		double min_d2 = std::numeric_limits<double>::infinity();
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			if (!previous_iterate_keys_.count(stencil_key(collision_set_, i)))
+				continue;
+			const double d2 = collision_set_[i].compute_distance(
+				collision_set_[i].dof(displaced_surface, collision_mesh_.edges(), collision_mesh_.faces()));
+			if (d2 < min_d2)
+				min_d2 = d2;
+		}
+		return min_d2;
+	}
+
+	double BarrierContactForm::collapse_min_distance(const Eigen::MatrixXd &displaced_surface, const double all_min_d2) const
+	{
+		return loop_guard_.exclude_born ? min_distance_excluding_born(displaced_surface) : all_min_d2;
+	}
+
+	bool BarrierContactForm::collapse_bump(const double factor, const double avg_d2, const double min_d2, const double severity, const char *context)
+	{
+		const double proxy_gap = std::sqrt(severity) / dhat_;
+		const double before = barrier_stiffness_;
+		const bool allowed = loop_guard_.allow_collapse(proxy_gap);
+		if (allowed)
+		{
+			bump_trim(factor, TrimLoopGuard::Collapse);
+			if (barrier_stiffness_ != before)
+				loop_guard_.collapse_bumped(proxy_gap);
+		}
+		trim_decision_ = {{"source", "collapse"}, {"context", context}, {"before", before}, {"after", barrier_stiffness_}, {"factor", factor}, {"collapse_proxy_gap", proxy_gap}, {"avg_gap", std::sqrt(avg_d2) / dhat_}, {"min_gap", std::sqrt(min_d2) / dhat_}, {"min_binds", min_d2 * min_gap_slack < avg_d2}, {"responsiveness_veto", !allowed}, {"reference_gap", std::isfinite(loop_guard_.collapse_ref) ? json(loop_guard_.collapse_ref) : json(nullptr)}};
+		return barrier_stiffness_ != before;
+	}
+
+	void BarrierContactForm::bump_trim(const double factor, const TrimLoopGuard::Source source)
+	{
+		double new_trim = std::clamp(barrier_stiffness_ * factor, trim_min_, trim_max_);
+		new_trim = std::clamp(loop_guard_.limit(barrier_stiffness_, new_trim, source), trim_min_, trim_max_);
+		loop_guard_.moved(barrier_stiffness_, new_trim);
 		if (new_trim != barrier_stiffness_)
 		{
 			logger().debug("Barrier stiffness trim: {:g} -> {:g}", barrier_stiffness_, new_trim);
@@ -432,6 +520,7 @@ namespace polyfem::solver
 			return false;
 		CoefficientEventScope event(*this, x, "stall_retune");
 		const double trim_before = barrier_stiffness_;
+		trim_decision_ = nullptr;
 		// A stall with the gap below the band (average OR a single collapsed
 		// contact) means the barrier is too soft (the solver is crawling
 		// against CCD); otherwise the barrier is likely dominating the
@@ -442,17 +531,18 @@ namespace polyfem::solver
 			return false; // stall unrelated to contact; nothing to retune
 
 		const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_).mean_sq;
-		const double min_d2 = collision_set_.compute_minimum_distance(
-			collision_mesh_, kappa_surface_);
+		const double min_d2 = collapse_min_distance(kappa_surface_, collision_set_.compute_minimum_distance(
+																		collision_mesh_, kappa_surface_));
 		const double severity = collapse_severity(avg_d2, min_d2);
+		loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
 
 		if (std::isfinite(severity) && severity < trim_lower_ * dhat_ * dhat_)
-			bump_trim(std::max(factor, collapse_bump_factor(severity)));
+			collapse_bump(std::max(factor, collapse_bump_factor(severity)), avg_d2, min_d2, severity, "stall");
 		else if (estimate_initial_trim(x, severity))
 		{
 		}
 		else if (force_weighted_controller_)
-			apply_force_band(x, severity, "stall");
+			apply_force_band(x, avg_d2, min_d2, severity, "stall");
 		else if (!calibrate_trim(x))
 		{
 			// Only soften blindly when the gap is pinned above the band
@@ -639,24 +729,30 @@ namespace polyfem::solver
 		// When the balance is degenerate (unloaded contact, no gradient
 		// provider) fall back to a conditioning cap on the effective
 		// stiffness plus the band's downward step.
+		if (run_trim_controller)
+			trim_decision_ = nullptr;
 		if (run_trim_controller && !collision_set_.empty())
 		{
 			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_).mean_sq;
+			// Every active collision persists at a refresh point (the born
+			// filter is relative to the previous accepted iterate, which is
+			// this one): the minimum is taken over all of them.
 			const double min_d2 = collision_set_.compute_minimum_distance(
 				collision_mesh_, kappa_surface_);
 			const double severity = collapse_severity(avg_d2, min_d2);
 			const double dhat_sq = dhat_ * dhat_;
+			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
 
 			if (std::isfinite(severity) && severity < trim_lower_ * dhat_sq)
 			{
-				bump_trim(collapse_bump_factor(severity));
+				collapse_bump(collapse_bump_factor(severity), avg_d2, min_d2, severity, published_endpoint ? "refresh_endpoint" : "refresh");
 			}
 			else if (!published_endpoint && estimate_initial_trim(x, severity))
 			{
 			}
 			else if (force_weighted_controller_)
 			{
-				apply_force_band(x, severity, published_endpoint ? "refresh_endpoint" : "refresh");
+				apply_force_band(x, avg_d2, min_d2, severity, published_endpoint ? "refresh_endpoint" : "refresh");
 			}
 			else if (!calibrate_trim(x))
 			{
@@ -704,6 +800,11 @@ namespace polyfem::solver
 
 		// Re-anchor the in-solve emergency climbing budget.
 		trim_solve_anchor_ = barrier_stiffness_;
+		if (track_collision_birth())
+		{
+			refresh_keys_ = current_stencil_keys();
+			previous_iterate_keys_ = refresh_keys_;
+		}
 
 		if (!collision_set_.empty())
 		{
@@ -1327,6 +1428,10 @@ namespace polyfem::solver
 		state.force_band_age = force_band_age_;
 		state.trim_decision = trim_decision_;
 		state.kappa_hessian_max = kappa_hessian_max_;
+		state.loop_guard = loop_guard_;
+		state.trim_seed_used = trim_seed_used_;
+		state.previous_iterate_keys = previous_iterate_keys_;
+		state.refresh_keys = refresh_keys_;
 	}
 
 	void BarrierContactForm::restore_barrier_state(const State &state)
@@ -1358,6 +1463,10 @@ namespace polyfem::solver
 		force_band_age_ = state.force_band_age;
 		trim_decision_ = state.trim_decision;
 		kappa_hessian_max_ = state.kappa_hessian_max;
+		loop_guard_ = state.loop_guard;
+		trim_seed_used_ = state.trim_seed_used;
+		previous_iterate_keys_ = state.previous_iterate_keys;
+		refresh_keys_ = state.refresh_keys;
 		// Transient flags of a refresh in progress; a state is never captured
 		// inside one, and a rollback never lands inside one.
 		batch_first_pass_ = false;
@@ -1750,6 +1859,20 @@ namespace polyfem::solver
 				{"seed_max_factor", force_trim_.seed_max_factor},
 				{"seed_cosine", force_trim_.seed_cosine}};
 		}
+		if (uses_semi_implicit_stiffness() && loop_guard_.any())
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in EF-07 trim loop guards active";
+			model["coefficient_law"]["controller"]["ef07"] = {
+				{"collapse_guard_basis", loop_guard_.pair_guard ? "pair" : "proxy"},
+				{"collapse_guard_partial", loop_guard_.partial_guard},
+				{"collapse_exclude_born", loop_guard_.exclude_born},
+				{"collapse_responsiveness_veto", loop_guard_.responsiveness_veto},
+				{"responsive_rise", loop_guard_.responsive_rise},
+				{"worsening", loop_guard_.worsening},
+				{"trim_step_excursion", loop_guard_.step_excursion},
+				{"trim_reversal_limit", loop_guard_.reversal_limit},
+				{"initial_trim_estimate_scope", loop_guard_.estimate_once ? "run" : "step"}};
+		}
 		return model;
 	}
 
@@ -1859,8 +1982,7 @@ namespace polyfem::solver
 		{
 			json record = trim_predictors(x, full);
 			record["event"] = event;
-			if (force_weighted_controller_ || initial_trim_estimate_)
-				record["controller_decision"] = trim_decision_;
+			record["controller_decision"] = trim_decision_;
 			record["sequence"] = ++trim_predictor_sequence_;
 			record["iteration"] = iteration >= 0 ? json(iteration) : json(nullptr);
 			trim_predictor_observer_(record);
@@ -1959,6 +2081,54 @@ namespace polyfem::solver
 			if (sum > 0)
 				mult["incidence_weighted_mean"] = sum_sq / sum;
 			r["multiplicity"] = mult;
+		}
+
+		// EF-07: which collision sets the minimum gap, whether it was born
+		// since the previous accepted iterate (or refresh) or was already in
+		// the last refresh's set, and how many collisions sit below the
+		// collapse proxy's pair threshold sqrt(trim_lower / slack).
+		{
+			const double collapse_gap = std::sqrt(trim_lower_ / min_gap_slack);
+			const bool birth_known = !previous_iterate_keys_.empty() || !refresh_keys_.empty();
+			size_t best = collision_set_.size();
+			double best_d2 = std::numeric_limits<double>::infinity(), best_persisting_d2 = best_d2;
+			int below = 0, below_born = 0, born = 0, below_2x = 0;
+			for (size_t i = 0; i < collision_set_.size(); ++i)
+			{
+				const double d2 = collision_set_[i].compute_distance(collision_set_[i].dof(V, E, F));
+				if (!(d2 <= dhat_sq))
+					continue;
+				const bool is_born = birth_known && !previous_iterate_keys_.count(stencil_key(collision_set_, i));
+				born += is_born;
+				const double gap = std::sqrt(d2) / dhat_;
+				if (gap < collapse_gap)
+				{
+					++below;
+					below_born += is_born;
+				}
+				if (gap < 2 * collapse_gap)
+					++below_2x;
+				if (d2 < best_d2)
+				{
+					best_d2 = d2;
+					best = i;
+				}
+				if (!is_born && d2 < best_persisting_d2)
+					best_persisting_d2 = d2;
+			}
+			json births = {{"collapse_pair_gap", collapse_gap}, {"birth_known", birth_known}, {"born_since_previous_iterate", born}, {"below_collapse_pair_gap", below}, {"below_collapse_pair_gap_born", below_born}, {"below_twice_collapse_pair_gap", below_2x}};
+			births["min_gap_persisting"] = std::isfinite(best_persisting_d2) ? json(std::sqrt(best_persisting_d2) / dhat_) : json(nullptr);
+			if (best < collision_set_.size())
+			{
+				const auto key = stencil_key(collision_set_, best);
+				const auto vids = collision_set_[best].vertex_ids(E, F);
+				json full_ids = json::array();
+				for (int a = 0; a < collision_set_[best].num_vertices(); ++a)
+					full_ids.push_back(vids[a] >= 0 ? json(collision_mesh_.to_full_vertex_id(vids[a])) : json(nullptr));
+				births["min_pair"] = {{"type", key[0]}, {"type_names", "0 vertex-vertex, 1 edge-vertex, 2 edge-edge, 3 face-vertex"}, {"full_vertex_ids", full_ids}, {"gap", std::sqrt(best_d2) / dhat_}, {"born_since_previous_iterate", birth_known && !previous_iterate_keys_.count(key)}, {"in_last_refresh", refresh_keys_.count(key) > 0}, {"stiffness_scale", collision_set_[best].stiffness_scale}, {"weight", collision_set_[best].weight}};
+			}
+			r["collapse_pairs"] = births;
+			r["loop_guard"] = {{"step_anchor", std::isfinite(loop_guard_.step_anchor) ? json(loop_guard_.step_anchor) : json(nullptr)}, {"up", loop_guard_.up}, {"down", loop_guard_.down}, {"reversals", loop_guard_.reversals}, {"blocked", loop_guard_.blocked}, {"clamped", loop_guard_.clamped}, {"vetoed", loop_guard_.vetoed}, {"collapse_ref", std::isfinite(loop_guard_.collapse_ref) ? json(loop_guard_.collapse_ref) : json(nullptr)}, {"collapse_peak", std::isfinite(loop_guard_.collapse_peak) ? json(loop_guard_.collapse_peak) : json(nullptr)}, {"solve_anchor", trim_solve_anchor_}};
 		}
 
 		if (!full)
@@ -2137,7 +2307,9 @@ namespace polyfem::solver
 			// dominating the elasticity). Only the global trim moves
 			// mid-solve; the per-contact snapshot stays frozen.
 			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_).mean_sq;
-			const double severity = collapse_severity(avg_d2, curr_distance);
+			const double min_d2 = collapse_min_distance(displaced_surface, curr_distance);
+			const double severity = collapse_severity(avg_d2, min_d2);
+			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
 			++iters_since_trim_;
 			if (force_weighted_controller_)
 				++force_band_age_;
@@ -2159,7 +2331,7 @@ namespace polyfem::solver
 					const double allowed =
 						trim_solve_anchor_ * max_in_solve_climb / barrier_stiffness_;
 					if (allowed > 1)
-						bump_trim(std::min(collapse_bump_factor(severity), allowed));
+						collapse_bump(std::min(collapse_bump_factor(severity), allowed), avg_d2, min_d2, severity, "iteration");
 				}
 				else if (initial_trim_estimate_ && trim_seed_pending_ && estimate_initial_trim(data.x, severity))
 				{
@@ -2167,7 +2339,7 @@ namespace polyfem::solver
 				else if (force_weighted_controller_)
 				{
 					if (force_band_age_ >= force_trim_.interval)
-						apply_force_band(data.x, severity, "iteration");
+						apply_force_band(data.x, avg_d2, min_d2, severity, "iteration");
 				}
 				else if (
 					controller_interval_ > 0
@@ -2188,6 +2360,8 @@ namespace polyfem::solver
 				refresh_semi_implicit_stiffness(data.x);
 
 			emit_trim_predictors(data.x, "iteration", /*full=*/false, data.iter_num);
+			if (track_collision_birth())
+				previous_iterate_keys_ = current_stencil_keys();
 		}
 		else if (use_adaptive_barrier_stiffness_)
 		{

@@ -16,6 +16,8 @@ def main():
     ap.add_argument('--mode', choices=['pilot', 'screen', 'production', 'candidate'], required=True)
     ap.add_argument('--prefix', default='')
     ap.add_argument('--only', action='append', help='Run only these scene names; preserve completed evidence separately')
+    ap.add_argument('--set', action='append', default=[], dest='extra_set',
+                    help='Extra run.py --set POINTER=JSON for non-production modes (EF-07 options); recorded in the ledger')
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     if a.mode == 'pilot':
@@ -40,6 +42,8 @@ def main():
         if a.mode != 'production':
             cmd += ['--set', '/solver/contact/semi_implicit/band_statistic="force_weighted"',
                     '--set', '/solver/contact/semi_implicit/initial_trim_estimate=true']
+            for extra in a.extra_set:
+                cmd += ['--set', extra]
         record = dict(label=label, command=cmd, binary_sha256=digest,
                       started=datetime.datetime.now(datetime.timezone.utc).isoformat())
         with ledger.open('a') as f: f.write(json.dumps(record)+'\n')
