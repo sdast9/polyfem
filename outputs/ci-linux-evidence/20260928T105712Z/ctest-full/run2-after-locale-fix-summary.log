@@ -1,0 +1,524 @@
+=== Full run 2 (after locale-gen en_US.UTF-8), summary ===
+100/405 Test #100: geometry selection can reuse volume IDs ......................................................................   Passed    0.01 sec
+101/405 Test #101: static-control-pressure-nodes-3d .............................................................................   Passed  107.98 sec
+102/405 Test #102: upsample mesh ................................................................................................   Passed    0.29 sec
+103/405 Test #103: AL hard line search failures remain failures and clean shared solver .........................................   Passed    0.10 sec
+104/405 Test #104: shape-neumann-nodes ..........................................................................................   Passed   28.30 sec
+105/405 Test #105: rbf_interpolate ..............................................................................................   Passed    0.01 sec
+106/405 Test #106: anisotropic laws: fibre frame indifference ...................................................................   Passed   56.30 sec
+107/405 Test #107: obstacle triangular meshes interpolation paths and 3d planes .................................................   Passed    0.01 sec
+108/405 Test #108: neo hookean synthetic nonlinear branches 2d 10 bases .........................................................   Passed    0.01 sec
+109/405 Test #109: Form states are typed: a state from another form is refused ..................................................   Passed    0.01 sec
+110/405 Test #110: Navier-Stokes Newton and Picard operators ....................................................................   Passed    0.01 sec
+111/405 Test #111: generic_elastic_assembler ....................................................................................   Passed    6.83 sec
+112/405 Test #112: Contact stiffness uses FEM node IDs for exact collision maps .................................................   Passed    0.01 sec
+113/405 Test #113: BC metric preserves lumping and identity fallbacks ...........................................................   Passed    0.01 sec
+114/405 Test #114: modified-neohookean-hessian ..................................................................................   Passed    7.17 sec
+115/405 Test #115: eigs3idautodiff ..............................................................................................   Passed    0.01 sec
+116/405 Test #116: Qk_1d ........................................................................................................   Passed    0.01 sec
+117/405 Test #117: elastic laws: stress-free reference configuration ............................................................   Passed  122.82 sec
+118/405 Test #118: damping-transient ............................................................................................   Passed  110.60 sec
+119/405 Test #119: eigs2autodiff ................................................................................................   Passed    0.01 sec
+120/405 Test #120: franke 3d ....................................................................................................   Passed    0.01 sec
+121/405 Test #121: AL records which condition actually triggered a stall restart ................................................   Passed    0.70 sec
+122/405 Test #122: stacked form propagates projected operator ...................................................................   Passed    0.04 sec
+123/405 Test #123: CMesh3D preserves cell-local vertex ordering .................................................................   Passed    0.01 sec
+124/405 Test #124: periodic boundary form rejects invalid pair settings .........................................................   Passed    0.01 sec
+125/405 Test #125: elasticity 3d ................................................................................................   Passed    0.01 sec
+126/405 Test #126: Identity and explicit rectangular selection share stiffness ..................................................   Passed    0.01 sec
+127/405 Test #127: linear elastic quasistatic schedule equals the static solve for every integrator .............................   Passed  247.22 sec
+128/405 Test #128: shape-transient-friction .....................................................................................   Passed   36.72 sec
+129/405 Test #129: generic elastic autodiff modes 2d 10 bases ...................................................................   Passed    0.01 sec
+130/405 Test #130: WS_2d ........................................................................................................   Passed    0.01 sec
+131/405 Test #131: Rayleigh damping form derivatives ............................................................................   Passed   15.74 sec
+132/405 Test #132: obstacle surfaces are validated ..............................................................................   Passed    0.01 sec
+133/405 Test #133: shape-transient-friction-sdf .................................................................................   Passed   34.10 sec
+134/405 Test #134: A named broad-phase refusal of a trial sweep leaves no partial candidate set (RBR-02) ........................   Passed    0.02 sec
+135/405 Test #135: pressure form derivatives ....................................................................................   Passed   16.78 sec
+136/405 Test #136: Semi-implicit first-contact conditioning cap is length-unit independent ......................................   Passed    0.01 sec
+137/405 Test #137: AL final solve accepts actual stationarity ...................................................................   Passed    1.47 sec
+138/405 Test #138: Q2_3d ........................................................................................................   Passed    0.01 sec
+139/405 Test #139: parallel_for_memory ..........................................................................................   Passed    0.01 sec
+140/405 Test #140: determinant2 .................................................................................................   Passed    0.01 sec
+141/405 Test #141: a value-file path that does not exist is reported as such ....................................................   Passed    0.01 sec
+142/405 Test #142: material-transient ...........................................................................................   Passed   42.02 sec
+143/405 Test #143: contact_3d ...................................................................................................   Passed  1208.49 sec
+144/405 Test #144: initial-contact-smooth .......................................................................................   Passed   31.92 sec
+145/405 Test #145: AL final solve rejects exhausted soft restarts ...............................................................   Passed    0.36 sec
+146/405 Test #146: Contact rebuilds follow candidate and filter lifecycle at unchanged positions ................................   Passed    0.01 sec
+147/405 Test #147: ALE Navier-Stokes FSI runs through State .....................................................................   Passed   14.54 sec
+148/405 Test #148: Force band cadence survives rollback and does not move coefficients ..........................................   Passed    0.01 sec
+149/405 Test #149: realized-force lag (default): the friction carries the force that acted ......................................   Passed    0.01 sec
+150/405 Test #150: periodic boundary form accepts boundary ID zero ..............................................................   Passed    0.01 sec
+151/405 Test #151: AL budget that is not exhausted leaves a compatible continuation unchanged ...................................   Passed    1.81 sec
+152/405 Test #152: boundary sampler local coordinates and triangle-edge quadrature ..............................................   Passed    0.01 sec
+153/405 Test #153: damping-opt ..................................................................................................   Passed   32.47 sec
+154/405 Test #154: interpolation ................................................................................................   Passed    0.02 sec
+155/405 Test #155: duplicate or shadowed Dirichlet entries are refused ..........................................................   Passed    0.01 sec
+156/405 Test #156: shape-transient-smooth .......................................................................................   Passed   30.73 sec
+157/405 Test #157: shape-contact-adhesion .......................................................................................   Passed    8.88 sec
+158/405 Test #158: smooth contact form derivatives ..............................................................................   Passed   13.45 sec
+159/405 Test #159: mesh utilities geogram conversion and topology helpers .......................................................   Passed    0.01 sec
+160/405 Test #160: cell matrices with invalid vertex indices are refused ........................................................   Passed    0.01 sec
+161/405 Test #161: Physical diagnostic snapshots preserve contact state and frozen derivatives ..................................   Passed    0.03 sec
+162/405 Test #162: AL final solve rejects other nonstationary stops .............................................................   Passed    0.18 sec
+163/405 Test #163: Force band cannot immediately undo collapse protection .......................................................   Passed    0.01 sec
+164/405 Test #164: LagrangeBasis2d mixed conforming triangle orders .............................................................   Passed    0.01 sec
+165/405 Test #165: A fully prescribed body driven within dhat of an obstacle keeps its prescribed motion ........................   Passed    6.92 sec
+166/405 Test #166: Force trim option errors are named and rejected ..............................................................   Passed    0.01 sec
+167/405 Test #167: body form derivatives 3d .....................................................................................   Passed   14.76 sec
+168/405 Test #168: hessian_lin ..................................................................................................   Passed    7.84 sec
+169/405 Test #169: generic scalar problem selects finite element space nodal data ...............................................   Passed    0.01 sec
+170/405 Test #170: piecewise cubic interpolation ................................................................................   Passed    0.01 sec
+171/405 Test #171: generic elastic autodiff modes 2d 6 bases ....................................................................   Passed    0.01 sec
+172/405 Test #172: barrier contact form derivatives .............................................................................   Passed   57.48 sec
+173/405 Test #173: BarrierContactForm state round trip through every mutation path ..............................................   Passed    0.01 sec
+174/405 Test #174: Interpolated contact maps condense the parent block ..........................................................   Passed    0.01 sec
+175/405 Test #175: Q1 hex face centroids get condensed stiffness through the production builder .................................   Passed    6.41 sec
+176/405 Test #176: Every integrator's saved kinematics agree with its independently evaluated rule ..............................   Passed    0.01 sec
+177/405 Test #177: homogenize-stress ............................................................................................   Passed   89.23 sec
+178/405 Test #178: state file size stays near its payload .......................................................................   Passed    0.16 sec
+179/405 Test #179: neo hookean synthetic nonlinear branches 3d 4 bases ..........................................................   Passed    0.01 sec
+180/405 Test #180: A fully prescribed transient body follows its prescribed motion ..............................................   Passed   28.68 sec
+181/405 Test #181: per-element value lists bind to global or body-local rows by length ..........................................   Passed    0.01 sec
+182/405 Test #182: linear_elasticity-surface ....................................................................................   Passed    7.56 sec
+183/405 Test #183: BCLagrangianForm multiplier and weight round trip ............................................................   Passed    0.01 sec
+184/405 Test #184: density, fibre and dispersion parameters are validated .......................................................   Passed    0.01 sec
+185/405 Test #185: mesh interface is empty for separated meshes .................................................................   Passed    0.01 sec
+186/405 Test #186: elasticity 2d ................................................................................................   Passed    0.01 sec
+187/405 Test #187: shape-stress-opt .............................................................................................   Passed  107.97 sec
+188/405 Test #188: linear elastic transient forces follow the solved step for every integrator ..................................   Passed  138.60 sec
+189/405 Test #189: eigs2id ......................................................................................................   Passed    0.01 sec
+190/405 Test #190: parallel_for .................................................................................................   Passed    0.01 sec
+191/405 Test #191: initial-contact-min-dist .....................................................................................   Passed   28.21 sec
+192/405 Test #192: time schedule and contact settings are validated at init .....................................................   Passed   50.09 sec
+193/405 Test #193: generic tensor problem evaluates explicit nodal neumann data by finite element space .........................   Passed    0.01 sec
+194/405 Test #194: generic elastic autodiff modes 3d 10 bases ...................................................................   Passed    0.01 sec
+195/405 Test #195: shape-pressure-nodes-2d ......................................................................................   Passed   27.21 sec
+196/405 Test #196: CI-06 reference regeneration preserves an existing scene-specific margin .....................................   Passed    0.01 sec
+197/405 Test #197: transient lagged friction: held body and reversal ............................................................   Passed    0.01 sec
+198/405 Test #198: Material files reload for independent consumers ..............................................................   Passed    0.01 sec
+199/405 Test #199: The trim band statistic does not depend on how a distance-type tie is resolved ...............................   Passed    0.01 sec
+200/405 Test #200: generic elastic autodiff modes 3d 20 bases ...................................................................   Passed    0.01 sec
+201/405 Test #201: quadratic ....................................................................................................   Passed    0.01 sec
+202/405 Test #202: Semi-implicit batch median ignores zeros and applies a relative floor ........................................   Passed    0.02 sec
+203/405 Test #203: every body needs a material ..................................................................................   Passed    0.01 sec
+204/405 Test #204: ALE Navier-Stokes FSI moving arc .............................................................................   Passed   10.00 sec
+205/405 Test #205: Endpoint records report the active-collision gap statistics ..................................................   Passed    0.01 sec
+206/405 Test #206: generic scalar problem selects body rhs data .................................................................   Passed    0.01 sec
+207/405 Test #207: generic tensor problem evaluates nodal neumann matrix data ...................................................   Passed    0.01 sec
+208/405 Test #208: Differentiable transient output states the current endpoint in both modes ....................................   Passed   17.21 sec
+209/405 Test #209: 3d-shape-layer-thickness .....................................................................................   Passed   66.81 sec
+210/405 Test #210: periodic boundary form rejects boundaries without a translated match .........................................   Passed    0.01 sec
+211/405 Test #211: modified-neohookean-barrier-active ...........................................................................   Passed    6.49 sec
+212/405 Test #212: geometry reader handles stored Gmsh surface selections .......................................................   Passed    0.01 sec
+213/405 Test #213: Q2_2d ........................................................................................................   Passed    0.01 sec
+214/405 Test #214: A fully prescribed static body is its prescribed values ......................................................   Passed    6.77 sec
+215/405 Test #215: neo hookean synthetic nonlinear branches 3d 20 bases .........................................................   Passed    0.02 sec
+216/405 Test #216: linear_elasticity-surface-3d .................................................................................   Passed    7.21 sec
+217/405 Test #217: lagged friction follows every semi-implicit retuning path (follow_stiffness) .................................   Passed    0.01 sec
+218/405 Test #218: auto_quadrature simplex ......................................................................................   Passed   68.45 sec
+219/405 Test #219: Pyramid ......................................................................................................   Passed    0.01 sec
+220/405 Test #220: build collision proxy ........................................................................................   Passed   14.32 sec
+221/405 Test #221: AL converted units and density preserve reduced solutions ....................................................   Passed   19.53 sec
+222/405 Test #222: Hexahedral interpolation converges at order q + 1 ............................................................   Passed   45.28 sec
+223/405 Test #223: mesh utilities surfaces edges and orientation ................................................................   Passed    0.01 sec
+224/405 Test #224: Endpoint records retain the candidate counts of this solve's trial sweeps ....................................   Passed    0.01 sec
+225/405 Test #225: Force band is bounded two sided with a dead zone and a guarded seed ..........................................   Passed    0.01 sec
+226/405 Test #226: inverse ......................................................................................................   Passed    0.01 sec
+227/405 Test #227: first order BDF ..............................................................................................   Passed    0.01 sec
+228/405 Test #228: BC metric normalization excludes obstacle placeholders .......................................................   Passed    0.01 sec
+229/405 Test #229: contact_2d ...................................................................................................***Failed  618.99 sec
+230/405 Test #230: broad-phase names are validated instead of aliased ...........................................................   Passed    0.01 sec
+231/405 Test #231: ALE identity mapping reproduces Navier-Stokes ................................................................   Passed    0.01 sec
+232/405 Test #232: AL feasibility permits repeated interrupted passes before reduced convergence ................................   Passed    0.46 sec
+233/405 Test #233: Q3 hex proxies are geometrically valid once the basis is repaired ............................................   Passed   13.98 sec
+234/405 Test #234: neo hookean synthetic nonlinear branches 2d 5 bases ..........................................................   Passed    0.01 sec
+235/405 Test #235: coupled two-mesh Navier-Stokes FSI ...........................................................................   Passed   12.97 sec
+236/405 Test #236: hybrid .......................................................................................................   Passed  184.11 sec
+237/405 Test #237: row-sum lumping with nonpositive nodal masses is reported ....................................................   Passed    0.01 sec
+238/405 Test #238: A held position exported before the history advances has the current step's kinematics .......................   Passed    0.01 sec
+239/405 Test #239: expression ...................................................................................................   Passed    0.04 sec
+240/405 Test #240: elastic form derivatives .....................................................................................   Passed   29.07 sec
+241/405 Test #241: Inversion barrier form derivatives ...........................................................................   Passed   14.57 sec
+242/405 Test #242: append_2d ....................................................................................................   Passed    0.01 sec
+243/405 Test #243: An AL stage ended by its budget is rolled back to the accepted state and recorded ............................   Passed  182.81 sec
+244/405 Test #244: friction-opt .................................................................................................   Passed   44.19 sec
+245/405 Test #245: elasticity utilities conversions stresses and dispatch .......................................................   Passed    0.01 sec
+246/405 Test #246: Ogden term lists must pair up ................................................................................   Passed    6.46 sec
+247/405 Test #247: AL pass budget ends an infeasible continuation with a named failure and its pass history .....................   Passed    0.35 sec
+248/405 Test #248: shape-pressure-nodes-3d ......................................................................................   Passed  117.33 sec
+249/405 Test #249: optimization keeps varforms on the legacy state path .........................................................   Passed    6.51 sec
+250/405 Test #250: quad .........................................................................................................   Passed    0.01 sec
+251/405 Test #251: the problem sums the generations of all its forms ............................................................   Passed    0.03 sec
+252/405 Test #252: density and Lame parameter helpers ...........................................................................   Passed    0.01 sec
+253/405 Test #253: eigs3 ........................................................................................................   Passed    0.01 sec
+254/405 Test #254: boundary sampler quadrature dispatch for quads and 3d faces ..................................................   Passed    0.01 sec
+255/405 Test #255: geometry reader applies geometry selection from the mesh object ..............................................   Passed    0.01 sec
+256/405 Test #256: eigs3id ......................................................................................................   Passed    0.01 sec
+257/405 Test #257: Hexahedral bases reproduce tensor-product polynomials of their order .........................................   Passed   41.35 sec
+258/405 Test #258: restart ......................................................................................................   Passed   35.28 sec
+259/405 Test #259: max_order lattice proxy of Q2/Q3/serendipity hexahedra is closed .............................................   Passed   27.76 sec
+260/405 Test #260: elastic parameters are validated at the element barycenters ..................................................   Passed    0.02 sec
+261/405 Test #261: The barrier form describes the model it implements ...........................................................   Passed    0.01 sec
+262/405 Test #262: AL budget options are off by default and read from the AL block ..............................................   Passed    0.01 sec
+263/405 Test #263: Coefficient event accounting observes outer mutations without changing them ..................................   Passed    0.01 sec
+264/405 Test #264: merge mixed assembler matrices ...............................................................................   Passed    0.01 sec
+265/405 Test #265: Q2+ hex contact scenes get the DOF-resolution proxy by default ...............................................   Passed   27.78 sec
+266/405 Test #266: A run's manifest records identity, input hashes, steps and completion ........................................   Passed    8.16 sec
+267/405 Test #267: fibre directions: constant, expression and dimension .........................................................   Passed    0.01 sec
+268/405 Test #268: LagrangeBasis2d edge nodes and conforming basis construction .................................................   Passed    0.01 sec
+269/405 Test #269: semi-implicit barrier contact form derivatives ...............................................................   Passed   30.29 sec
+270/405 Test #270: geometry reader obstacle mesh extraction modes ...............................................................   Passed    0.01 sec
+271/405 Test #271: HDF5 VTU fields are chunked in dense row blocks ..............................................................   Passed    0.49 sec
+272/405 Test #272: periodic boundary form keeps weighted trace mappings .........................................................   Passed    0.01 sec
+273/405 Test #273: all PolyFEM data JSON files are classified ...................................................................   Passed    0.04 sec
+274/405 Test #274: a contact form counts only real changes to its objective .....................................................   Passed    0.01 sec
+275/405 Test #275: laplacian ....................................................................................................   Passed    7.44 sec
+276/405 Test #276: RB-21 parent-keyed coefficients are continuous across closest-feature switches ...............................   Passed    0.01 sec
+277/405 Test #277: weights ......................................................................................................   Passed    0.01 sec
+278/405 Test #278: mshreader ....................................................................................................   Passed    0.01 sec
+279/405 Test #279: split defaults to geometry zero ..............................................................................   Passed    0.01 sec
+280/405 Test #280: per-element fibre files bind to global or body-local rows by length ..........................................   Passed    0.01 sec
+281/405 Test #281: SHA-256 known answers and streaming ..........................................................................   Passed    0.05 sec
+282/405 Test #282: Tetrahedron volume ...........................................................................................   Passed    0.01 sec
+283/405 Test #283: build collision proxy displacement map .......................................................................   Passed   26.76 sec
+284/405 Test #284: generic elastic autodiff modes 2d 5 bases ....................................................................   Passed    0.01 sec
+285/405 Test #285: Boundary extraction report names the skipped hex faces .......................................................   Passed   13.16 sec
+286/405 Test #286: Q1_3d ........................................................................................................   Passed    0.01 sec
+287/405 Test #287: restart from restart json ....................................................................................   Passed   71.16 sec
+288/405 Test #288: shape-contact-force-norm-adhesion ............................................................................   Passed   62.53 sec
+289/405 Test #289: obstacle mesh sequence interpolates nodal displacement .......................................................   Passed    0.01 sec
+290/405 Test #290: Semi-implicit lagged friction follows the trim ...............................................................   Passed    0.01 sec
+291/405 Test #291: lagged regularization form derivatives .......................................................................   Passed   14.05 sec
+292/405 Test #292: zero bc 3d ...................................................................................................   Passed    0.01 sec
+293/405 Test #293: generic elastic autodiff modes 3d 4 bases ....................................................................   Passed    0.01 sec
+294/405 Test #294: generic elastic autodiff modes 2d 3 bases ....................................................................   Passed    0.01 sec
+295/405 Test #295: RB-20 force continuation carries endpoint coefficients .......................................................   Passed    0.01 sec
+296/405 Test #296: boundary sampler quad and volume face sampling ...............................................................   Passed    0.01 sec
+297/405 Test #297: auto_quadrature tensor product ...............................................................................   Passed   55.40 sec
+298/405 Test #298: eigs3autodiff ................................................................................................   Passed    0.01 sec
+299/405 Test #299: AMIPS-debug ..................................................................................................   Passed    7.51 sec
+300/405 Test #300: topology-opt .................................................................................................   Passed   20.80 sec
+301/405 Test #301: Q3 hex node positions are the geometric images of their reference nodes and shared consistently ..............   Passed    6.49 sec
+302/405 Test #302: Tetrahedra clipping ..........................................................................................   Passed    0.01 sec
+303/405 Test #303: matrix utils reorder and scatter block data ..................................................................   Passed    0.01 sec
+304/405 Test #304: Pure P1 and P2 tetrahedral collision surfaces are unchanged by the mixed-order path ..........................   Passed   12.91 sec
+305/405 Test #305: two periodic directions leave redundant corner constraints to QR .............................................   Passed    0.04 sec
+306/405 Test #306: elastic laws: finite-difference derivatives ..................................................................   Passed  116.48 sec
+307/405 Test #307: AL final solve preserves configured non-gradient convergence .................................................   Passed    0.09 sec
+308/405 Test #308: hessian_hooke ................................................................................................   Passed    7.76 sec
+309/405 Test #309: Semi-implicit nonpositive curvature keeps the previous coefficient ...........................................   Passed    0.01 sec
+310/405 Test #310: selection objects without an id ..............................................................................   Passed    0.01 sec
+311/405 Test #311: periodic boundary matching skips already paired DoFs .........................................................   Passed    0.01 sec
+312/405 Test #312: Force weighted trim statistic is scale invariant and rejects invalid forces ..................................   Passed    0.01 sec
+313/405 Test #313: material parameter helpers ...................................................................................   Passed    0.01 sec
+314/405 Test #314: AL stagnation exit is unchanged by the bounded storage: the wall fixture stops where the full history says ...   Passed    2.11 sec
+315/405 Test #315: friction-contact .............................................................................................   Passed   19.99 sec
+316/405 Test #316: macro displacement gradient remains on legacy state path .....................................................   Passed    6.98 sec
+317/405 Test #317: duplicate rest elements are refused ..........................................................................   Passed    0.01 sec
+318/405 Test #318: obstacle displacements tolerate file-path Dirichlet entries ..................................................   Passed    0.01 sec
+319/405 Test #319: a form retuned mid-solve discards the quasi-Newton history ...................................................   Passed    0.18 sec
+320/405 Test #320: selection ....................................................................................................   Passed  149.33 sec
+321/405 Test #321: time integrator ..............................................................................................   Passed    0.01 sec
+322/405 Test #322: Saved VTU kinematics of a held prescribed motion follow the saved displacements ..............................   Passed   23.84 sec
+323/405 Test #323: generic elastic autodiff modes 3d 5 bases ....................................................................   Passed    0.01 sec
+324/405 Test #324: topology-compliance ..........................................................................................   Passed    7.22 sec
+325/405 Test #325: generic tensor problem updates nodal dirichlet matrix data ...................................................   Passed    0.01 sec
+326/405 Test #326: AL stops repeating unchanged stall restarts ..................................................................   Passed    1.73 sec
+327/405 Test #327: average pressure residual and Jacobian .......................................................................   Passed    0.01 sec
+328/405 Test #328: initial-opt ..................................................................................................   Passed   48.85 sec
+329/405 Test #329: Filtered negative slope uses the configured tolerance ........................................................   Passed    0.10 sec
+330/405 Test #330: An extraction that skips boundary faces is refused with a named error ........................................   Passed   18.27 sec
+331/405 Test #331: first order implicit Euler ...................................................................................   Passed    0.02 sec
+332/405 Test #332: Qk_2d ........................................................................................................   Passed    0.01 sec
+333/405 Test #333: geometry reader obstacle geometry arrays and planes ..........................................................   Passed    0.01 sec
+334/405 Test #334: thermo .......................................................................................................   Passed  130.84 sec
+335/405 Test #335: A publication failure after an accepted solve publishes nothing of the step and fires no callback ............   Passed   11.09 sec
+336/405 Test #336: hex ..........................................................................................................   Passed    0.01 sec
+337/405 Test #337: varform factory supports migrated formulations ...............................................................   Passed    0.01 sec
+338/405 Test #338: RBR-04 the improved max operator is refused under semi-implicit stiffness ....................................   Passed    0.01 sec
+339/405 Test #339: linear elastic quasistatic schedule equals the static solve at any dt ........................................   Passed   41.78 sec
+340/405 Test #340: neo hookean synthetic nonlinear branches 2d 6 bases ..........................................................   Passed    0.01 sec
+341/405 Test #341: P2_2d ........................................................................................................   Passed    0.01 sec
+342/405 Test #342: Changed, identical, returning and advanced endpoints have explicit kinematics ................................   Passed    0.01 sec
+343/405 Test #343: runners-polyspline ...........................................................................................   Passed  157.02 sec
+344/405 Test #344: cache ........................................................................................................   Passed    0.01 sec
+345/405 Test #345: tet ..........................................................................................................   Passed    0.01 sec
+346/405 Test #346: Q1_1d ........................................................................................................   Passed    0.01 sec
+347/405 Test #347: friction form derivatives 3d nonconvergent ...................................................................   Passed    7.38 sec
+348/405 Test #348: linear elastic time-dependent load is exported at the saved step .............................................   Passed   13.99 sec
+349/405 Test #349: BC lagrangian form derivatives ...............................................................................   Passed   13.73 sec
+350/405 Test #350: AL clears direction filters on every exit ....................................................................   Passed    0.31 sec
+351/405 Test #351: AL continuation handles zero initial error and caps penalty growth ...........................................   Passed    1.02 sec
+352/405 Test #352: triangle .....................................................................................................   Passed    0.01 sec
+353/405 Test #353: Mixed P1/P2 tetrahedra get a complete conforming collision surface ...........................................   Passed    6.85 sec
+354/405 Test #354: shear-only laws accept the incompressible limit ..............................................................   Passed    0.01 sec
+355/405 Test #355: the convergent formulation's improved max operator is refused with semi-implicit stiffness at init ...........   Passed   80.00 sec
+356/405 Test #356: Contact forms own their collision sets independent of evaluation order .......................................   Passed    0.02 sec
+357/405 Test #357: periodic boundary form builds equality constraints ...........................................................   Passed    0.01 sec
+358/405 Test #358: Simulation initialization owns scalar and fiber snapshots ....................................................   Passed   40.92 sec
+359/405 Test #359: time_int .....................................................................................................   Passed   75.66 sec
+360/405 Test #360: determinant3 .................................................................................................   Passed    0.01 sec
+361/405 Test #361: Hexahedral bases are continuous across shared faces ..........................................................   Passed   26.47 sec
+362/405 Test #362: triangle_data ................................................................................................***Failed  107.99 sec
+363/405 Test #363: per-body material arrays use body-local element indices ......................................................   Passed    0.01 sec
+364/405 Test #364: standard .....................................................................................................   Passed  886.67 sec
+365/405 Test #365: A failed step attempt is rolled back and a solve from the restored state equals a fresh control ..............   Passed   92.09 sec
+366/405 Test #366: output statistics are initialized ............................................................................   Passed    0.01 sec
+367/405 Test #367: MV_2d ........................................................................................................   Passed    0.01 sec
+368/405 Test #368: A swept candidate cache left by an escaped line search is not treated as complete ............................   Passed    0.01 sec
+369/405 Test #369: Independent contact forms can rebuild concurrently ...........................................................   Passed    0.01 sec
+370/405 Test #370: node-trajectory ..............................................................................................   Passed    8.64 sec
+371/405 Test #371: modified-neohookean-barrier-zero .............................................................................   Passed    6.84 sec
+372/405 Test #372: inertia form derivatives .....................................................................................   Passed   13.35 sec
+373/405 Test #373: dirichlet-nodes-3d ...........................................................................................   Passed    8.75 sec
+374/405 Test #374: shape-contact-smooth .........................................................................................   Passed    8.64 sec
+375/405 Test #375: friction form derivatives 3d convergent ......................................................................   Passed    7.00 sec
+376/405 Test #376: elastic laws: objectivity under a rigid rotation .............................................................   Passed  114.39 sec
+377/405 Test #377: BC fixed targets retain inhomogeneous values after slicing ...................................................   Passed    0.01 sec
+378/405 Test #378: P2_3d ........................................................................................................   Passed    0.01 sec
+379/405 Test #379: elastic laws: translation invariance .........................................................................   Passed  117.44 sec
+380/405 Test #380: geometry split supports nonconforming mesh storage ...........................................................   Passed    0.01 sec
+381/405 Test #381: zero bc 2d ...................................................................................................   Passed    0.01 sec
+382/405 Test #382: Semi-implicit global fallback preserves overflow for batch resolution ........................................   Passed    0.01 sec
+383/405 Test #383: NormalAdhesionForm owns its collision set and does not treat an abandoned swept cache as complete ............   Passed    0.01 sec
+384/405 Test #384: neo hookean synthetic nonlinear branches 3d 5 bases ..........................................................   Passed    0.01 sec
+385/405 Test #385: state can opt into migrated varforms .........................................................................   Passed   35.08 sec
+386/405 Test #386: DOF-resolution proxy of Q2/Q3/serendipity hexahedra is closed with exact selector rows .......................   Passed   28.29 sec
+387/405 Test #387: obstacle meshes planes and displacement updates ..............................................................   Passed    0.01 sec
+388/405 Test #388: bessel .......................................................................................................   Passed    0.01 sec
+389/405 Test #389: friction form derivatives 2d convergent ......................................................................   Passed    6.57 sec
+390/405 Test #390: multi-model materials are validated against their own model only .............................................   Passed    0.01 sec
+391/405 Test #391: Triangle area ................................................................................................   Passed    0.01 sec
+392/405 Test #392: Qk_3d ........................................................................................................   Passed    0.01 sec
+393/405 Test #393: Q2 hex node positions are the geometric images of their reference nodes and shared consistently ..............   Passed    6.83 sec
+394/405 Test #394: control-pressure-walker-2d ...................................................................................   Passed   44.40 sec
+395/405 Test #395: AL budget retains only the carried states its motion measures need, whatever the pass count ..................   Passed   38.56 sec
+396/405 Test #396: AL stagnation window ends a continuation blocked by a wall at the weight ceiling .............................   Passed    1.89 sec
+397/405 Test #397: interpolated_fun_2d ..........................................................................................   Passed    0.01 sec
+398/405 Test #398: hgo-dispersion-invariants ....................................................................................   Passed    0.01 sec
+399/405 Test #399: RB-21 parent contributions are recorded by the builder .......................................................   Passed    0.01 sec
+400/405 Test #400: P1_2d ........................................................................................................   Passed    0.01 sec
+401/405 Test #401: adhesion .....................................................................................................   Passed  247.21 sec
+402/405 Test #402: geometry split pairs nonconforming interfaces ................................................................   Passed    0.01 sec
+403/405 Test #403: expand_bc_sidecars ...........................................................................................   Passed    0.02 sec
+404/405 Test #404: shape-walker-2d ..............................................................................................   Passed   60.83 sec
+405/405 Test #405: cli_contract .................................................................................................   Passed   35.67 sec
+99% tests passed, 2 tests failed out of 405
+Total Test time (real) = 9484.78 sec
+The following tests FAILED:
+
+=== contact_2d failure detail ===
+        Start 229: contact_2d
+229/405 Test #229: contact_2d ...................................................................................................***Failed  618.99 sec
+Filters: "contact_2d"
+Randomness seeded to: 1
+[2026-09-28 14:59:13.527] [info] Processing contact/examples/2D/large-ratios/large-stiffness-ratio.json
+[2026-09-28 14:59:21.131] [info] Computed tests: {"err_h1":0.0008670896903995647,"err_h1_semi":1.3170806546128614e-13,"err_l2":0.0008670896903995647,"err_linf":0.0061312500000000325,"err_linf_grad":0.0061312500000000325,"err_lp":0.0037599128111834752,"margin":1e-05,"time_steps":1}
+[2026-09-28 14:59:21.131] [info] Authenticating...
+[2026-09-28 14:59:21.131] [info] Authenticated ✅
+[2026-09-28 14:59:21.131] [info] Processing contact/examples/2D/large-ratios/circle-mat.json
+[2026-09-28 14:59:29.298] [info] Computed tests: {"err_h1":0.0030447489461439504,"err_h1_semi":0.002803673951236774,"err_l2":0.001187395688134782,"err_linf":0.009831667090717896,"err_linf_grad":0.009831667090717896,"err_lp":0.00447739595441553,"margin":1e-05,"time_steps":1}
+[2026-09-28 14:59:29.298] [info] Authenticating...
+[2026-09-28 14:59:29.298] [info] Authenticated ✅
+[2026-09-28 14:59:29.298] [info] Processing contact/examples/2D/large-ratios/large-mass-ratio.json
+[2026-09-28 14:59:58.501] [info] Computed tests: {"err_h1":0.25144660239409533,"err_h1_semi":0.14635228237970835,"err_l2":0.20446614217954123,"err_linf":0.22595852588111123,"err_linf_grad":0.22595852588111123,"err_lp":0.21116501905739787,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 14:59:58.501] [info] Authenticating...
+[2026-09-28 14:59:58.501] [info] Authenticated ✅
+[2026-09-28 14:59:58.501] [info] Processing contact/examples/2D/large-ratios/large-mass-ratio-friction-defaults.json
+[2026-09-28 15:00:29.720] [info] Computed tests: {"err_h1":0.2501306299602148,"err_h1_semi":0.14544130541023548,"err_l2":0.20349977573663444,"err_linf":0.2247405358517233,"err_linf_grad":0.2247405358517233,"err_lp":0.21007662662331364,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:00:29.720] [info] Authenticating...
+[2026-09-28 15:00:29.720] [info] Authenticated ✅
+[2026-09-28 15:00:29.720] [info] Processing contact/examples/2D/initial_angular_velocity.json
+[2026-09-28 15:01:01.445] [info] Computed tests: {"err_h1":2.829988079050731,"err_h1_semi":2.7914836691694322,"err_l2":0.46524343340837077,"err_linf":0.46524343340837115,"err_linf_grad":2.7914836691694327,"err_lp":0.46524343340837077,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:01:01.445] [info] Authenticating...
+[2026-09-28 15:01:01.445] [info] Authenticated ✅
+[2026-09-28 15:01:01.445] [info] Processing contact/examples/2D/golf-ball-doformable-wall.json
+[2026-09-28 15:01:10.731] [info] Computed tests: {"err_h1":4.749937865604088e-05,"err_h1_semi":9.806472703670262e-17,"err_l2":4.749937865604088e-05,"err_linf":0.001340000000000007,"err_linf_grad":0.001340000000000007,"err_lp":0.0005814342100541383,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:10.731] [info] Authenticating...
+[2026-09-28 15:01:10.731] [info] Authenticated ✅
+[2026-09-28 15:01:10.731] [info] Processing contact/examples/2D/golf-ball.json
+[2026-09-28 15:01:18.798] [info] Computed tests: {"err_h1":4.749937865604088e-05,"err_h1_semi":9.806472703670262e-17,"err_l2":4.749937865604088e-05,"err_linf":0.001340000000000007,"err_linf_grad":0.001340000000000007,"err_lp":0.0005814342100541383,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:18.798] [info] Authenticating...
+[2026-09-28 15:01:18.798] [info] Authenticated ✅
+[2026-09-28 15:01:18.798] [info] Processing contact/examples/2D/golf-ball-Linf.json
+[2026-09-28 15:01:26.699] [info] Computed tests: {"err_h1":4.749937865604088e-05,"err_h1_semi":9.806472703670262e-17,"err_l2":4.749937865604088e-05,"err_linf":0.001340000000000007,"err_linf_grad":0.001340000000000007,"err_lp":0.0005814342100541383,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:26.699] [info] Authenticating...
+[2026-09-28 15:01:26.699] [info] Authenticated ✅
+[2026-09-28 15:01:26.699] [info] Processing contact/examples/2D/codimensional/disk-codim-points.json
+[2026-09-28 15:01:33.897] [info] Computed tests: {"err_h1":0.06949523082238415,"err_h1_semi":1.7674270113657186e-16,"err_l2":0.06949523082238415,"err_linf":0.01569600000000002,"err_linf_grad":0.01569600000000002,"err_lp":0.022768294119120517,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:33.897] [info] Authenticating...
+[2026-09-28 15:01:33.897] [info] Authenticated ✅
+[2026-09-28 15:01:33.897] [info] Processing contact/examples/2D/friction/rotating-slope.json
+[2026-09-28 15:01:41.531] [info] Computed tests: {"err_h1":0.010276418755436794,"err_h1_semi":0.007761853879215144,"err_l2":0.006734865016821491,"err_linf":0.01047190057615102,"err_linf_grad":0.022214186308714138,"err_lp":0.007513348913630845,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:41.531] [info] Authenticating...
+[2026-09-28 15:01:41.531] [info] Authenticated ✅
+[2026-09-28 15:01:41.531] [info] Processing contact/examples/2D/friction/high-school-physics-slopetest-mu=0.49.json
+[2026-09-28 15:01:48.877] [info] Computed tests: {"err_h1":0.00035686089300753925,"err_h1_semi":3.988657241396413e-05,"err_l2":0.0003546248134285078,"err_linf":0.0003547562931255426,"err_linf_grad":0.0003547562931255426,"err_lp":0.00035462495972366143,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:48.877] [info] Authenticating...
+[2026-09-28 15:01:48.877] [info] Authenticated ✅
+[2026-09-28 15:01:48.877] [info] Processing contact/examples/2D/friction/circle-rollers.json
+[2026-09-28 15:01:56.757] [info] Computed tests: {"err_h1":0.022331530644152636,"err_h1_semi":0.021987216050737213,"err_l2":0.003906352678513811,"err_linf":0.005964273278623087,"err_linf_grad":0.005964273278623087,"err_lp":0.004370632626860946,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:01:56.757] [info] Authenticating...
+[2026-09-28 15:01:56.757] [info] Authenticated ✅
+[2026-09-28 15:01:56.758] [info] Processing contact/examples/2D/friction/moving-ground.json
+[2026-09-28 15:02:04.212] [info] Computed tests: {"err_h1":0.000984256572242822,"err_h1_semi":4.7322506210810034e-17,"err_l2":0.000984256572242822,"err_linf":0.0009810000000016314,"err_linf_grad":0.0009810000000016314,"err_lp":0.0009810037476693317,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:02:04.212] [info] Authenticating...
+[2026-09-28 15:02:04.212] [info] Authenticated ✅
+[2026-09-28 15:02:04.212] [info] Processing contact/examples/2D/friction/high-school-physics-slopetest-mu=0.50.json
+[2026-09-28 15:02:29.909] [info] Computed tests: {"err_h1":0.00034543300860690796,"err_h1_semi":4.254526142842207e-05,"err_l2":0.0003428029523869469,"err_linf":0.0003433270891029103,"err_linf_grad":0.0003433270891029103,"err_lp":0.00034280536018267823,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:02:29.909] [info] Authenticating...
+[2026-09-28 15:02:29.909] [info] Authenticated ✅
+[2026-09-28 15:02:29.909] [info] Processing contact/examples/2D/friction/card-house.json
+[2026-09-28 15:02:39.592] [info] Computed tests: {"err_h1":0.003936911862317547,"err_h1_semi":1.0800500200586715e-13,"err_l2":0.003936911862317547,"err_linf":0.0061312500001869845,"err_linf_grad":0.0061312500001869845,"err_lp":0.0054884623779742825,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:02:39.592] [info] Authenticating...
+[2026-09-28 15:02:39.592] [info] Authenticated ✅
+[2026-09-28 15:02:39.592] [info] Processing contact/examples/2D/unit-tests/erleben/sliding-spike.json
+[2026-09-28 15:02:54.165] [info] Computed tests: {"err_h1":12.247448713915905,"err_h1_semi":4.084558157512003e-07,"err_l2":12.247448713915897,"err_linf":10.000000000000005,"err_linf_grad":10.000000000000005,"err_lp":10.519895055086447,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:02:54.165] [info] Authenticating...
+[2026-09-28 15:02:54.165] [info] Authenticated ✅
+[2026-09-28 15:02:54.165] [info] Processing contact/examples/2D/unit-tests/erleben/spikes.json
+[2026-09-28 15:03:10.965] [info] Computed tests: {"err_h1":0.05694389162948533,"err_h1_semi":0.02745718021674658,"err_l2":0.04988697273292567,"err_linf":0.04073254266926851,"err_linf_grad":0.04073254266926851,"err_lp":0.04285020742075353,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:03:10.965] [info] Authenticating...
+[2026-09-28 15:03:10.965] [info] Authenticated ✅
+[2026-09-28 15:03:10.965] [info] Processing contact/examples/2D/unit-tests/erleben/internal-edges.json
+[2026-09-28 15:03:54.941] [info] Computed tests: {"err_h1":0.11909601944800167,"err_h1_semi":0.00617349896979617,"err_l2":0.118935906095799,"err_linf":0.11924187088002693,"err_linf_grad":0.11924187088002693,"err_lp":0.11893827331968969,"margin":0.0001,"time_steps":"all"}
+[2026-09-28 15:03:54.941] [info] Authenticating...
+[2026-09-28 15:03:54.941] [info] Authenticated ✅
+[2026-09-28 15:03:54.941] [info] Processing contact/examples/2D/unit-tests/erleben/spike-in-crack.json
+[2026-09-28 15:04:40.781] [info] Computed tests: {"err_h1":6.17352107454909,"err_h1_semi":0.05061146512462816,"err_l2":6.173313610817102,"err_linf":5.040489456226759,"err_linf_grad":5.040489456226759,"err_lp":5.302542010577522,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:04:40.781] [info] Authenticating...
+[2026-09-28 15:04:40.781] [info] Authenticated ✅
+[2026-09-28 15:04:40.781] [info] Processing contact/examples/2D/unit-tests/erleben/cliff-edges.json
+[2026-09-28 15:05:06.833] [info] Computed tests: {"err_h1":0.07524893835264271,"err_h1_semi":0.006140928528813894,"err_l2":0.07499794477186573,"err_linf":0.0754496832496028,"err_linf_grad":0.0754496832496028,"err_lp":0.07500615399794562,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:05:06.833] [info] Authenticating...
+[2026-09-28 15:05:06.833] [info] Authenticated ✅
+[2026-09-28 15:05:06.833] [info] Processing contact/examples/2D/unit-tests/vertex-edge.json
+[2026-09-28 15:05:52.800] [info] Computed tests: {"err_h1":0.1148652441132309,"err_h1_semi":0.038442473799126554,"err_l2":0.1082413992583041,"err_linf":0.1644913556426425,"err_linf_grad":0.1644913556426425,"err_lp":0.14815136571551607,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:05:52.801] [info] Authenticating...
+[2026-09-28 15:05:52.801] [info] Authenticated ✅
+[2026-09-28 15:05:52.801] [info] Processing contact/examples/2D/unit-tests/5-squares.json
+[2026-09-28 15:06:01.268] [info] Computed tests: {"err_h1":0.0027419783574091183,"err_h1_semi":3.517095698523584e-18,"err_l2":0.0027419783574091183,"err_linf":0.0061312500000000065,"err_linf_grad":0.0061312500000000065,"err_lp":0.005013924316954637,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:06:01.268] [info] Authenticating...
+[2026-09-28 15:06:01.268] [info] Authenticated ✅
+[2026-09-28 15:06:01.268] [info] Processing contact/examples/2D/unit-tests/vertex-vertex.json
+[2026-09-28 15:06:36.064] [info] Computed tests: {"err_h1":12.463805188868438,"err_h1_semi":0.33434099161027653,"err_l2":12.459320041133578,"err_linf":17.620139380118015,"err_linf_grad":17.620139380118015,"err_lp":16.15773905339807,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:06:36.064] [info] Authenticating...
+[2026-09-28 15:06:36.064] [info] Authenticated ✅
+[2026-09-28 15:06:36.064] [info] Processing contact/examples/2D/unit-tests/edge-vertex.json
+[2026-09-28 15:07:23.195] [info] Computed tests: {"err_h1":0.09501267735047453,"err_h1_semi":0.019639881342949406,"err_l2":0.09296065790505274,"err_linf":0.14126965047581774,"err_linf_grad":0.14126965047581774,"err_lp":0.12723642267022767,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:07:23.195] [info] Authenticating...
+[2026-09-28 15:07:23.195] [info] Authenticated ✅
+[2026-09-28 15:07:23.195] [info] Processing contact/examples/2D/unit-tests/triangle-corner.json
+[2026-09-28 15:08:09.246] [info] Computed tests: {"err_h1":0.7843626968106129,"err_h1_semi":0.018950920487092862,"err_l2":0.7841337276005346,"err_linf":1.108932552286846,"err_linf_grad":1.108932552286846,"err_lp":1.0168956340883133,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:08:09.246] [info] Authenticating...
+[2026-09-28 15:08:09.246] [info] Authenticated ✅
+[2026-09-28 15:08:09.246] [info] Processing contact/examples/2D/unit-tests/edge-edge.json
+[2026-09-28 15:08:54.863] [info] Computed tests: {"err_h1":0.13775067134633104,"err_h1_semi":0.01963988152564905,"err_l2":0.13634339921691616,"err_linf":0.20719716045610856,"err_linf_grad":0.20719716045610856,"err_lp":0.18661492680890568,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:08:54.863] [info] Authenticating...
+[2026-09-28 15:08:54.863] [info] Authenticated ✅
+[2026-09-28 15:08:54.863] [info] Processing contact/examples/2D/codimensional/pin-cushion-ball.json
+[2026-09-28 15:09:02.560] [info] Computed tests: {"err_h1":0.05562969895765257,"err_h1_semi":5.147620702051516e-16,"err_l2":0.05562969895765257,"err_linf":0.015696000000000057,"err_linf_grad":0.015696000000000057,"err_lp":0.021536167481716342,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:09:02.560] [info] Authenticating...
+[2026-09-28 15:09:02.560] [info] Authenticated ✅
+[2026-09-28 15:09:02.560] [info] Processing contact/examples/2D/convergence/sliding-spike.json
+[2026-09-28 15:09:10.538] [info] Computed tests: {"err_h1":1.9532008175757734,"err_h1_semi":1.3837038681711957,"err_l2":1.3785343807779114,"err_linf":1.1255686085964847,"err_linf_grad":1.1297894773782504,"err_lp":1.1840863639734684,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:09:10.538] [info] Authenticating...
+[2026-09-28 15:09:10.538] [info] Authenticated ✅
+[2026-09-28 15:09:10.538] [info] Processing gcp-contact/cube-on-floor/run.json
+[2026-09-28 15:09:32.499] [info] Computed tests: {"err_h1":0.09845800662701884,"err_h1_semi":0.09796627102614003,"err_l2":0.00982796063275397,"err_linf":0.025741730996920415,"err_linf_grad":0.04473772958363539,"err_lp":0.016937531476195544,"margin":1e-05,"time_steps":"all"}
+[2026-09-28 15:09:32.500] [info] Authenticating...
+[2026-09-28 15:09:32.500] [error] Violating Authenticate prev_err_l2=0.009827690001006802 curr_err_l2=0.00982796063275397 relerr_err_l2=2.7537676416242114e-05
+[2026-09-28 15:09:32.500] [error] Violating Authenticate prev_err_h1=0.09881319455550931 curr_err_h1=0.09845800662701884 relerr_err_h1=0.0035945394750995672
+[2026-09-28 15:09:32.500] [error] Violating Authenticate prev_err_h1_semi=0.0983232623925236 curr_err_h1_semi=0.09796627102614003 relerr_err_h1_semi=0.003630792527595407
+[2026-09-28 15:09:32.500] [error] Violating Authenticate prev_err_linf=0.02572930405859209 curr_err_linf=0.025741730996920415 relerr_err_linf=0.00048298773647452377
+[2026-09-28 15:09:32.500] [error] Violating Authenticate prev_err_linf_grad=0.044732657488330614 curr_err_linf_grad=0.04473772958363539 relerr_err_linf_grad=0.00011338685402484687
+[2026-09-28 15:09:32.500] [error] Violating Authenticate prev_err_lp=0.016938155138014152 curr_err_lp=0.016937531476195544 relerr_err_lp=3.6819937798825616e-05
+[2026-09-28 15:09:32.500] [error] Computed tests: {"err_h1":0.09845800662701884,"err_h1_semi":0.09796627102614003,"err_l2":0.00982796063275397,"err_linf":0.025741730996920415,"err_linf_grad":0.04473772958363539,"err_lp":0.016937531476195544,"margin":1e-05,"time_steps":"all"}
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unit_tests is a Catch2 v3.13.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+contact_2d
+-------------------------------------------------------------------------------
+/home/user/polyfem/tests/verify_run.cpp:417
+...............................................................................
+
+/home/user/polyfem/tests/verify_run.cpp:291: FAILED:
+  CHECK( result == SUCCESS )
+with expansion:
+  4 == 0
+with message:
+  line := "gcp-contact/cube-on-floor/run.json"
+
+[2026-09-28 15:09:32.500] [polyfem] [error] Failing tests:
+gcp-contact/cube-on-floor/run.json
+
+===============================================================================
+test cases:  1 |  0 passed | 1 failed
+assertions: 29 | 28 passed | 1 failed
+
+
+        Start 230: broad-phase names are validated instead of aliased
+
+=== triangle_data failure detail ===
+        Start 362: triangle_data
+362/405 Test #362: triangle_data ................................................................................................***Failed  107.99 sec
+Filters: "triangle_data"
+Randomness seeded to: 1
+[2026-09-28 15:44:25.657] [info] Processing contact/examples/3D/higher-order/ball-bounce/P1.json
+[2026-09-28 15:44:33.068] [info] Computed tests: {"err_h1":6.845543291911039e-07,"err_h1_semi":8.756434115399321e-21,"err_l2":6.845543291911039e-07,"err_linf":9.810000000000003e-06,"err_linf_grad":9.810000000000003e-06,"err_lp":5.042010385129135e-06,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:44:33.068] [info] Authenticating...
+[2026-09-28 15:44:33.068] [info] Authenticated ✅
+[2026-09-28 15:44:33.068] [info] Processing contact/examples/3D/higher-order/ball-bounce/P2.json
+[2026-09-28 15:44:40.801] [info] Computed tests: {"err_h1":8.207999469277731e-07,"err_h1_semi":2.684125320371391e-20,"err_l2":8.207999469277731e-07,"err_linf":9.81000000000001e-06,"err_linf_grad":9.81000000000001e-06,"err_lp":5.276076518497313e-06,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:44:40.801] [info] Authenticating...
+[2026-09-28 15:44:40.801] [info] Authenticated ✅
+[2026-09-28 15:44:40.801] [info] Processing contact/examples/3D/higher-order/ball-bounce/P3.json
+[2026-09-28 15:44:49.423] [info] Computed tests: {"err_h1":8.28351012898774e-07,"err_h1_semi":1.0309754450119173e-19,"err_l2":8.28351012898774e-07,"err_linf":9.810000000000035e-06,"err_linf_grad":9.810000000000035e-06,"err_lp":5.288169383601531e-06,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:44:49.423] [info] Authenticating...
+[2026-09-28 15:44:49.423] [info] Authenticated ✅
+[2026-09-28 15:44:49.423] [info] Processing contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json
+[2026-09-28 15:45:19.036] [info] Computed tests: {"err_h1":0.004936123096822667,"err_h1_semi":0.0013129920252288735,"err_l2":0.004758294144824549,"err_linf":0.05685404280187156,"err_linf_grad":0.05685404280187156,"err_lp":0.03038360307883781,"margin":1e-05,"time_steps":20}
+[2026-09-28 15:45:19.036] [info] Authenticating...
+[2026-09-28 15:45:19.036] [info] Authenticated ✅
+[2026-09-28 15:45:19.036] [info] Processing contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01-friction-defaults.json
+[2026-09-28 15:45:49.523] [info] Computed tests: {"err_h1":0.004806040015997946,"err_h1_semi":0.0007342731213108365,"err_l2":0.004749617207596205,"err_linf":0.056942485078301665,"err_linf_grad":0.056942485078301665,"err_lp":0.030329615062595485,"margin":1e-05,"time_steps":20}
+[2026-09-28 15:45:49.523] [info] Authenticating...
+[2026-09-28 15:45:49.523] [info] Authenticated ✅
+[2026-09-28 15:45:49.523] [info] Processing contact/examples/3D/higher-order/ball-bounce/P4.json
+[2026-09-28 15:45:57.056] [info] Computed tests: {"err_h1":8.281610677999527e-07,"err_h1_semi":3.5789401702656427e-19,"err_l2":8.281610677999527e-07,"err_linf":9.810000000000363e-06,"err_linf_grad":9.810000000000363e-06,"err_lp":5.287866206498734e-06,"margin":1e-05,"time_steps":1}
+[2026-09-28 15:45:57.056] [info] Authenticating...
+[2026-09-28 15:45:57.056] [info] Authenticated ✅
+[2026-09-28 15:45:57.056] [info] Processing contact/examples/3D/higher-order/microstructure.json
+[2026-09-28 15:46:13.295] [polyfem] [error] Broad phase over trial step failed (Broad phase resource budget exceeded before allocation: HashGrid would need 65160487 candidate_emissions (limit 50000000); item pairs sharing a cell in one detect call before filtering and deduplication; 37739 vertex, 126321 edge and 89037 face items over a 9x8x9 grid of cell size 1.02146): trial Linf=0.98 (980 supports; clamp 1 -> swept Linf 0.98), median vertex sweep 0.98, 19240 vertices / 57768 edges / 38512 faces, broad phase HashGrid (budget: cell items 100000000, candidate emissions 50000000)
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unit_tests is a Catch2 v3.13.0 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+triangle_data
+-------------------------------------------------------------------------------
+/home/user/polyfem/tests/verify_run.cpp:458
+...............................................................................
+
+/home/user/polyfem/tests/verify_run.cpp:291: FAILED:
+  CHECK( result == SUCCESS )
+with expansion:
+  3 == 0
+with message:
+  line := "contact/examples/3D/higher-order/microstructure.json"
+
+[2026-09-28 15:46:13.569] [polyfem] [error] Failing tests:
+contact/examples/3D/higher-order/microstructure.json
+
+===============================================================================
+test cases: 1 | 1 failed
+assertions: 7 | 6 passed | 1 failed
+
+
+        Start 363: per-body material arrays use body-local element indices
