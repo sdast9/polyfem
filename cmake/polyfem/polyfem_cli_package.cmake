@@ -22,10 +22,22 @@ endif()
 
 set(POLYFEM_CLI_RUNTIME_COMPONENT cli)
 
+# PolyFEM_bin currently links no third-party shared library outside the
+# default system search path (TBB and MKL are linked statically in the
+# tested configuration), so CMake's automatic RPATH computation embeds no
+# RPATH/RUNPATH section at all -- and `file(RPATH_CHANGE)` at install time
+# refuses to rewrite a section that does not exist. Force a (possibly
+# no-op) build-time RPATH so install-time relocation always has something
+# valid to rewrite, in case a future configuration (a different platform,
+# POLYFEM_THREADING, or a shared TBB) does bundle a runtime library.
 if(APPLE)
-    set_target_properties(${PROJECT_NAME}_bin PROPERTIES INSTALL_RPATH "@executable_path/../lib")
+    set_target_properties(${PROJECT_NAME}_bin PROPERTIES
+        BUILD_RPATH "@loader_path"
+        INSTALL_RPATH "@executable_path/../lib")
 elseif(UNIX)
-    set_target_properties(${PROJECT_NAME}_bin PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
+    set_target_properties(${PROJECT_NAME}_bin PROPERTIES
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
 if(WIN32)
