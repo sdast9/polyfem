@@ -350,3 +350,50 @@ Evidence: `outputs/ci-06/20260929T023242Z/` (five run directories,
 `outputs/ci-06/20260929T023436Z-smoke/`), not committed (gitignored,
 per-task evidence convention). No solver, tolerance, reference, or default
 changed by this session.
+
+## 2026-09-29 — Reference regenerated; CI-06 closed
+
+**Status: done.** The reference/tolerance decision left open above was made
+by the user this session: **option 1**, keep the fixture's margin at `1e-5`
+and regenerate its reference at the deterministic value the canonical-order
+fix now produces (`ipc_toolkit f8dafef39e8`, already pinned; the recommendation
+above quoted these exact values). Branch `cloud/ci-05-06-refs`, on top of
+`8f8b518`.
+
+The reference was **generated through the harness itself**, not hand-typed:
+the `*` manifest-prefix / `compute_validation` path
+(`run_manifest_env`) against the `sdast9/polyfem-data` `fable-fixtures`
+checkout, exactly as CI-03's twins were generated. `resolve_reference_margin`
+(this record's earlier fix) preserved the fixture's existing `1e-5` margin
+across the regeneration — it did not silently widen back to the global
+default. The six computed values matched the recommendation section's
+predicted values bit-for-bit as doubles:
+
+| Metric | Regenerated reference |
+| --- | ---: |
+| `err_l2` | 0.0098260282514205325 |
+| `err_h1` | 0.098409800311031831 |
+| `err_h1_semi` | 0.097918016554970344 |
+| `err_linf` | 0.025735020611998116 |
+| `err_linf_grad` | 0.044738583163921243 |
+| `err_lp` | 0.016934065257996768 |
+
+Verification: 3/3 fresh, isolated, single-threaded `run_manifest_env`
+processes against the `fable-fixtures` checkout gave bitwise-identical
+computed values and all authenticated against the new reference; the same
+3/3 bitwise-identical repeat was run again against the built `data/` copy
+once `cmake/recipes/polyfem_data.cmake` moved to the new pin. `contact_2d`
+(CTest group, single-threaded, cloud Linux): **29/29 fixtures authenticate**,
+`cube-on-floor` included — the first time this group has been fully green
+since the scene's margin was last achievable. No other `contact_2d` fixture
+or reference was touched; the `1e-5` margin is unchanged, only the stored
+value moved to match the now-reproducible, canonical-order computation.
+
+Publication: data — `sdast9/polyfem-data@72d3076` (`fable-fixtures`, the
+reference-only commit; full branch head after CI-05's twin is `b7ae0d9`).
+PolyFEM — `cmake/recipes/polyfem_data.cmake` pin update on
+`sdast9/polyfem:cloud/ci-05-06-refs`. No solver, tolerance, or default
+changed; the margin stays `1e-5` as decided.
+
+Cross-platform (macOS/Windows) confirmation of this reference is pending
+native CI, as for every other scene item in this plan.

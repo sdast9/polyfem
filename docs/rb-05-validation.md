@@ -668,3 +668,24 @@ for the full numbers and next-step options. This does not change RB-05's
 scope or the global default; it is a new open question specific to this one
 fixture's reference under a bounded budget.
 
+### Follow-up — the mismatch was the CI-03 friction-defaults pattern; fixture pair published (2026-09-29)
+
+The reference mismatch above is now explained: a 2026-09-29 measurement (CI-05
+section of [ci-portability-plan.md](ci-portability-plan.md#ci-05--resource-limit-rejects-the-microstructure-fixture))
+found the mismatch is entirely the RB-10 `friction_iterations` default
+(1 → 2), the same signature [CI-03](ci-03-validation.md) found on its three
+fixtures — the resource budget was not the cause. Per the user's decision
+that day (CI-05, treated as CI-03), `contact/examples/3D/higher-order/
+microstructure.json` now states `solver/contact/friction_iterations: 1`
+alongside its existing `max_candidate_emissions: 70000000` budget, and a
+`microstructure-friction-defaults.json` twin (same scene, current friction
+default, same budget) carries a harness-generated reference. Both
+authenticate: the historical fixture at ~1e-9 relative error against its
+**unchanged** stored reference, the twin bit-identical to its own
+freshly-generated one — confirmed together in one `run_manifest_env` pass
+(6/6 assertions) and again inside the full `triangle_data` ctest group.
+Published: `sdast9/polyfem-data@b7ae0d9` (`fable-fixtures`), pinned in
+`cmake/recipes/polyfem_data.cmake` on `sdast9/polyfem:cloud/ci-05-06-refs`.
+This closes CI-05 (see the plan); RB-05's global default and the CCD/trial-cap
+protections are unchanged.
+
