@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <string>
 #include <thread>
 
 #include <Eigen/Core>
@@ -34,12 +35,27 @@ namespace polyfem
 				thread_limiter = std::make_shared<tbb::global_control>(tbb::global_control::max_allowed_parallelism, num_threads);
 #endif
 				Eigen::setNbThreads(num_threads);
+				limit_accelerate_threads(max_threads > 0 ? num_threads : 0);
 			}
+
+			/// The VECLIB_MAXIMUM_THREADS value in force after the last
+			/// set_num_threads, empty when unset (Apple builds only).
+			inline const std::string &accelerate_threads() const { return accelerate_threads_; }
+			/// Where accelerate_threads() came from: "max_threads", "environment"
+			/// (preset by the user, kept), "unlimited" or "not_applicable".
+			inline const std::string &accelerate_source() const { return accelerate_source_; }
 
 		private:
 			NThread() {}
 
+			/// Caps Apple Accelerate's own threads (0 = no cap), see par_for.cpp.
+			void limit_accelerate_threads(const unsigned limit);
+
 			size_t num_threads_;
+			std::string accelerate_threads_;
+			std::string accelerate_source_ = "not_applicable";
+			/// The value this class exported, empty when it exported none.
+			std::string accelerate_exported_;
 
 #if defined(POLYFEM_WITH_TBB) || defined(POLYFEM_WITH_CPP_THREADS)
 			/// limits the number of used threads

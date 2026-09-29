@@ -220,6 +220,17 @@ namespace polyfem::io
 #endif
 		}
 
+		json accelerate_threads()
+		{
+#ifdef __APPLE__
+			const auto &threads = utils::NThread::get();
+			return {{"VECLIB_MAXIMUM_THREADS", threads.accelerate_threads().empty() ? json(nullptr) : json(threads.accelerate_threads())},
+					{"source", threads.accelerate_source()}};
+#else
+			return {{"VECLIB_MAXIMUM_THREADS", nullptr}, {"source", "not_applicable"}};
+#endif
+		}
+
 		json hashed_file(const std::string &path)
 		{
 			try
@@ -356,7 +367,8 @@ namespace polyfem::io
 			{"requested_max_threads", max_threads},
 			{"effective", utils::get_n_threads()},
 			{"hardware_concurrency", std::thread::hardware_concurrency()},
-			{"scope", "The parallel-for limit (tbb::global_control) and Eigen's thread count; the linear solver and the IPC toolkit follow it, an external OMP/TBB environment setting is not read"}};
+			{"accelerate", accelerate_threads()},
+			{"scope", "The parallel-for limit (tbb::global_control), which the IPC toolkit follows, Eigen's thread count and, on Apple builds, Accelerate's own threads through VECLIB_MAXIMUM_THREADS unless preset (see accelerate; Accelerate is bitwise reproducible only at one thread). Other libraries' own threading and an external OMP/TBB environment setting are not read"}};
 		m["process"] = process;
 
 		// Source identity (compiled in) and the libraries' compile-time versions.

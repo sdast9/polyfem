@@ -314,9 +314,11 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
   Loose descent-test stops then amplify this from step 12 (first stiff
   contact solve), and the contact trajectory carries it to 17.7 %. With
   `VECLIB_MAXIMUM_THREADS=1` or CHOLMOD, 200-step repeats are bit-identical,
-  so nothing else in single-threaded runs is nondeterministic. The fix
-  (set the variable when `max_threads == 1`) is proposed, and the user's
-  decision is pending. Even deterministic, two roundoff realizations differ by
+  so nothing else in single-threaded runs is nondeterministic. **Fixed
+  2026-09-28** (user decision): the binary now caps Accelerate at
+  `max_threads` whenever a limit is set, so `--max_threads 1` runs are
+  bit-reproducible (200-step IT repeats identical without the variable);
+  earlier single-threaded Accelerate evidence stays a random realization. Even deterministic, two roundoff realizations differ by
   up to 23.5 % and 3,807 vs 6,385 iterations, so the IT cross comparisons
   above stay unassessable pairwise.
 * Opt-in `coefficient-events.jsonl` (physical diagnostics) grows past 10 GB

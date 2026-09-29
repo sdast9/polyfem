@@ -3,9 +3,10 @@
 Date: 2026-09-28. Follow-up to the open item of
 [EF-07](ef-07-trim-loop.md#open) ("IT's run-to-run irreproducibility on this
 host (single-threaded)"), also noted in [EF-04b](ef-04b-feasible-bound-retest.md).
-**Status: cause found. Measurements only, with no code, default or tool change.
-The fix is proposed below and waits for the user's decision, because it
-changes single-threaded trajectories (within the same distribution).**
+**Status: cause found, fix decided and implemented (2026-09-28).** The user
+chose option (a) plus (c) below: the binary caps Accelerate's threads at
+`max_threads` whenever a limit is set, which makes `--max_threads 1` runs
+bit-reproducible. See "Implemented fix" for the code and acceptance results.
 
 ## Result
 
@@ -176,10 +177,11 @@ proposal below.
   tested here: R4 runs multithreaded, where TBB reductions could also
   contribute.
 
-## Proposed fix (user decision pending)
+## Proposed fix (decided: (a) and (c))
 
 1. **Pin Accelerate's threads for single-threaded runs.** In
-   `State::set_max_threads` (`src/polyfem/State.cpp:453`), on Apple builds,
+   `NThread::set_num_threads` (proposed there as `State::set_max_threads`; the
+   former is what every entry point calls), on Apple builds,
    when `max_threads == 1` and `VECLIB_MAXIMUM_THREADS` is not already set:
    `setenv("VECLIB_MAXIMUM_THREADS", "1", /*overwrite=*/0)`. This runs before
    the first factorization (verified above: setting it at `main` works). It
@@ -205,16 +207,52 @@ Effect on results:
   non-Apple build.
 * Multithreaded runs are unchanged.
 
-Open questions for the user:
+Decision (user, 2026-09-28): (a) apply the fix to the binary, and (c) cap
+Accelerate at `max_threads` for multithreaded runs too (that changes
+performance, not determinism: 4 threads is still nondeterministic). Option (b),
+a harness-only export in `tools/ef01/ef01_run.py`, was not chosen.
 
-* (a) Apply the fix to the binary, as proposed above.
-* (b) Or keep the binary and only have the harness (`tools/ef01/ef01_run.py`,
-  hence `tools/ef02/run.py`) export `VECLIB_MAXIMUM_THREADS=1` when
-  `--threads 1`. This makes acceptance matrices reproducible without touching
-  Houdini or ad-hoc runs.
-* (c) Whether multithreaded runs should also cap Accelerate at `max_threads`,
-  for thread-limit consistency. That changes performance, not determinism
-  (4 threads is still nondeterministic).
+## Implemented fix
+
+`NThread::set_num_threads` (`src/polyfem/utils/par_for.cpp`), which every
+solver entry (`State`, legacy `State`, `OptState`) calls, now sets
+`VECLIB_MAXIMUM_THREADS` on Apple builds before the first factorization:
+
+* `max_threads > 0`: the variable is set to the effective thread count
+  (1 for `--max_threads 1`, 4 for `--max_threads 4`).
+* `max_threads <= 0` (unlimited, the default): the variable is not set and
+  Accelerate decides, so default multithreaded runs behave as before.
+* A `VECLIB_MAXIMUM_THREADS` the user exported is never overridden. The
+  variable PolyFEM itself exported is replaced when the limit changes.
+* Non-Apple builds are unchanged.
+
+The run manifest records it in `process.threads.accelerate`
+(`VECLIB_MAXIMUM_THREADS` value or null, and `source` = `max_threads` |
+`environment` | `unlimited` | `not_applicable`), and the `scope` sentence now
+says that Accelerate follows the limit through this variable and is bitwise
+reproducible only at one thread. The manifest schema stays at version 1 (a
+field was added, none changed). Test: `[run_manifest][threads]` in
+`tests/test_run_manifest.cpp` (cap 1, cap 3, unlimited, preset value kept,
+manifest fields, environment restored).
+
+Acceptance (binary built from `5143c15a9` plus this change; the unrelated
+upstream commits since then were not rebuilt):
+
+| Check | Result |
+| --- | --- |
+| `unit_tests "[run_manifest]"` | 185 assertions in 8 cases pass; `[threads]` also with `VECLIB_MAXIMUM_THREADS=7` preset |
+| IT 3 steps, no environment variable, two runs | step files byte-identical to each other and to the `VECLIB_MAXIMUM_THREADS=1` reference (`step_1` `2ca1e5fc`, `step_4` `12c55752`); the old binary without the variable gives `c9375856` |
+| IT 200 steps, no environment variable, two runs at the same time | all 201 VTU files byte-identical; `step_1/12/124/200` equal the `VECLIB_MAXIMUM_THREADS=1` reference hashes |
+| Five public smokes, `--max_threads 1` | exit 0, no `[error]` lines, all field outputs byte-identical to the pre-change binary (only `run-manifest.json`, which gains the new field and the binary hash, and timings in `run.log` differ) |
+| `--max_threads 4` / `0` manifest | `accelerate` = "4"/`max_threads` and null/`unlimited` |
+| 13 Houdini HDA scripts against the fixed binary | all exit 0 |
+
+Not run: the full unit suite (about 2 h; the change is confined to thread
+setup and the manifest) and the RB-02 probe (a standalone coefficient probe
+that does not touch threading). Single-threaded Accelerate trajectories
+recorded before this change (IT, EF matrix scenes) came from random
+realizations and cannot be reproduced bit for bit; the spreads in §3 apply to
+them.
 
 Not proposed: changing the default linear solver (CHOLMOD is deterministic
 and was faster here, but that is a solver-default change), or tightening the

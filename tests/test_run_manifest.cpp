@@ -12,15 +12,18 @@
 #include <polyfem/io/RunManifest.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/utils/Sha256.hpp>
+#include <polyfem/utils/par_for.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -430,4 +433,75 @@ TEST_CASE("The manifest is opt-in for the library and defaulted for the executab
 		state.run_manifest->finalize("completed", -1, "");
 	}
 	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("max_threads caps Accelerate's own threads unless the user preset them", "[run_manifest][threads]")
+{
+	// Accelerate's multithreaded sparse factorization ignored --max_threads and
+	// made single-threaded runs irreproducible (docs/it-reproducibility-20260928.md).
+	auto &threads = utils::NThread::get();
+#ifdef __APPLE__
+	static constexpr const char *variable = "VECLIB_MAXIMUM_THREADS";
+	const char *initial = std::getenv(variable);
+	const std::optional<std::string> preset = initial ? std::optional<std::string>(initial) : std::nullopt;
+	const auto exported = []() -> std::optional<std::string> {
+		const char *value = std::getenv(variable);
+		return value ? std::optional<std::string>(value) : std::nullopt;
+	};
+
+	unsetenv(variable);
+	threads.set_num_threads(1);
+	CHECK(exported() == "1");
+	CHECK(threads.accelerate_threads() == "1");
+	CHECK(threads.accelerate_source() == "max_threads");
+
+	threads.set_num_threads(3);
+	CHECK(exported() == std::to_string(std::min(3u, std::thread::hardware_concurrency())));
+	CHECK(threads.accelerate_source() == "max_threads");
+
+	// Unlimited: the variable this class exported is withdrawn, Accelerate decides.
+	for (const int unlimited : {0, -1})
+	{
+		threads.set_num_threads(1);
+		threads.set_num_threads(unlimited);
+		CHECK_FALSE(exported().has_value());
+		CHECK(threads.accelerate_threads().empty());
+		CHECK(threads.accelerate_source() == "unlimited");
+	}
+
+	// A user's own setting is kept, whatever max_threads asks.
+	setenv(variable, "2", 1);
+	for (const int max_threads : {1, 4, 0})
+	{
+		threads.set_num_threads(max_threads);
+		CHECK(exported() == "2");
+		CHECK(threads.accelerate_threads() == "2");
+		CHECK(threads.accelerate_source() == "environment");
+	}
+
+	// The manifest of a single-threaded run records the cap.
+	unsetenv(variable);
+	{
+		const auto dir = scratch_dir("polyfem-manifest-threads");
+		json args = beam_args(write_beam(dir), dir);
+		args["/output/manifest"_json_pointer] = "manifest.json";
+		State state;
+		state.init(args, true);
+		const json m = read_json(dir / "manifest.json");
+		CHECK(m["process"]["threads"]["accelerate"]["VECLIB_MAXIMUM_THREADS"] == "1");
+		CHECK(m["process"]["threads"]["accelerate"]["source"] == "max_threads");
+		CHECK_THAT(m["process"]["threads"]["scope"].get<std::string>(), ContainsSubstring("VECLIB_MAXIMUM_THREADS"));
+		state.run_manifest->finalize("completed", -1, "");
+		std::filesystem::remove_all(dir);
+	}
+
+	unsetenv(variable);
+	threads.set_num_threads(0);
+	if (preset)
+		setenv(variable, preset->c_str(), 1);
+#else
+	threads.set_num_threads(1);
+	CHECK(threads.accelerate_source() == "not_applicable");
+	CHECK(threads.accelerate_threads().empty());
+#endif
 }
