@@ -68,9 +68,21 @@ realization noise), and a repeat of `pup_push` for steps 1–3.
 [ci-portability-plan.md](ci-portability-plan.md). CI-01, CI-02, CI-03, CI-05
 and CI-06 are complete. Open:
 
-- **Native acceptance.** CI-04 (mixed P1/P2 tetrahedral surface) and the
-  CI-05/CI-06 data pin were validated on one Linux GCC host only; macOS and
-  Windows runs are pending.
+- **Native acceptance — a first native result exists and is not green.**
+  CI-04, CI-05 and CI-06 were validated on one cloud Linux GCC host. The only
+  GitHub Build that covered them is [run 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097)
+  at `d53b9e444` (2026-09-29); every later push cancelled its successors, so no
+  Build has completed since. Its job results, **none of them diagnosed yet**:
+  Linux Release fails `contact_3d` (green natively at `0c129dcfb`, before the
+  CI-04/05/06 changes); macOS Release fails `contact_2d` (the cube-on-floor
+  reference regenerated on Linux is the obvious suspect; the cloud session
+  planned to measure a platform gap and set that scene's margin from it);
+  Linux DebugNoSymbols fails four rollback/AL-budget scene tests with a
+  SEGFAULT; Windows Release fails the `restart from restart json` test;
+  macOS and Windows Debug were cancelled. Reproduce each before treating any
+  of them as a regression or as platform noise. (The `pre-commit` failure that
+  accompanied these runs was formatting in `tests/test_trim_loop_guard.cpp`,
+  repaired in `bd2f4db44`.)
 - **CI-07:** item 2 (presets, pinned runner, cold-cache build), item 3
   (named common subset, expected counts, `[.][run]` gating), item 4 (portable
   Eigen lane; TBB/CPP decision), item 5 (bounded concurrency), item 6
