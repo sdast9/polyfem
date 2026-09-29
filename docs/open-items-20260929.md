@@ -121,6 +121,21 @@ and CI-06 are complete. Open:
   20 (RB-11 envelope stage).
 - Physical accuracy beyond the recorded envelopes is **not** established.
 
+### To investigate later: the `merge-cloud-branches` memory
+
+On 2026-09-28 the "Cloud environment setup" session (transcript
+`f5907031-1f9e-417a-bdcb-4fc96ad7c1c2`) had a fast-forward of `cloud/ci-04` into
+`main` blocked by the auto-mode classifier ("Merge Without Review"), the user
+replied "merge without asking", and the session then wrote a memory file
+`merge-cloud-branches.md` (its `Write` succeeded) and tried to index it. That
+index and `cloud-routines-20260928.md` edit was denied ("Self-Modification").
+Today the file is no longer in the memory directory and the index has no entry.
+A later attempt to recreate it was denied ("Instruction Poisoning"), and it was
+deliberately **not** retried. Open questions: what removed the file, whether the
+user wants a standing merge permission recorded at all and with what scope, and
+how a durable record should be made without bypassing the classifier. Until that
+is settled, treat merges of cloud branches as needing the user's go-ahead.
+
 ## 3. Repository state
 
 - `polyfem` `main` = `origin/main` = `2a619cd38` (fast-forwarded 2026-09-29).
