@@ -1641,6 +1641,7 @@
             "trim_step_excursion",
             "trim_reversal_limit",
             "initial_trim_estimate_scope",
+            "clamped_contacts",
             "gap_floor",
             "constraint_floor",
             "trial_displacement_cap",
@@ -1814,6 +1815,13 @@
         "type": "string",
         "options": ["pair", "proxy"],
         "doc": "Only with band_statistic force_weighted (experimental): gap the force band's downward guard is evaluated on. pair (default since 2026-09-28, docs/ef-07-trim-loop.md) = each collapse term on its own gap and threshold (the average against sqrt(trim_lower), the minimum pair against sqrt(trim_lower / 100)); proxy = the EF-02/03 guard on the collapse proxy sqrt(severity), kept to reproduce the EF-02/03 records; it loops on contact-dense scenes and is warned about."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/clamped_contacts",
+        "default": "keep",
+        "type": "string",
+        "options": ["keep", "exclude_statistics", "exclude_collisions"],
+        "doc": "Experiment (opt-in, docs/clamped-contacts-20260928.md): contacts whose every vertex is Dirichlet-clamped (obstacles included). keep (default) = built, evaluated and seen by the trim controller, as before; exclude_statistics = still built and evaluated, but ignored by the trim controller (band statistic, collapse minimum, force-weighted gap, coefficient batch median/floor/cap, gradient balance, first-contact detection); exclude_collisions = candidates whose primitives are all clamped are filtered out of the collision set and CCD (IPC can_collide), which changes the barrier energy by a per-step constant in reduced solves but removes their barrier where clamped DOFs move (augmented-Lagrangian passes)."
     },
     {
         "pointer": "/solver/contact/semi_implicit/collapse_guard_partial",

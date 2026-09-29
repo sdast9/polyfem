@@ -503,6 +503,11 @@ namespace polyfem::solver
 
 					auto barrier_form = std::dynamic_pointer_cast<BarrierContactForm>(contact_form);
 					assert(barrier_form != nullptr);
+					// Clamped collision vertices from the reduced solve's
+					// Dirichlet DOFs (docs/clamped-contacts-20260928.md):
+					// observational unless semi_implicit.clamped_contacts
+					// excludes them from the controller.
+					barrier_form->set_dirichlet_dofs(boundary_nodes, dim);
 					if (elastic_form != nullptr)
 					{
 						// The weighted elastic (+ inertia, when transient)

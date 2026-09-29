@@ -336,6 +336,7 @@ namespace polyfem::solver
 					parent_keyed_ = false;
 				else
 					log_and_throw_error("Semi-implicit barrier stiffness: coefficient_identity must be \"parent\" or \"stencil\" (got \"{}\")", identity);
+				clamped_contacts_ = parse_clamped_contacts(semi_implicit_opts);
 				const std::string friction_lag = semi_implicit_opts.value("friction_lag", std::string("realized_force"));
 				if (friction_lag == "follow_stiffness")
 					friction_lag_realized_ = false;
@@ -367,6 +368,8 @@ namespace polyfem::solver
 		ForceWeightedGap statistic;
 		for (size_t i = 0; i < collision_set_.size(); ++i)
 		{
+			if (controller_skips(i))
+				continue;
 			const auto dof = collision_set_[i].dof(surface, collision_mesh_.edges(), collision_mesh_.faces());
 			const double d2 = collision_set_[i].compute_distance(dof);
 			if (d2 <= dhat_ * dhat_)
@@ -381,7 +384,7 @@ namespace polyfem::solver
 			return false;
 		Eigen::VectorXd ge;
 		system_gradient_provider_(x, ge);
-		const Eigen::VectorXd gb = collision_mesh_.to_full_dof(barrier_potential_.gradient(collision_set_, collision_mesh_, compute_displaced_surface(x)));
+		const Eigen::VectorXd gb = collision_mesh_.to_full_dof(controller_barrier_gradient(compute_displaced_surface(x)));
 		const double bn = gb.stableNorm(), en = ge.stableNorm();
 		if (!(bn > 0 && en > 0) || gb.size() != ge.size())
 			return false;
@@ -473,7 +476,7 @@ namespace polyfem::solver
 		double min_d2 = std::numeric_limits<double>::infinity();
 		for (size_t i = 0; i < collision_set_.size(); ++i)
 		{
-			if (!previous_iterate_keys_.count(stencil_key(collision_set_, i)))
+			if (!previous_iterate_keys_.count(stencil_key(collision_set_, i)) || controller_skips(i))
 				continue;
 			const double d2 = collision_set_[i].compute_distance(
 				collision_set_[i].dof(displaced_surface, collision_mesh_.edges(), collision_mesh_.faces()));
@@ -485,7 +488,8 @@ namespace polyfem::solver
 
 	double BarrierContactForm::collapse_min_distance(const Eigen::MatrixXd &displaced_surface, const double all_min_d2) const
 	{
-		return loop_guard_.exclude_born ? min_distance_excluding_born(displaced_surface) : all_min_d2;
+		return loop_guard_.exclude_born ? min_distance_excluding_born(displaced_surface)
+										: controller_min_distance(displaced_surface, all_min_d2);
 	}
 
 	bool BarrierContactForm::collapse_bump(const double factor, const double avg_d2, const double min_d2, const double severity, const char *context)
@@ -534,8 +538,15 @@ namespace polyfem::solver
 		refresh_semi_implicit_stiffness(x, /*run_trim_controller=*/false);
 		if (collision_set_.empty())
 			return false; // stall unrelated to contact; nothing to retune
+		if (!controller_has_contacts())
+		{
+			// Only fully clamped contacts (clamped_contacts exclude_statistics):
+			// nothing the trim can act on; report the refresh as usual.
+			emit_trim_predictors(x, "stall_retune", /*full=*/true);
+			return barrier_stiffness_ != trim_before || kappa_cache_ != prev_kappa_cache_;
+		}
 
-		const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_).mean_sq;
+		const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_, controller_skip()).mean_sq;
 		const double min_d2 = collapse_min_distance(kappa_surface_, collision_set_.compute_minimum_distance(
 																		collision_mesh_, kappa_surface_));
 		const double severity = collapse_severity(avg_d2, min_d2);
@@ -639,8 +650,8 @@ namespace polyfem::solver
 		kappa_global_fallback_count_ = 0;
 		kappa_interpolated_count_ = 0;
 		kappa_direction_fallback_count_ = 0;
-		const bool first_contact = !kappa_snapshot_had_contacts_ && !collision_set_.empty();
-		kappa_snapshot_had_contacts_ = !collision_set_.empty();
+		const bool first_contact = !kappa_snapshot_had_contacts_ && controller_has_contacts();
+		kappa_snapshot_had_contacts_ = controller_has_contacts();
 		batch_first_pass_ = true;
 		pull_toward_fresh_ = pull_toward_fresh;
 		try
@@ -676,9 +687,18 @@ namespace polyfem::solver
 			// every coefficient key (parent or stencil) assigned at this x.
 			std::vector<double> kappas, continued_kappas;
 			kappas.reserve(kappa_cache_.size());
+			// clamped_contacts exclude_statistics: the coefficients of fully
+			// clamped collisions are resolved against the batch but do not
+			// shape it.
+			std::set<std::array<long, 5>> skipped_keys;
+			if (clamped_contacts_ == ClampedContacts::ExcludeStatistics)
+				for (size_t i = 0; i < collision_set_.size(); i++)
+					if (!collision_set_.is_plane_vertex(i) && controller_skips(i))
+						for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+							skipped_keys.insert(key);
 			for (const auto &[key, k] : kappa_cache_)
 			{
-				if (!(k > 0 && std::isfinite(k)))
+				if (!(k > 0 && std::isfinite(k)) || skipped_keys.count(key))
 					continue;
 				(is_continued(key) ? continued_kappas : kappas).push_back(k);
 			}
@@ -736,14 +756,14 @@ namespace polyfem::solver
 		// stiffness plus the band's downward step.
 		if (run_trim_controller)
 			trim_decision_ = nullptr;
-		if (run_trim_controller && !collision_set_.empty())
+		if (run_trim_controller && controller_has_contacts())
 		{
-			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_).mean_sq;
+			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_, controller_skip()).mean_sq;
 			// Every active collision persists at a refresh point (the born
 			// filter is relative to the previous accepted iterate, which is
 			// this one): the minimum is taken over all of them.
-			const double min_d2 = collision_set_.compute_minimum_distance(
-				collision_mesh_, kappa_surface_);
+			const double min_d2 = controller_min_distance(kappa_surface_, collision_set_.compute_minimum_distance(
+																			  collision_mesh_, kappa_surface_));
 			const double severity = collapse_severity(avg_d2, min_d2);
 			const double dhat_sq = dhat_ * dhat_;
 			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
@@ -1292,8 +1312,7 @@ namespace polyfem::solver
 		// the least-squares balance ratio against the driving forces is
 		// directly the trim (up to the form weight, which multiplies the
 		// barrier but not grad_energy).
-		Eigen::VectorXd grad_barrier = barrier_potential_.gradient(
-			collision_set_, collision_mesh_, compute_displaced_surface(x));
+		Eigen::VectorXd grad_barrier = controller_barrier_gradient(compute_displaced_surface(x));
 		grad_barrier = collision_mesh_.to_full_dof(grad_barrier);
 
 		const double gb_norm = grad_barrier.norm();
@@ -1878,6 +1897,15 @@ namespace polyfem::solver
 				{"trim_reversal_limit", loop_guard_.reversal_limit},
 				{"initial_trim_estimate_scope", loop_guard_.estimate_once ? "run" : "step"}};
 		}
+		if (uses_semi_implicit_stiffness() && clamped_contacts_ != ClampedContacts::Keep)
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in clamped-contact experiment active";
+			model["coefficient_law"]["controller"]["clamped_contacts"] = {
+				{"mode", clamped_contacts_ == ClampedContacts::ExcludeStatistics ? "exclude_statistics" : "exclude_collisions"},
+				{"definition", "fully clamped = every stencil vertex (exclude_statistics) or every vertex of both candidate primitives (exclude_collisions, IPC can_collide) has its displacement prescribed by Dirichlet DOFs"},
+				{"clamped_vertex_count", std::count(clamped_vertex_.begin(), clamped_vertex_.end(), true)},
+				{"record", "docs/clamped-contacts-20260928.md"}};
+		}
 		return model;
 	}
 
@@ -1885,7 +1913,8 @@ namespace polyfem::solver
 		const ipc::NormalCollisions &collisions,
 		const ipc::CollisionMesh &mesh,
 		const Eigen::MatrixXd &displaced_surface,
-		const double dhat)
+		const double dhat,
+		const std::function<bool(size_t)> &skip)
 	{
 		assert(displaced_surface.rows() == mesh.num_vertices());
 		const Eigen::MatrixXi &edges = mesh.edges();
@@ -1895,6 +1924,8 @@ namespace polyfem::solver
 		double sum_d2 = 0, sum_wd2 = 0;
 		for (size_t i = 0; i < collisions.size(); ++i)
 		{
+			if (skip && skip(i))
+				continue;
 			const double d2 = collisions[i].compute_distance(collisions[i].dof(displaced_surface, edges, faces));
 			if (!(d2 <= dhat_sq)) // inactive or nonfinite
 				continue;
@@ -1912,6 +1943,246 @@ namespace polyfem::solver
 		result.weighted = result.total_weight > 0 && std::isfinite(result.total_weight);
 		result.mean_sq = result.weighted ? sum_wd2 / result.total_weight : sum_d2 / double(result.active_count);
 		return result;
+	}
+
+	BarrierContactForm::ClampedContacts BarrierContactForm::parse_clamped_contacts(const json &semi_implicit_opts)
+	{
+		if (!semi_implicit_opts.is_object())
+			return ClampedContacts::Keep;
+		const std::string mode = semi_implicit_opts.value("clamped_contacts", std::string("keep"));
+		if (mode == "keep")
+			return ClampedContacts::Keep;
+		if (mode == "exclude_statistics")
+			return ClampedContacts::ExcludeStatistics;
+		if (mode == "exclude_collisions")
+			return ClampedContacts::ExcludeCollisions;
+		log_and_throw_error("semi_implicit.clamped_contacts must be keep, exclude_statistics or exclude_collisions (got \"{}\")", mode);
+	}
+
+	std::vector<bool> BarrierContactForm::clamped_collision_vertices(
+		const ipc::CollisionMesh &mesh, const std::vector<int> &dirichlet_dofs, const int dim)
+	{
+		const auto &map = mesh.displacement_map(); // collision vertices x full nodes
+		std::vector<int> fixed_components(map.cols(), 0);
+		for (const int dof : dirichlet_dofs)
+			if (dof >= 0 && dof / dim < long(fixed_components.size()))
+				++fixed_components[dof / dim];
+		std::vector<bool> clamped(map.rows(), true); // a row without entries cannot move
+		for (int col = 0; col < map.outerSize(); ++col)
+			for (Eigen::SparseMatrix<double>::InnerIterator it(map, col); it; ++it)
+				if (it.value() != 0. && fixed_components[it.col()] < dim)
+					clamped[it.row()] = false;
+		return clamped;
+	}
+
+	ipc::CollisionFilter BarrierContactForm::clamped_collision_filter(std::vector<bool> clamped)
+	{
+		return ipc::CollisionFilter([clamped = std::move(clamped)](size_t vi, size_t vj) { return !clamped[vi] || !clamped[vj]; });
+	}
+
+	void BarrierContactForm::set_dirichlet_dofs(const std::vector<int> &dirichlet_dofs, const int dim)
+	{
+		dirichlet_dofs_ = dirichlet_dofs;
+		clamped_vertex_ = clamped_collision_vertices(collision_mesh_, dirichlet_dofs, dim);
+	}
+
+	int BarrierContactForm::clamp_class(const ipc::NormalCollisions &collisions, const size_t i) const
+	{
+		if (clamped_vertex_.empty())
+			return 0;
+		const auto vids = collisions[i].vertex_ids(collision_mesh_.edges(), collision_mesh_.faces());
+		int clamped = 0, n = 0;
+		for (int a = 0; a < collisions[i].num_vertices(); ++a)
+		{
+			++n;
+			clamped += vids[a] < 0 || clamped_vertex_[vids[a]];
+		}
+		if (collisions.is_plane_vertex(i))
+		{
+			++n; // the analytic plane does not move
+			++clamped;
+		}
+		return clamped == 0 ? 0 : (clamped == n ? 2 : 1);
+	}
+
+	std::function<bool(size_t)> BarrierContactForm::controller_skip() const
+	{
+		if (clamped_contacts_ != ClampedContacts::ExcludeStatistics || clamped_vertex_.empty())
+			return nullptr;
+		return [this](const size_t i) { return controller_skips(i); };
+	}
+
+	bool BarrierContactForm::controller_has_contacts() const
+	{
+		if (collision_set_.empty())
+			return false;
+		if (!controller_skip())
+			return true;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			if (!controller_skips(i))
+				return true;
+		return false;
+	}
+
+	double BarrierContactForm::controller_min_distance(const Eigen::MatrixXd &displaced_surface, const double all_min_d2) const
+	{
+		if (!controller_skip())
+			return all_min_d2;
+		double min_d2 = std::numeric_limits<double>::infinity();
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			if (!controller_skips(i))
+				min_d2 = std::min(min_d2, collision_set_[i].compute_distance(
+											  collision_set_[i].dof(displaced_surface, collision_mesh_.edges(), collision_mesh_.faces())));
+		return min_d2;
+	}
+
+	ipc::NormalCollisions BarrierContactForm::without_fully_clamped() const
+	{
+		// Same collision objects (weights, stiffness scales, parents) in the
+		// same order; operator[] enumerates vv, ev, ee, fv, pv.
+		ipc::NormalCollisions kept = collision_set_;
+		size_t offset = 0;
+		const auto filter = [&](auto &collisions) {
+			size_t k = 0;
+			for (size_t j = 0; j < collisions.size(); ++j)
+				if (clamp_class(collision_set_, offset + j) != 2)
+					collisions[k++] = collisions[j];
+			offset += collisions.size();
+			collisions.erase(collisions.begin() + k, collisions.end());
+		};
+		filter(kept.vv_collisions);
+		filter(kept.ev_collisions);
+		filter(kept.ee_collisions);
+		filter(kept.fv_collisions);
+		filter(kept.pv_collisions);
+		return kept;
+	}
+
+	Eigen::VectorXd BarrierContactForm::controller_barrier_gradient(const Eigen::MatrixXd &displaced_surface) const
+	{
+		// IPC's own assembly in both branches: with no collision skipped the
+		// result is the production gradient bit for bit.
+		if (!controller_skip())
+			return barrier_potential_.gradient(collision_set_, collision_mesh_, displaced_surface);
+		return barrier_potential_.gradient(without_fully_clamped(), collision_mesh_, displaced_surface);
+	}
+
+	json BarrierContactForm::clamped_contact_record(const Eigen::VectorXd &x, const Eigen::MatrixXd &V, const bool full) const
+	{
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const double dhat_sq = dhat_ * dhat_;
+		const auto is_fully = [&](const size_t i) { return clamp_class(collision_set_, i) == 2; };
+
+		json r = {{"mode", clamped_contacts_ == ClampedContacts::Keep ? "keep" : (clamped_contacts_ == ClampedContacts::ExcludeStatistics ? "exclude_statistics" : "exclude_collisions")},
+				  {"scope", "Collision classes by their stencil vertices: free (no clamped vertex), partly, fully (every vertex's displacement prescribed by Dirichlet DOFs, obstacles included). The statistics are the controller's, over all collisions (all) and without the fully clamped ones (excluding_fully); gaps / dhat"}};
+		// Counts: all collisions of the set and the active ones (distance <= dhat).
+		std::array<size_t, 3> in_set{{0, 0, 0}}, active{{0, 0, 0}};
+		ForceWeightedGap fw_all, fw_excl;
+		double min_all = std::numeric_limits<double>::infinity(), min_excl = min_all;
+		size_t min_all_i = collision_set_.size();
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const int c = clamp_class(collision_set_, i);
+			++in_set[c];
+			const ipc::VectorMax12d dof = collision_set_[i].dof(V, E, F);
+			const double d2 = collision_set_[i].compute_distance(dof);
+			if (d2 < min_all)
+			{
+				min_all = d2;
+				min_all_i = i;
+			}
+			if (c != 2)
+				min_excl = std::min(min_excl, d2);
+			if (!(d2 <= dhat_sq))
+				continue;
+			++active[c];
+			const double force = barrier_potential_.gradient(collision_set_[i], dof).stableNorm();
+			fw_all.add(std::sqrt(d2) / dhat_, force);
+			if (c != 2)
+				fw_excl.add(std::sqrt(d2) / dhat_, force);
+		}
+		r["clamped_vertex_count"] = std::count(clamped_vertex_.begin(), clamped_vertex_.end(), true);
+		r["collisions"] = {{"free", in_set[0]}, {"partly", in_set[1]}, {"fully", in_set[2]}};
+		r["active"] = {{"free", active[0]}, {"partly", active[1]}, {"fully", active[2]}};
+		r["min_pair_class"] = min_all_i < collision_set_.size() ? json(clamp_class(collision_set_, min_all_i)) : json(nullptr);
+
+		const auto gap_or_null = [&](const double d2) { return std::isfinite(d2) ? json(std::sqrt(d2) / dhat_) : json(nullptr); };
+		const auto stats = [&](const std::function<bool(size_t)> &skip, const double min_d2, const ForceWeightedGap &fw) {
+			const BandStatistic band = band_statistic(collision_set_, collision_mesh_, V, dhat_, skip);
+			const double severity = collapse_severity(band.mean_sq, min_d2);
+			const double fw_mean = fw.mean();
+			return json{{"band_rms", gap_or_null(band.mean_sq)}, {"band_active_count", band.active_count}, {"min_gap", gap_or_null(min_d2)}, {"collapse_proxy_gap", gap_or_null(severity)}, {"collapse", std::isfinite(severity) && severity < trim_lower_ * dhat_sq}, {"force_weighted_mean_gap", std::isfinite(fw_mean) ? json(fw_mean) : json(nullptr)}};
+		};
+		r["all"] = stats(nullptr, min_all, fw_all);
+		r["excluding_fully"] = stats(is_fully, min_excl, fw_excl);
+
+		if (!full)
+			return r;
+
+		// Coefficient batch (valid right after a refresh, when the memo is the
+		// batch): the median rule of refresh_semi_implicit_stiffness with and
+		// without the coefficient keys of fully clamped collisions.
+		std::set<std::array<long, 5>> fully_keys;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			if (!collision_set_.is_plane_vertex(i) && is_fully(i))
+				for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+					fully_keys.insert(key);
+		const auto batch = [&](const bool skip_fully) {
+			std::vector<double> kappas, continued_kappas;
+			for (const auto &[key, k] : kappa_cache_)
+			{
+				if (!(k > 0 && std::isfinite(k)) || (skip_fully && fully_keys.count(key)))
+					continue;
+				(is_continued(key) ? continued_kappas : kappas).push_back(k);
+			}
+			const size_t fresh = kappas.size(), continued = continued_kappas.size();
+			if (kappas.empty())
+				kappas.swap(continued_kappas);
+			double median = 0;
+			if (!kappas.empty())
+			{
+				std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
+				median = kappas[kappas.size() / 2];
+			}
+			return json{{"median", median}, {"cap", kappa_spread_ * median}, {"floor", median / kappa_spread_}, {"fresh", fresh}, {"continued", continued}};
+		};
+		size_t fully_keys_in_batch = 0;
+		for (const auto &key : fully_keys)
+			fully_keys_in_batch += kappa_cache_.count(key);
+		r["batch"] = {{"scope", "positive finite memo values; fresh estimates, continued ones only when no fresh value (refresh rule); valid at refresh records"}, {"all", batch(false)}, {"excluding_fully", batch(true)}, {"fully_keys_in_batch", fully_keys_in_batch}, {"in_force_median", kappa_median_}};
+
+		// Gradient balance (calibrate_trim's kappa_gb before its gate): all
+		// collisions, without the fully clamped ones, and restricted to free
+		// DOFs (the reduced solve's balance; partly clamped contacts'
+		// clamped rows and the Dirichlet reactions drop out).
+		if (system_gradient_provider_ && !collision_set_.empty())
+		{
+			Eigen::VectorXd ge;
+			system_gradient_provider_(x, ge);
+			Eigen::VectorXd gb_all = barrier_potential_.gradient(collision_set_, collision_mesh_, V);
+			Eigen::VectorXd gb_excl = barrier_potential_.gradient(without_fully_clamped(), collision_mesh_, V);
+			gb_all = collision_mesh_.to_full_dof(gb_all);
+			gb_excl = collision_mesh_.to_full_dof(gb_excl);
+			const auto balance = [&](const Eigen::VectorXd &gb, const Eigen::VectorXd &g_e) {
+				const double bn = gb.norm(), en = g_e.norm();
+				if (!(bn > 0 && en > 0) || gb.size() != g_e.size())
+					return json{{"kappa_gb", nullptr}, {"barrier_gradient_norm", bn}, {"energy_gradient_norm", en}};
+				const double c = -gb.dot(g_e) / (bn * en);
+				return json{{"kappa_gb", c * en / (weight_ * bn)}, {"cos_opposition", c}, {"gate_passes", std::isfinite(c) && c >= 0.1}, {"barrier_gradient_norm", bn}, {"energy_gradient_norm", en}};
+			};
+			json g = {{"all", balance(gb_all, ge)}, {"excluding_fully", balance(gb_excl, ge)}};
+			if (!dirichlet_dofs_.empty() && gb_all.size() == ge.size())
+			{
+				Eigen::VectorXd gb_free = gb_all, ge_free = ge;
+				for (const int dof : dirichlet_dofs_)
+					if (dof >= 0 && dof < gb_free.size())
+						gb_free[dof] = ge_free[dof] = 0;
+				g["free_dofs"] = balance(gb_free, ge_free);
+			}
+			r["gradient_balance"] = g;
+		}
+		return r;
 	}
 
 	json BarrierContactForm::gap_statistics(const Eigen::MatrixXd &displaced_surface) const
@@ -2136,6 +2407,9 @@ namespace polyfem::solver
 			r["loop_guard"] = {{"step_anchor", std::isfinite(loop_guard_.step_anchor) ? json(loop_guard_.step_anchor) : json(nullptr)}, {"up", loop_guard_.up}, {"down", loop_guard_.down}, {"reversals", loop_guard_.reversals}, {"blocked", loop_guard_.blocked}, {"clamped", loop_guard_.clamped}, {"vetoed", loop_guard_.vetoed}, {"collapse_ref", std::isfinite(loop_guard_.collapse_ref) ? json(loop_guard_.collapse_ref) : json(nullptr)}, {"collapse_peak", std::isfinite(loop_guard_.collapse_peak) ? json(loop_guard_.collapse_peak) : json(nullptr)}, {"solve_anchor", trim_solve_anchor_}};
 		}
 
+		if (!clamped_vertex_.empty())
+			r["clamped"] = clamped_contact_record(x, V, full);
+
 		if (!full)
 			return r;
 
@@ -2302,7 +2576,7 @@ namespace polyfem::solver
 			// the trim was never initialized against these kappas. Refresh
 			// immediately (with the controller, so the conditioning cap
 			// softens the barrier while the contact is still unloaded).
-			if (!kappa_snapshot_had_contacts_ && !collision_set_.empty())
+			if (!kappa_snapshot_had_contacts_ && controller_has_contacts())
 				refresh_semi_implicit_stiffness(data.x);
 
 			// In-solve trim controller (mirrors classic IPC's emergency
@@ -2311,7 +2585,7 @@ namespace polyfem::solver
 			// downward step when the gap stays pinned above it (barrier
 			// dominating the elasticity). Only the global trim moves
 			// mid-solve; the per-contact snapshot stays frozen.
-			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_).mean_sq;
+			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_, controller_skip()).mean_sq;
 			const double min_d2 = collapse_min_distance(displaced_surface, curr_distance);
 			const double severity = collapse_severity(avg_d2, min_d2);
 			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);

@@ -114,7 +114,50 @@ namespace polyfem::solver
 			const ipc::NormalCollisions &collisions,
 			const ipc::CollisionMesh &mesh,
 			const Eigen::MatrixXd &displaced_surface,
-			const double dhat);
+			const double dhat,
+			const std::function<bool(size_t)> &skip = nullptr);
+
+		/// @brief Contacts between Dirichlet-clamped primitives
+		///        (docs/clamped-contacts-20260928.md). A collision is fully
+		///        clamped when every vertex of its stencil is clamped: it
+		///        exerts no force on a free degree of freedom of the reduced
+		///        solve, and the trim cannot move it.
+		///        keep (default): part of the collision set and of every
+		///        controller statistic, as before;
+		///        exclude_statistics: still built and evaluated, but ignored
+		///        by the trim controller (band statistic, collapse minimum,
+		///        force-weighted gap, coefficient batch median/floor/cap,
+		///        gradient balance, first-contact detection);
+		///        exclude_collisions: candidates whose primitives are all
+		///        clamped are filtered by the collision mesh's can_collide
+		///        (set by the var form), so they are neither built nor
+		///        checked by CCD.
+		enum class ClampedContacts
+		{
+			Keep,
+			ExcludeStatistics,
+			ExcludeCollisions
+		};
+		static ClampedContacts parse_clamped_contacts(const json &semi_implicit_opts);
+		/// @brief Collision-mesh vertices whose displacement is fully
+		///        prescribed: every node of the vertex's displacement-map row
+		///        has all dim DOFs in the Dirichlet list (obstacle nodes are in
+		///        it); a row without entries cannot move either.
+		static std::vector<bool> clamped_collision_vertices(
+			const ipc::CollisionMesh &mesh, const std::vector<int> &dirichlet_dofs, const int dim);
+		/// @brief IPC vertex filter of exclude_collisions: a candidate is
+		///        kept when any vertex pair drawn from its two primitives has a
+		///        free vertex, i.e. dropped only when every vertex is clamped.
+		static ipc::CollisionFilter clamped_collision_filter(std::vector<bool> clamped);
+		/// @brief Install the Dirichlet DOF list (semi-implicit mode; SolveData)
+		///        and derive the clamped collision vertices from it.
+		///        Observational unless clamped_contacts excludes them.
+		void set_dirichlet_dofs(const std::vector<int> &dirichlet_dofs, const int dim);
+		/// @brief 0 free, 1 partly clamped, 2 fully clamped (every stencil
+		///        vertex clamped; analytic planes count as clamped); 0 while
+		///        no clamped vertices are installed.
+		int clamp_class(const ipc::NormalCollisions &collisions, const size_t i) const;
+		ClampedContacts clamped_contacts() const { return clamped_contacts_; }
 		/// Observer for outer refresh/calibration/stall/post-step operations.
 		/// Callback failures cannot change solver behavior. Direct initialization
 		/// setters and coordinate-only feature transitions are outside this stream.
@@ -509,5 +552,32 @@ namespace polyfem::solver
 		/// 2026-09-13) instead of the current trim at the lag gap (RB-18 F6,
 		/// `friction_lag: "follow_stiffness"`).
 		bool friction_lag_realized_ = true;
+
+		// -- Clamped contacts (docs/clamped-contacts-20260928.md) -----------
+		ClampedContacts clamped_contacts_ = ClampedContacts::Keep;
+		/// @brief Per collision-mesh vertex; empty = unknown (nothing clamped)
+		std::vector<bool> clamped_vertex_;
+		/// @brief Dirichlet DOFs (full DOF indices) of the reduced solve
+		std::vector<int> dirichlet_dofs_;
+		/// @brief Does the controller ignore collision i of collision_set_?
+		bool controller_skips(const size_t i) const
+		{
+			return clamped_contacts_ == ClampedContacts::ExcludeStatistics && clamp_class(collision_set_, i) == 2;
+		}
+		/// @brief The skip predicate for band_statistic (null when nothing is skipped)
+		std::function<bool(size_t)> controller_skip() const;
+		/// @brief Whether the controller sees any collision of the current set
+		bool controller_has_contacts() const;
+		/// @brief Squared minimum distance over the collisions the controller
+		///        sees; all_min_d2 (the whole set's) when nothing is skipped
+		double controller_min_distance(const Eigen::MatrixXd &displaced_surface, double all_min_d2) const;
+		/// @brief Copy of the collision set without its fully clamped collisions
+		ipc::NormalCollisions without_fully_clamped() const;
+		/// @brief Barrier gradient (surface DOF) of the collisions the
+		///        controller sees; the whole set's when nothing is skipped
+		Eigen::VectorXd controller_barrier_gradient(const Eigen::MatrixXd &displaced_surface) const;
+		/// @brief The observational trim-predictor block comparing the
+		///        controller statistics with and without fully clamped contacts
+		json clamped_contact_record(const Eigen::VectorXd &x, const Eigen::MatrixXd &V, bool full) const;
 	};
 } // namespace polyfem::solver

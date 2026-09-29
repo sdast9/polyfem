@@ -1595,6 +1595,23 @@ namespace polyfem::varform
 
 		const ElementInversionCheck check_inversion = args["solver"]["advanced"]["check_inversion"];
 
+		// Opt-in (docs/clamped-contacts-20260928.md): semi_implicit
+		// clamped_contacts = exclude_collisions filters candidates whose
+		// primitives are all Dirichlet-clamped out of the collision set (and
+		// CCD) through IPC's vertex filter; any vertex pair with a free vertex
+		// keeps a candidate. Default: every primitive may collide.
+		if (is_contact_enabled() && args["solver"]["contact"]["barrier_stiffness"].is_string()
+			&& args["solver"]["contact"]["barrier_stiffness"].get<std::string>() == "semi_implicit"
+			&& solver::BarrierContactForm::parse_clamped_contacts(args["solver"]["contact"]["semi_implicit"])
+				   == solver::BarrierContactForm::ClampedContacts::ExcludeCollisions)
+		{
+			const std::vector<bool> clamped = solver::BarrierContactForm::clamped_collision_vertices(
+				collision_mesh_, boundary_.boundary_nodes, mesh_->dimension());
+			collision_mesh_.can_collide &= solver::BarrierContactForm::clamped_collision_filter(clamped);
+			logger().info("Clamped contacts excluded from the collision set: {} of {} collision vertices are Dirichlet-clamped",
+						  std::count(clamped.begin(), clamped.end(), true), clamped.size());
+		}
+
 		// NOTE: some stuff are legacy and hardcoded to be off
 		forms = solve_data_.init_forms(
 			// General

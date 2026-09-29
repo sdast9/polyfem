@@ -352,6 +352,19 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
   above stay unassessable pairwise.
 * Opt-in `coefficient-events.jsonl` (physical diagnostics) grows past 10 GB
   per ball-burst step; it filled the disk once during this work.
-* Contacts between clamped primitives are part of the collision set and of
+* ~~Contacts between clamped primitives are part of the collision set and of
   the controller's gap statistics (point 3a). Not a cause here; excluding them
-  from the statistics (or from the collision set) would be a separate change.
+  from the statistics (or from the collision set) would be a separate change.~~
+  **Measured 2026-09-29** ([record](clamped-contacts-20260928.md)): fully
+  clamped contacts occur only on R4 (≤ 2 active), BB and the ball-burst
+  step-31 state (≤ 3, knit-rim self-contact among them); R1, BBT, IT and the
+  smokes have none. They never set the minimum gap in production runs,
+  flipped no collapse or calibration-gate decision, and shift the band, gap
+  and batch statistics by ≤ 0.7 % (BB's first-refresh batch median 5.1 %,
+  R4's gradient-balance trim 2.2 %). Opt-in `semi_implicit/clamped_contacts`
+  (`exclude_statistics` / `exclude_collisions`, default `keep`) prototypes
+  both exclusions: exact no-ops without a fully clamped contact; with them
+  (R4, BB, ball-burst) no failure, and iterations and solutions not
+  separable from the multithreaded run-to-run spread. Defaults unchanged;
+  adoption is the user's decision. New open item there: the gradient balance
+  counts Dirichlet rows (on IT the free-DOF balance trim is ~2.1×).
