@@ -8,6 +8,7 @@ set(test_sources
   test_contact_cache.cpp
   test_trim_loop_guard.cpp
   test_clamped_contacts.cpp
+  test_gradient_balance_dofs.cpp
   test_contact_stiffness_mapping.cpp
   test_hex_collision_surface.cpp
   test_hex_basis_layout.cpp

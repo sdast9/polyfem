@@ -337,6 +337,7 @@ namespace polyfem::solver
 				else
 					log_and_throw_error("Semi-implicit barrier stiffness: coefficient_identity must be \"parent\" or \"stencil\" (got \"{}\")", identity);
 				clamped_contacts_ = parse_clamped_contacts(semi_implicit_opts);
+				balance_free_dofs_ = parse_balance_free_dofs(semi_implicit_opts);
 				const std::string friction_lag = semi_implicit_opts.value("friction_lag", std::string("realized_force"));
 				if (friction_lag == "follow_stiffness")
 					friction_lag_realized_ = false;
@@ -384,7 +385,8 @@ namespace polyfem::solver
 			return false;
 		Eigen::VectorXd ge;
 		system_gradient_provider_(x, ge);
-		const Eigen::VectorXd gb = collision_mesh_.to_full_dof(controller_barrier_gradient(compute_displaced_surface(x)));
+		Eigen::VectorXd gb = collision_mesh_.to_full_dof(controller_barrier_gradient(compute_displaced_surface(x)));
+		restrict_balance_rows(gb, ge);
 		const double bn = gb.stableNorm(), en = ge.stableNorm();
 		if (!(bn > 0 && en > 0) || gb.size() != ge.size())
 			return false;
@@ -1314,6 +1316,10 @@ namespace polyfem::solver
 		// barrier but not grad_energy).
 		Eigen::VectorXd grad_barrier = controller_barrier_gradient(compute_displaced_surface(x));
 		grad_barrier = collision_mesh_.to_full_dof(grad_barrier);
+		// gradient_balance_dofs = free: the reduced solve's balance (the
+		// Dirichlet reactions and the clamped half of partly clamped
+		// contacts drop out).
+		restrict_balance_rows(grad_barrier, grad_energy);
 
 		const double gb_norm = grad_barrier.norm();
 		const double ge_norm = grad_energy.norm();
@@ -1912,6 +1918,16 @@ namespace polyfem::solver
 				{"clamped_vertex_count", std::count(clamped_vertex_.begin(), clamped_vertex_.end(), true)},
 				{"record", "docs/clamped-contacts-20260928.md"}};
 		}
+		if (uses_semi_implicit_stiffness() && balance_free_dofs_)
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in free-DOF gradient balance active";
+			model["coefficient_law"]["controller"]["gradient_balance"] = {
+				{"dofs", "free"},
+				{"default", "all"},
+				{"definition", "calibrate_trim and the initial trim estimate zero the Dirichlet rows of the barrier and energy gradients before the balance"},
+				{"dirichlet_dof_count", dirichlet_dofs_.size()},
+				{"record", "docs/gradient-balance-free-dofs-20260929.md"}};
+		}
 		return model;
 	}
 
@@ -1965,6 +1981,27 @@ namespace polyfem::solver
 		if (mode == "exclude_collisions")
 			return ClampedContacts::ExcludeCollisions;
 		log_and_throw_error("semi_implicit.clamped_contacts must be keep, exclude_statistics or exclude_collisions (got \"{}\")", mode);
+	}
+
+	bool BarrierContactForm::parse_balance_free_dofs(const json &semi_implicit_opts)
+	{
+		if (!semi_implicit_opts.is_object())
+			return false;
+		const std::string dofs = semi_implicit_opts.value("gradient_balance_dofs", std::string("all"));
+		if (dofs == "all")
+			return false;
+		if (dofs == "free")
+			return true;
+		log_and_throw_error("semi_implicit.gradient_balance_dofs must be all or free (got \"{}\")", dofs);
+	}
+
+	void BarrierContactForm::restrict_balance_rows(Eigen::VectorXd &grad_barrier, Eigen::VectorXd &grad_energy) const
+	{
+		if (!balance_free_dofs_ || grad_barrier.size() != grad_energy.size())
+			return;
+		for (const int dof : dirichlet_dofs_)
+			if (dof >= 0 && dof < grad_barrier.size())
+				grad_barrier[dof] = grad_energy[dof] = 0;
 	}
 
 	std::vector<bool> BarrierContactForm::clamped_collision_vertices(
@@ -2428,8 +2465,13 @@ namespace polyfem::solver
 		{
 			Eigen::VectorXd grad_energy;
 			system_gradient_provider_(x, grad_energy);
-			const Eigen::VectorXd grad_barrier = collision_mesh_.to_full_dof(
+			Eigen::VectorXd grad_barrier = collision_mesh_.to_full_dof(
 				barrier_potential_.gradient(collision_set_, collision_mesh_, V));
+			if (balance_free_dofs_)
+			{
+				restrict_balance_rows(grad_barrier, grad_energy);
+				balance["dofs"] = "free";
+			}
 			const double gb = grad_barrier.norm(), ge = grad_energy.norm();
 			balance["energy_gradient_norm"] = ge;
 			balance["barrier_gradient_norm_unweighted"] = gb;

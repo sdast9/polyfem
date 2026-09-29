@@ -159,6 +159,12 @@ namespace polyfem::solver
 		///        no clamped vertices are installed.
 		int clamp_class(const ipc::NormalCollisions &collisions, const size_t i) const;
 		ClampedContacts clamped_contacts() const { return clamped_contacts_; }
+		/// @brief DOFs the gradient balance (calibrate_trim, the initial trim
+		///        estimate) is taken over: all DOFs (default) or the reduced
+		///        solve's free DOFs (Dirichlet rows of both gradients zeroed;
+		///        docs/gradient-balance-free-dofs-20260929.md).
+		static bool parse_balance_free_dofs(const json &semi_implicit_opts);
+		bool balance_free_dofs() const { return balance_free_dofs_; }
 		/// Observer for outer refresh/calibration/stall/post-step operations.
 		/// Callback failures cannot change solver behavior. Direct initialization
 		/// setters and coordinate-only feature transitions are outside this stream.
@@ -560,6 +566,13 @@ namespace polyfem::solver
 		std::vector<bool> clamped_vertex_;
 		/// @brief Dirichlet DOFs (full DOF indices) of the reduced solve
 		std::vector<int> dirichlet_dofs_;
+		/// @brief gradient_balance_dofs = free: zero the Dirichlet rows of
+		///        both gradients before the balance (opt-in; default all)
+		bool balance_free_dofs_ = false;
+		/// @brief Zero the Dirichlet rows of the full-DOF barrier and energy
+		///        gradients when balance_free_dofs_ (no-op otherwise, and
+		///        when no Dirichlet list is installed)
+		void restrict_balance_rows(Eigen::VectorXd &grad_barrier, Eigen::VectorXd &grad_energy) const;
 		/// @brief Does the controller ignore collision i of collision_set_?
 		bool controller_skips(const size_t i) const
 		{

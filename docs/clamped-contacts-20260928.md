@@ -425,12 +425,19 @@ clamped one without a warning (S4).
 
 ## Open
 
-* The gradient balance (`calibrate_trim`, the initial estimate and the
+* ~~The gradient balance (`calibrate_trim`, the initial estimate and the
   trim-predictor `gradient_balance`) uses full-DOF gradients, so Dirichlet
   reactions and the clamped half of partly clamped contacts enter it. On IT
   the free-DOF balance trim is ~2.1× the full-DOF one, and the cosine gate
   would pass at 18–20 more refreshes. Restricting the balance to free DOFs
-  is a separate controller change, not measured beyond this record.
+  is a separate controller change, not measured beyond this record.~~
+  Characterized and prototyped in
+  [gradient-balance-free-dofs-20260929.md](gradient-balance-free-dofs-20260929.md):
+  only the clamped half of a contact moves the balance (reactions dilute the
+  cosine only), by a factor that depends on the clamped side's mesh (9× on
+  the smokes' two-triangle slab, 2.1× on IT); opt-in
+  `semi_implicit/gradient_balance_dofs: free`, default `all` unchanged
+  (adopting it is the user's decision).
 * ~~`tools/ef02/sequence.py` production mode inherits controller options
   from re-exported scene files.~~ Closed by `a1982dd1e`, which pins the
   production controller (including `clamped_contacts`).

@@ -1642,6 +1642,7 @@
             "trim_reversal_limit",
             "initial_trim_estimate_scope",
             "clamped_contacts",
+            "gradient_balance_dofs",
             "gap_floor",
             "constraint_floor",
             "trial_displacement_cap",
@@ -1822,6 +1823,13 @@
         "type": "string",
         "options": ["exclude_statistics", "keep", "exclude_collisions"],
         "doc": "Contacts whose every vertex is Dirichlet-clamped (obstacles included; docs/clamped-contacts-20260928.md). exclude_statistics (default since 2026-09-29) = still built and evaluated, but ignored by the trim controller (band statistic, collapse minimum, force-weighted gap, coefficient batch median/floor/cap, gradient balance, first-contact detection), so a clamped pair cannot drive the trim; keep = also seen by the trim controller (the behaviour before 2026-09-29, to reproduce earlier runs); exclude_collisions (experiment, not recommended) = candidates whose primitives are all clamped are filtered out of the collision set and CCD (IPC can_collide), which changes the barrier energy by a per-step constant in reduced solves but removes their barrier where clamped DOFs move (augmented-Lagrangian passes)."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/gradient_balance_dofs",
+        "default": "all",
+        "type": "string",
+        "options": ["all", "free"],
+        "doc": "DOFs the trim controller's gradient balance is taken over (calibrate_trim and the initial trim estimate; docs/gradient-balance-free-dofs-20260929.md). all (default) = every full DOF, including Dirichlet rows (obstacle nodes, prescribed faces): their reactions and the clamped half of contacts with a clamped body enter the balance; free (experiment) = the reduced solve's free DOFs only (Dirichlet rows of both gradients zeroed), the balance the reduced problem itself satisfies."
     },
     {
         "pointer": "/solver/contact/semi_implicit/collapse_guard_partial",
