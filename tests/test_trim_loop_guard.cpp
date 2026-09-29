@@ -107,10 +107,10 @@ TEST_CASE("Reversal lockout exempts collapse bumps", "[trim_controller][ef07]")
 	TrimLoopGuard g;
 	g.reversal_limit = 1;
 	g.new_step(1.);
-	g.moved(1., 2.);                                       // up
-	CHECK(g.limit(2., 1., TrimLoopGuard::Band) == 1.);     // first reversal allowed
-	g.moved(2., 1.);                                       // down, reversals = 1
-	CHECK(g.limit(1., 2., TrimLoopGuard::Band) == 1.);     // would reverse again: blocked
+	g.moved(1., 2.);                                   // up
+	CHECK(g.limit(2., 1., TrimLoopGuard::Band) == 1.); // first reversal allowed
+	g.moved(2., 1.);                                   // down, reversals = 1
+	CHECK(g.limit(1., 2., TrimLoopGuard::Band) == 1.); // would reverse again: blocked
 	CHECK(g.blocked == 1);
 	CHECK(g.limit(1., .5, TrimLoopGuard::Band) == .5);     // same direction is free
 	CHECK(g.limit(1., 2., TrimLoopGuard::Collapse) == 2.); // protection kept

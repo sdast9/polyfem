@@ -24,26 +24,35 @@ always runs with `collapse_guard_basis: pair`; `clamped_contacts` defaults to
 budget method-independent; L-BFGS not pursued (EF-06 retired); automatic
 timestep retry off (RB-08); mixed hexahedral orders refused (RB-23);
 `friction_iterations: 2` with `realized_force` lag (RB-10); the CI-05 and
-CI-06 reference policies (2026-09-29).
+CI-06 reference policies (2026-09-29); the default stall-restart budget
+`max_restarts` is 200 (2026-09-29, R3).
 
 ## 2. Open work
 
 ### R3 inflation (NeoHookean vs Ogden)
 
 [r3-inflation-diagnosis-20260926.md](r3-inflation-diagnosis-20260926.md). The
-snap past the pressure maximum is traversable when restarts are off (step 39
-ends at 169.5 mL with 831 contacts). With restarts off the run then stalls at
-step 76 (one 20,431-iteration solve, gradient oscillating between 1e3 and
-4e5). Still unestablished:
+NeoHookean run stops at step 39 because the snap-through past the pressure
+maximum needs about **131 stall retunes** and the stall-retune budget the run
+used was 50. With restarts on and the budget raised to 1,000
+(`probe-nh-restarts1000`) step 39 passes (169.0 mL, 815 contacts), every later
+step converges within the ordinary budget, and the 4 h cap ended the run at
+step 168. **The user decided on 2026-09-29 to raise the default
+`solver/contact/semi_implicit/restart/max_restarts` from 20 to 200** (scenes
+that set it explicitly are unchanged); the change is PolyFEM `8bb9f936e` plus
+the Houdini asset's parameter (default 200, range 0–500). Verify both are
+published before relying on them, and when they are, update the `max_restarts`
+value in [scenes/semi-implicit/README.md](../scenes/semi-implicit/README.md).
+Still unestablished:
 
-- whether the NeoHookean completes all 200 steps with restarts on and the
-  retune budget raised from 50 to 1,000 (the probe is pending);
+- whether the NeoHookean completes all 200 steps (the 10 h repeat,
+  `probe-nh-restarts1000-long`, was started 2026-09-29);
 - whether the Ogden run has its own pressure maximum without the obstacle;
 - mesh independence of either path;
 - a constrained eigenanalysis of the tangent at the limit point;
-- the physical adequacy of either completed state.
-
-No material, coefficient or default recommendation follows from R3.
+- the physical adequacy of either completed state (the snapped NeoHookean
+  state has min J 0.016–0.021 and the membrane pressed on the obstacle; whether
+  that is the intended physics is the user's question).
 
 ### Contact-efficiency plan
 
