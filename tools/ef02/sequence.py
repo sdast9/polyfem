@@ -20,7 +20,7 @@ SI = '/solver/contact/semi_implicit/'
 PRODUCTION_CONTROLLER = {
     'band_statistic': 'rms',
     'initial_trim_estimate': False,
-    'clamped_contacts': 'keep',
+    'clamped_contacts': 'exclude_statistics',  # production since 2026-09-29
     'collapse_guard_partial': False,
     'collapse_exclude_born': False,
     'collapse_responsiveness_veto': False,

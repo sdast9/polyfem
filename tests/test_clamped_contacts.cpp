@@ -121,7 +121,7 @@ TEST_CASE("Trim-predictor record compares the statistics without fully clamped c
 	f.init(x);
 	f.refresh_semi_implicit_stiffness(x, false);
 	const json r = f.trim_predictors(x, true)["clamped"];
-	CHECK(r["mode"] == "keep");
+	CHECK(r["mode"] == "exclude_statistics"); // the default since 2026-09-29
 	CHECK(r["clamped_vertex_count"] == 3);
 	CHECK(r["active"]["fully"] == 1);
 	CHECK(r["active"]["free"] == 1);
@@ -140,19 +140,22 @@ TEST_CASE("Trim-predictor record compares the statistics without fully clamped c
 
 TEST_CASE("Excluding fully clamped contacts from the controller", "[clamped_contacts][trim_controller]")
 {
+	const json keep_opts{{"clamped_contacts", "keep"}};
 	// keep: the clamped pinched pair sets the minimum gap and bumps the trim.
-	CHECK(trim_change_after_iterations(json::object(), pinched_pair_dofs()) > 1);
-	CHECK(trim_change_after_iterations(json{{"clamped_contacts", "keep"}}, pinched_pair_dofs()) > 1);
-	// exclude_statistics: the controller sees only the comfortable pair.
+	CHECK(trim_change_after_iterations(keep_opts, pinched_pair_dofs()) > 1);
+	// exclude_statistics (explicit and the default): the controller sees only
+	// the comfortable pair.
 	CHECK(trim_change_after_iterations(json{{"clamped_contacts", "exclude_statistics"}}, pinched_pair_dofs()) == 1);
+	CHECK(trim_change_after_iterations(json::object(), pinched_pair_dofs()) == 1);
+	CHECK(trim_change_after_iterations(json(nullptr), pinched_pair_dofs()) == 1);
 	// Without a fully clamped collision the option follows keep exactly.
 	CHECK(trim_change_after_iterations(json{{"clamped_contacts", "exclude_statistics"}}, {0, 1, 2, 3})
-		  == trim_change_after_iterations(json::object(), {0, 1, 2, 3}));
+		  == trim_change_after_iterations(keep_opts, {0, 1, 2, 3}));
 	// A pinched pair with a free vertex still counts.
 	CHECK(trim_change_after_iterations(json{{"clamped_contacts", "exclude_statistics"}}, {0, 1, 2, 3}) > 1);
 	// The option acts on the controller only: the pair keeps its barrier.
 	const auto mesh = two_pair_mesh();
-	ClampForm keep(mesh, json::object()), excl(mesh, json{{"clamped_contacts", "exclude_statistics"}});
+	ClampForm keep(mesh, json{{"clamped_contacts", "keep"}}), excl(mesh, json{{"clamped_contacts", "exclude_statistics"}});
 	const Eigen::VectorXd x = Eigen::VectorXd::Zero(12);
 	for (ClampForm *f : {&keep, &excl})
 	{
@@ -167,13 +170,20 @@ TEST_CASE("Clamped-contact option is validated and reported", "[clamped_contacts
 {
 	const auto mesh = two_pair_mesh();
 	CHECK_THROWS(ClampForm(mesh, json{{"clamped_contacts", "ignore"}}));
-	CHECK_FALSE(ClampForm(mesh, json::object()).model_description()["coefficient_law"]["controller"].contains("clamped_contacts"));
-	ClampForm f(mesh, json{{"clamped_contacts", "exclude_statistics"}});
+	// The default (exclude_statistics since 2026-09-29) is named in every
+	// semi-implicit manifest; only a non-default mode changes the status line.
+	ClampForm f(mesh, json::object());
 	f.set_dirichlet_dofs(pinched_pair_dofs(), 2);
-	const json m = f.model_description()["coefficient_law"]["controller"]["clamped_contacts"];
+	const json d = f.model_description();
+	const json m = d["coefficient_law"]["controller"]["clamped_contacts"];
 	CHECK(m["mode"] == "exclude_statistics");
 	CHECK(m["clamped_vertex_count"] == 3);
-	CHECK(BarrierContactForm::parse_clamped_contacts(json(nullptr)) == BarrierContactForm::ClampedContacts::Keep);
+	CHECK(d["model_selection_status"].get<std::string>().find("clamped") == std::string::npos);
+	const json k = ClampForm(mesh, json{{"clamped_contacts", "keep"}}).model_description();
+	CHECK(k["coefficient_law"]["controller"]["clamped_contacts"]["mode"] == "keep");
+	CHECK(k["model_selection_status"].get<std::string>().find("before 2026-09-29") != std::string::npos);
+	CHECK(BarrierContactForm::parse_clamped_contacts(json(nullptr)) == BarrierContactForm::ClampedContacts::ExcludeStatistics);
+	CHECK(BarrierContactForm::parse_clamped_contacts(json::object()) == BarrierContactForm::ClampedContacts::ExcludeStatistics);
 }
 
 TEST_CASE("exclude_collisions filter drops only all-clamped candidates", "[clamped_contacts]")

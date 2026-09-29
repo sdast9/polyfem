@@ -122,12 +122,13 @@ namespace polyfem::solver
 		///        clamped when every vertex of its stencil is clamped: it
 		///        exerts no force on a free degree of freedom of the reduced
 		///        solve, and the trim cannot move it.
-		///        keep (default): part of the collision set and of every
-		///        controller statistic, as before;
-		///        exclude_statistics: still built and evaluated, but ignored
-		///        by the trim controller (band statistic, collapse minimum,
+		///        exclude_statistics (default since 2026-09-29, user
+		///        decision): still built and evaluated, but ignored by the
+		///        trim controller (band statistic, collapse minimum,
 		///        force-weighted gap, coefficient batch median/floor/cap,
 		///        gradient balance, first-contact detection);
+		///        keep: part of the collision set and of every controller
+		///        statistic (the behaviour before 2026-09-29);
 		///        exclude_collisions: candidates whose primitives are all
 		///        clamped are filtered by the collision mesh's can_collide
 		///        (set by the var form), so they are neither built nor
@@ -554,7 +555,7 @@ namespace polyfem::solver
 		bool friction_lag_realized_ = true;
 
 		// -- Clamped contacts (docs/clamped-contacts-20260928.md) -----------
-		ClampedContacts clamped_contacts_ = ClampedContacts::Keep;
+		ClampedContacts clamped_contacts_ = ClampedContacts::ExcludeStatistics;
 		/// @brief Per collision-mesh vertex; empty = unknown (nothing clamped)
 		std::vector<bool> clamped_vertex_;
 		/// @brief Dirichlet DOFs (full DOF indices) of the reduced solve

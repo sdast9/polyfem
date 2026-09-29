@@ -26,7 +26,7 @@ fully clamped. Gaps are in dhat.
                   faces are free, so P-B candidates keep a free vertex)
 
 Writes E/<scene>-<mode>/{scene.json,run.log,row.json,output/}. Modes:
-keep, exclude_statistics, exclude_collisions.
+keep, exclude_statistics, exclude_collisions, and default (the key absent).
 """
 import argparse, hashlib, json, subprocess, time
 from pathlib import Path
@@ -66,8 +66,10 @@ def scene(name, mode):
         dirichlet.append({'id': 4, 'value': ['0.3*t', 0, 0]})
         geometry.append(block(1.1, y=3.0))
         dirichlet.append({'id': 3, 'value': [0, 0, 0]})
+    # clamped_contacts explicit except in mode "default" (key absent): its
+    # default changed from keep to exclude_statistics on 2026-09-29.
     si = {'band_statistic': 'rms', 'initial_trim_estimate': False}
-    if mode != 'keep':
+    if mode != 'default':
         si['clamped_contacts'] = mode
     return {
         'geometry': geometry,
@@ -88,7 +90,7 @@ def main():
     ap.add_argument('--binary', type=Path, required=True)
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--scene', action='append', choices=['S0', 'S0late', 'S1', 'S2', 'S3', 'S4', 'S4a', 'S5'])
-    ap.add_argument('--mode', action='append', choices=['keep', 'exclude_statistics', 'exclude_collisions'])
+    ap.add_argument('--mode', action='append', choices=['keep', 'exclude_statistics', 'exclude_collisions', 'default'])
     ap.add_argument('--timeout', type=float, default=1800)
     a = ap.parse_args()
     digest = hashlib.file_digest(a.binary.open('rb'), 'sha256').hexdigest()

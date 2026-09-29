@@ -1,9 +1,11 @@
 # Contacts between Dirichlet-clamped primitives: measurement and opt-in exclusion
 
 Date: 2026-09-28/29. Status: **measured on the matrix and on synthetic
-clamped-contact scenes; two opt-in prototypes
-(`semi_implicit/clamped_contacts`), default `keep` unchanged.** Adopting a
-default is the user's decision.
+clamped-contact scenes. `semi_implicit/clamped_contacts: exclude_statistics`
+is the production default since 2026-09-29 (user decision, see *Decision*);
+`keep` reproduces earlier runs, `exclude_collisions` stays an experiment.**
+Sections before *Decision* describe the options as they were measured, when
+`keep` was the default.
 Origin: [EF-07](ef-07-trim-loop.md), point 3a and its *Open* list.
 
 ## Question
@@ -75,8 +77,8 @@ from the statistics only or from the collision set?
   `exclude_statistics` refuse the overlap (they grind in the
   augmented-Lagrangian stage until the time cap; the opt-in RB-07 budget
   would stop them with a named failure).
-* **Recommendation: `exclude_statistics` is the candidate default; the
-  decision is the user's, and the default stays `keep` until then.** It is
+* **Decision (user, 2026-09-29): `exclude_statistics` is the default**, as
+  recommended; `keep` reproduces earlier runs. It is
   byte-identical to `keep` wherever no fully clamped contact exists, fixes
   every synthetic failure mode, integrates the same energy with the same
   CCD, and showed nothing beyond run-to-run spread on R4, BB and
@@ -347,6 +349,48 @@ The overlapping target is contradictory input either way; the point is that
 `exclude_collisions` turns a refusal into a silent interpenetration, because
 its filter also removes CCD and the snap check.
 
+## Decision (user, 2026-09-29)
+
+**`exclude_statistics` is the default.** The change (commit "Clamped contacts: exclude_statistics is the default"):
+
+* `parse_clamped_contacts` and the form's member default return
+  `exclude_statistics` (also when the `semi_implicit` block is absent). The
+  spec default and documentation are updated.
+* Every semi-implicit run manifest names the mode under
+  `coefficient_law.controller.clamped_contacts`. `model_selection_status`
+  changes only for a non-default mode: `keep` is reported as the behaviour
+  before 2026-09-29, `exclude_collisions` as the experiment.
+* `tools/ef02/sequence.py`'s production pins now reset `clamped_contacts`
+  to `exclude_statistics`. `tools/clamped/*` always write the mode
+  explicitly; `synthetic.py` gained a `default` mode that omits the key.
+* **Reproducing earlier results:** runs made before this change that had a
+  fully clamped contact within d̂ (in this record: R4, BB, ball-burst; any
+  scene with clamped grips, fixtures or rims that touch) need
+  `clamped_contacts: keep` to reproduce. Scenes without one are unaffected.
+  The Houdini asset does not export the key, so its runs take the new
+  default; no asset change was needed.
+
+Verification of the default change:
+
+Binaries `base4` (`main` at `633c0f5d9`) and `default4` (this change), both
+built with IPC `f8dafef39e8`, `main`'s pin (hashes in `bin/hashes.txt`,
+evidence `smoke5/`, `matrix5/`, `synthetic5/`).
+
+| check | result |
+|---|---|
+| Five public smokes (`run_smoke.py`), `main` vs the new default | 25/25 VTU byte-identical |
+| R1 (3 steps), BBT (20), IT (200) through the matrix driver, key absent, `main` vs the new default | 4 / 21 / 201 VTU byte-identical (no fully clamped contact in these scenes) |
+| Synthetic S0, S0late, S1, S2, S3, S5, key absent vs explicit `exclude_statistics` | byte-identical in every scene (S1: 22 iterations, max trim 8; S3 completes) |
+| Explicit `keep` on the new binary vs `keep` on the pre-flip binary | byte-identical in every synthetic scene (S3 still fails at step 7) |
+| `[clamped_contacts]` | 6 cases / 38 assertions (defaults, the `keep` path, manifest naming) |
+| Affected unit selection (same 28 tags) | 145 cases / 11,203 assertions |
+| RB-02 probe | 270/270 (`rb02-5/`) |
+| HDA scripts | Not run: the asset neither exports nor reads the key, and none of its controls changed |
+
+R4, BB and the ball-burst state were not rerun: their `exclude_statistics`
+runs above (`matrix2/`, `matrix4/`) are the same code path as the new
+default.
+
 ## Checks
 
 | check | result |
@@ -358,7 +402,7 @@ its filter also removes CCD and the snap check.
 | RB-02 probe | Pass: 270/270 on the first build (`rb02/`) and on the published sources (`rb02-3/`) |
 | HDA scripts | Not run: nothing the Houdini asset exports or reads changes (a new optional spec key, not exported by the asset) |
 
-## Recommendation
+## Recommendation (before the decision)
 
 `exclude_statistics` is the candidate default. The matrix scenes do not
 need it: their clamped contacts are too few to move a decision. But
@@ -372,7 +416,7 @@ byte-identical to `keep` where no fully clamped contact exists, integrates
 the same energy with the same CCD, and showed nothing beyond run-to-run
 spread on R4, BB and ball-burst. Making it the default is the user's
 decision (a model change of the controller, not of the energy); until then
-the default stays `keep`.
+the default stays `keep`. (Decided 2026-09-29: see *Decision*.)
 
 `exclude_collisions` is not recommended. On the synthetic scenes it matches
 `exclude_statistics`, but it removes the barrier, CCD and the snap check

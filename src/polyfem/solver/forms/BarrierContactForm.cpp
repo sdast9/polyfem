@@ -1897,11 +1897,17 @@ namespace polyfem::solver
 				{"trim_reversal_limit", loop_guard_.reversal_limit},
 				{"initial_trim_estimate_scope", loop_guard_.estimate_once ? "run" : "step"}};
 		}
-		if (uses_semi_implicit_stiffness() && clamped_contacts_ != ClampedContacts::Keep)
+		if (uses_semi_implicit_stiffness())
 		{
-			model["model_selection_status"] = "Production coefficient law retained; opt-in clamped-contact experiment active";
+			// exclude_statistics is the production setting since 2026-09-29;
+			// keep (earlier runs) and exclude_collisions are named as non-default.
+			if (clamped_contacts_ != ClampedContacts::ExcludeStatistics)
+				model["model_selection_status"] = clamped_contacts_ == ClampedContacts::Keep
+													  ? "Production coefficient law retained; clamped contacts kept in the controller statistics (behaviour before 2026-09-29)"
+													  : "Production coefficient law retained; opt-in clamped-contact experiment active (exclude_collisions)";
 			model["coefficient_law"]["controller"]["clamped_contacts"] = {
-				{"mode", clamped_contacts_ == ClampedContacts::ExcludeStatistics ? "exclude_statistics" : "exclude_collisions"},
+				{"mode", clamped_contacts_ == ClampedContacts::Keep ? "keep" : (clamped_contacts_ == ClampedContacts::ExcludeStatistics ? "exclude_statistics" : "exclude_collisions")},
+				{"default", "exclude_statistics (since 2026-09-29)"},
 				{"definition", "fully clamped = every stencil vertex (exclude_statistics) or every vertex of both candidate primitives (exclude_collisions, IPC can_collide) has its displacement prescribed by Dirichlet DOFs"},
 				{"clamped_vertex_count", std::count(clamped_vertex_.begin(), clamped_vertex_.end(), true)},
 				{"record", "docs/clamped-contacts-20260928.md"}};
@@ -1947,9 +1953,11 @@ namespace polyfem::solver
 
 	BarrierContactForm::ClampedContacts BarrierContactForm::parse_clamped_contacts(const json &semi_implicit_opts)
 	{
+		// Default exclude_statistics since 2026-09-29 (user decision,
+		// docs/clamped-contacts-20260928.md); keep reproduces earlier runs.
 		if (!semi_implicit_opts.is_object())
-			return ClampedContacts::Keep;
-		const std::string mode = semi_implicit_opts.value("clamped_contacts", std::string("keep"));
+			return ClampedContacts::ExcludeStatistics;
+		const std::string mode = semi_implicit_opts.value("clamped_contacts", std::string("exclude_statistics"));
 		if (mode == "keep")
 			return ClampedContacts::Keep;
 		if (mode == "exclude_statistics")

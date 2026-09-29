@@ -10,7 +10,10 @@ pursued); **EF-02/03 implemented and measured together 2026-09-26, opt-in; stric
 EF-01 sensitivity result; **EF-07 done 2026-09-28** ([record](ef-07-trim-loop.md):
 the EF-02/03 opt-in controller's ball-burst loop is diagnosed; the opt-in
 `collapse_guard_basis: pair` removes it; strict cost/accuracy gates unmet;
-defaults unchanged). Items are EF-01 …
+defaults unchanged). **Clamped contacts (EF-07 point 3a) 2026-09-29**
+([record](clamped-contacts-20260928.md)): the trim controller ignores
+contacts whose every vertex is Dirichlet-clamped
+(`clamped_contacts: exclude_statistics`, default by user decision). Items are EF-01 …
 EF-07; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.

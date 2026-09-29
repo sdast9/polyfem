@@ -370,6 +370,6 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
   0.05 d̂), fails a run (0.5 d̂) or leaves a free contact at 0.076 d̂ (in-band
   pair), and `exclude_statistics` reproduces the no-clamped-pair controls
   step for step; `exclude_collisions` lets a prescribed block pass through a
-  clamped one silently. `exclude_statistics` is the candidate default;
-  defaults unchanged, adoption is the user's decision. New open item there: the gradient balance
+  clamped one silently. **User decision 2026-09-29: `exclude_statistics`
+  is the default** (`keep` reproduces earlier runs). New open item there: the gradient balance
   counts Dirichlet rows (on IT the free-DOF balance trim is ~2.1×).

@@ -42,8 +42,7 @@ def main():
     si = params['solver']['contact']['semi_implicit']
     si['band_statistic'] = a.controller
     si['initial_trim_estimate'] = a.controller == 'force_weighted'
-    if a.clamped != 'keep':
-        si['clamped_contacts'] = a.clamped
+    si['clamped_contacts'] = a.clamped  # always explicit: the default changed on 2026-09-29
     out = params['output']
     out['directory'] = str(run / 'output')
     out['paraview']['file_name'] = str(run / 'output/sim.pvd')

@@ -43,8 +43,9 @@ def main():
     si = '/solver/contact/semi_implicit/'
     sets = [si + f'band_statistic="{a.controller}"',
             si + f'initial_trim_estimate={"true" if a.controller == "force_weighted" else "false"}']
-    if a.clamped != 'keep':
-        sets.append(si + f'clamped_contacts="{a.clamped}"')
+    # Always explicit: the default changed from keep to exclude_statistics on
+    # 2026-09-29, and binaries before 8f8b51878 refuse the key altogether.
+    sets.append(si + f'clamped_contacts="{a.clamped}"')
     for scene, steps, repeat in jobs:
         label = f'{a.clamped}-{a.controller}-{scene}-s{steps}-r{repeat}'
         cmd = [sys.executable, str(HERE.parent / 'ef02/run.py'), '--workspace', str(a.workspace), label,
