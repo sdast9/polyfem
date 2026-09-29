@@ -32,3 +32,21 @@ python3 tools/clamped/compare.py "$E" --json "$E/compare.json"
   retunes, AL passes, balance flags, VTU byte identity and relative solution
   difference per step. R1, BBT, IT, R4 and BB are not reproducible run to run
   on this host (see the record), so single-run differences need the repeats.
+
+## Synthetic clamped-contact scenes
+
+```sh
+python3 tools/clamped/synthetic.py --binary "$B" --out "$E/synthetic"            # S0, S0late, S1–S3, S5, S4
+python3 tools/clamped/synthetic.py --binary "$B" --out "$E/synthetic" --scene S4 --timeout 300
+python3 tools/clamped/synthetic_reduce.py "$E/synthetic" --json "$E/synthetic.json"
+```
+
+A free cube pushed onto the smoke's slab next to two fully clamped blocks
+at a chosen gap (S1 0.05 d̂, S2 0.97 d̂, S3 0.5 d̂, S5 0.8 d̂ with a late free
+contact), no-block controls (S0, S0late), and a prescribed block driven into
+a clamped one (S4 whole surface prescribed, S4a top/bottom only). Each scene
+runs in all three `clamped_contacts` modes, in seconds, except S4/S4a, whose
+overlapping target makes `keep` grind in the AL stage until the timeout.
+`synthetic_reduce.py` reports per step the iterations, stall retunes, trim
+path, controller decisions and the free contacts' gaps (the record's
+`excluding_fully` statistics).

@@ -1,6 +1,7 @@
 # Contacts between Dirichlet-clamped primitives: measurement and opt-in exclusion
 
-Date: 2026-09-28/29. Status: **measured; two opt-in prototypes
+Date: 2026-09-28/29. Status: **measured on the matrix and on synthetic
+clamped-contact scenes; two opt-in prototypes
 (`semi_implicit/clamped_contacts`), default `keep` unchanged.** Adopting a
 default is the user's decision.
 Origin: [EF-07](ef-07-trim-loop.md), point 3a and its *Open* list.
@@ -21,7 +22,9 @@ from the statistics only or from the collision set?
 
 ## Answer in brief
 
-* **They are rare, and none ever set a controller decision.** Fully clamped
+* **On the measured scenes they are rare and never set a controller
+  decision; on synthetic scenes built to contain them they take the
+  controller over** (see the synthetic-scene bullet below). Fully clamped
   contacts (every stencil vertex's displacement prescribed) occur only on R4
   (≤ 2 of ~1,300–2,100 active), BB and the ball-burst step-31 state (≤ 3 of
   ~1,000 / ~4,000; the one identified is knit-rim self-contact). R1, BBT,
@@ -49,12 +52,35 @@ from the statistics only or from the collision set?
   ball-burst. Solution differences to keep are within keep's own
   spread except one `exclude_statistics` R4 run: 9.2–10.8 % against a
   4.5–7.3 % keep spread; its repeat is 4.1–7.9 %.
-* **Recommendation: keep the default (`keep`).** There is no measured
-  benefit, and neither exclusion is needed for correctness on these scenes.
-  If one is wanted as a guard, `exclude_statistics` is the safe choice: it
-  changes nothing the solver integrates. `exclude_collisions` also removes the
-  pair's barrier and CCD, and that is unsafe wherever clamped DOFs move
-  (augmented-Lagrangian passes, prescribed bodies approaching each other).
+* **Synthetic scenes (a free cube pushed onto a slab next to two fully
+  clamped blocks at a chosen gap; controls without the blocks).** Under
+  `keep` the clamped pair drives the controller:
+  * at 0.05 d̂ (below the 0.0707 d̂ collapse pair threshold) the trim rails
+    to 2³², the free contact is held at 0.99–1.0 d̂ and the run takes 59
+    Newton iterations against 22–24;
+  * at 0.5 d̂ (below the band's 0.707 d̂ lower edge) the trim ratchets ×4 per
+    step before anything free touches, and the run **fails** (20 stall
+    restarts, named failure) at step 7;
+  * at 0.97 d̂ (above the band) and 0.8 d̂ (inside it) the controller
+    softens or never reacts, and the free contact closes to 0.085 and
+    0.076 d̂, just above the collapse pair threshold (control 0.47–0.59 d̂).
+
+  With either exclusion every scene reproduces its no-block control's trim
+  path and free-contact gaps step for step.
+* **`exclude_collisions` is unsafe where clamped DOFs move.** A fully
+  prescribed block driven into a clamped one (an overlapping Dirichlet
+  target) completes under `exclude_collisions` with exit 0 and the blocks
+  interpenetrating by 0.2 (a fifth of the block width), with no warning:
+  the filter removes the barrier, CCD and the snap check. `keep` and
+  `exclude_statistics` refuse the overlap (they grind in the
+  augmented-Lagrangian stage until the time cap; the opt-in RB-07 budget
+  would stop them with a named failure).
+* **Recommendation: `exclude_statistics` is the candidate default; the
+  decision is the user's, and the default stays `keep` until then.** It is
+  byte-identical to `keep` wherever no fully clamped contact exists, fixes
+  every synthetic failure mode, integrates the same energy with the same
+  CCD, and showed nothing beyond run-to-run spread on R4, BB and
+  ball-burst. `exclude_collisions` is not recommended.
 * **Separate finding (not prototyped): the gradient balance counts Dirichlet
   rows.** `calibrate_trim` / the initial estimate use the full-DOF barrier
   and energy gradients. On IT the obstacle half of every sphere–obstacle
@@ -258,6 +284,69 @@ Reading:
   effect from the spread. On the ball-burst state the controller took the
   same decisions in every mode.
 
+## Synthetic scenes
+
+`tools/clamped/synthetic.py` builds quasistatic scenes from the public
+smoke's `cube.mesh` (unit cube, 5×5×5 vertices) and `slab.obj` (obstacle at
+z = −0.02): d̂ 10⁻³, NeoHookean E 10⁷, `Eigen::SimplicialLDLT`, one thread,
+production controller stated explicitly. A free cube C is pushed down onto
+the slab by its top face (−0.25 t). Blocks A and B, far from C, have their
+whole surface clamped at a chosen face gap, so all 187 A–B collisions are
+fully clamped (225 clamped collision vertices, as intended). Controls S0 /
+S0late have no blocks. `synthetic_reduce.py` reads the free contacts' gaps
+from the record's `excluding_fully` statistics. Binary `clamped3`; evidence
+`fixed-contacts-work/synthetic/`.
+
+| scene | A–B gap | mode | exit | steps | Newton its | stall retunes | max trim | free contact min gap / band rms (d̂) |
+|---|---|---|---|---:|---:|---:|---:|---|
+| S0 control | — | keep | 0 | 4 | 27 | 0 | 8 | 0.47–0.63 / 0.74–0.80 |
+| S1 pinch | 0.05 d̂ | keep | 0 | 4 | 59 | 0 | 4.3·10⁹ (cap) | 0.99–1.0 / 1.0 |
+| | | exclude_statistics | 0 | 4 | 22 | 0 | 8 | 0.47–0.63 / 0.74–0.80 |
+| | | exclude_collisions | 0 | 4 | 24 | 0 | 8 | 0.47–0.63 / 0.74–0.80 |
+| S2 above band | 0.97 d̂ | keep | 0 | 4 | 26 | 0 | 2 (0.5 at start) | 0.085–0.24 / 0.44–0.60 |
+| | | exclude_statistics | 0 | 4 | 24 | 0 | 8 | 0.47–0.63 / 0.74–0.80 |
+| | | exclude_collisions | 0 | 4 | 24 | 0 | 8 | 0.47–0.63 / 0.74–0.80 |
+| S0late control (C arrives at step 6) | — | keep | 0 | 8 | 37 | 0 | 8 | 0.54–0.59 / 0.76–0.79 |
+| S3 below band | 0.5 d̂ | keep | **1** (step 7) | 7 | 2,154 | 21 | 4.3·10⁹ (cap) | 1.0 / 1.0 |
+| | | exclude_statistics | 0 | 8 | 37 | 0 | 8 | 0.54–0.59 / 0.76–0.79 |
+| | | exclude_collisions | 0 | 8 | 37 | 0 | 8 | 0.54–0.59 / 0.76–0.79 |
+| S5 inside band | 0.8 d̂ | keep | 0 | 8 | 37 | 0 | 1 | 0.076–0.36 / 0.43–0.67 |
+| | | exclude_statistics | 0 | 8 | 37 | 0 | 8 | 0.54–0.59 / 0.76–0.79 |
+| | | exclude_collisions | 0 | 8 | 37 | 0 | 8 | 0.54–0.59 / 0.76–0.79 |
+
+Mechanisms under `keep`:
+
+* **S1:** the clamped pair is the collapse minimum at every refresh and
+  every third iteration (6–8 collapse bumps per step), so the trim climbs
+  ×14 per refresh and ×256 per solve until it rails.
+* **S3:** the pair's 0.5 d̂ gaps hold the average term below the band's
+  lower edge, so the trim climbs ×4 per step while C is still in the air
+  (6.5·10⁴ at C's first contact). C is then held at d̂, the trim rails, and
+  step 7 exhausts its 20 stall restarts.
+* **S2:** at the first refresh only the clamped pair is active, above the
+  band, so the trim is halved before C arrives. The mixed band average
+  then keeps C's contact tight.
+* **S5:** the pair's in-band gaps dilute the average, so no controller
+  decision is ever taken while C's minimum gap closes to 0.076 d̂.
+
+With either exclusion the trim path (1 → 2 → 4 → 8) and C's gaps equal
+the control's step for step. Iteration counts differ by a few, because the
+linear systems carry the extra blocks.
+
+**Prescribed body driven into a clamped one** (Dirichlet target overlapping
+the clamped block; no free body):
+
+| scene | P | mode | outcome |
+|---|---|---|---|
+| S4 | whole surface prescribed (+x 0.3 toward B 0.1 away) | keep | AL at the ceiling weight until the 300 s cap (54 passes), P held off B |
+| | | exclude_statistics | same (13 passes in 300 s) |
+| | | exclude_collisions | **exit 0 in 5.7 s, no AL pass, P displaced the full 0.3: 0.2 inside B** (all 196 collision vertices clamped, every P–B candidate filtered) |
+| S4a | only top and bottom faces prescribed | all three | AL until the cap (keep 1,800 s / 2,066 passes, exclude_statistics 1,800 s / 2,082, exclude_collisions stopped by hand after 1,558): P's free side vertices keep the P–B candidates, so the barrier still acts |
+
+The overlapping target is contradictory input either way; the point is that
+`exclude_collisions` turns a refusal into a silent interpenetration, because
+its filter also removes CCD and the snap check.
+
 ## Checks
 
 | check | result |
@@ -271,17 +360,24 @@ Reading:
 
 ## Recommendation
 
-Keep `clamped_contacts: keep` as the default. On every measured scene,
-contacts between clamped primitives are too few to move a controller
-decision, and neither exclusion changed cost or accuracy beyond run-to-run
-noise. If the user wants the guard EF-07 point 3a described (a clamped pair
-must never be allowed to set the collapse minimum), `exclude_statistics` is
-the candidate: it is an exact no-op when no fully clamped contact exists, and
-it leaves the energy and CCD untouched, including in AL passes.
-`exclude_collisions` is not recommended as a default: its only extra effect is
-removing barrier/CCD work for pairs that are few here, and it removes
-protection wherever clamped DOFs move. Adopting either is the user's
-decision.
+`exclude_statistics` is the candidate default. The matrix scenes do not
+need it: their clamped contacts are too few to move a decision. But
+whenever a clamped pair sits within d̂, the synthetic scenes show `keep`
+letting it take over the controller: a railed trim, a named failure, or a
+free contact left just above the collapse threshold. That is plausible in
+real setups: clamped grips touching a clamped part of a specimen, a
+folded clamped rim, prescribed fixtures. `exclude_statistics` removes all
+of these and reproduces the no-block controls step for step. It is
+byte-identical to `keep` where no fully clamped contact exists, integrates
+the same energy with the same CCD, and showed nothing beyond run-to-run
+spread on R4, BB and ball-burst. Making it the default is the user's
+decision (a model change of the controller, not of the energy); until then
+the default stays `keep`.
+
+`exclude_collisions` is not recommended. On the synthetic scenes it matches
+`exclude_statistics`, but it removes the barrier, CCD and the snap check
+between clamped primitives, and it lets a prescribed body pass through a
+clamped one without a warning (S4).
 
 ## Open
 
@@ -291,5 +387,6 @@ decision.
   the free-DOF balance trim is ~2.1× the full-DOF one, and the cosine gate
   would pass at 18–20 more refreshes. Restricting the balance to free DOFs
   is a separate controller change, not measured beyond this record.
-* `tools/ef02/sequence.py` production mode still inherits controller options
-  from re-exported scene files; `tools/clamped/sequence.py` pins them.
+* ~~`tools/ef02/sequence.py` production mode inherits controller options
+  from re-exported scene files.~~ Closed by `a1982dd1e`, which pins the
+  production controller (including `clamped_contacts`).

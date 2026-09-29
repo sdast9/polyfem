@@ -365,6 +365,11 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
   (`exclude_statistics` / `exclude_collisions`, default `keep`) prototypes
   both exclusions: exact no-ops without a fully clamped contact; with them
   (R4, BB, ball-burst) no failure, and iterations and solutions not
-  separable from the multithreaded run-to-run spread. Defaults unchanged;
-  adoption is the user's decision. New open item there: the gradient balance
+  separable from the multithreaded run-to-run spread. **Synthetic scenes
+  confirm the hazard:** a clamped pair within d̂ rails the trim (pinch at
+  0.05 d̂), fails a run (0.5 d̂) or leaves a free contact at 0.076 d̂ (in-band
+  pair), and `exclude_statistics` reproduces the no-clamped-pair controls
+  step for step; `exclude_collisions` lets a prescribed block pass through a
+  clamped one silently. `exclude_statistics` is the candidate default;
+  defaults unchanged, adoption is the user's decision. New open item there: the gradient balance
   counts Dirichlet rows (on IT the free-DOF balance trim is ~2.1×).
