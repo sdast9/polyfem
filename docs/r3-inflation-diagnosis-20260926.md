@@ -155,8 +155,8 @@ attempt with a named failure, or an observation cap ends it first.
   takes over only after the cavity reaches roughly 100 mL (at most ~50 active
   stencils up to step 78, then 164 at step 90 and 980 at step 200). If the
   NeoHookean's supported state is similar, it lies an order of magnitude
-  beyond the pressure maximum in volume. This is inferred from the Ogden's
-  geometry and not established for the NeoHookean.
+  beyond the pressure maximum in volume. The no-restart probe below confirms
+  this: the snap lands at 169.5 mL with 831 active contacts.
 * **Local ellipticity is not the blocker.** The Ogden's own energy loses
   rank-one ellipticity at step 10 (75 kPa, max J 3.03) and stays negative in
   every later step: 128 elements at 285 kPa, 3,164 at step 200, min
@@ -167,9 +167,34 @@ attempt with a named failure, or an observation cap ends it first.
 The **no-restart probe** (the diagnosis NeoHookean with only
 `solver/contact/semi_implicit/restart/enabled = false`, so step 39 runs as one
 uninterrupted Newton solve at the unchanged trial cap; 8 threads, 3 h cap)
-tests whether the snap is traversable at all. At the time of this record it
-was still running (1,270 iterations into step 39, 1.8 m accumulated, objective
-still falling); its outcome is appended below when it ends.
+tests whether the snap is traversable at all. **It is.**
+* **Step 39** ends after 2,683 iterations (1,185 s) on the solver's
+  descent-direction stop at ‖∇f‖_rel 4.8e-3, not on the gradient tolerance.
+  The cavity has jumped from **7.26 mL to 169.5 mL** (198× initial) and
+  active contacts from 7 to 831: the membrane now rests on the obstacle.
+* **Steps 40–42** then take 70, 90 and 46 iterations, with the same stop.
+* **The landed state is extreme:** min J 0.035, max J 252, 657 non-elliptic
+  elements (min −4.7 GPa). Solver consistency still holds: energy to
+  3e-14 J, min det F to 2e-14.
+
+The same setting over the **full horizon** (4 h cap) repeats the snap at
+step 39 (2,849 iterations, 169.6 mL, 835 contacts). It then accepts steps
+40–75 in 27–140 iterations each (cavity 169.8 → 174.4 mL, contacts
+870 → 1,779, min J falling to 0.018). **Step 76 (570 kPa) is a different
+stall:**
+* 20,431 iterations in one solve, and the cap ends the run;
+* every Newton step is short (median 2e-5 m) and accepted in full, so
+  nothing is cap-limited;
+* the gradient does not fall: it oscillates between ~1e3 and 4e5.
+
+This is not a snap-through. It is a non-converging iteration in a heavily
+distorted, contact-dominated state, and with restarts disabled the solver has
+no retune to leave it. So the snap past the pressure maximum is traversable,
+and the default stall-retune budget (50) is what ends step 39 before the snap
+completes. Whether the NeoHookean completes all 200 steps is **not
+established**: the no-restart probe cannot show it. A probe that keeps
+restarts on and raises the retune budget from 50 to 1,000 (run
+`probe-nh-restarts1000`) was started on 2026-09-29.
 
 ### The Ogden rerun (reproduction)
 
@@ -270,8 +295,9 @@ reached the obstacle.
 
 ### Not established
 
-* Whether the NeoHookean snap-through lands on an obstacle-supported state,
-  and where (see the no-restart probe above).
+* Whether the NeoHookean completes all 200 steps once the snap is
+  traversed. The no-restart probe stalls at step 76; the raised-retune-budget
+  probe is pending.
 * Whether the Ogden has its own pressure maximum without the obstacle.
 * Mesh independence of either path. The non-elliptic elements are few and
   small for the NeoHookean, and thousands for the Ogden.
