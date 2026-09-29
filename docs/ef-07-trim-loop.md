@@ -41,6 +41,15 @@ its benefit without that limit cycle, and with what change?
   win clearly on BB (90–120 vs 385), IT, R1 and BBT. The cause of the R4
   change was not isolated (the weighted band statistic, the IPC upstream
   integration and Tight-Inclusion 1.1.0 all landed since EF-02/03).
+  **Correction (2026-09-28,
+  [r4-production-speedup-20260928.md](r4-production-speedup-20260928.md)):**
+  the R4 scene file was re-exported on 2026-09-26 with `band_statistic
+  force_weighted` and `initial_trim_estimate true`, and the matrix's
+  production mode does not override them, so every R4 "production" run below
+  ran the v3 configuration (their manifests record it). The true production
+  controller on `6a4e788bf` still takes ≈ 600 iterations for R4 step 1. The
+  R4 production numbers, the R4 part of the cost gate and the R4 "production
+  repeat spread" in this record are v3 repeats; other scenes are unaffected.
 
 ## Evidence and method
 
@@ -236,10 +245,17 @@ Matrix on one binary (`ef07-b`); `v3` = EF-02/03 mode (fw + estimate), `pair`
 | R1, 3 steps | 376 | 202 | 190 | 185 |
 | BBT, 20 steps | 186 | 119 | 118 | 117 |
 | IT, 200 steps | 6,027 / 5,789 | 3,546 / 3,196 | 4,039 / 3,622 | 3,702 |
-| R4, 1 step | 102 / 116 | 81 / 98 | 102 / 124 | 106 / 86 |
-| R4, 5 steps | 401 / 348 | 393 / 434 | 453 / 399 | — |
+| R4, 1 step | 102 / 116 † | 81 / 98 | 102 / 124 | 106 / 86 |
+| R4, 5 steps | 401 / 348 † | 393 / 434 | 453 / 399 | — |
 | BB, 1 step | 385 | 90 | 120 | 81 |
 | five smokes | 31, 26, 37, 31, 62 | identical | identical | — |
+
+† Not production: the R4 scene file selects `force_weighted` + the initial
+estimate, so these runs are v3 repeats (see the correction under *Answer in
+brief*). The production controller on R4 step 1 takes ≈ 600 iterations on
+`6a4e788bf` ([r4-production-speedup-20260928.md](r4-production-speedup-20260928.md)).
+The R4 "production" solution differences and repeat spread below are
+likewise v3-vs-v3.
 
 Solution differences to production (relative L2 per step; production's own
 repeat spread in brackets): R4 one step v3 4.0–4.9 %, pair 3.4–5.5 % [4.7 %];
@@ -292,10 +308,12 @@ looping step measured. Making that the default of the force-weighted mode, or
 the force-weighted mode the default, is the user's decision; the evidence
 above does not meet the plan's strict cost/accuracy gates (IT/BB/R4 cost versus
 v3, R4 accuracy versus production's repeat spread). Note that on the current
-base the rms controller is no longer slow on R4 and does not loop on the
-ball-burst step that broke the force-weighted mode (297 / 198 iterations vs
-pair's 259 / 258), which narrows the case for the force-weighted mode to scenes
-like BB, IT, R1 and BBT.
+base the rms controller does not loop on the ball-burst step that broke the
+force-weighted mode (297 / 198 iterations vs pair's 259 / 258). (This record
+also said the rms controller was no longer slow on R4; that was a scene-file
+artefact — see the correction above. Production still takes ≈ 600
+iterations on R4 step 1, so R4 stays among the scenes where the
+force-weighted mode saves cost, with BB, IT, R1 and BBT.)
 
 Out of scope and not changed: the per-contact coefficient law, CCD, the
 trial-displacement cap, the stall trigger, RB-08's no-automatic-retry, the
@@ -305,8 +323,19 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
 
 ## Open
 
-* The cause of the production controller's R4 improvement since EF-02/03 was
-  not isolated.
+* ~~The cause of the production controller's R4 improvement since EF-02/03 was
+  not isolated.~~ **Attributed 2026-09-28**
+  ([record](r4-production-speedup-20260928.md)): there was no ~6× production
+  improvement. The R4 scene file re-exported on 2026-09-26 selects
+  `force_weighted` + `initial_trim_estimate`, so this record's R4
+  "production" runs were v3 runs. True production on `6a4e788bf` takes
+  591 / 600 iterations for R4 step 1 (871 on `6a59cb387` rerun, 657 / 703 in
+  EF-02/03). The only code effect is moderate: the collision-weighted band
+  statistic (`6a4e788bf`) lets production leave trim 1 after 212–291 instead
+  of 314–459 iterations (`c133948cf`, with the IPC/PolySolve adoptions,
+  still 379 / 352); the ~350-iteration walk down from trim 1 is unchanged.
+  Open: `tools/ef02/sequence.py` production mode does not pin the controller
+  options, so it inherits whatever a re-exported scene selects.
 * IT's run-to-run irreproducibility on this host (single-threaded): **cause
   found 2026-09-28** ([record](it-reproducibility-20260928.md)).
   `Eigen::AccelerateLDLT`'s internal threads ignore `--max_threads` and are
