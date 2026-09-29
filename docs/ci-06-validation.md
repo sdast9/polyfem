@@ -397,3 +397,32 @@ changed; the margin stays `1e-5` as decided.
 
 Cross-platform (macOS/Windows) confirmation of this reference is pending
 native CI, as for every other scene item in this plan.
+
+## 2026-09-30 — Native platform gap; margin `1e-3`
+
+The first native Build covering this reference, [run 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097)
+at `d53b9e444`, and a later one, [run 36609059244](https://github.com/sdast9/polyfem/actions/runs/36609059244)
+at `9051aacb1`, both authenticate cube-on-floor on **GitHub Linux Release**
+(the same values as the cloud Linux host) and both fail it on **macOS
+Release**, with bitwise-identical macOS values in the two runs:
+
+| Metric | Reference (Linux) | macOS Release | Relative error |
+| --- | ---: | ---: | ---: |
+| `err_l2` | 0.009826028251420533 | 0.009829252522522487 | 3.28e-4 |
+| `err_h1` | 0.09840980031103183 | 0.09847364203850231 | 6.49e-4 |
+| `err_h1_semi` | 0.09791801655497034 | 0.09798185531605112 | 6.52e-4 |
+| `err_linf` | 0.025735020611998116 | 0.025737705644709757 | 1.04e-4 |
+| `err_linf_grad` | 0.04473858316392124 | 0.04474140575554891 | 6.3e-5 |
+| `err_lp` | 0.016934065257996768 | 0.016941042507488065 | 4.12e-4 |
+
+So the ordering fix made each platform deterministic, and what remains is a
+fixed platform difference (compiler, math library and Eigen code paths),
+not noise. Per the user's 2026-09-29 decision (keep `1e-5` unless another
+platform differs by more; then set the margin from the measured platform
+gap), the margin is now **`1e-3`**, the next round value above the 6.52e-4
+gap, published as `sdast9/polyfem-data@5d76dcb` (`fable-fixtures`); the
+reference values are unchanged, and `resolve_reference_margin` keeps the
+margin across a future regeneration. Windows Release does not run the
+`[run]` scene groups, so it gives no value here. Acceptance: the next
+completed native Build must show `contact_2d` green on macOS Release.
+

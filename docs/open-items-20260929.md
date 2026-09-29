@@ -68,21 +68,32 @@ realization noise), and a repeat of `pup_push` for steps 1–3.
 [ci-portability-plan.md](ci-portability-plan.md). CI-01, CI-02, CI-03, CI-05
 and CI-06 are complete. Open:
 
-- **Native acceptance — a first native result exists and is not green.**
-  CI-04, CI-05 and CI-06 were validated on one cloud Linux GCC host. The only
-  GitHub Build that covered them is [run 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097)
-  at `d53b9e444` (2026-09-29); every later push cancelled its successors, so no
-  Build has completed since. Its job results, **none of them diagnosed yet**:
-  Linux Release fails `contact_3d` (green natively at `0c129dcfb`, before the
-  CI-04/05/06 changes); macOS Release fails `contact_2d` (the cube-on-floor
-  reference regenerated on Linux is the obvious suspect; the cloud session
-  planned to measure a platform gap and set that scene's margin from it);
-  Linux DebugNoSymbols fails four rollback/AL-budget scene tests with a
-  SEGFAULT; Windows Release fails the `restart from restart json` test;
-  macOS and Windows Debug were cancelled. Reproduce each before treating any
-  of them as a regression or as platform noise. (The `pre-commit` failure that
-  accompanied these runs was formatting in `tests/test_trim_loop_guard.cpp`,
-  repaired in `bd2f4db44`.)
+- **Native acceptance — diagnosed 2026-09-30, not yet green.** CI-04, CI-05
+  and CI-06 were validated on one cloud Linux GCC host; the GitHub Builds that
+  covered them are [run 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097)
+  (`d53b9e444`) and the partly completed [run 36609059244](https://github.com/sdast9/polyfem/actions/runs/36609059244)
+  (`9051aacb1`); later pushes cancelled every other run. Diagnosis from their
+  logs and earlier runs:
+  - **CI-05 microstructure pair:** green on Linux and macOS Release.
+  - **CI-06 cube-on-floor:** green on Linux Release; macOS Release is
+    deterministic but differs from the Linux reference by up to 6.52e-4.
+    Margin set to `1e-3` from that gap (data `5d76dcb`, user decision of
+    2026-09-29); needs one completed Build to confirm.
+  - **Linux Release `contact_3d`:** `gcp-contact/parallel-edge/run.json` hits
+    the 500-iteration Newton limit on GitHub Linux only (macOS and the cloud
+    Linux host solve it). It already failed at `5143c15a9` (run 36485520601),
+    before the canonical-order toolkit pin, so the regression lies between
+    `0c129dcfb` (green, 2026-09-21) and `5143c15a9`. **Open, not diagnosed.**
+  - **Linux DebugNoSymbols:** four rollback/AL-budget scene tests SEGFAULT
+    (`test_step_rollback.cpp:407`); already known before CI-04–06 (the
+    2026-09-20 golden plan records the same four). **Open.**
+  - **Windows Release:** `restart from restart json` (`test_restart.cpp:244`)
+    also fails in runs 36485520601 and 36524461889, before the CI-05/06
+    changes. **Open.** Windows does not run the `[run]` scene groups.
+  (The `pre-commit` failure that accompanied these runs was formatting in
+  `tests/test_trim_loop_guard.cpp`, repaired in `bd2f4db44`.) Every push to
+  `main` cancels the running Build; a completed native result needs a quiet
+  period of about 2.5 hours or a manual run on a fixed commit.
 - **CI-07:** item 2 (presets, pinned runner, cold-cache build), item 3
   (named common subset, expected counts, `[.][run]` gating), item 4 (portable
   Eigen lane; TBB/CPP decision), item 5 (bounded concurrency), item 6
