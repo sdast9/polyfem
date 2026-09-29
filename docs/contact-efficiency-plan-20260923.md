@@ -13,7 +13,19 @@ the EF-02/03 opt-in controller's ball-burst loop is diagnosed; the opt-in
 defaults unchanged). **Clamped contacts (EF-07 point 3a) 2026-09-29**
 ([record](clamped-contacts-20260928.md)): the trim controller ignores
 contacts whose every vertex is Dirichlet-clamped
-(`clamped_contacts: exclude_statistics`, default by user decision). Items are EF-01 …
+(`clamped_contacts: exclude_statistics`, default by user decision). Two
+further 2026-09-29 records close the plan's measurement phase:
+[gradient balance on free DOFs](gradient-balance-free-dofs-20260929.md)
+(opt-in `gradient_balance_dofs: free`; the user kept the default `all`) and the
+[default-controller assessment](default-controller-assessment-20260929.md)
+(four arms on the smokes, R1, BBT, IT, R4, ball-burst and three held-out
+scenes; **no default changed**; production `rms` remains the default, the
+force-weighted band is not adopted, the initial estimate alone is the only
+candidate). The EF-07 "production is no longer slow on R4" claim was a scene
+re-export, corrected in [r4-production-speedup-20260928.md](r4-production-speedup-20260928.md).
+**What remains is the user's decisions** (the accuracy standard, the
+initial-estimate scope and bound, whether to redesign the force-weighted band),
+listed in [open-items-20260929.md](open-items-20260929.md). Items are EF-01 …
 EF-07; EF-01 is measurement only and is the prerequisite of the rest.
 
 EF-01 outcome in brief: H-A and H-B hold, H-E holds on R4, H-C and H-D do not.

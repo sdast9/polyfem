@@ -52,6 +52,14 @@ does not prove the failure is pre-existing. Baseline CI run 35871632819 stopped
 at the missing LBFGSpp header repaired here, so it supplies no comparable
 Debug runtime result. The assertion remains an open CI issue; this integration
 does not alter nonlinear behavior or weaken the assertion to obtain a pass.
+
+**Resolved later on 2026-09-27.** The assertion was the Armijo line search receiving
+an uphill direction (ADAM directions are unscreened). PolySolve `6a8c2cc9` makes
+Armijo/RobustArmijo/Wolfe's fallback fail the search on an uphill direction instead
+of asserting, and PolySolve CI then passed 14/14 jobs, the seven Debug jobs
+included (recorded at `43ca2e66`, the pin PolyFEM adopted in `61a7a4507`; the workspace
+README's 2026-09-27 band-statistic entry carries the result).
+The "open CI issue" above is closed.
 The complete PolyFEM unit suite and all 13 HDA scripts were not rerun;
 the affected selection and the HDA end-to-end script are the consumer checks.
 No Teseo or private scene was run. General physical accuracy is not established

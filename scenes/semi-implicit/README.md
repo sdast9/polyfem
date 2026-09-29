@@ -60,6 +60,10 @@ All semi-implicit options are optional. Defaults from
                 "coefficient_identity": "parent",
                 "conditioning_cap": 1000.0,
                 "controller_interval": 30,
+                "band_statistic": "rms",
+                "initial_trim_estimate": false,
+                "clamped_contacts": "exclude_statistics",
+                "gradient_balance_dofs": "all",
                 "restart": {
                     "enabled": true,
                     "alpha_threshold": 0.01,
@@ -128,6 +132,48 @@ continuation). Continuation changes semi-implicit endpoints relative to the
 re-estimating behavior (measured on the public smokes: ~1e-4 frictionless,
 ~1.6e-2 with friction, on a .25 displacement); `force_continuation: false`
 restores it.
+
+### Trim controller options (EF-02/03, EF-07, clamped contacts; 2026-09-26 – 29)
+
+The production controller is the global gap-band trim with the collision-weighted
+mean `sum(w d²)/sum(w)` as its statistic (`band_statistic: "rms"`; the statistic
+is weighted by collision weight since `6a4e788bf`, so it no longer depends on how
+IPC resolves a distance-type tie). The keys below change what feeds it. All
+records are in the [contact-efficiency plan](../../docs/contact-efficiency-plan-20260923.md);
+the standing recommendation (user decisions of 2026-09-28/29) is to leave
+everything except `clamped_contacts` at its default.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `clamped_contacts` | `exclude_statistics` | Contacts whose every vertex is Dirichlet-clamped (obstacles included) stay in the energy and CCD but are ignored by the trim controller's statistics. `keep` reproduces runs made before 2026-09-29 that had such a contact; `exclude_collisions` is an unrecommended experiment (a prescribed block passed through a clamped one silently). [Record](../../docs/clamped-contacts-20260928.md). |
+| `gradient_balance_dofs` | `all` | `free` takes the gradient balance over free DOFs only. Only the clamped half of contacts against a clamped body moves the balance, by a factor set by that body's mesh (9× on the smokes' two-triangle slab, 2.1× on IT). Opt-in; the default was kept by user decision. [Record](../../docs/gradient-balance-free-dofs-20260929.md). |
+| `band_statistic` | `rms` | `force_weighted` is **experimental** (Houdini shows a warning). It failed the held-out `pup_push` scene in 2 of 4 runs and is not adopted. |
+| `collapse_guard_basis` | `pair` | Only with `force_weighted`: the gap the band's downward guard is evaluated on. `pair` removes the ball-burst trim loop; `proxy` reproduces the EF-02/03 records and is warned. [EF-07](../../docs/ef-07-trim-loop.md). |
+| `initial_trim_estimate` | `false` | Opt-in two-sided, cosine-gated first-stall estimate. Byte-inert wherever its cosine stays below 0.8; saves R4 step 1 (583/510 → 89/133 iterations). Not adopted pending an agreed accuracy standard ([assessment](../../docs/default-controller-assessment-20260929.md)). |
+| `restart/alpha_basis` | `absolute` | `feasible_bound` counts a small step toward the stall patience only when the search backtracked below the feasible bound. No benefit measured; opt-in ([EF-04](../../docs/ef-04-stall-trigger.md)). |
+
+Any run that selects an experimental option records it in `run-manifest.json`.
+
+### Restart and reproducibility
+
+A `restart.json` resumes the run it came from: it keeps `dt` and the remaining
+steps, absolute paths and the original `sim.pvd` frame times, and its state file
+carries the contact controller's memory (trim, per-contact stiffness caches,
+continuation keys, realized friction lag) and the augmented-Lagrangian
+multipliers. The first resumed step is bit-identical; later steps differ by
+one-ulp step-time roundoff. State files are sized to their data
+(`c2a57e393`). Older state files resume with a fresh controller and a warning
+([restart](../../docs/restart-json-20260927.md),
+[AL multipliers](../../docs/restart-al-multipliers-20260928.md),
+[state files](../../docs/state-file-chunks-20260927.md)).
+
+On macOS the default `Eigen::AccelerateLDLT` used vecLib threads that ignored
+`--max_threads` and were not bitwise deterministic. Since `ba3ea76b6`
+`--max_threads N` also caps Accelerate (`VECLIB_MAXIMUM_THREADS`), and the
+manifest records `process.threads.accelerate`; single-threaded runs then repeat
+bit-identically ([record](../../docs/it-reproducibility-20260928.md)). Two
+different deterministic realizations of a trajectory-sensitive scene can still
+differ (IT: up to 23.5 %).
 
 ### Augmented-Lagrangian budget (RB-07)
 
@@ -238,12 +284,15 @@ smoke scene.
 
 ## Companion revisions
 
-CMake pins `sdast9/ipc-toolkit@c24d803e` (sources as of `bb795446`:
+CMake pins `sdast9/ipc-toolkit@f8dafef39e8` (branch `semi-implicit-stiffness`:
 per-collision `stiffness_scale`, `compute_avg_distance`, the RB-21 parent
-contributions on built collisions, the RB-05 broad-phase budget) and
-`sdast9/polysolve@bce32a39` (sources as of `ee5b296a`: the PF-06 derivative
-correction and the RB-19 line-search fallback with its finite energy bound on
-top of `713220f`, the upstream merge of the iteration-callback work); the two
-pinned commits only enable CI on the maintained branches (RB-12). Dependency
-feature branches and `main` branches are not interchangeable. A run's
-`run-manifest.json` records the effective checkouts next to these pins.
+contributions on built collisions, the RB-05 broad-phase budget with checked
+counting, the merged upstream `869e489e`, Tight-Inclusion 1.1.0 and the
+canonical smooth-contact collision order) and `sdast9/polysolve@43ca2e66`
+(branch `iteration-callback`: the PF-06 derivative correction, the RB-19
+line-search fallback, the slope tolerance limited to Hessian-based strategies,
+the opt-in Wolfe search, the uphill refusal in Armijo, and the merged upstream
+hybrid solvers). Test data is pinned to `sdast9/polyfem-data@b7ae0d9`
+(`fable-fixtures`). Dependency feature branches and `main` branches are not
+interchangeable. A run's `run-manifest.json` records the effective checkouts
+next to these pins.

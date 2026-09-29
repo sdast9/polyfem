@@ -1,0 +1,111 @@
+# Open items, decisions and questions — 2026-09-29
+
+A reconciliation of the project records as of PolyFEM `main` at `2a619cd38`
+(IPC Toolkit pin `f8dafef39e8`, PolySolve pin `43ca2e66`, data pin
+`sdast9/polyfem-data@b7ae0d9`). It adds no evidence: every line points at the
+record that owns the claim. When a record and this page disagree, the record
+governs; fix this page.
+
+## 1. Decisions waiting on the user
+
+| # | Decision | What it blocks | Owner record |
+| --- | --- | --- | --- |
+| D1 | Agree the **accuracy standard** for trajectory-sensitive scenes (a pinned-trim reference ladder plus a production realization ensemble) and the **held-out scene set** | Any change to the default trim controller; standing condition of 2026-09-28 for the force-weighted band | [default-controller-assessment-20260929.md](default-controller-assessment-20260929.md) |
+| D2 | Whether the **initial trim estimate alone** becomes the default, and its scope: `step` (re-arms every step) or `run` (needs `trim_seed_used_` persisted in the state file, a version-2 layout); whether to lower or cap the 4096× seed bound | Flipping `initial_trim_estimate`; the HDA default `si_initial_trim_estimate` and its test change with it | same, *Recommendation* 3 |
+| D3 | Whether to pursue a **force-weighted redesign** (a target relative to the collapse threshold, no softening at stall retunes, or a cap on band moves per step) | Nothing today: the mode stays experimental | same, *Recommendation* 2; [ef-07-trim-loop.md](ef-07-trim-loop.md) |
+| D4 | **Distribution licensing** for the Linux CLI package: GPL-2.0 SuiteSparse components (UMFPACK, SPQR, parts of CHOLMOD) and the Intel MKL redistribution notice; the glibc ≥ 2.38 and `-msse4.2` baselines were measured, not decided; which macOS/Windows targets to support | Wider distribution; CI-08 macOS/Windows work | [ci-08-validation.md](ci-08-validation.md) |
+| D5 | Whether the `*-work/` evidence directories at the workspace root (`default-controller-work` is 51 GB) move to the Pitt share as `outputs/` did | Only disk hygiene | `AGENTS.md`, *Archived test outputs* |
+
+Decided and closed (do not reopen without new evidence): production trim
+controller stays `rms` with no estimate; force-weighted is experimental and
+always runs with `collapse_guard_basis: pair`; `clamped_contacts` defaults to
+`exclude_statistics` (2026-09-29); `gradient_balance_dofs` defaults to `all`
+(2026-09-29); AL budget default off; stall-trigger default `absolute`; soft
+budget method-independent; L-BFGS not pursued (EF-06 retired); automatic
+timestep retry off (RB-08); mixed hexahedral orders refused (RB-23);
+`friction_iterations: 2` with `realized_force` lag (RB-10); the CI-05 and
+CI-06 reference policies (2026-09-29).
+
+## 2. Open work
+
+### R3 inflation (NeoHookean vs Ogden)
+
+[r3-inflation-diagnosis-20260926.md](r3-inflation-diagnosis-20260926.md). The
+snap past the pressure maximum is traversable when restarts are off (step 39
+ends at 169.5 mL with 831 contacts). With restarts off the run then stalls at
+step 76 (one 20,431-iteration solve, gradient oscillating between 1e3 and
+4e5). Still unestablished:
+
+- whether the NeoHookean completes all 200 steps with restarts on and the
+  retune budget raised from 50 to 1,000 (the probe is pending);
+- whether the Ogden run has its own pressure maximum without the obstacle;
+- mesh independence of either path;
+- a constrained eigenanalysis of the tangent at the limit point;
+- the physical adequacy of either completed state.
+
+No material, coefficient or default recommendation follows from R3.
+
+### Contact-efficiency plan
+
+[contact-efficiency-plan-20260923.md](contact-efficiency-plan-20260923.md).
+EF-01, EF-04, EF-02/03 and EF-07 are done; EF-05 was not pursued; EF-06 is
+retired. What is left is the decision list above and the measurements it
+needs: a current pinned-trim ladder on R4 (no current R4 ladder exists;
+five-step R4 has one run per arm, which cannot separate accuracy from
+realization noise), and a repeat of `pup_push` for steps 1–3.
+
+### CI and portability
+
+[ci-portability-plan.md](ci-portability-plan.md). CI-01, CI-02, CI-03, CI-05
+and CI-06 are complete. Open:
+
+- **Native acceptance.** CI-04 (mixed P1/P2 tetrahedral surface) and the
+  CI-05/CI-06 data pin were validated on one Linux GCC host only; macOS and
+  Windows runs are pending.
+- **CI-07:** item 2 (presets, pinned runner, cold-cache build), item 3
+  (named common subset, expected counts, `[.][run]` gating), item 4 (portable
+  Eigen lane; TBB/CPP decision), item 5 (bounded concurrency), item 6
+  remainder (JUnit, configure metadata), item 7 (path filters), item 8 (IPC
+  fork Windows lanes), item 9 (Windows half of the repeatability matrix; the
+  Linux half is done), item 10 (IPC `-march=native` cache key).
+- **CI-08:** macOS arm64/x86_64 and Windows packages. Linux x86_64 is done.
+- **CI-09:** Houdini-side integration (path quoting in `write_params()`,
+  launcher tests, packaged-solver discovery). The portable smoke runner is
+  done.
+
+### Verification gaps
+
+- The last **complete** PolyFEM unit suite: 395 of 398 cases pass (92 minutes,
+  2026-09-27; the three failures were the two known `verify_run` scenes,
+  `gcp-contact/cube-on-floor` (CI-06) and `multi-material/stretch-cubes`
+  (CI-04), and `shape-transient-friction`, whose forward tolerance was then
+  tightened). A cloud Linux run on 2026-09-28 gave
+  403/405 (`contact_2d`, `triangle_data`); CI-05/CI-06 then repaired both
+  groups, confirmed locally on Linux only. No full suite has run
+  since `clamped_contacts` became a default or since the Accelerate thread cap
+  (`ba3ea76b6`); RB-02 was not rerun for the cap either. A full run needs a
+  cap of at least two hours.
+- `tools/ef02/sequence.py` `PRODUCTION_CONTROLLER` pins
+  `clamped_contacts: "keep"`, stale since `eb8286b7c`. It matters only if a
+  scene file sets the key; recorded, not changed.
+- BFGS audit review follow-ups ([bfgs-convergence-audit-20260922.md](bfgs-convergence-audit-20260922.md)).
+
+### Known limits (documented, not defects)
+
+- Threaded friction runs reproduce only to about 1.7e-4 (RB-12); single-thread
+  runs are bit-reproducible, including on macOS since `ba3ea76b6`.
+- Two deterministic linear-solver realizations of IT differ by up to 23.5 %
+  ([it-reproducibility-20260928.md](it-reproducibility-20260928.md)).
+- The ν = .49999 cube needs 24 Newton iterations against a declared target of
+  20 (RB-11 envelope stage).
+- Physical accuracy beyond the recorded envelopes is **not** established.
+
+## 3. Repository state
+
+- `polyfem` `main` = `origin/main` = `2a619cd38` (fast-forwarded 2026-09-29).
+- The `cloud/*` branches on `origin` (`ci-04`, `ci-05-06-refs`, `ci-06-order`,
+  `ci-08-linux`, `linux-evidence`, `locale-fix`) were cherry-picked onto `main`; `git cherry`
+  finds no unmerged work except the cloud full-suite log, which `main` carries
+  as `09e95bd83`. The branches are safe to delete.
+- `ipc-toolkit-fork` and `polysolve-merged` match their `origin` branches.
+- The HDA sources are not a repository; see `houdini_HDAs/AGENTS.md`.

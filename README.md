@@ -11,9 +11,29 @@ PolyFEM is a polyvalent C++ FEM library.
 
 ### sdast9 fork
 
-State as of **September 22, 2026** (`main`). The dated project state lives in
-the parent workspace's README; this section keeps the repository's own claims
-current.
+State as of **September 29, 2026** (`main`, `2a619cd38`). The dated project
+state lives in the parent workspace's README; this section keeps the
+repository's own claims current. **Open decisions, work and verification gaps:
+[docs/open-items-20260929.md](docs/open-items-20260929.md).**
+
+- **Trim controller and restart work (September 26–29, 2026):** the opt-in
+  guarded initial trim estimate and force-weighted band ([EF-02/03](docs/ef-02-03-trim-controller.md))
+  and the EF-07 pair guard that removes their ball-burst loop
+  ([record](docs/ef-07-trim-loop.md)) are implemented and **not defaults**: the
+  [default-controller assessment](docs/default-controller-assessment-20260929.md)
+  recommends production `rms` and leaves the accuracy standard to the user.
+  Defaults that did change: the trim band statistic is collision-weighted
+  ([record](docs/band-statistic-weighting-20260927.md)) and
+  `clamped_contacts` is `exclude_statistics`
+  ([record](docs/clamped-contacts-20260928.md)); `gradient_balance_dofs` stays
+  `all` ([record](docs/gradient-balance-free-dofs-20260929.md)). A restart resumes
+  the run it came from, including the contact controller's memory and the
+  augmented-Lagrangian multipliers
+  ([restart](docs/restart-json-20260927.md), [AL](docs/restart-al-multipliers-20260928.md)),
+  and `--max_threads` now caps Accelerate so single-threaded runs repeat
+  bit-identically on macOS ([record](docs/it-reproducibility-20260928.md)).
+  The R3 inflation failure is a material/structural limit, not the controller
+  ([record](docs/r3-inflation-diagnosis-20260926.md)).
 
 - **BFGS convergence audit (September 22, 2026):** the dense-BFGS direction now
   uses the latest secant update (PolySolve `427e1458`), and both BFGS strategies
@@ -64,6 +84,11 @@ current.
   only failures are the four scene groups `standard`, `contact_2d`,
   `contact_3d` and `triangle_data` tracked as
   [CI-03–CI-06](docs/ci-portability-plan.md#4-scene-failures-requiring-distinct-treatment).
+  Since then CI-03, CI-05 and CI-06 are complete and CI-04 is done locally
+  (2026-09-28/29; [CI-04](docs/ci-04-validation.md), [CI-06](docs/ci-06-validation.md#2026-09-29--reference-regenerated-ci-06-closed));
+  a cloud Linux run passed `standard` and `contact_3d`, and after CI-05/06
+  `contact_2d` 29/29 and `triangle_data` 7/7. Native macOS and Windows runs
+  of those fixes are **pending**, and no GitHub run has read them.
   CI-03 is complete (2026-09-21, [record](docs/ci-03-validation.md)): the
   three friction fixtures that RB-10's `friction_iterations` default had
   moved now state the budget their references were generated under and have
@@ -78,16 +103,18 @@ current.
   ([schema](scenes/semi-implicit/README.md#run-manifest-rb-12)) and
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
-- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@482b9eab`
-  (branch `semi-implicit-stiffness`), `sdast9/polysolve@448f1b8e` (branch
-  `iteration-callback`) and the test data `sdast9/polyfem-data@e6ed5cf`
+- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@f8dafef39e8`
+  (branch `semi-implicit-stiffness`), `sdast9/polysolve@43ca2e66` (branch
+  `iteration-callback`) and the test data `sdast9/polyfem-data@b7ae0d9`
   (branch `fable-fixtures`; `main` mirrors upstream `polyfem/polyfem-data`);
   both code forks' `Build` workflows run on those branches
   (PolySolve 6/6 lanes green; IPC Toolkit green on Linux/macOS, its two Windows
   lanes failing on upstream code — CI-07). A run's manifest records the
   effective sources next to the declared pins; verify local overrides before
-  trusting a build. PolyFEM incorporates upstream through `6c9e7a390`
-  (September 2); the September 5 `sync-upstream` promotion is historical.
+  trusting a build. PolyFEM incorporates upstream through `591b08bd5`
+  (September 23, elastic-material smoothing, #544; merged in `ad7f41622`), the
+  IPC Toolkit through `869e489e` and PolySolve through its September hybrid-solver
+  release; the September 5 `sync-upstream` promotion is historical.
 - **Robustness work:** bounded sessions follow the
   **[RB robustness plan](docs/robustness-plan.md)**, whose status table is the
   authority on what is validated, characterized, closed or not started, and

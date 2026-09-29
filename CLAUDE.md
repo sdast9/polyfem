@@ -31,9 +31,11 @@ to the data fork first, then pinned.
 The fork keeps `option(POLYFEM_WITH_MISO ... OFF)`. Every upstream merge brings
 back a plain `set(... ON)`; re-apply the option after merging.
 
-Known unit-suite failures: the two golden scenes recorded in README.md
-(including the `contact_2d` cube-on-floor comparison). Compare against them;
-do not treat them as new.
+Unit-suite baseline: the two golden scenes that used to fail
+(`gcp-contact/cube-on-floor`, `multi-material/stretch-cubes`) were repaired by
+CI-06 and CI-04 and pass on cloud Linux; macOS and Windows runs and a complete
+suite since 2026-09-29 are unconfirmed, so treat a failure as new unless
+[docs/open-items-20260929.md](docs/open-items-20260929.md) says otherwise.
 
 ## Working rules
 
