@@ -87,8 +87,12 @@ repository's own claims current. **Open decisions, work and verification gaps:
   Since then CI-03, CI-05 and CI-06 are complete and CI-04 is done locally
   (2026-09-28/29; [CI-04](docs/ci-04-validation.md), [CI-06](docs/ci-06-validation.md#2026-09-29--reference-regenerated-ci-06-closed));
   a cloud Linux run passed `standard` and `contact_3d`, and after CI-05/06
-  `contact_2d` 29/29 and `triangle_data` 7/7. Native macOS and Windows runs
-  of those fixes are **pending**, and no GitHub run has read them.
+  `contact_2d` 29/29 and `triangle_data` 7/7. The one native run that
+  covered them ([Build 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097),
+  `d53b9e444`) is **not green and not yet diagnosed**: Linux Release fails
+  `contact_3d`, macOS Release `contact_2d`, Linux DebugNoSymbols four
+  rollback/AL-budget tests (SEGFAULT), Windows Release `restart from restart
+  json`; the macOS/Windows Debug lanes were cancelled.
   CI-03 is complete (2026-09-21, [record](docs/ci-03-validation.md)): the
   three friction fixtures that RB-10's `friction_iterations` default had
   moved now state the budget their references were generated under and have
