@@ -40,10 +40,10 @@ step converges within the ordinary budget, and the 4 h cap ended the run at
 step 168. **The user decided on 2026-09-29 to raise the default
 `solver/contact/semi_implicit/restart/max_restarts` from 20 to 200** (scenes
 that set it explicitly are unchanged); the change is PolyFEM `8bb9f936e` plus
-the Houdini asset's parameter (default 200, range 0–500). Verify both are
-published before relying on them, and when they are, update the `max_restarts`
-value in [scenes/semi-implicit/README.md](../scenes/semi-implicit/README.md).
-Still unestablished:
+the Houdini asset's parameter (default 200, range 0–500), both published
+2026-09-29 with the README defaults block updated. The R3 scene
+(`kristin_sim.hipnc`) sets 50 explicitly and keeps it until the scene is
+changed. Still unestablished:
 
 - whether the NeoHookean completes all 200 steps (the 10 h repeat,
   `probe-nh-restarts1000-long`, was started 2026-09-29);

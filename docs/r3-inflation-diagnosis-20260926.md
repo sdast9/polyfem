@@ -9,7 +9,8 @@ which is being archived to the Pitt share (AGENTS.md, *Archived test
 outputs*).
 
 **Update 2026-09-29 — the stall is a structural pressure maximum followed by a
-snap-through that the default stall-retune budget (50) cuts off. Step 39 needs
+snap-through that the scene's stall-retune budget (50; the shipped default
+was 20) cuts off. Step 39 needs
 about 131 retunes; with the budget raised, the run passes it and every later
 step through step 168 (the observation cap) converges normally. The local loss
 of ellipticity is not the cause.** The controlled Ogden
@@ -193,7 +194,7 @@ stall:**
 This is not a snap-through. It is a non-converging iteration in a heavily
 distorted, contact-dominated state, and with restarts disabled the solver has
 no retune to leave it. So the snap past the pressure maximum is traversable,
-and the default stall-retune budget (50) is what ends step 39 before the snap
+and the scene's stall-retune budget (50) is what ends step 39 before the snap
 completes. The no-restart probe alone cannot show whether the NeoHookean
 completes all 200 steps.
 
@@ -215,10 +216,18 @@ machine heavily loaded by other sessions):
 
 **So the one thing that stops the default NeoHookean run is step 39:** the
 snap-through past the pressure maximum needs about 131 stall retunes, and the
-default budget is 50. After the snap every step fits the default budget.
+scene's budget is 50 (the shipped default was 20). After the snap every step
+fits that budget.
 Completion to step 200 was not observed within the cap; a repeat with a 10 h
-cap (`probe-nh-restarts1000-long`) was started 2026-09-29. This is a
-measurement of the budget, not a recommendation to change it. The snapped
+cap (`probe-nh-restarts1000-long`) was started 2026-09-29.
+
+**Decision (user, 2026-09-29): the default `max_restarts` is raised from 20
+to 200**, in PolyFEM's input spec (`8bb9f936e`) and in the Houdini asset's
+`si_max_restarts` (default 200, range 0–500). The R3 scene
+(`kristin_sim.hipnc`, `test_cases/inflation`) sets 50 explicitly, and a saved
+scene value overrides the default: R3 needs its value changed to at least
+~131 to pass step 39. On the smoke scenes the change is inert: all five are
+byte-identical with `max_restarts` pinned to 20 and at the new default. The snapped
 state is also extreme: min J 0.016–0.021, max J up to 291, and the membrane
 pressed on the obstacle. Whether that is the intended physics of the scene is
 the user's question.

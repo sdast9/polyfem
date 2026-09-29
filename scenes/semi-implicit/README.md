@@ -70,7 +70,7 @@ All semi-implicit options are optional. Defaults from
                     "patience": 5,
                     "min_iterations": 5,
                     "soft_iteration_limit": 100,
-                    "max_restarts": 20,
+                    "max_restarts": 200,
                     "stall_trim_factor": 2.0
                 }
             }
