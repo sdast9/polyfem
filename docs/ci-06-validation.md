@@ -171,3 +171,182 @@ PolyFEM commit: this record follows the `verify_run.cpp` fix commit on
 run-manifest output, ~40 MB): `outputs/ci-06/20260928T161716Z/` in this
 session's working tree only. No solver, tolerance, reference, or default
 changed.
+
+## 2026-09-29 — Canonical smooth-contact collision order (ipc-toolkit `f8dafef39e8`)
+
+**Status: nondeterminism root-caused and fixed; the stored reference/margin
+is still unchanged pending the user's decision.** Cloud session, branch
+`cloud/ci-06-order`, on top of `5fdd1925c`. A previous cloud session
+diagnosed and fixed the root cause on the IPC Toolkit side but hit the
+usage limit before landing anything on PolyFEM; this session pins the fix,
+builds, and re-measures.
+
+### The fix (done and verified by the previous session; cited here)
+
+The 2026-09-28 record above measured this scene as **not bit-reproducible
+single-threaded** (five fresh processes spread `1.275e-3` relative on
+`err_h1_semi`) and flagged an address-order-dependent container iteration
+as the suspected cause, not traced further. The previous session traced it:
+`sdast9/ipc-toolkit` branch `cloud/smooth-order`, commit
+`f8dafef39e881d1aa51b2a7975d06766db66d7da` (parent `cf99893b`, the pin this
+record's evidence above was measured against). `SmoothCollisionsBuilder<2>`
+and `<3>::merge` gathered each thread's deduplicated collision map and
+appended the maps in whatever order Abseil's ASLR-seeded `robin_map` hashed
+them into — a process-specific, not scene-specific, ordering — instead of a
+canonical one; face-vertex/edge-edge candidate lists had the same problem.
+The fix gathers each thread's map and appends in ascending primitive-id key
+order, and sorts the face-vertex/edge-edge lists by their primitive-id
+pair. New coverage:
+`tests/src/tests/potential/test_smooth_collision_order.cpp`.
+
+The previous session's causal proof, on this exact scene
+(`gcp-contact/cube-on-floor/run.json`, a probe build, two fresh processes):
+collision membership and candidates were already identical between
+processes; only emission order differed. Summing `E`/`g`/`H` in canonical
+order made the two processes' sums bitwise equal; the first divergence
+without the fix was at the first Newton update, downstream of the
+summation order, not of anything physical. After the fix: 5/5 fresh
+single-threaded harness processes gave identical metrics; the five
+`scenes/semi-implicit` smokes were byte-identical before/after (55
+VTU/VTM/PVD files; only run-manifest provenance differed).
+
+### This session's work
+
+- **Pin.** `cmake/recipes/ipc_toolkit.cmake` moved from `cf99893be74f`
+  (this record's earlier evidence) to `f8dafef39e881d1aa51b2a7975d06766db66d7da`.
+  Built with `tools/cloud/compile.sh` (default config,
+  `POLYFEM_PORTABLE_BUILD=ON`, `POLYFEM_WITH_TRIANGLE=ON`); `PolyFEM_bin
+  --build_info` confirms `ipc_toolkit.matches_declared_pin: true` against
+  this exact SHA. No locale-gen was needed (the fix from
+  [ci-portability-plan.md](ci-portability-plan.md) is on `main`).
+
+- **IPC Toolkit tests (this session).** In a separate clone of
+  `sdast9/ipc-toolkit` at `f8dafef39e8`, cloned
+  `ipc-sim/ipc-toolkit-tests-data` into `tests/data`, configured a Release
+  build with `IPC_TOOLKIT_BUILD_TESTS=ON` (top-level default), built
+  `ipc_toolkit_tests`, and ran the smooth-contact selection
+  (`OMP_NUM_THREADS=1 ./build-tests/tests/ipc_toolkit_tests
+  "[smooth_potential]"`, which in a Release/`NDEBUG` build also matches the
+  new order test's `[determinism]` tag): the new
+  "Smooth collisions have a canonical order" case (both 2D and 3D, via
+  `GENERATE`), "Smooth barrier potential codim", "Smooth barrier potential
+  full gradient and hessian 3D" (finite-difference gradient/Hessian
+  checks), "Smooth barrier potential real sim 2D C^2" and "…C^1". **5/5
+  test cases, 1450/1450 assertions, exit 0.**
+
+- **Determinism re-measured with the pinned PolyFEM build.** Five fresh,
+  isolated, single-threaded processes of `gcp-contact/cube-on-floor/run.json`
+  through `run_manifest_env` (same path as `contact_2d`'s ctest case:
+  `Eigen::SimplicialLDLT`, `set_max_threads(1)`), each in its own process
+  and directory (`outputs/ci-06/20260929T023242Z/run-{1..5}/`):
+
+  | Run | `err_l2` | `err_h1` | `err_h1_semi` | `err_linf` | `err_linf_grad` | `err_lp` |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 1–5 | 0.0098260282514205325 | 0.098409800311031831 | 0.097918016554970344 | 0.025735020611998116 | 0.044738583163921243 | 0.016934065257996768 |
+
+  **All five processes produced bitwise-identical values on every metric,
+  to full `double` precision (17 significant digits, printed above) —
+  0 spread, against the `1.275e-3` relative spread on `err_h1_semi` alone
+  measured on the previous pin.** Relative error against the still-unchanged
+  stored reference (margin `1e-5`):
+
+  | Metric | Reference (17 s.f.) | Computed (17 s.f.) | Relative error |
+  | --- | ---: | ---: | ---: |
+  | `err_l2` | 0.0098276900010068023 | 0.0098260282514205325 | 1.6909e-4 |
+  | `err_h1` | 0.098813194555509312 | 0.098409800311031831 | 4.0824e-3 |
+  | `err_h1_semi` | 0.098323262392523605 | 0.097918016554970344 | 4.1216e-3 |
+  | `err_linf` | 0.025729304058592091 | 0.025735020611998116 | 2.2218e-4 |
+  | `err_linf_grad` | 0.044732657488330614 | 0.044738583163921243 | 1.3247e-4 |
+  | `err_lp` | 0.016938155138014152 | 0.016934065257996768 | 2.4146e-4 |
+
+  Every metric still exceeds the `1e-5` margin (the harness's authentication
+  fails, exit 42, as expected — `contact_2d` still fails only on
+  `cube-on-floor`, unchanged from before this fix: 28/29 fixtures authenticate,
+  `cube-on-floor` the sole failure). The magnitudes (`1.3e-4`–`4.1e-3`) sit
+  inside the `3.96e-3`–`5.23e-3` range the previous, non-reproducible
+  five-run spread covered for `err_h1_semi` specifically — consistent with a
+  real, now-pinned-down mismatch that was always in roughly this range, not
+  with the fix having moved the answer to a new place.
+
+- **Smoke scenes.** `python3 tools/smoke/run_smoke.py --binary
+  build-cloud/PolyFEM_bin --output outputs/ci-06/20260929T023436Z-smoke`: all
+  five `scenes/semi-implicit` scenes still exit 0 with 0 error lines
+  (`quasistatic-adaptive`, `quasistatic-semi`, `quasistatic-semi-alhess`,
+  `quasistatic-semi-friction`, `transient-semi`).
+
+- **Targeted regression check.** `OMP_NUM_THREADS=1 ./build-cloud/tests/unit_tests
+  "contact_2d"`: 28/29 fixtures authenticate; the sole failure is
+  `cube-on-floor`, as always. `contact_3d` also carries a GCP fixture
+  exercised by the same `SmoothCollisionsBuilder` code path
+  (`gcp-contact/parallel-edge/run.json`, margin `1.2e-5`): **all 50
+  assertions pass, 1/1 test case, exit 0** — that fixture authenticates
+  cleanly against its stored reference on this pin, no regression.
+
+### Reading the result
+
+The fix does exactly what it was built to do: it removes the process-level
+nondeterminism from this scene's collision emission order (0 spread across
+5 fresh processes, where before there was a `1.275e-3` relative spread on
+`err_h1_semi` alone) without moving the *value* outside the range that
+noise already covered. It does **not**, by itself, make `cube-on-floor`
+authenticate against its stored `1e-5`-margin reference — nothing in this
+fix's scope claimed it would; the previous record was explicit that the
+fix's job was to make the number reproducible, not to make it match. What
+this fix changes about the reference-policy question:
+
+- **The scene is now bit-reproducible single-threaded**, matching
+  `quasistatic-semi`'s semi-implicit path (CI-07 item 9) rather than being
+  an outlier. A same-noise-floor comparison against the reference's
+  generation revision — the thing the 2026-09-28 record said this session's
+  evidence could not by itself separate from a real regression — is now a
+  well-posed, deterministic bisection instead of one contending with
+  run-to-run noise on both ends.
+- **The remaining `1.3e-4`–`4.1e-3` mismatch is real and reproducible**, not
+  noise. It has not been traced to a specific cause (a genuine behavior
+  change somewhere in `cf99893b`'s upstream merge or earlier, versus this
+  scene's reference having been generated on a different revision, remain
+  open and untraced, per the earlier record).
+
+### Recommendation (measured, not decided)
+
+This is the user's reference/tolerance decision to make; two justified
+options, unchanged in substance from 2026-09-28's recommendation but now
+resting on a deterministic (not noisy) measurement:
+
+1. **Keep the `1e-5` margin and regenerate the reference** at the
+   deterministic value this fix now produces
+   (`err_l2=0.0098260282514205325`, `err_h1=0.098409800311031831`,
+   `err_h1_semi=0.097918016554970344`, `err_linf=0.025735020611998116`,
+   `err_linf_grad=0.044738583163921243`, `err_lp=0.016934065257996768`),
+   published on the `sdast9/polyfem-data` fork (`fable-fixtures` branch) the
+   way CI-03's twins were, with the regeneration going through
+   `resolve_reference_margin` (already fixed to preserve a margin) so a
+   future regeneration cannot silently widen it back to `1e-5`.
+2. **Widen this fixture's margin to a justified value** (`≥ 1e-2`, matching
+   the historical `f52db28` value) if the mismatch is judged to be a real,
+   accepted difference from the reference's generation platform/revision
+   rather than something to chase to zero — the CI-03 precedent (an
+   explicit, justified per-fixture value, not a global change).
+
+Either way, the deterministic single-threaded value above is now a solid
+basis for the decision; before this fix, the noise floor and the mismatch
+were the same order of magnitude and could not be told apart.
+
+**The multi-thread claim is separate** (not measured this session — flagged
+as a possible follow-up, not required by this item): whether the fix also
+removes or reduces the thread-count divergence documented elsewhere (RB-12,
+CI-07 item 9) on GCP/SmoothContact scenes specifically is a one-line
+question to answer cheaply (a threaded repeat of this same scene) whenever
+that's wanted, but was not measured here.
+
+### Publication
+
+PolyFEM: `cmake/recipes/ipc_toolkit.cmake` (the pin), this record — branch
+`cloud/ci-06-order`. IPC Toolkit: the fix itself was already published by
+the previous session as `sdast9/ipc-toolkit:cloud/smooth-order` at
+`f8dafef39e881d1aa51b2a7975d06766db66d7da`; not modified or re-pushed by
+this session (never push to `sdast9/ipc-toolkit`, per this task's rules).
+Evidence: `outputs/ci-06/20260929T023242Z/` (five run directories,
+`outputs/ci-06/20260929T023436Z-smoke/`), not committed (gitignored,
+per-task evidence convention). No solver, tolerance, reference, or default
+changed by this session.
