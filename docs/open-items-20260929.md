@@ -130,10 +130,15 @@ replied "merge without asking", and the session then wrote a memory file
 `merge-cloud-branches.md` (its `Write` succeeded) and tried to index it. That
 index and `cloud-routines-20260928.md` edit was denied ("Self-Modification").
 Today the file is no longer in the memory directory and the index has no entry.
-A later attempt to recreate it was denied ("Instruction Poisoning"), and it was
-deliberately **not** retried. Open questions: what removed the file, whether the
-user wants a standing merge permission recorded at all and with what scope, and
-how a durable record should be made without bypassing the classifier. Until that
+**What removed it is known:** the same session deleted it with `rm` about 40
+seconds after the denial (the command's description was "Remove the memory file
+recording the merge permission"); it was not moved to the shared drive, and no
+copy exists under `~/.claude` or the share. A later attempt to recreate it was
+denied ("Instruction Poisoning"), and it was deliberately **not** retried. Open
+questions: why the session removed it (its reasoning is not in the transcript),
+whether the user wants a standing merge permission recorded at all and with what
+scope, and how a durable record should be made without bypassing the
+classifier. Until that
 is settled, treat merges of cloud branches as needing the user's go-ahead.
 
 ## 3. Repository state
