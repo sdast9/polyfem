@@ -29,6 +29,18 @@ are refused rather than silently reused. The sequence ledger is written before
 execution, in addition to EF-01's per-run `row.json`. Solver failures remain in
 the matrix; they do not terminate the sequence or become successful evidence.
 
+`production` means the production trim controller, whatever the scene file
+says. The user's scenes are Houdini exports that can select experimental
+controller options (R4's 2026-09-26 export selects `force_weighted` and the
+initial estimate, which made EF-07's R4 "production" runs v3 runs:
+[r4-production-speedup-20260928.md](../../docs/r4-production-speedup-20260928.md)).
+Production mode therefore reads each scene file and resets every option in
+`PRODUCTION_CONTROLLER` (`band_statistic`, `initial_trim_estimate`,
+`clamped_contacts` and the EF-07 experiments) that the scene sets to another
+value. It prints the pins, stores them in the ledger's `production_pins`,
+and passes them as `--set`, so they also appear in `row.json`. Options the
+scene leaves out are not written, so binaries that predate them still run.
+
 R4 and BB use all available threads; other scenes use one. R4 has a 45-minute
 run cap. `pmset` captures power status on this macOS host. Inspect sleep logs
 separately before trusting wall times. The option-off identity check compares

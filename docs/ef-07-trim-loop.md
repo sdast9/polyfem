@@ -334,8 +334,8 @@ retired floor. The scene-side causes of the slow late steps (d̂ = 1 µm against
   statistic (`6a4e788bf`) lets production leave trim 1 after 212–291 instead
   of 314–459 iterations (`c133948cf`, with the IPC/PolySolve adoptions,
   still 379 / 352); the ~350-iteration walk down from trim 1 is unchanged.
-  Open: `tools/ef02/sequence.py` production mode does not pin the controller
-  options, so it inherits whatever a re-exported scene selects.
+  `tools/ef02/sequence.py` production mode now pins the production
+  controller over a scene's experimental options (2026-09-29, user decision).
 * IT's run-to-run irreproducibility on this host (single-threaded): **cause
   found 2026-09-28** ([record](it-reproducibility-20260928.md)).
   `Eigen::AccelerateLDLT`'s internal threads ignore `--max_threads` and are

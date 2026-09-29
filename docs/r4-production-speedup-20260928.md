@@ -161,8 +161,14 @@ descent screen, present on all three binaries (2–5 per run).
 * The scene file now selects opt-in experimental controller options. Any
   measurement that means "production" on R4 must set
   `band_statistic "rms"` and `initial_trim_estimate false` explicitly (or use
-  the old export); `tools/ef02/sequence.py` production mode does not. Not
-  changed here (tooling decision).
+  the old export). **Done 2026-09-29 (user decision):**
+  `tools/ef02/sequence.py` production mode now resets any opt-in controller
+  option a scene file selects to its production value and records the pins
+  (see `tools/ef02/README.md`). For today's scenes only R4 is pinned
+  (`band_statistic "rms"`, `initial_trim_estimate false`). Checked: a pinned
+  R4 input runs on `6a4e788bf` with `rms` / estimate off in its manifest's
+  effective input, and production smokes still run on `6a59cb387`, which
+  predates the options.
 
 ## Not done
 
