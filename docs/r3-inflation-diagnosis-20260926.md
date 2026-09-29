@@ -222,7 +222,7 @@ Completion to step 200 was not observed within the cap; a repeat with a 10 h
 cap (`probe-nh-restarts1000-long`) was started 2026-09-29.
 
 **Decision (user, 2026-09-29): the default `max_restarts` is raised from 20
-to 200**, in PolyFEM's input spec (`8bb9f936e`) and in the Houdini asset's
+to 200**, in PolyFEM's input spec (`e20ec8781`) and in the Houdini asset's
 `si_max_restarts` (default 200, range 0–500). The R3 scene
 (`kristin_sim.hipnc`, `test_cases/inflation`) sets 50 explicitly, and a saved
 scene value overrides the default: R3 needs its value changed to at least

@@ -39,7 +39,7 @@ used was 50. With restarts on and the budget raised to 1,000
 step converges within the ordinary budget, and the 4 h cap ended the run at
 step 168. **The user decided on 2026-09-29 to raise the default
 `solver/contact/semi_implicit/restart/max_restarts` from 20 to 200** (scenes
-that set it explicitly are unchanged); the change is PolyFEM `8bb9f936e` plus
+that set it explicitly are unchanged); the change is PolyFEM `e20ec8781` plus
 the Houdini asset's parameter (default 200, range 0–500), both published
 2026-09-29 with the README defaults block updated. The R3 scene
 (`kristin_sim.hipnc`) sets 50 explicitly and keeps it until the scene is
