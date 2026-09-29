@@ -436,8 +436,8 @@ clamped one without a warning (S4).
   only the clamped half of a contact moves the balance (reactions dilute the
   cosine only), by a factor that depends on the clamped side's mesh (9× on
   the smokes' two-triangle slab, 2.1× on IT); opt-in
-  `semi_implicit/gradient_balance_dofs: free`, default `all` unchanged
-  (adopting it is the user's decision).
+  `semi_implicit/gradient_balance_dofs: free`; the default stays `all`
+  (user decision, 2026-09-29).
 * ~~`tools/ef02/sequence.py` production mode inherits controller options
   from re-exported scene files.~~ Closed by `a1982dd1e`, which pins the
   production controller (including `clamped_contacts`).

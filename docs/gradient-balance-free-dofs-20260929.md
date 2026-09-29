@@ -1,8 +1,8 @@
 # Gradient balance on free DOFs: characterization and opt-in prototype
 
 Date: 2026-09-29. Status: **characterized; opt-in prototype
-`semi_implicit/gradient_balance_dofs: free`, default `all` unchanged.**
-Adopting a default is the user's decision.
+`semi_implicit/gradient_balance_dofs: free`. Decision (user, 2026-09-29):
+the default stays `all`;** `free` remains an opt-in experiment.
 Origin: [clamped contacts](clamped-contacts-20260928.md), *Open* (first
 bullet) and its "Separate finding".
 
@@ -116,8 +116,8 @@ happens when the balance is restricted to free DOFs?
   scenes, and it extends the near-zero-raise interaction to every obstacle
   scene. For the experimental force-weighted mode it is what makes the
   initial estimate work at all, at the price of somewhat tighter gaps on
-  IT. If adopted, pair it with a minimum relative raise. The decision is
-  the user's.
+  IT. If adopted, pair it with a minimum relative raise. **Decided
+  (user, 2026-09-29): `all` stays the default.**
 
 ## Mechanism
 
@@ -407,6 +407,12 @@ wants the consistent balance, adopt `free` together with a minimum
 relative raise for the upward-only calibration (for example 1 %). That
 second change would also affect scenes without a clamped side, so it
 needs its own measurement.
+
+## Decision (user, 2026-09-29)
+
+**`gradient_balance_dofs` keeps `all` as its default**, as recommended.
+`free` stays available as an opt-in experiment; the manifest names it when
+set. No code change follows from the decision.
 
 ## Open
 
