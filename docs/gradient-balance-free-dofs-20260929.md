@@ -86,7 +86,8 @@ happens when the balance is restricted to free DOFs?
   `free` vs 6,385 / 3,807 / 5,087 without; stall retunes 5 / 7 / 21 vs
   23 / 1 / 10; the modes differ by 6.5–21 % in solution, the realizations
   of one mode by up to 24 % and 33 %; realized minimum gaps median
-  0.80–0.82 d̂ in both modes). R4 and BB: see *Multithreaded (R4, BB)*.
+  0.80–0.82 d̂ in both modes). R4 and BB (two multithreaded repeats per
+  mode): no effect beyond their run-to-run spread; see *Multithreaded (R4, BB)*.
 * **Force-weighted mode: the initial estimate is effectively disabled on
   all DOFs.** `estimate_initial_trim` gates at cosine 0.8. The full-DOF
   cosine never reaches it on the smokes (max 0.229), BBT (0.326) or R1
@@ -319,65 +320,36 @@ cosine, which flips no gate decision on either (BB passes at 1 of 5 full
 records in both variants, R4 at 9 of 9). They run with all
 threads and are not reproducible run to run.
 
-| scene | repeat | option off: its / stalls / final trim | `free`: its / stalls / final trim | solution difference |
+| scene | repeat | option off: its / stalls / AL passes / final trim | `free`: its / stalls / AL passes / final trim | off vs free |
 |---|---|---|---|---:|
-| BB (1 step) | r1 | 388 / 4 / 3.9·10⁻³ | 333 / 3 / 7.8·10⁻³ | 3.8 % |
+| BB (1 step) | r1 | 388 / 4 / 0 / 3.9·10⁻³ | 333 / 3 / 0 / 7.8·10⁻³ | 3.8 % |
+| | r2 | 432 / 4 / 0 / 4.0·10⁻³ | 365 / 4 / 0 / 3.9·10⁻³ | 1.4 % |
+| R4 (1 step) | r1 | 591 / 7 / 1 / 2.9·10⁻⁴ | 563 / 7 / 1 / 3.1·10⁻⁴ | 10.4 % |
+| | r2 | 528 / 7 / 1 / 4.9·10⁻⁴ | 567 / 6 / 1 / 2.9·10⁻⁴ | 4.9 % |
 
-For scale, the clamped-contacts record measured BB's option-off spread at
-2.5 % and R4's at 4.5–7.3 %. **R4 is not measured yet:** the first R4 pair
-hit the driver's 2,700 s cap at a machine load of ~140 on 18 cores (other
-sessions' runs; kept in `matrix/aborted-load/`), and the repeats run with a
-4 h cap (`queue-threaded2.sh`). This section is updated when they finish.
+Spread within a mode (r1 vs r2): BB 4.0 % off, 3.1 % `free`; R4 8.2 % off,
+8.1 % `free`. Cross pairs (off r1 vs `free` r2 and the reverse): BB
+3.3–3.8 %, R4 7.9–8.1 %. Every run exited 0 with its step accepted; the
+free-contact minimum gap was 0.67–0.72 d̂ (BB) and 0.381–0.388 d̂ (R4) in
+every run.
 
-### Force-weighted controller (`estimate_initial_trim`)
+* **R4:** no effect. Iterations overlap (528–591 vs 563–567), the solution
+  differences between the modes lie within each mode's own spread, and the
+  controller took the same kinds of decisions (7 or 6 stall retunes, one AL
+  pass, 11–12 trim decreases).
+* **BB:** `free` needed fewer iterations in both repeats (333 and 365 vs
+  388 and 432, −14 % and −16 %), with solutions within the modes' own
+  spread. Nothing in the balance explains it: BB's balance ratio is 1 and
+  its gate decisions are identical in both variants, so `free` differs only
+  at roundoff there. Two multithreaded repeats per mode cannot separate this
+  from run-to-run variation (the clamped-contacts record saw BB's own
+  iterations vary by 343–368 and its modes by 368–386); it is not read as
+  an effect.
 
-`estimate_initial_trim` runs only with `initial_trim_estimate: true`, which
-the matrix driver sets together with `band_statistic: force_weighted`
-(`--controller force_weighted`, the experimental mode; `matrix-fw/`). Its
-gate is `initial_trim_cosine` = 0.8, far stricter than calibration's 0.1,
-so the cosine dilution decides it. Distinct estimate decisions (a pending
-estimate is re-evaluated at refreshes and iterations until one is
-accepted; `tools/balance/estimates.py`):
-
-| scene | option off: decisions / accepted | `free`: decisions / accepted | its off → free | stalls | final trim off → free | min gap (d̂) off → free | solution difference |
-|---|---|---|---|---|---|---|---:|
-| smoke-qs, -alhess | 25 / 0 | 7 / 4 | 31 → 27 | 0 → 0 | 8 → 10.6 | 0.466 → 0.505 | 2.9·10⁻⁴ |
-| smoke-tr | 20 / 0 | 7 / 4 | 26 → 27 | 0 → 0 | 8 → 10.6 | 0.466 → 0.505 | 2.9·10⁻⁴ |
-| smoke-friction | 52 / 0 | 7 / 4 | 62 → 63 | 0 → 0 | 8 → 9.8 | 0.477 → 0.497 | 3.8·10⁻⁴ |
-| R1 (3) | 187 / 0 | 105 / 3 | 196 → 175 | 2 → 2 | 8.4·10⁻⁶ → 4.3·10⁻⁶ | 0.315 → 0.148 | 2.8·10⁻⁴ |
-| BBT (20) | 93 / 0 | 32 / 20 | 119 → 121 | 0 → 0 | 6.1·10⁻⁶ → 5.6·10⁻⁶ | 0.082 → 0.074 | 7.2·10⁻⁴ |
-| IT (200), Accelerate | 2,539 / 12 | 981 / 65 | 4,313 → 3,163 | 6 → 0 | 11.2 → 0.28 | 0.073 → 0.061 | 120 % |
-
-* **With the option off the estimate is almost never accepted.** On the
-  smokes the full-DOF cosine tops out at 0.215–0.229 (s_B·s_E ≈ 0.22), on
-  BBT at 0.326 (reactions, s_E) and on R1 at 0.252, all under the 0.8
-  gate, so the force-weighted mode runs without its initial estimate
-  there. IT passes it only at steps 177–200 (3–12 acceptances per
-  realization), after its first 176 steps without one. On free DOFs the cosine reaches 0.93–1.0
-  and the estimate is accepted on every scene (the smokes at each of their
-  4 steps, BBT 20 times, IT 65 times from its first contact at step 11,
-  R1 3 times).
-* The accepted estimates move the trim by factors near 1 on the smokes
-  (0.86–0.94) and let the band settle at 10.6 instead of 8, with a wider
-  minimum gap. On BBT and R1 the minimum gap narrows (R1 0.315 → 0.148 d̂,
-  BBT 0.082 → 0.074 d̂, both at their first contacts), with the solution
-  within 7·10⁻⁴.
-* **IT realization ensemble** (`it-ensemble-fw/`, `it-ensemble-fw.json`;
-  same construction as above):
-
-  | realization | option off: its / stalls / estimates accepted / worst min gap | `free`: its / stalls / accepted / worst min gap | off vs free |
-  |---|---|---|---:|
-  | AccelerateLDLT | 4,313 / 6 / 12 / 0.073 | 3,163 / 0 / 65 / 0.061 | 120 % |
-  | CHOLMOD | 3,260 / 2 / 5 / 0.074 | 3,251 / 0 / 69 / 0.073 | 21 % |
-  | SimplicialLDLT | 3,284 / 1 / 3 / 0.079 | 3,258 / 1 / 53 / 0.069 | 459 % |
-
-  Within one mode the realizations differ by 97–243 % (off) and 72–266 %
-  (`free`) in solution: in this mode IT's sphere leaves the mat on a
-  different path in every realization, so the solution difference carries
-  no mode information. Iterations agree except for the option-off
-  Accelerate realization. Per-step minimum gaps (`gaps.py`): median
-  0.179–0.200 d̂ off, 0.148–0.185 `free`; steps below the collapse-pair
-  threshold 0 / 0 / 0 off, 1 / 0 / 1 `free`; below 0.2 d̂ 33–36 vs 35–39.
+R4 ran after an attempt that hit the driver's 2,700 s cap at a machine load
+of ~140 on 18 cores (other sessions' runs; kept in `matrix/aborted-load/`);
+these repeats used a 4 h cap (`sequence.py --timeout`, `queue-threaded2.sh`,
+`threaded-compare.json`).
 
 ## Checks
 
@@ -416,8 +388,6 @@ set. No code change follows from the decision.
 
 ## Open
 
-* R4 (option off and `free`, two repeats each) and the second BB pair:
-  running, see *Multithreaded (R4, BB)*.
 * Minimum relative raise for the upward-only calibration (near-zero raises
   at equilibrium reset the band's downward timer); not prototyped.
 * A gate pass with a balance below the trim counts as "calibrated" and
