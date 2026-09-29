@@ -1923,9 +1923,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/max_restarts",
-        "default": 20,
+        "default": 200,
         "type": "int",
-        "doc": "Maximum number of stall restarts per nonlinear solve. Each restart retunes the barrier stiffness and re-freezes the per-contact snapshot; hard loading ramps can legitimately need 15+ retunes within one solve."
+        "doc": "Maximum number of stall restarts per nonlinear solve. Each restart retunes the barrier stiffness and re-freezes the per-contact snapshot; hard loading ramps can legitimately need 15+ retunes within one solve, and a snap-through past a structural limit point (R3 inflation, step 39) needed about 131. Raised from 20 to 200 on 2026-09-29 (user decision)."
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/stall_trim_factor",
