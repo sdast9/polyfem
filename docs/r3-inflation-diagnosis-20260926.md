@@ -9,7 +9,10 @@ which is being archived to the Pitt share (AGENTS.md, *Archived test
 outputs*).
 
 **Update 2026-09-29 — the stall is a structural pressure maximum followed by a
-snap-through, not the local loss of ellipticity.** The controlled Ogden
+snap-through that the default stall-retune budget (50) cuts off. Step 39 needs
+about 131 retunes; with the budget raised, the run passes it and every later
+step through step 168 (the observation cap) converges normally. The local loss
+of ellipticity is not the cause.** The controlled Ogden
 comparison and the NeoHookean hold probes are in
 [Controlled Ogden comparison and why the NeoHookean stops](#controlled-ogden-comparison-and-why-the-neohookean-stops-2026-09-29).
 The Ogden run loses strong ellipticity earlier and far more widely than the
@@ -191,10 +194,34 @@ This is not a snap-through. It is a non-converging iteration in a heavily
 distorted, contact-dominated state, and with restarts disabled the solver has
 no retune to leave it. So the snap past the pressure maximum is traversable,
 and the default stall-retune budget (50) is what ends step 39 before the snap
-completes. Whether the NeoHookean completes all 200 steps is **not
-established**: the no-restart probe cannot show it. A probe that keeps
-restarts on and raises the retune budget from 50 to 1,000 (run
-`probe-nh-restarts1000`) was started on 2026-09-29.
+completes. The no-restart probe alone cannot show whether the NeoHookean
+completes all 200 steps.
+
+The **raised-retune-budget probe** (`probe-nh-restarts1000`) keeps restarts
+on and changes only `max_restarts` from 50 to 1,000 (8 threads, 4 h cap,
+machine heavily loaded by other sessions):
+* **Step 39** needs **131 retunes** (3,158 iterations, 51 min) and lands at
+  169.0 mL with 815 contacts, the same obstacle-supported state as the
+  no-restart probe.
+* **Every later step converges within the ordinary budget.** Step 76 takes
+  151 iterations and 1 retune. The median after step 40 is 53 iterations,
+  and no other step needs more than 20 retunes (272 retunes in total,
+  131 of them in step 39).
+* The cap ended the run at **step 168** (t 12.6, 1.26 MPa; cavity 179.7 mL,
+  3,510 contacts). It was still converging steps normally (38–66 iterations
+  each).
+* Solver consistency holds throughout: energy to 2e-13 J, min det F to
+  3e-14.
+
+**So the one thing that stops the default NeoHookean run is step 39:** the
+snap-through past the pressure maximum needs about 131 stall retunes, and the
+default budget is 50. After the snap every step fits the default budget.
+Completion to step 200 was not observed within the cap; a repeat with a 10 h
+cap (`probe-nh-restarts1000-long`) was started 2026-09-29. This is a
+measurement of the budget, not a recommendation to change it. The snapped
+state is also extreme: min J 0.016–0.021, max J up to 291, and the membrane
+pressed on the obstacle. Whether that is the intended physics of the scene is
+the user's question.
 
 ### The Ogden rerun (reproduction)
 
@@ -295,9 +322,8 @@ reached the obstacle.
 
 ### Not established
 
-* Whether the NeoHookean completes all 200 steps once the snap is
-  traversed. The no-restart probe stalls at step 76; the raised-retune-budget
-  probe is pending.
+* Completion of the NeoHookean to step 200. The raised-retune-budget probe
+  reached step 168 inside its 4 h cap; the 10 h repeat is pending.
 * Whether the Ogden has its own pressure maximum without the obstacle.
 * Mesh independence of either path. The non-elliptic elements are few and
   small for the NeoHookean, and thousands for the Ogden.
