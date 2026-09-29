@@ -316,3 +316,13 @@ it is PolyFEM's default for the force-weighted band, and the asset always
 exports it (`proxy` remains only as an explicit, warned setting to reproduce
 the EF-02/03 records). **Standing condition:** Before the force-weighted mode can be considered for adoption it first needs an agreed accuracy standard for trajectory-sensitive scenes, and repeat evidence on dynamic scenes not used for tuning. This holds for every
 future proposal to adopt the force-weighted mode or make it a default.
+
+**Default assessment 2026-09-29**
+([record](default-controller-assessment-20260929.md)). This is a measurement
+only; no default changed. The force-weighted band fails the held-out
+`pup_push` step 1 in 2/4 (fw) and 3/4 (fw + estimate) runs, against 1/4 for
+production: stall-driven softening exhausts the restarts. It also costs 12 %
+more on `fibers`. The estimate alone is inert where its cosine stays below
+0.8 and saves step 1 on R4. The record proposes an accuracy standard (a
+pinned-trim reference ladder plus a production realization ensemble) and a
+held-out scene set, both for the user to agree.
