@@ -14,6 +14,11 @@
 # fork's semi-implicit-stiffness branch. cf99893b merges upstream 869e489e
 # (block assembly, templated/SIMD geometry and CPU/CUDA LBVH), preserving
 # the fork contracts and refusing unsupported CUDA LBVH resource budgets.
+# f8dafef3 (CI-06 canonical smooth-contact order): SmoothCollisionsBuilder
+# merge gathers each thread's deduplicated maps and appends them, and
+# face-vertex/edge-edge lists, in ascending primitive-id order instead of
+# Abseil-seeded robin_map iteration order, so GCP/SmoothContact energy,
+# gradient and Hessian sums are reproducible across processes.
 # License: MIT
 
 if(TARGET ipc::toolkit)
@@ -23,4 +28,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#cf99893be74fe296e6b771b8e22ba4562942e77e")
+CPMAddPackage("gh:sdast9/ipc-toolkit#f8dafef39e881d1aa51b2a7975d06766db66d7da")
