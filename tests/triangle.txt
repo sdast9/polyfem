@@ -5,3 +5,4 @@ contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01.json
 contact/examples/3D/higher-order/ball-bounce/P4-dt=0.01-friction-defaults.json
 contact/examples/3D/higher-order/ball-bounce/P4.json
 contact/examples/3D/higher-order/microstructure.json
+contact/examples/3D/higher-order/microstructure-friction-defaults.json
