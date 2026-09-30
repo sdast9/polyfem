@@ -83,7 +83,13 @@ and CI-06 are complete. Open:
     the 500-iteration Newton limit on GitHub Linux only (macOS and the cloud
     Linux host solve it). It already failed at `5143c15a9` (run 36485520601),
     before the canonical-order toolkit pin, so the regression lies between
-    `0c129dcfb` (green, 2026-09-21) and `5143c15a9`. **Open, not diagnosed.**
+    `0c129dcfb` (green, 2026-09-21) and `5143c15a9`. **Diagnosed 2026-09-30
+    ([record](parallel-edge-regression-20260930.md)):** step 39 is a chaotic
+    barrier-wall crawl (56 iterations or 500-2100 depending on ulp-level noise,
+    1-3 % of draws for the old and the new toolkit alike); MKL's AMD dispatch
+    (`DGETRF`) gives the post-merge build the crawling draw (reproduced under
+    `qemu -cpu EPYC-Milan`); `MKL_CBWR=COMPATIBLE` in the test lanes fixes it
+    on every CPU; no toolkit defect; scene/CI change is the user's decision.
   - **Linux DebugNoSymbols:** four rollback/AL-budget scene tests SEGFAULT
     (`test_step_rollback.cpp:407`); already known before CI-04–06 (the
     2026-09-20 golden plan records the same four). **Open.**

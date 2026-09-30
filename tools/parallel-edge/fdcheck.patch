@@ -1,0 +1,61 @@
+diff --git a/src/polyfem/solver/forms/SmoothContactForm.cpp b/src/polyfem/solver/forms/SmoothContactForm.cpp
+index 9d94a547..ea4ae4bc 100644
+--- a/src/polyfem/solver/forms/SmoothContactForm.cpp
++++ b/src/polyfem/solver/forms/SmoothContactForm.cpp
+@@ -8,6 +8,9 @@
+ #include <ipc/utils/world_bbox_diagonal_length.hpp>
+ 
+ #include <cmath>
++#include <cstdlib>
++#include <random>
++#include <iostream>
+ 
+ namespace polyfem::solver
+ {
+@@ -82,6 +85,46 @@ namespace polyfem::solver
+ 		POLYFEM_SCOPED_TIMER("barrier hessian");
+ 		hessian = barrier_potential_.hessian(collision_set_, collision_mesh_, compute_displaced_surface(x), project_to_psd_ ? ipc::PSDProjectionMethod::CLAMP : ipc::PSDProjectionMethod::NONE);
+ 		hessian = collision_mesh_.to_full_dof(hessian);
++
++		// PE_FDCHECK (local diagnostic, not committed): finite-difference check of the
++		// gradient (vs value) and Hessian (vs gradient) at this iterate, over a range of h;
++		// reports the best (smallest) error over h and the h that attains it.
++		if (std::getenv("PE_FDCHECK"))
++		{
++			static int call = 0;
++			static std::mt19937 gen(12345);
++			std::normal_distribution<double> nd(0, 1);
++			++call;
++			Eigen::VectorXd g0;
++			first_derivative_unweighted(x, g0);
++			double best_g = 1e300, best_h = 1e300, hg = 0, hh = 0;
++			for (int trial = 0; trial < 2; ++trial)
++			{
++				Eigen::VectorXd d(x.size());
++				for (int i = 0; i < d.size(); ++i)
++					d[i] = nd(gen);
++				d.normalize();
++				double bg = 1e300, bh = 1e300, ag = 0, ah = 0;
++				for (const double h : {1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8})
++				{
++					const double fp = value_unweighted(x + h * d), fm = value_unweighted(x - h * d);
++					const double fd = (fp - fm) / (2 * h), an = g0.dot(d);
++					const double eg = std::abs(fd - an) / std::max(std::abs(an), 1e-14);
++					Eigen::VectorXd gp, gm;
++					first_derivative_unweighted(x + h * d, gp);
++					first_derivative_unweighted(x - h * d, gm);
++					const Eigen::VectorXd fdh = (gp - gm) / (2 * h), anh = hessian * d;
++					const double eh = (fdh - anh).norm() / std::max(anh.norm(), 1e-14);
++					if (eg < bg) { bg = eg; ag = h; }
++					if (eh < bh) { bh = eh; ah = h; }
++				}
++				if (bg < best_g || trial == 0) { best_g = std::max(best_g == 1e300 ? 0 : best_g, bg); hg = ag; }
++				else best_g = std::max(best_g, bg);
++				best_h = (trial == 0) ? bh : std::max(best_h, bh);
++				hh = ah;
++			}
++			std::cerr << "FDCHECK call=" << call << " |g|=" << g0.norm() << " grad_best_err=" << best_g << "@h=" << hg << " hess_best_err=" << best_h << "@h=" << hh << " active=" << collision_set_.size() << std::endl;
++		}
+ 	}
+ 
+ 	void SmoothContactForm::post_step(const polysolve::nonlinear::PostStepData &data)
