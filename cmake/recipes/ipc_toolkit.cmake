@@ -19,7 +19,7 @@
 # face-vertex/edge-edge lists, in ascending primitive-id order instead of
 # Abseil-seeded robin_map iteration order, so GCP/SmoothContact energy,
 # gradient and Hessian sums are reproducible across processes.
-# 8a353ad9 (cloud/parallel-edge-fix, solve_spd_2x2 refinement): the branchless
+# 1f1b5dbf (cloud/parallel-edge-fix, solve_spd_2x2 refinement): the branchless
 # Cramer solve of the 2x2 edge-edge/point-triangle Gram systems takes one
 # step of iterative refinement where its relative residual exceeds 1e-12
 # (nearly parallel edges, cond(A) ~ 1e7), which restores the residual the
@@ -34,4 +34,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#8a353ad9d93422384cf8a85ec2a2a58ae7a0bc54")
+CPMAddPackage("gh:sdast9/ipc-toolkit#1f1b5dbf46f4f69a558effac74c71c1a5a5d4ca4")

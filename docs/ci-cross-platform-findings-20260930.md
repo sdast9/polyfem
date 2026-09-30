@@ -7,10 +7,10 @@ reproduced on a cloud Linux host (Ubuntu 24.04, GCC 13.3).
 
 | # | Failure | Platform | Source (confidence) | Status |
 | --- | --- | --- | --- | --- |
-| 1 | `gcp-contact/parallel-edge` hits the 500-iteration limit | Linux Release, some runner CPUs | Chaotic crawl at step 39, selected by MKL run-time dispatch (AMD path); reproduced under `qemu -cpu EPYC-Milan` (high) | diagnosed; CI env fix proposed |
+| 1 | `gcp-contact/parallel-edge` hits the 500-iteration limit | Linux Release, some runner CPUs | Chaotic crawl at step 39, selected by MKL run-time dispatch (AMD path); reproduced under `qemu -cpu EPYC-Milan` (high) | diagnosed; `MKL_CBWR=COMPATIBLE` adopted in the test lanes (section 6) |
 | 2 | `gcp-contact/cube-on-floor` differs by up to 6.5e-4 | macOS arm64 Release | **Corrected 2026-09-30:** the fork's AL mass normalization (`63e06378e`) makes the scene roundoff-sensitive; upstream code is not (see [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) §2) (high, measured) | fork-specific; decision needed |
 | 3 | `restart from restart json` (`test_restart.cpp:244`) | Windows Release | Test bug: `remove_all(outdir)` runs while the test's `std::ifstream` on `sim.pvd` is still open; Windows cannot delete open files (high, from the exception text) | fixed in this commit, unverified on Windows |
-| 4 | Four rollback/AL-budget scene tests SIGSEGV at `test_step_rollback.cpp:407` | Linux DebugNoSymbols only | Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch (3 tests, verified: pass with a uniform setting); the 4th then trips a real toolkit assertion in the new Cramer 2x2 solve (nearly parallel edges) | ODR: decision needed; 2x2 solve: fixed on toolkit branch `cloud/parallel-edge-fix` |
+| 4 | Four rollback/AL-budget scene tests SIGSEGV at `test_step_rollback.cpp:407` | Linux DebugNoSymbols only | Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch (3 tests, verified: pass with a uniform setting); the 4th then trips a real toolkit assertion in the new Cramer 2x2 solve (nearly parallel edges) | ODR: Debug-only uniform `EIGEN_DONT_VECTORIZE` adopted; 2x2 solve: fixed on toolkit branch `cloud/parallel-edge-fix`, pinned; AL-budget test hidden in Debug (section 6) |
 
 ## 2. macOS arm64: solver-tolerance-limited references
 
@@ -148,3 +148,70 @@ pin theirs.
 * macOS: the stored `cube-on-floor` reference is roundoff-sensitive because of the fork's AL mass
   normalization (section 2 correction); a decision on the normalization, or on margin
   versus regenerating with a converged tolerance is needed before the next native run.
+
+## 6. Resolution (2026-09-30, cloud session; brief `tasks/ci-fixes-20260930.md`)
+
+Adopted on branch `ci/fixes-20260930` (user decisions of 2026-09-30, see the brief). Host: Ubuntu 24.04,
+GCC 13.3, 4 vCPU, Sapphire-Rapids-class Xeon; every PolyFEM run single-threaded (`OMP_NUM_THREADS=1`).
+
+**What was adopted**
+
+| Item | Change | Commit |
+| --- | --- | --- |
+| Workflow | Linux/Windows test steps `MKL_CBWR=COMPATIBLE`; `EIGEN_DONT_VECTORIZE=1` in every translation unit of the DebugNoSymbols lanes (section 4, option 1, Debug only); `cube-on-floor` margin 5e-3 (data pin `aed03ab`) | `05d7354be` (earlier) |
+| Toolkit | `solve_spd_2x2` iterative refinement (section 4b), with a regression test, on `sdast9/ipc-toolkit` branch `cloud/parallel-edge-fix` = `1f1b5dbf` (`dacf5ea7` + test `8a353ad9` + a comment-only correction; `f8dafef3` = `main`'s pin is the parent of `dacf5ea7`); `cmake/recipes/ipc_toolkit.cmake` pins `1f1b5dbf` (first `8a353ad9`, `5c7a1288`) | toolkit `1f1b5dbf`; PolyFEM `5c7a1288` and the repin below |
+| Debug runtime | "An AL stage ended by its budget is rolled back to the accepted state and recorded" (`test_step_rollback.cpp`) is registered in release builds only and hidden (`[.]`) in debug builds, as in `tests/verify_run.cpp` (`tagsrun`) and `test_diff.cpp`; its body is unchanged. Catch2 does not list hidden tests, so CTest does not register them (Debug: 391 tests; Release: 425) | `3495bb41` |
+
+The toolkit's work branch `semi-implicit-stiffness` and `main` were not touched; fast-forwarding
+`semi-implicit-stiffness` to `1f1b5dbf` is left to the user.
+
+**Evidence**
+
+1. *Toolkit suite* (`ipc_toolkit_tests`, Release, `ipc-toolkit-tests-data` `c7eba549`, `--rng-seed 1`, default
+   selection: the 27 hidden benchmark/sweep cases are not part of it):
+
+   | toolkit | SIMD flags | result |
+   | --- | --- | --- |
+   | `f8dafef3` | default (`-march=native`) | all pass: 346 cases, 5 685 663 assertions |
+   | `8a353ad9` | default | all pass: 348 cases, 5 687 679 assertions (346 existing + the 2 new) |
+   | `8a353ad9` | `-DSIMD_CXX_FLAGS=-msse4.2` (PolyFEM's portable build, no FMA) | all pass: 348 cases, 5 641 917 assertions |
+
+   No test fails only with the fix. (A first run at the fix with a draft of the new test failed that one
+   test, an over-strict forward-error check that I dropped: refinement brings the *residual* to rounding
+   level, the forward error stays at cond(A) eps.) The new test
+   (`[solve_spd_2x2]`, `tests/src/tests/tangent/test_closest_point.cpp`) uses the system from section 4b:
+   at `f8dafef3` its relative residual is above the 1e-10 debug bound (1.4e-10 with hardware FMA; 2.1e-10
+   without) and two assertions fail; at `8a353ad9` it is below 1e-15. It also checks that four fixed and 1000
+   random well-conditioned Gram systems equal the unrefined Cramer result bit for bit.
+2. *Release, new pin* (`tools/cloud/compile.sh`, toolkit `8a353ad9`; `1f1b5dbf` differs only in a test comment, data `aed03ab`):
+   `MKL_CBWR=COMPATIBLE OMP_NUM_THREADS=1 ctest -R '^(contact_2d|contact_3d|triangle_data|standard)$'`:
+   4/4 pass (557 s, 867 s, 1072 s, 470 s).
+3. *Smoke scenes*: `tools/smoke/run_smoke.py --threads 1` on all five `scenes/semi-implicit` scenes exits 0
+   with 0 error lines for the new pin and for a build at the previous pin (`f8dafef3`, commit `05d7354be`):
+   the 55 output files (VTM/VTU/PVD) have identical SHA-256, and the logs are identical after masking
+   timings and run ids. The refinement does not move them.
+4. *parallel-edge under emulated AMD*: `tools/parallel-edge/run_qemu.sh EPYC-Milan` on
+   `gcp-contact/parallel-edge` (scene copy with `Eigen::SimplicialLDLT`): with `MKL_CBWR=COMPATIBLE` it
+   solves all 60 steps (362 iterations, hard step 58, no limit hit), log identical (timings masked) to the
+   build at the previous toolkit pin; without the variable it stops at step 40 with
+   `Reached iteration limit (limit=500)`, the CI symptom, so the emulation still reproduces it.
+5. *DebugNoSymbols, CI flags* (`-DCMAKE_BUILD_TYPE=DebugNoSymbols -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS=-DEIGEN_DONT_VECTORIZE=1
+   -DPOLYFEM_THREADING=TBB -DPOLYFEM_WITH_TRIANGLE=ON -DPOLYFEM_PORTABLE_BUILD=ON`):
+   `MKL_CBWR=COMPATIBLE OMP_NUM_THREADS=1 CTEST_PARALLEL_LEVEL=4 ctest`: **391/391 pass, 5399 s wall**.
+   The three friction rollback tests that segfaulted pass (837 s, 211 s, 99 s). No test exceeds 1500 s; the
+   longest are "linear elastic quasistatic schedule equals the static solve for every integrator" at
+   1231 s (82 % of the limit, with four tests running in parallel on 4 vCPUs: a slower runner could push it
+   over), "A failed step attempt is rolled back ..." 837 s, "Hexahedral interpolation converges at order
+   q + 1" 787 s and "linear elastic transient forces follow the solved step for every integrator" 738 s.
+   The `[.][run]` scene groups (`contact_2d`, `contact_3d`, `standard`, ...) are hidden in Debug by
+   design, so the Debug lane does not run them.
+6. *The hidden AL-budget test in Debug with the new pin* (explicit name, single process):
+   a first run was killed after 75 minutes by a restart of my shell (289 stall restarts, no assertion or error
+   other than the test's own expected stall messages); a complete rerun is listed below when finished.
+
+**Left for the user**: fast-forward `sdast9/ipc-toolkit` `semi-implicit-stiffness` to `1f1b5dbf`; a completed
+native GitHub Build of the branch (Linux lanes with `MKL_CBWR=COMPATIBLE`, Windows restart test, macOS
+`cube-on-floor` at margin 5e-3); a CI run with `MKL_VERBOSE=1` would still confirm the inferred AMD CPU model.
+The Windows Release lane hides the `[run]` scene groups (`tests/verify_run.cpp`), which this change does not alter;
+the new AL-budget gating deliberately follows `NDEBUG` alone (no `WIN32` exclusion), so it runs in Windows
+Release as before.
