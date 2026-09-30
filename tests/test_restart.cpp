@@ -236,9 +236,13 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	}
 
 	// Frame i of the PVD is at i * dt, including the frames before the restart.
-	std::ifstream pvd_file(restart_outdir / "sim.pvd");
-	REQUIRE(pvd_file.is_open());
-	const std::string pvd((std::istreambuf_iterator<char>(pvd_file)), std::istreambuf_iterator<char>());
+	std::string pvd;
+	{
+		// Closed before remove_all below: Windows cannot delete an open file.
+		std::ifstream pvd_file(restart_outdir / "sim.pvd");
+		REQUIRE(pvd_file.is_open());
+		pvd.assign(std::istreambuf_iterator<char>(pvd_file), std::istreambuf_iterator<char>());
+	}
 	CAPTURE(pvd);
 	for (int i = 0; i <= total_time_steps; ++i)
 		CHECK(pvd.find(fmt::format("timestep=\"{:f}\" group=\"\" part=\"0\" file=\"step_{:d}.vtm\"", i * full_dt, i)) != std::string::npos);

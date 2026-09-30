@@ -14,33 +14,50 @@ from concurrent.futures import ThreadPoolExecutor
 ut, root, out, label = sys.argv[1:5]
 variants = sys.argv[5:]
 KEYS = ["err_l2", "err_h1", "err_h1_semi", "err_linf", "err_linf_grad", "err_lp"]
-src = os.path.join(root, "gcp-contact/parallel-edge/run.json")
+SCENE = os.environ.get("SCENE", "gcp-contact/parallel-edge")  # scene directory under the data root
+src = os.path.join(root, SCENE, "run.json")
 base = json.load(open(src))
 ref = base["tests"]
 
 def run(v):
     name = re.sub(r"[^A-Za-z0-9]+", "_", v)
     d = os.path.join(out, f"{label}-{name}")
-    os.makedirs(os.path.join(d, "data/gcp-contact/parallel-edge"), exist_ok=True)
+    sd = os.path.join(d, "data", SCENE)
+    os.makedirs(sd, exist_ok=True)
+    for f in os.listdir(os.path.join(root, SCENE)):  # meshes etc. next to run.json
+        if f != "run.json" and not os.path.exists(os.path.join(sd, f)):
+            os.symlink(os.path.realpath(os.path.join(root, SCENE, f)), os.path.join(sd, f))
     link = os.path.join(d, "data/contact")
     if not os.path.exists(link):
         os.symlink(os.path.realpath(os.path.join(root, "contact")), link)
     shutil.copy(os.path.join(root, "gcp-contact/common.json"), os.path.join(d, "data/gcp-contact/common.json"))
     cfg = json.loads(json.dumps(base))
+    if os.environ.get("PATCH"):  # JSON merge patch applied to every variant's scene
+        def merge(a, b):
+            for k, v in b.items():
+                if isinstance(v, dict) and isinstance(a.get(k), dict):
+                    merge(a[k], v)
+                else:
+                    a[k] = v
+        merge(cfg, json.loads(os.environ["PATCH"]))
     env = dict(os.environ, OMP_NUM_THREADS="1")
     kind, _, arg = v.partition(":")
-    if kind == "ulp":
+    if kind == "ulp" and "geometry" in cfg and "transformation" in cfg["geometry"][0]:
         cfg["geometry"][0]["transformation"]["translation"][1] = 0.5 + int(arg) * math.ulp(0.5)
+    elif kind == "ulp":
+        raise SystemExit("ulp variant needs a geometry transformation; use E:K for this scene")
     elif kind == "E":
-        cfg["materials"][0]["E"] = 1e5 + int(arg) * math.ulp(1e5)
+        e0 = base["materials"][0]["E"]
+        cfg["materials"][0]["E"] = e0 + int(arg) * math.ulp(e0)
     elif kind == "rho":
-        cfg["materials"][0]["rho"] = 1000 + int(arg) * math.ulp(1000.0)
+        r0 = base["materials"][0]["rho"]
+        cfg["materials"][0]["rho"] = r0 + int(arg) * math.ulp(r0)
     elif kind == "env":
         for kv in arg.split(","):
             k, _, val = kv.partition("=")
             env[k] = val
-    json.dump(cfg, open(os.path.join(d, "data/gcp-contact/parallel-edge/run.json"), "w"))
-    open(os.path.join(d, "manifest.txt"), "w").write("gcp-contact/parallel-edge/run.json\n")
+    json.dump(cfg, open(os.path.join(sd, "run.json"), "w"))
+    open(os.path.join(d, "manifest.txt"), "w").write(SCENE + "/run.json\n")
     env["POLYFEM_RUN_MANIFEST"] = os.path.join(d, "manifest.txt")
     env["POLYFEM_RUN_DATA_DIR"] = os.path.join(d, "data")
     with open(os.path.join(d, "harness.log"), "w") as log:
