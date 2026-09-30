@@ -135,8 +135,10 @@ pin theirs.
 ## Open items after this pass
 
 * Debug lane: the ODR mismatch needs a decision (options in section 4); the three friction tests
-  pass with a uniform `EIGEN_DONT_VECTORIZE`; the AL-budget test's Debug completion with the fix and
-  the pin is recorded below if it finished.
+  pass with a uniform `EIGEN_DONT_VECTORIZE`; the AL-budget test's completion in Debug with the fix and
+  the pin is **not verified**: in `build-dbg2` it was at stall restart 6 of 20 after 40 minutes
+  (about 7 minutes per restart at -O0), so it needs roughly 2.5 hours in a Debug lane; expect
+  that lane's wall time to grow accordingly once the segfaults stop ending these tests early.
 * Windows: cannot be verified here; the cause is read from the exception text.
 * macOS: the stored `cube-on-floor` reference is tolerance-limited (section 2); a decision on margin
   versus regenerating with a converged tolerance is needed before the next native run.
