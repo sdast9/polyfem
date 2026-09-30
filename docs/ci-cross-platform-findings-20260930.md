@@ -8,11 +8,17 @@ reproduced on a cloud Linux host (Ubuntu 24.04, GCC 13.3).
 | # | Failure | Platform | Source (confidence) | Status |
 | --- | --- | --- | --- | --- |
 | 1 | `gcp-contact/parallel-edge` hits the 500-iteration limit | Linux Release, some runner CPUs | Chaotic crawl at step 39, selected by MKL run-time dispatch (AMD path); reproduced under `qemu -cpu EPYC-Milan` (high) | diagnosed; CI env fix proposed |
-| 2 | `gcp-contact/cube-on-floor` differs by up to 6.5e-4 | macOS arm64 Release | Stored metrics are limited by the solver tolerance (`grad_norm_tol` 1e-7), so any roundoff change moves them by 1e-4..3e-3 (high, measured on Linux) | margin 1e-3 is too tight; see below |
+| 2 | `gcp-contact/cube-on-floor` differs by up to 6.5e-4 | macOS arm64 Release | **Corrected 2026-09-30:** the fork's AL mass normalization (`63e06378e`) makes the scene roundoff-sensitive; upstream code is not (see [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) §2) (high, measured) | fork-specific; decision needed |
 | 3 | `restart from restart json` (`test_restart.cpp:244`) | Windows Release | Test bug: `remove_all(outdir)` runs while the test's `std::ifstream` on `sim.pvd` is still open; Windows cannot delete open files (high, from the exception text) | fixed in this commit, unverified on Windows |
 | 4 | Four rollback/AL-budget scene tests SIGSEGV at `test_step_rollback.cpp:407` | Linux DebugNoSymbols only | Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch (3 tests, verified: pass with a uniform setting); the 4th then trips a real toolkit assertion in the new Cramer 2x2 solve (nearly parallel edges) | ODR: decision needed; 2x2 solve: fixed on toolkit branch `cloud/parallel-edge-fix` |
 
 ## 2. macOS arm64: solver-tolerance-limited references
+
+> **Correction (same day):** the measurements below are right, the attribution is not. On an upstream
+> build the scene passes upstream's reference (1e-5 margin) with one-ulp spread ≤ 1e-6. The sensitivity
+> comes from fork commit `63e06378e` (AL mass normalization, ×3.0116 on this scene's Dirichlet AL stage):
+> with only that line switched off, fork `main` matches upstream's reference to 5e-8. Details in
+> [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) §2.
 
 `cube-on-floor` (2D, NeoHookean E=1e4, barrier stiffness 1e5, 20 steps) stores six metrics generated
 with `solver/nonlinear/grad_norm_tol` 1e-7. On the cloud Linux host the harness reproduces the stored
@@ -139,5 +145,6 @@ pin theirs.
   in `build-dbg2` with the toolkit fix, the `max_restarts` pin and a uniform `EIGEN_DONT_VECTORIZE`), so
   expect that lane's wall time to grow once the segfaults stop ending these tests early.
 * Windows: cannot be verified here; the cause is read from the exception text.
-* macOS: the stored `cube-on-floor` reference is tolerance-limited (section 2); a decision on margin
+* macOS: the stored `cube-on-floor` reference is roundoff-sensitive because of the fork's AL mass
+  normalization (section 2 correction); a decision on the normalization, or on margin
   versus regenerating with a converged tolerance is needed before the next native run.
