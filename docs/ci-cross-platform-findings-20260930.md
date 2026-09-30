@@ -10,7 +10,7 @@ reproduced on a cloud Linux host (Ubuntu 24.04, GCC 13.3).
 | 1 | `gcp-contact/parallel-edge` hits the 500-iteration limit | Linux Release, some runner CPUs | Chaotic crawl at step 39, selected by MKL run-time dispatch (AMD path); reproduced under `qemu -cpu EPYC-Milan` (high) | diagnosed; CI env fix proposed |
 | 2 | `gcp-contact/cube-on-floor` differs by up to 6.5e-4 | macOS arm64 Release | Stored metrics are limited by the solver tolerance (`grad_norm_tol` 1e-7), so any roundoff change moves them by 1e-4..3e-3 (high, measured on Linux) | margin 1e-3 is too tight; see below |
 | 3 | `restart from restart json` (`test_restart.cpp:244`) | Windows Release | Test bug: `remove_all(outdir)` runs while the test's `std::ifstream` on `sim.pvd` is still open; Windows cannot delete open files (high, from the exception text) | fixed in this commit, unverified on Windows |
-| 4 | Four rollback/AL-budget scene tests SIGSEGV at `test_step_rollback.cpp:407` | Linux DebugNoSymbols only | See the last section | in progress |
+| 4 | Four rollback/AL-budget scene tests SIGSEGV at `test_step_rollback.cpp:407` | Linux DebugNoSymbols only | Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch (3 tests, verified: pass with a uniform setting); the 4th then trips a real toolkit assertion in the new Cramer 2x2 solve (nearly parallel edges) | ODR: decision needed; 2x2 solve: fixed on toolkit branch `cloud/parallel-edge-fix` |
 
 ## 2. macOS arm64: solver-tolerance-limited references
 
@@ -85,4 +85,37 @@ cube-on-floor):
    says the toolkit saw alignment problems, so this needs the toolkit's tests.
 3. Keep Release as is and only make Debug consistent (option 1 in Debug lanes only), accepting that
    Debug and Release then run different arithmetic.
-See the result of the verification build at the end of this section.
+Verification (local Debug build `build-dbg2` with `-DEIGEN_DONT_VECTORIZE=1` on every translation
+unit): the three friction rollback tests that segfaulted now pass ("A failed step attempt is rolled
+back..." 1676 assertions, "A publication failure...", "A stall retune followed by a failure..."). Option 1
+therefore removes the Debug segfaults.
+
+### 4b. The fourth test then hits a real numerical assertion
+
+With the ODR fixed, "An AL stage ended by its budget is rolled back..." aborts on a Debug-only
+`assert` in the toolkit, `solve_spd_2x2` (`ipc/tangent/closest_point.hpp:203`), reached from
+`ipc::semi_implicit_stiffness` -> `EdgeEdgeCandidate::compute_coefficients` -> `edge_edge_closest_point`.
+Instrumented values of the failing call:
+
+    A = [0.0678967655905255 1.10374224378703; 1.10374224378703 17.9426433062929]   det = 5.06e-7
+    b = [0.620822036653334 10.0922008015598]
+    Cramer residual = 4.29e-9, debug bound tol*scale = 2.02e-9
+
+`det/(a00 a11)` = 4e-7, i.e. the edges are ~6e-4 rad from parallel and cond(A) ~ 4e7. Before the
+toolkit merge this system was solved with Eigen's pivoted `A.ldlt().solve()` (asserted residual
+< 1e-10); the merge replaced it by the branchless Cramer rule ("comparable accuracy" in the
+comment), whose residual grows with cond(A). This is the only accuracy regression I found that
+matches the parallel-edge brief ("a robust scalar path for near-parallel edges"): residual 4.3e-9
+against 1.1e-16 for LDLT on the same system (`tools/parallel-edge/spd2x2_check.cpp`). Release
+builds compile the assertion out, so the inexact `x` is used silently in
+`semi_implicit_stiffness` and friction tangents.
+
+Fix (toolkit branch `sdast9/ipc-toolkit:cloud/parallel-edge-fix`, dacf5ea7, patch also in
+`tools/parallel-edge/toolkit-solve-spd-2x2-refinement.patch`): one step of iterative refinement
+in `solve_spd_2x2`, applied lane-wise only where the relative residual exceeds 1e-12 (rounding-level
+residuals are ~1e-16, so well-conditioned systems keep their bits). On the system above: residual
+1.1e-16 (as LDLT), forward error 4.8e-10 against 3.2e-9 before. Checks on a Release build with the
+fix: the five semi-implicit smoke scenes (single-threaded) are byte-identical to `main` (25 VTU, sim
+files), and `parallel-edge` is bit-identical (the refinement never triggers there), so the fix does
+**not** change the parallel-edge CI outcome; that is the crawl described in the other record. PolyFEM
+branch `cloud/parallel-edge-fix` moves only the pin (main's pin is untouched).
