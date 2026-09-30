@@ -34,7 +34,7 @@ the CI matrix (Linux/macOS, `DebugNoSymbols` + `Release`, TBB, `POLYFEM_PORTABLE
 | 1 | `parallel-edge` crawl, 500-iteration limit on some Linux runners | **Yes — the fragility.** Upstream code crawls past 500 iterations in 2/64 one-ulp draws (same rate as the fork); scene, mesh, reference, solver settings and MKL dispatch are all upstream | **The failing draw.** Upstream solves the scene on both Intel and emulated-AMD dispatch today; the fork's toolkit merge (upstream toolkit SIMD code) re-rolled the AMD-path draw into a crawl | see §1 |
 | 2 | `cube-on-floor` off by up to 6.5e-4 on macOS (and 0.4–0.7 % off upstream's reference on every fork build since at least 2026-09-13) | **No.** Upstream code passes upstream's reference (margin 1e-5) in 6/6 processes, deviation ≤ 8e-7, and one-ulp perturbations stay ≤ 8.4e-7 | **Yes: fork commit `63e06378e` (2026-07-02, "AL mass normalization")** divides the Dirichlet augmented-Lagrangian penalty metric by the mean lumped mass (here ×1/0.33205 = ×3.0116), which changes where the AL stage stops and makes the scene roundoff-sensitive (one-ulp spread 2e-4..3e-3). Switching only that line off makes fork `main` match upstream's reference to 5e-8 | see §2 (rewritten after the experiment) |
 | 3 | Windows `restart from restart json` cleanup | No | **Yes** | the test was added by the fork (`7dd45a606`); upstream's only restart test (`"restart"`) keeps no file open at `remove_all` |
-| 4 | Linux Debug SIGSEGV (Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch) | **Yes, latent**: reproduced with an **upstream scene** on the fork's Debug binary; crash site is upstream code identical in upstream's pin | Only fork tests *reach* it in CI: upstream's Debug CI runs no friction scene (scenes are hidden in Debug) | see §4 |
+| 4 | Linux Debug SIGSEGV (Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch) | **Yes, latent — reproduced on pure upstream**: upstream `591b08bd5`'s own `DebugNoSymbols` `PolyFEM_bin` segfaults (exit 139) on upstream's own 3D friction scene, same frame | Only fork tests *reach* it in CI: upstream's Debug CI runs no friction scene (scenes are hidden in Debug) | see §4 |
 | 5 | Cramer `solve_spd_2x2` accuracy loss (near-parallel edges) | **Yes, in upstream ipc-toolkit HEAD** (`b778f64`, 2026-09-06, "Add SIMD batch support…"; `closest_point.hpp` identical upstream and fork). **Not** in upstream PolyFEM (its pin `b40e9c07` predates it and uses pivoted LDLT) | The Debug assertion was reached through the fork's semi-implicit stiffness path | see §5 |
 | 6 | AL-budget test ~10x slower (`max_restarts` 20 → 200) | No | **Yes** | semi-implicit stall restarts and the default change (`e20ec8781`) exist only in the fork; upstream's input spec has no `semi_implicit` block |
 
@@ -120,6 +120,12 @@ which opens no stream at its `remove_all`.
   crashes with SIGSEGV after 54 s in `TangentialPotential::hessian` ← `FrictionForm::second_derivative_unweighted`
   (gdb). The fork's upstream-origin friction tests that run in Debug CI (`friction-contact`,
   `friction form derivatives 2d/3d`, `shape-transient-friction`) never reach the 3D sliding branch and pass.
+* **Reproduced on pure upstream:** upstream `591b08bd5` built `DebugNoSymbols` exactly as its CI does (toolkit
+  `b40e9c07`, PolySolve `a7727e33`, TBB, portable) crashes with SIGSEGV (exit 139) after 46 s on the same 10-step
+  slope scene from upstream data, in `ipc::TangentialPotential::hessian` ← `Potential<TangentialCollisions>::hessian`
+  ← `polyfem::solver::FrictionForm::second_derivative_unweighted` (gdb). The weak-symbol split is the same as the
+  fork's: the vectorized `Eigen::internal::pstore<double, __vector(2)>` is defined 17 times in upstream PolySolve's
+  archives and not at all in the toolkit's.
 * Why upstream CI does not see it: upstream's Debug lane runs no scene test (scenes are `[.][run]` in
   Debug), and none of its Debug unit tests evaluates a 3D sliding friction Hessian. The fork's four
   rollback/AL-budget scene tests are ordinary unit tests (not `[run]`), so the fork's Debug lane runs them.
