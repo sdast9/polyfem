@@ -634,6 +634,11 @@ TEST_CASE("An AL stage ended by its budget is rolled back to the accepted state 
 	json args = scene_args(dir / "budget", json::object());
 	args["/boundary_conditions/dirichlet_boundary/0/value"_json_pointer] = motion;
 	args["/solver/augmented_lagrangian/budget"_json_pointer] = budget;
+	// The impossible motion stalls the line search until the AL budget ends the
+	// stage; the stall restarts on the way are not what this test measures.
+	// Pinned to the value the test was written under (the default is 200 since
+	// e20ec8781, which made this test ~10x slower).
+	args["/solver/contact/semi_implicit/restart/max_restarts"_json_pointer] = 20;
 	Run run;
 	run.begin(args);
 	run.solve(1);
