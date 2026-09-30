@@ -31,26 +31,40 @@ the CI matrix (Linux/macOS, `DebugNoSymbols` + `Release`, TBB, `POLYFEM_PORTABLE
 
 | # | Finding | Upstream? | Fork-specific? | Why |
 | --- | --- | --- | --- | --- |
-| 1 | `parallel-edge` crawl, 500-iteration limit on some Linux runners | **Mechanism upstream** (scene, mesh and reference byte-identical in upstream data; GCP smooth contact, MKL dispatch, harness all upstream) | **The failing draw is fork-specific** (the fork's toolkit merge re-rolled it for MKL's AMD path) | see §1; upstream build under emulated AMD pending |
+| 1 | `parallel-edge` crawl, 500-iteration limit on some Linux runners | **Yes — the fragility.** Upstream code crawls past 500 iterations in 2/64 one-ulp draws (same rate as the fork); scene, mesh, reference, solver settings and MKL dispatch are all upstream | **The failing draw.** Upstream solves the scene on both Intel and emulated-AMD dispatch today; the fork's toolkit merge (upstream toolkit SIMD code) re-rolled the AMD-path draw into a crawl | see §1 |
 | 2 | `cube-on-floor` off by up to 6.5e-4 on macOS (and 0.4–0.7 % off upstream's reference on every fork build since at least 2026-09-13) | **No.** Upstream code passes upstream's reference (margin 1e-5) in 6/6 processes, deviation ≤ 8e-7, and one-ulp perturbations stay ≤ 8.4e-7 | **Yes: fork commit `63e06378e` (2026-07-02, "AL mass normalization")** divides the Dirichlet augmented-Lagrangian penalty metric by the mean lumped mass (here ×1/0.33205 = ×3.0116), which changes where the AL stage stops and makes the scene roundoff-sensitive (one-ulp spread 2e-4..3e-3). Switching only that line off makes fork `main` match upstream's reference to 5e-8 | see §2 (rewritten after the experiment) |
 | 3 | Windows `restart from restart json` cleanup | No | **Yes** | the test was added by the fork (`7dd45a606`); upstream's only restart test (`"restart"`) keeps no file open at `remove_all` |
 | 4 | Linux Debug SIGSEGV (Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch) | **Yes, latent**: reproduced with an **upstream scene** on the fork's Debug binary; crash site is upstream code identical in upstream's pin | Only fork tests *reach* it in CI: upstream's Debug CI runs no friction scene (scenes are hidden in Debug) | see §4 |
 | 5 | Cramer `solve_spd_2x2` accuracy loss (near-parallel edges) | **Yes, in upstream ipc-toolkit HEAD** (`b778f64`, 2026-09-06, "Add SIMD batch support…"; `closest_point.hpp` identical upstream and fork). **Not** in upstream PolyFEM (its pin `b40e9c07` predates it and uses pivoted LDLT) | The Debug assertion was reached through the fork's semi-implicit stiffness path | see §5 |
 | 6 | AL-budget test ~10x slower (`max_restarts` 20 → 200) | No | **Yes** | semi-implicit stall restarts and the default change (`e20ec8781`) exist only in the fork; upstream's input spec has no `semi_implicit` block |
 
-## 1. parallel-edge
+## 1. parallel-edge — upstream fragility; the failing draw is the fork's
 
 * The scene (`gcp-contact/parallel-edge/run.json`), its mesh (`tet-perp-edges.msh`) and stored reference
   (margin 1.2e-5) are byte-identical in upstream data `e0efb6b` and the fork's `5d76dcb`; the scene is in
-  upstream's `tests/contact_3d.txt`.
-* Everything that makes the scene fragile is upstream: GCP `SmoothContactForm`, the Newton/backtracking
-  solver, `use_psd_projection: false` in `gcp-contact/common.json` (upstream data), and the
-  MKL-routed 3x3 `DGETRF` calls whose kernel MKL picks by CPU vendor.
-* What the fork changed: the toolkit merge (SIMD paths) moved roundoff so that the AMD-path draw of the
-  fork crawls. On the pre-merge toolkit (which is ≈ upstream PolyFEM's pin for this code) the AMD path
-  solves the scene. Expected consequence: upstream PolyFEM passes on all runners *today*, but would
-  inherit the same 1–3 % chance of a crawling draw with any roundoff change, including adopting upstream
-  toolkit `869e489e`. To be confirmed on the upstream build (native, one-ulp ensemble, emulated EPYC-Milan).
+  upstream's `tests/contact_3d.txt`. The AL mass normalization of §2 does not enter (the scene has no
+  Dirichlet boundary).
+* Measured on the upstream build:
+
+| Build | native (Intel dispatch) | `qemu -cpu EPYC-Milan` (MKL's AMD path) | one-ulp height ensemble, native, limit lifted to 5000: draws over 500 iterations |
+| --- | --- | --- | --- |
+| upstream `591b08bd5` (toolkit `b40e9c07`) | solves, 56 at the hard step, deviation 2.8e-7 | **solves**, 359 / 56 | **2 / 64** (897, 2039) |
+| fork `3c40ae557` (toolkit `75600955`, pre-merge) | solves, 56 | solves, 359 / 56 | 2 / 64 (897, 2112) |
+| fork `6570e0410` / `7dd45a606` / `main` (toolkit merge) | solves, 56 | **500-iteration limit at step 40** | 1 / 64 (809) |
+| fork `main`, `IPC_TOOLKIT_WITH_SIMD=OFF` | solves, 59 | solves, 358 / 55 | |
+
+* So the crawl — a 2–3 % chance per roundoff draw that step 39 takes 800–2100 Newton iterations — is an
+  **upstream property of the scene with upstream code** (GCP smooth contact, backtracking Newton with
+  `use_psd_projection: false` from upstream's `gcp-contact/common.json`, the 500-iteration default). The
+  runner-CPU dependence is also upstream infrastructure (PolySolve's MKL with `EIGEN_USE_MKL_ALL`, whose
+  3x3 `DGETRF` kernel depends on the CPU vendor).
+* Upstream is green on these runners only because its current draw does not crawl on either dispatch path.
+  The fork's toolkit merge (SIMD geometry from upstream `ipc-sim/ipc-toolkit` `b778f64`…`869e489e`)
+  re-rolled the AMD-path draw into a crawl. Upstream PolyFEM will face the same re-roll when it adopts
+  the newer toolkit (or any other roundoff change); whether that particular draw crawls cannot be known
+  in advance — the chance is ~3 % per dispatch path.
+* Fork-specific part: only *which* draw the fork currently has. The remedies in the parallel-edge record
+  (`MKL_CBWR=COMPATIBLE` in CI; a scene-level `max_iterations` or PSD projection) apply to upstream equally.
 
 ## 2. cube-on-floor — fork-specific (AL mass normalization, `63e06378e`)
 
