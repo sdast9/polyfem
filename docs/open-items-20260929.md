@@ -92,7 +92,9 @@ and CI-06 are complete. Open:
     on every CPU; scene/CI change is the user's decision. Related: Linux Debug
     segfaults = Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch, Windows restart =
     test hygiene (fixed), macOS deviation = tolerance-limited reference, all in
-    [ci-cross-platform-findings-20260930.md](ci-cross-platform-findings-20260930.md).
+    [ci-cross-platform-findings-20260930.md](ci-cross-platform-findings-20260930.md); which of these are
+    upstream and which fork-specific: [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md)
+    (macOS cube-on-floor corrected there: fork AL mass normalization `63e06378e`).
   - **Linux DebugNoSymbols:** four rollback/AL-budget scene tests SEGFAULT
     (`test_step_rollback.cpp:407`); already known before CI-04–06 (the
     2026-09-20 golden plan records the same four). **Open.**

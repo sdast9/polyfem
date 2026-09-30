@@ -1,8 +1,28 @@
 # Upstream or fork? Attribution of the 2026-09-30 CI findings
 
 Date: 2026-09-30. Companion to [ci-cross-platform-findings-20260930.md](ci-cross-platform-findings-20260930.md)
-and [parallel-edge-regression-20260930.md](parallel-edge-regression-20260930.md). Status: **in progress**
-(written as the work goes; the "Experiments on the upstream build" section is filled in when they finish).
+and [parallel-edge-regression-20260930.md](parallel-edge-regression-20260930.md). Status: **done** (measured on
+upstream builds, Release and Debug, where a claim needed it).
+
+## Summary
+
+* **Upstream defects** (present in upstream code, independent of the fork):
+  - the Debug-only friction-Hessian segfault (toolkit's `PUBLIC EIGEN_DONT_VECTORIZE` against vectorized
+    PolySolve) — reproduced on upstream's own Debug build and scene; upstream CI misses it only because its
+    Debug lane runs no friction scene;
+  - the Cramer 2x2 closest-point solve's accuracy loss for nearly parallel edges — upstream ipc-toolkit HEAD
+    (not yet in upstream PolyFEM's pin);
+  - the `parallel-edge` fragility (2/64 roundoff draws crawl past the 500-iteration limit on upstream code) and
+    its runner-CPU dependence through MKL dispatch;
+  - process-to-process non-determinism of GCP smooth contact (hash-seeded map order), harmless at the 1e-7 level.
+* **Fork-specific** (caused by fork changes):
+  - which `parallel-edge` draw fails: the fork's toolkit merge turned the AMD-path draw into a crawl
+    (upstream passes on both paths today);
+  - the whole `cube-on-floor` problem, including the macOS gap: fork commit `63e06378e`'s AL mass
+    normalization; with only that line off, fork `main` reproduces upstream's reference to 5e-8;
+  - the Windows restart-test failure (a fork-added test);
+  - the AL-budget test slowdown (fork-only semi-implicit restart default);
+  - the fork's Debug lane *reaching* the upstream segfault (its rollback scene tests are plain unit tests).
 
 ## What "upstream" means here
 
