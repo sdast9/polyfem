@@ -119,3 +119,24 @@ fix: the five semi-implicit smoke scenes (single-threaded) are byte-identical to
 files), and `parallel-edge` is bit-identical (the refinement never triggers there), so the fix does
 **not** change the parallel-edge CI outcome; that is the crawl described in the other record. PolyFEM
 branch `cloud/parallel-edge-fix` moves only the pin (main's pin is untouched).
+
+## 5. A latent CI-time regression: `max_restarts` 20 -> 200
+
+The AL-budget scene test drives the prescribed top face through the slab, which stalls the line
+search; every stall triggers a barrier-stiffness retune and restart. Its last passing Linux Release
+run took 304 s (run 36576988097) under `max_restarts` 20. Since the 2026-09-29 default change to 200
+(e20ec8781) it needs ~10x more restarts (175 of 200 used after 20 minutes in Debug; over 10 minutes
+without finishing in Release), so the next full CI run would hit its time budget with no code
+defect. The test does not measure stall restarts, so it now pins `max_restarts` 20 (the value it
+was written under): 2 min 22 s and 129 assertions pass in Release. The same holds for any other test
+that relies on the old default; `test_al_solver.cpp:368` and `test_step_rollback.cpp:540` already
+pin theirs.
+
+## Open items after this pass
+
+* Debug lane: the ODR mismatch needs a decision (options in section 4); the three friction tests
+  pass with a uniform `EIGEN_DONT_VECTORIZE`; the AL-budget test's Debug completion with the fix and
+  the pin is recorded below if it finished.
+* Windows: cannot be verified here; the cause is read from the exception text.
+* macOS: the stored `cube-on-floor` reference is tolerance-limited (section 2); a decision on margin
+  versus regenerating with a converged tolerance is needed before the next native run.
