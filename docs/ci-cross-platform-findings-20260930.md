@@ -50,9 +50,39 @@ and still open at `remove_all`. Fix: read the PVD in an inner scope so the handl
 still fails on Windows the next suspects are an HDF5 state file kept open by `State` and the
 `sim.pvd` writer.
 
-## 4. Linux Debug rollback segfaults
+## 4. Linux Debug rollback segfaults: Eigen ODR violation (reproduced locally)
 
-The four tests (`rollback` / `al_budget` scene tests) crash inside the test fixture after the
-`REQUIRE(form != nullptr)` at line 407, i.e. in `VarFormTestAccess::prepare` or `begin_transient_run`.
-They pass in Release on Linux, macOS and here. A `DebugNoSymbols` (-O0) build is being made to
-get a backtrace. (Section completed below if the build finishes.)
+Reproduced with a local `DebugNoSymbols` build (same flags as CI, `build-dbg`): the same four tests
+crash with SIGSEGV; under gdb the first frame is
+`Eigen::internal::pstore<double, double __vector(2)>` (an aligned SSE store), called from
+`assign_op::assignPacket` <- ... <- `Eigen::Matrix<double,-1,1,0,12,1>` constructed from a product
+<- `ipc::TangentialPotential::hessian` <- `Potential<TangentialCollisions>::assemble_hessian` (TBB
+`parallel_for`) <- `polyfem::solver::FrictionForm::second_derivative_unweighted`. All four tests
+use the friction scene (`friction_coefficient` .3), which is why only they crash.
+
+Cause (high confidence): `ipc_toolkit` defines `EIGEN_DONT_VECTORIZE=1` **PUBLIC** when
+`IPC_TOOLKIT_WITH_SIMD` is on (`CMakeLists.txt`, "Disable vectorization in Eigen since I've found it
+to have alignment issues"; present at the old pin 75600955 too, which is why the crash predates the
+merge). That definition reaches only the targets that link `ipc_toolkit` (the toolkit, PolyFEM, the
+tests: 341 of 419 compile commands). PolySolve and the other dependencies do not link it, so they
+compile Eigen vectorized. The mangled names of Eigen's template instantiations do not contain the
+macro, so at `-O0` (no inlining) the same weak symbol exists twice, a scalar copy in the toolkit's
+objects and a packet copy in `libpolysolve*.a`, and the linker keeps one. Here the packet copy wins
+(the toolkit archive has no `pstore<double, __vector(2)>`; `libpolysolve_linear.a` and
+`libpolysolve.a` define it 20 times), so the toolkit's friction Hessian, whose stack temporaries
+are only 8-byte aligned in its non-vectorized layout, executes `movapd` on them and faults.
+Release builds inline these functions and never resolve the symbol, so they run; the mismatch is
+still there (a class with a `Vector2d`/`Vector4d` member has a different alignment and padding in the
+two kinds of translation unit, so it is a latent ABI hazard in Release too, unobserved so far).
+
+Options (a build-configuration decision for the user, because vectorization changes the summation
+order of Eigen reductions and therefore re-rolls chaotic scenes such as parallel-edge and
+cube-on-floor):
+1. Make the setting uniform: `-DCMAKE_CXX_FLAGS=-DEIGEN_DONT_VECTORIZE=1` (or PolySolve's
+   `-DEIGEN_DONT_VECTORIZE=ON`, which defines it on `Eigen3_Eigen`) so PolySolve matches. Release
+   PolySolve would lose vectorization; results of Release runs can change at roundoff level.
+2. Remove the toolkit's PUBLIC definition (make PolyFEM build the toolkit vectorized). The comment
+   says the toolkit saw alignment problems, so this needs the toolkit's tests.
+3. Keep Release as is and only make Debug consistent (option 1 in Debug lanes only), accepting that
+   Debug and Release then run different arithmetic.
+See the result of the verification build at the end of this section.
