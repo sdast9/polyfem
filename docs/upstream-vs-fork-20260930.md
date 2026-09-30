@@ -142,6 +142,15 @@ which opens no stream at its `remove_all`.
 Semi-implicit stall restarts (`/solver/contact/semi_implicit/restart/max_restarts`) and the 2026-09-29 default
 change are fork features; upstream's `json-specs/input-spec.json` has no `semi_implicit` block.
 
+## Other differences between the data fork and upstream data
+
+`sdast9/polyfem-data` `5d76dcb` differs from upstream `e0efb6b` in 9 files, all adaptations to fork behaviour,
+none to an upstream defect: CI-03 (`e6ed5cf`) pins `friction_iterations: 1` on three historical fixtures and adds
+current-default twins because the fork changed that default to 2 (the only changed pre-existing default under
+`/solver` and `/contact` in `json-specs/input-spec.json`); CI-05 (`8e88613`, `d1c54f0`, `b7ae0d9`) sets an explicit
+broad-phase budget (a fork-only `CCD/resource_limits` feature) and a friction-defaults twin for the microstructure
+fixture; CI-06 (`72d3076`, `5d76dcb`) regenerates `cube-on-floor` and widens its margin (§2).
+
 ## Experiments on the upstream build
 
 Upstream PolyFEM `591b08bd5` with its own pins (toolkit `b40e9c07`, PolySolve `a7727e33`, data `e0efb6b`),
