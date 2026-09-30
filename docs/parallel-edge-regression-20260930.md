@@ -1,8 +1,11 @@
 # parallel-edge regression (contact_3d): bisect record
 
 Date: 2026-09-30. Brief: [tasks/parallel-edge-bisect-20260930.md](tasks/parallel-edge-bisect-20260930.md).
-Branch `cloud/parallel-edge`. Status: **cause established, no fix written** (decision boundary,
-rule 3: nothing lost accuracy, so there is nothing to restore; recommendations below).
+Branch `cloud/parallel-edge`. Status: **cause established; the parallel-edge failure has no code fix** (decision boundary,
+rule 3). A *different* accuracy regression of the merge (nearly parallel edge-edge closest-point
+solve) was found afterwards while chasing the Linux Debug failures and is fixed on toolkit branch
+`cloud/parallel-edge-fix`; it does not affect this scene. See
+[ci-cross-platform-findings-20260930.md](ci-cross-platform-findings-20260930.md) section 4b.
 
 ## Result in five lines
 
@@ -24,8 +27,9 @@ rule 3: nothing lost accuracy, so there is nothing to restore; recommendations b
    3c40ae557 build solves the scene. Intel AVX2 models solve it with every build.
 5. The merge changed the outcome only by re-rolling this 1-3 % draw for the AMD path: with
    `-DIPC_TOOLKIT_WITH_SIMD=OFF` `main` passes under the same emulated CPU; disabling the
-   MeshFEMSparse block assembly changes nothing. No toolkit function is wrong: the smooth-contact
-   gradient and Hessian match finite differences to ~1e-8 at every iterate of the failing run.
+   MeshFEMSparse block assembly changes nothing. The smooth-contact gradient and Hessian match
+   finite differences to ~1e-8 at every iterate of the failing run. (A separate near-parallel-edge
+   accuracy loss in `solve_spd_2x2` exists but is not exercised by this scene; see the link above.)
 
 ## Established from GitHub CI logs (from the brief, not re-derived)
 
@@ -162,8 +166,10 @@ single draw is arbitrary. The SIMD first differs from the scalar build already i
    changes a stored input and needs a decision: raise this scene's `max_iterations` to 1000-2000
    (the crawl needs ~530-2100); or `use_psd_projection: true` (37 iterations on the failing
    path); or lower `barrier_stiffness`. I did not change any of them.
-3. **Toolkit:** no change. `IPC_TOOLKIT_WITH_SIMD` is not the defect; turning it off only
-   re-rolls the draw. No `cloud/parallel-edge-fix` branch was created.
+3. **Toolkit:** for this scene, no change: `IPC_TOOLKIT_WITH_SIMD` is not the defect (turning it off
+   only re-rolls the draw). The toolkit branch `cloud/parallel-edge-fix` (dacf5ea7) fixes the
+   unrelated `solve_spd_2x2` accuracy loss; adopting it is optional for this scene (bit-identical
+   here).
 
 ## Open
 
