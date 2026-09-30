@@ -32,7 +32,7 @@ the CI matrix (Linux/macOS, `DebugNoSymbols` + `Release`, TBB, `POLYFEM_PORTABLE
 | # | Finding | Upstream? | Fork-specific? | Why |
 | --- | --- | --- | --- | --- |
 | 1 | `parallel-edge` crawl, 500-iteration limit on some Linux runners | **Mechanism upstream** (scene, mesh and reference byte-identical in upstream data; GCP smooth contact, MKL dispatch, harness all upstream) | **The failing draw is fork-specific** (the fork's toolkit merge re-rolled it for MKL's AMD path) | see §1; upstream build under emulated AMD pending |
-| 2 | `cube-on-floor` off by up to 6.5e-4 on macOS | **Yes, and worse upstream**: scene tolerance-limited (upstream scene), and GCP smooth contact is run-to-run non-deterministic in upstream toolkit (`absl::Hash`-seeded `robin_map` iteration in `SmoothCollisionsBuilder`, present in `b40e9c07` and `869e489e`) | The fork *removed* the non-determinism (`f8dafef3` canonical order) and regenerated the reference with margin 1e-3; the residual macOS gap is platform roundoff on a tolerance-limited solve | see §2 |
+| 2 | `cube-on-floor` off by up to 6.5e-4 on macOS (and 0.4–0.7 % off upstream's reference on every fork build since at least 2026-09-13) | **No.** Upstream code passes upstream's reference (margin 1e-5) in 6/6 processes, deviation ≤ 8e-7, and one-ulp perturbations stay ≤ 8.4e-7 | **Yes: fork commit `63e06378e` (2026-07-02, "AL mass normalization")** divides the Dirichlet augmented-Lagrangian penalty metric by the mean lumped mass (here ×1/0.33205 = ×3.0116), which changes where the AL stage stops and makes the scene roundoff-sensitive (one-ulp spread 2e-4..3e-3). Switching only that line off makes fork `main` match upstream's reference to 5e-8 | see §2 (rewritten after the experiment) |
 | 3 | Windows `restart from restart json` cleanup | No | **Yes** | the test was added by the fork (`7dd45a606`); upstream's only restart test (`"restart"`) keeps no file open at `remove_all` |
 | 4 | Linux Debug SIGSEGV (Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch) | **Yes, latent**: reproduced with an **upstream scene** on the fork's Debug binary; crash site is upstream code identical in upstream's pin | Only fork tests *reach* it in CI: upstream's Debug CI runs no friction scene (scenes are hidden in Debug) | see §4 |
 | 5 | Cramer `solve_spd_2x2` accuracy loss (near-parallel edges) | **Yes, in upstream ipc-toolkit HEAD** (`b778f64`, 2026-09-06, "Add SIMD batch support…"; `closest_point.hpp` identical upstream and fork). **Not** in upstream PolyFEM (its pin `b40e9c07` predates it and uses pivoted LDLT) | The Debug assertion was reached through the fork's semi-implicit stiffness path | see §5 |
@@ -52,19 +52,40 @@ the CI matrix (Linux/macOS, `DebugNoSymbols` + `Release`, TBB, `POLYFEM_PORTABLE
   inherit the same 1–3 % chance of a crawling draw with any roundoff change, including adopting upstream
   toolkit `869e489e`. To be confirmed on the upstream build (native, one-ulp ensemble, emulated EPYC-Milan).
 
-## 2. cube-on-floor
+## 2. cube-on-floor — fork-specific (AL mass normalization, `63e06378e`)
 
-* Upstream's stored reference (`err_h1` 0.098813…, margin **1e-5**) is the one the fork replaced; CI-06
-  measured the upstream-equivalent code (fork toolkit `cf99893b`, before the canonical-order commit)
-  0.40–0.52 % away from it in every process, with 0.13 % spread *between processes of the same binary*
-  ([ci-06-validation.md](ci-06-validation.md)). The source of that spread, `absl::Hash`'s per-process
-  seed driving `tsl::robin_map` iteration order in `SmoothCollisionsBuilder`'s merge, is unchanged in
-  upstream `b40e9c07` and `869e489e` (`ipc/utils/unordered_map_and_set.hpp`,
-  `smooth_collisions_builder.cpp` lines 195–283). So upstream's `contact_2d` scene test can only pass
-  by luck with a 1e-5 margin. To be confirmed on the upstream build (repeats against upstream's reference).
-* Fork-specific: the canonical order (`f8dafef3`) made the scene deterministic per platform; the fork then
-  regenerated the reference and set margin 1e-3. The remaining macOS/Linux gap (6.5e-4) is the
-  tolerance-limited solve (`grad_norm_tol` 1e-7, an upstream scene setting) reacting to platform roundoff.
+My first reading (in the cross-platform record) called this a tolerance-limited *upstream* scene. The
+upstream build shows that is wrong:
+
+| Build (Release, one thread, `SimplicialLDLT`) | Reference compared against | max relative deviation (6 metrics) |
+| --- | --- | --- |
+| upstream `591b08bd5`, 6 separate processes | upstream (margin 1e-5) | 1.5e-8 … 8.0e-7 (passes every time) |
+| upstream, Young's modulus + 1..12 ulp | upstream | 4.6e-9 … 8.4e-7 |
+| fork `main`, AL mass normalization **on** (as shipped), 2 processes + 6 one-ulp draws | upstream | 3.9e-3 … 4.8e-3 |
+| fork `main`, AL mass normalization **off** (only that line switched off), 2 processes + 6 one-ulp draws | upstream | 1.2e-8 … 2.2e-7 |
+| fork `main` as shipped, + 1..23 ulp | fork's regenerated reference (margin 1e-3) | 2.4e-4 … 3.0e-3 |
+
+Trace: the first solve of step 1 is the Dirichlet AL stage (the top face is pushed down 0.02). Its
+initial energy and gradient are ×3.0116 in the fork (f₀ 475.32 vs 157.83, ‖∇f‖ 535 067 vs 177 668) with
+*identical* Newton steps — the objective is uniformly scaled. 3.0116 = 1 / 0.3320479, the scene's average
+nodal mass: fork `BCLagrangianForm::init_masked_lumped_mass` normalizes the penalty metric by its mean
+diagonal (`masked_lumped_mass_ /= mean_diag`, introduced by fork commit `63e06378e`, 2026-07-02,
+"Semi-implicit stiffness: unit fix, load-following trim control, AL mass normalization"); upstream uses the
+raw lumped mass. Newton's stopping test is an absolute ‖∇f‖ tolerance, so the ×3 objective stops at a
+different, later point (94 iterations with regularization in the fork against 26 upstream), and the
+rest of the run follows from there. The fork's run lands 0.4 % from upstream's answer and, because
+that AL stage ends on a regularized crawl, its end point depends on roundoff — hence the one-ulp spread,
+the process-to-process spread CI-06 saw before the canonical order, and the macOS/Linux gap.
+
+Upstream-side contribution: the `absl::Hash`-seeded `robin_map` iteration order in
+`SmoothCollisionsBuilder` (upstream `b40e9c07`, `869e489e`) does make upstream non-deterministic across
+processes, but only at the 1e-7 level on this scene (6 processes: 1.5e-8 … 8e-7), which the 1e-5 margin
+absorbs. The fork's canonical-order commit (`f8dafef3`) is still worth upstreaming as a determinism fix.
+
+Consequences: the fork's regenerated reference and 1e-3 margin (CI-06) paper over a fork behaviour
+change. Options for the user: (a) keep the normalization and accept a sensitive scene (margin ≥ 5e-3), or
+(b) decide whether `63e06378e`'s normalization should apply to scenes without semi-implicit contact
+(it was introduced for the semi-implicit work), which would restore upstream's reference and margin.
 
 ## 3. Windows restart test — fork only
 
@@ -109,4 +130,13 @@ change are fork features; upstream's `json-specs/input-spec.json` has no `semi_i
 
 ## Experiments on the upstream build
 
-Upstream PolyFEM `591b08bd5` with its own pins, Release, same flags as CI; results added below as they finish.
+Upstream PolyFEM `591b08bd5` with its own pins (toolkit `b40e9c07`, PolySolve `a7727e33`, data `e0efb6b`),
+Release, TBB, `POLYFEM_PORTABLE_BUILD=ON`, Triangle on, built in `wt-upstream` on the cloud host (Intel,
+flags md5 `90d38fdb…`). Upstream has no `run_manifest_env` hook, so scenes are run with `PolyFEM_bin` exactly
+as the harness would (`Eigen::SimplicialLDLT`, one thread) and the six printed metrics are compared with the
+stored reference using the harness's normalisation (`tools/parallel-edge/direct_ref_check.py`; it reproduces
+the fork harness bit for bit: deviation 0 on fork `main` against the fork's reference).
+
+* `cube-on-floor`: see §2.
+* `parallel-edge`, native: 3 processes, deviation 2.85e-7 each, hard step 56 iterations, no limit hit
+  (same as the fork on this host).
