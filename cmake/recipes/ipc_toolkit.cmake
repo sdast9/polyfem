@@ -19,6 +19,10 @@
 # face-vertex/edge-edge lists, in ascending primitive-id order instead of
 # Abseil-seeded robin_map iteration order, so GCP/SmoothContact energy,
 # gradient and Hessian sums are reproducible across processes.
+# dacf5ea7 (branch cloud/parallel-edge-fix, NOT the main pin): solve_spd_2x2
+# refines its Cramer solution once where the residual exceeds 1e-12, which
+# restores the residual (1e-16, was 4e-9) of the pivoted LDLT solve it
+# replaced for nearly parallel edges. Bit-identical elsewhere.
 # License: MIT
 
 if(TARGET ipc::toolkit)
@@ -28,4 +32,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#f8dafef39e881d1aa51b2a7975d06766db66d7da")
+CPMAddPackage("gh:sdast9/ipc-toolkit#dacf5ea7658e046b0958658f94b1249a77a13c56")
