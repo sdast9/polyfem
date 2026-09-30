@@ -426,3 +426,19 @@ margin across a future regeneration. Windows Release does not run the
 `[run]` scene groups, so it gives no value here. Acceptance: the next
 completed native Build must show `contact_2d` green on macOS Release.
 
+## 2026-09-30 — Margin `5e-3` (fork AL mass normalization)
+
+The `1e-3` margin above covered the measured Linux/macOS gap but not the
+scene's own roundoff sensitivity. The parallel-edge session measured it
+([ci-cross-platform-findings-20260930.md](ci-cross-platform-findings-20260930.md) §2,
+[upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) §2): one-ulp
+changes of Young's modulus move the metrics by 2.4e-4 to 3.0e-3, because the
+fork's AL mass normalization (`63e06378e`) scales the Dirichlet AL stage's
+objective by 3.01 and that stage ends on a roundoff-dependent regularized
+crawl; with the normalization off the fork reproduces upstream's reference to
+5e-8. **User decision (2026-09-30):** keep the normalization and set this
+scene's margin to **`5e-3`** (data `aed03ab`), which covers the measured
+spread; reference values unchanged. Restricting the normalization to
+semi-implicit scenes (which would restore upstream's reference and margin)
+was not chosen.
+

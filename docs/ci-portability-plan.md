@@ -204,6 +204,8 @@ Required work: establish explicit policy settings, repeat the exact scene across
 
 **Margin set from the native platform gap, 2026-09-30 ([record](ci-06-validation.md#2026-09-30--native-platform-gap-margin-1e-3)).** GitHub Linux Release authenticates the regenerated reference; macOS Release computes a different, deterministic value (bitwise identical in Build runs 36576988097 and 36609059244) whose largest relative error against it is 6.52e-4 (`err_h1_semi`). Following the user's 2026-09-29 decision (keep `1e-5` unless another platform differs, then take the margin from the measured gap), the margin is `1e-3` (`sdast9/polyfem-data@5d76dcb`); reference values unchanged. Windows Release does not run the `[run]` scene groups.
 
+**Margin `5e-3`, 2026-09-30 ([record](ci-06-validation.md#2026-09-30--margin-5e-3-fork-al-mass-normalization)).** The `1e-3` margin did not cover the scene's roundoff sensitivity (one-ulp spread up to 3e-3), which comes from the fork's AL mass normalization (`63e06378e`). User decision: keep the normalization, margin `5e-3` (`sdast9/polyfem-data@aed03ab`).
+
 ## 5. Make the checks represent the supported product
 
 ### CI-07 — Workflow triggers, test selection, and reproducible builds

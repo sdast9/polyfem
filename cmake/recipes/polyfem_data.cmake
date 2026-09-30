@@ -10,7 +10,8 @@
 # at the solver's current default -- CI-06 (2026-09-29): gcp-contact/
 # cube-on-floor/run.json's reference regenerated at the deterministic value
 # produced with the canonical-order ipc-toolkit (f8dafef39e8); its margin is
-# 1e-3 since 5d76dcb, set from the measured Linux/macOS gap (6.52e-4); see
+# 5e-3 since aed03ab (the fork's AL mass normalization makes the scene
+# roundoff-sensitive, one-ulp spread up to 3e-3); see
 # docs/ci-portability-plan.md and docs/ci-06-validation.md)
 # License: MIT
 
@@ -41,7 +42,7 @@ else()
         PREFIX ${FETCHCONTENT_BASE_DIR}/polyfem-test-data
         SOURCE_DIR ${POLYFEM_DATA_DIR}
         GIT_REPOSITORY https://github.com/sdast9/polyfem-data
-        GIT_TAG 5d76dcb510e0d9061dd31303f0b02dac0a680754
+        GIT_TAG aed03ab9abf9eb54ca21dcbc3df3682dc8176e7f
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ""
         INSTALL_COMMAND ""

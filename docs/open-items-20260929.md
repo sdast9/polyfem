@@ -77,8 +77,9 @@ and CI-06 are complete. Open:
   - **CI-05 microstructure pair:** green on Linux and macOS Release.
   - **CI-06 cube-on-floor:** green on Linux Release; macOS Release is
     deterministic but differs from the Linux reference by up to 6.52e-4.
-    Margin set to `1e-3` from that gap (data `5d76dcb`, user decision of
-    2026-09-29); needs one completed Build to confirm.
+    The scene is roundoff-sensitive because of the fork's AL mass
+    normalization (one-ulp spread up to 3e-3); margin now `5e-3` (data
+    `aed03ab`, user decision 2026-09-30); needs one completed Build.
   - **Linux Release `contact_3d`:** `gcp-contact/parallel-edge/run.json` hits
     the 500-iteration Newton limit on GitHub Linux only (macOS and the cloud
     Linux host solve it). It already failed at `5143c15a9` (run 36485520601),

@@ -68,7 +68,7 @@ jobs:
           cmake -G Ninja -S . -B build \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
-            -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="" \
+            -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="-DEIGEN_DONT_VECTORIZE=1" \
             -DPOLYFEM_THREADING=${{ matrix.threading }} \
             -DPOLYFEM_WITH_TRIANGLE=ON \
             -DPOLYFEM_PORTABLE_BUILD=ON
@@ -76,6 +76,11 @@ jobs:
         run: cmake --build build && ccache --show-stats
 
       - name: Tests
+        # MKL_CBWR=COMPATIBLE: the same MKL code path on every runner CPU (Intel
+        # or AMD), so chaotic scenes such as gcp-contact/parallel-edge follow the
+        # same trajectory everywhere (docs/parallel-edge-regression-20260930.md).
+        env:
+          MKL_CBWR: COMPATIBLE
         run: OMP_NUM_THREADS=1 ctest --test-dir build --verbose --output-on-failure
 
       # RB-12: keep the test logs and the CLI contract's manifests of every
@@ -142,7 +147,7 @@ jobs:
           cmake -G Ninja -S . -B build \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
-            -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="" \
+            -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="-DEIGEN_DONT_VECTORIZE=1" \
             -DPOLYFEM_THREADING=${{ matrix.threading }} \
             -DPOLYFEM_WITH_TRIANGLE=ON
 
@@ -218,7 +223,7 @@ jobs:
             -DCMAKE_CXX_STANDARD_REQUIRED=ON ^
             -DCMAKE_CXX_EXTENSIONS=OFF ^
             -DCMAKE_CXX_FLAGS="/std:c++17 /DWIN32 /D_WINDOWS /EHsc" ^
-            -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="/Od" -DCMAKE_EXE_LINKER_FLAGS_DEBUGNOSYMBOLS="" ^
+            -DCMAKE_CXX_FLAGS_DEBUGNOSYMBOLS="/Od /DEIGEN_DONT_VECTORIZE=1" -DCMAKE_EXE_LINKER_FLAGS_DEBUGNOSYMBOLS="" ^
             -DPOLYFEM_WITH_CLIPPER=OFF ^
             -DPOLYFEM_THREADING=${{ matrix.threading }} ^
             -DPOLYSOLVE_WITH_CHOLMOD=OFF ^
@@ -234,6 +239,8 @@ jobs:
           cmake --build build && sccache --show-stats
 
       - name: Tests
+        env:
+          MKL_CBWR: COMPATIBLE
         run: ctest --test-dir build --verbose --output-on-failure
 
       # RB-12: keep the test logs and the CLI contract's manifests of every
