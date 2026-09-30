@@ -160,7 +160,9 @@ single draw is arbitrary. The SIMD first differs from the scalar build already i
    same on every x86-64 runner (verified across three emulated CPUs and the native host), and
    the scene passes. It is not a model or tolerance change, and it does not need the reference
    regenerated (deviation 2.9e-7 against a 1.2e-5 margin). Cost: 2 440 DGETRF calls of ~15 µs on
-   3x3 matrices per scene run. Caveat: it removes the CPU dependence, not
+   3x3 matrices per scene run. The whole `contact_3d` case (all 50 scenes, one process,
+   single-threaded) passes on the native host with `MKL_CBWR=COMPATIBLE`; `cube-on-floor` (2D) is
+   unaffected by it (deviation 0 under every CBWR mode). Other test groups were not run with it. Caveat: it removes the CPU dependence, not
    the fragility; the next roundoff-changing commit re-rolls the draw once for all runners.
 2. **Scene robustness:** the underlying fragility is the scene's, not the toolkit's. Options, each
    changes a stored input and needs a decision: raise this scene's `max_iterations` to 1000-2000
