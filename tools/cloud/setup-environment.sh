@@ -19,3 +19,10 @@ if [ -z "$have" ] || [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1)
         || python3 -m pip install --upgrade cmake
 fi
 cmake --version | head -1
+
+# Formatting: the CI pre-commit check pins clang-format 21.1.8. Install the
+# pre-commit tool and its git hook so commits from this clone are formatted
+# with that exact version (see CLAUDE.md, Working rules).
+python3 -m pip install --break-system-packages --quiet pre-commit \
+    || python3 -m pip install --quiet pre-commit
+(cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" && pre-commit install) || true

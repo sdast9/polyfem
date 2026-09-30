@@ -53,6 +53,12 @@ suite since 2026-09-29 are unconfirmed, so treat a failure as new unless
   `outputs/<item>/<UTC timestamp>/`. Evidence is not committed unless a record
   needs it.
 * After golden tests, add files by name. Never `git add -A`.
+* Format before every commit with the repository's pinned formatter: run
+  `pre-commit install` once per clone (the hook then formats staged C/C++
+  files on each commit; re-add them if it changed anything), or
+  `pre-commit run --files <changed files>` before committing. The CI check
+  pins clang-format 21.1.8 (`.pre-commit-config.yaml`); other clang-format
+  versions (Homebrew's, for example) format differently and fail it.
 * Verify before pushing: rebuild, run the affected tests, and keep the smoke
   scenes (`scenes/semi-implicit`) byte-identical single-threaded unless the
   change is meant to move them.
