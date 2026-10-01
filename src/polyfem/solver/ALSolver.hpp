@@ -172,6 +172,22 @@ namespace polyfem::solver
 			recalibrate_after_line_search_failure_ = std::move(recalibrate);
 		}
 
+		/// @brief Stall restarts for solves without a stall retune (open item
+		///        D8, solver/advanced/stall_restart): with the stall options
+		///        enabled, a stall restarts the subsolve although no on_stall
+		///        callback is installed. With `force_psd`, the first stall of
+		///        this solver's lifetime (a forward step) also forces PolySolve's
+		///        Newton to project the Hessian to PSD (Newton/force_psd_projection)
+		///        for every later subsolve, which is what frees a crawl along a
+		///        barrier wall. Needs solvers created per attempt (no shared solver).
+		void enable_general_stall_restarts(const bool force_psd)
+		{
+			general_stall_restarts_ = true;
+			psd_stall_remedy_ = force_psd;
+		}
+		/// @brief Whether a stall has forced PSD projection (see above).
+		bool psd_projection_forced() const { return psd_forced_; }
+
 		/// @brief Optional filter applied to every Newton update direction
 		///        (installed on the nonlinear solver for each subsolve).
 		///        The objective derivative remains gradient.dot(direction).
@@ -240,6 +256,9 @@ namespace polyfem::solver
 		///        consecutive stall from the same iterate with nothing changed
 		///        interrupts the subsolve instead of repeating identical restarts.
 		std::function<bool(const Eigen::VectorXd &)> on_stall;
+
+		/// @brief See enable_general_stall_restarts
+		bool general_stall_restarts_ = false, psd_stall_remedy_ = false, psd_forced_ = false;
 
 		/// @brief See set_line_search_failure_recovery
 		int line_search_failure_restarts_ = 0;

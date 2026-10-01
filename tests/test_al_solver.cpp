@@ -1709,3 +1709,44 @@ TEST_CASE("AL recovers from a line search that failed on every strategy", "[al_s
 		CHECK(retunes == 2);
 	}
 }
+
+// Open item D8 (solver/advanced/stall_restart): stall restarts without a
+// retune callback, for every solve without the semi-implicit controller; the
+// remedy forces PSD projection for the rest of the solver's lifetime.
+TEST_CASE("General stall restarts need no retune callback and force PSD once", "[al_solver][stall_restart]")
+{
+	StallRestartOptions opts;
+	opts.enabled = true;
+	opts.min_iterations = 0;
+	opts.soft_iteration_limit = -1;
+	opts.max_restarts = 5;
+	opts.alpha_basis = StallRestartOptions::AlphaBasis::FeasibleBound;
+
+	for (const bool force_psd : {true, false})
+	{
+		CAPTURE(force_psd);
+		QuarticProblem problem;
+		problem.block_steps = true; // the first attempt's line search fails on every strategy
+		problem.unblock_on_reinit = true;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, opts);
+		solver.enable_general_stall_restarts(force_psd);
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, parameters(), linear, 1));
+		CHECK(std::abs(std::pow(sol(0, 0), 3)) < 1e-12);
+		CHECK(solver.info()["outcome"] == "converged");
+		CHECK(solver.info()["restarts"] == 1);
+		CHECK(solver.psd_projection_forced() == force_psd);
+		CHECK(solver.info().contains("psd_projection_forced") == force_psd);
+	}
+
+	SECTION("without them the failure ends the solve as before")
+	{
+		QuarticProblem problem;
+		problem.block_steps = true;
+		problem.unblock_on_reinit = true;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, opts);
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Line search failed"));
+		CHECK_FALSE(solver.psd_projection_forced());
+	}
+}

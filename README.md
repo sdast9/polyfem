@@ -139,9 +139,12 @@ repository's own claims current. **Open decisions, work and verification gaps:
   restores the last accepted state in memory before the failure is reported
   ([RB-06](docs/rb-06-validation.md), 2026-09-15; no retry — a failed step
   still ends the run with exit status 1, or 3 for a resource failure). Since
-  2026-10-01 a line search that fails on every strategy first restarts the
-  subsolve once with a fresh solver in every mode, not only semi-implicit
-  (`solver/advanced/line_search_failure_restarts`,
+  2026-10-01 every mode, not only semi-implicit, restarts a stalled solve:
+  repeated tiny backtracked steps or a line search that fails on every
+  strategy restart the subsolve with a fresh solver, and the first stall of a
+  step makes Newton project the Hessian to PSD for the rest of it
+  (`solver/advanced/stall_restart`, on by default;
+  `solver/advanced/line_search_failure_restarts` when it is off;
   [record](docs/stall-recovery-generalization-20261001.md)). The
   augmented-Lagrangian stage that prepares the snap to prescribed values can
   be bounded on request (`solver.augmented_lagrangian.budget`: a pass cap

@@ -2419,6 +2419,18 @@ namespace polyfem::varform
 				};
 			}
 
+			// Open item D8 (solver/advanced/stall_restart): stall restarts for
+			// every solve without the semi-implicit retune; the remedy forces
+			// PSD projection for the rest of the step.
+			bool general_stall_restarts = false, stall_force_psd = false;
+			if (on_stall == nullptr && args["solver"]["advanced"]["stall_restart"]["enabled"].get<bool>())
+			{
+				const json &general_restart = args["solver"]["advanced"]["stall_restart"];
+				stall_opts = solver::StallRestartOptions::from_json(general_restart);
+				general_stall_restarts = true;
+				stall_force_psd = general_restart["remedy"].get<std::string>() == "force_psd_projection";
+			}
+
 			ALSolver al_solver(
 				solve_data_.al_form,
 				initial_al_weight,
@@ -2433,6 +2445,8 @@ namespace polyfem::varform
 			al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"]));
 			// Line-search failure recovery for every solve without stall
 			// restarts (solver/advanced/line_search_failure_restarts).
+			if (general_stall_restarts)
+				al_solver.enable_general_stall_restarts(stall_force_psd);
 			al_solver.set_line_search_failure_recovery(
 				args["solver"]["advanced"]["line_search_failure_restarts"].get<int>(),
 				solver::SolveData::classic_stiffness_recalibration(solve_data_));

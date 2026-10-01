@@ -2,7 +2,7 @@
 
 Date: 2026-10-01. Status: **line-search failure recovery implemented for every mode (user
 decision 2026-10-01); small-step stall restarts outside semi-implicit mode measured on an
-uncommitted experiment, decision pending (open items D8).**
+uncommitted experiment, then adopted on by default (user decision 2026-10-01, D8; section 3).**
 
 ## Origin
 
@@ -96,13 +96,32 @@ So on the classic group the trigger never fires and the runs follow the same pat
 non-semi-implicit stall on record it rescues the step, and the forced-projection remedy does it
 with one restart and fewer iterations than the adopted CI path.
 
-### Decision for the user (open items D8)
+### Decision (user, 2026-10-01): on by default (section 3)
 
-Whether to make small-step stall restarts part of every mode without them, with the soft
-iteration limit off, the `feasible_bound` basis and the forced-PSD remedy (default on, or opt-in).
-Not measured: the classic `contact_2d`, `standard` and other groups; native AMD or Apple silicon
-(only emulation reproduces the crawl); a crawl in classic barrier contact (none on record). It
-would also make the `parallel-edge` scene robust by itself, which bears on D6.
+The measurements left open: the classic `contact_2d`, `standard` and other groups individually;
+native AMD or Apple silicon (only emulation reproduces the crawl); a crawl in classic barrier
+contact (none on record).
+
+## 3. Small-step stall restarts in every mode (implemented, on by default)
+
+`solver/advanced/stall_restart` (defaults: `enabled` true, `alpha_threshold` 0.01, `patience` 5,
+`min_iterations` 5, `soft_iteration_limit` −1 (off), `max_restarts` 20, `alpha_basis`
+`feasible_bound`, `remedy` `force_psd_projection`) applies to every forward elastic solve without the
+semi-implicit stall restart: classic and fixed barrier stiffness, smooth (GCP) contact, no contact.
+`ALSolver::enable_general_stall_restarts` lets the existing stall loop restart without a retune
+callback; on the first stall of a step the remedy creates every later solver of that step with
+`Newton/force_psd_projection` (and `use_psd_projection`). While these restarts are on they also own
+a line search that fails on every strategy (the semi-implicit hard-stall path: restart, then
+revert to the subsolve start), so `line_search_failure_restarts` acts only with them off.
+`max_restarts` is 20, not the semi-implicit 200: the measured crawl needed one restart with the
+remedy, and the cap bounds the cost of a stall the remedy cannot free. Semi-implicit mode, with or
+without its own restarts, is unchanged.
+
+Verification (Release, `b55166de` + this change): `[al_solver]` 28 cases / 4,111 assertions
+(new: restarts without a retune callback, PSD forced once or not per the remedy, and the historical
+failure without them); the five smokes byte-identical with no restart in any of them (the classic
+`quasistatic-adaptive` included); the emulated-AMD `parallel-edge` crawl solves with one restart and
+436 Newton iterations, identical to the experiment; full Release CTest (`MKL_CBWR=COMPATIBLE`, `-j3`) 427/427 pass.
 
 ## Evidence
 

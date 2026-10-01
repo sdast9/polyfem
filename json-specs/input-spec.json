@@ -2145,16 +2145,98 @@
             "characteristic_length",
             "characteristic_force_density",
             "failure_injection",
-            "line_search_failure_restarts"
+            "line_search_failure_restarts",
+            "stall_restart"
         ],
         "doc": "Advanced settings for the solver"
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "enabled",
+            "alpha_threshold",
+            "patience",
+            "min_iterations",
+            "soft_iteration_limit",
+            "max_restarts",
+            "alpha_basis",
+            "feasible_ratio_threshold",
+            "remedy"
+        ],
+        "doc": "Stall restarts for every nonlinear solve that has no semi-implicit stall restart (classic or fixed barrier stiffness, smooth GCP contact, no contact; open item D8, docs/stall-recovery-generalization-20261001.md). After patience consecutive steps whose line search backtracked below the feasible (CCD) bound with alpha below alpha_threshold, the subsolve restarts with a fresh solver; the first stall of a step also applies the remedy. A line search that fails on every strategy is handled as a stall too while restarts remain (it then supersedes solver/advanced/line_search_failure_restarts). Measured: rescues the emulated-AMD gcp-contact/parallel-edge crawl with one restart and never fires on the 50 contact_3d scenes."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/enabled",
+        "default": true,
+        "type": "bool",
+        "doc": "Enable the stall restarts (on by default since 2026-10-01, user decision)."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/alpha_threshold",
+        "default": 0.01,
+        "type": "float",
+        "doc": "Accepted line-search step sizes below this count towards a stall."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/patience",
+        "default": 5,
+        "type": "int",
+        "doc": "Consecutive small steps that make a stall."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/min_iterations",
+        "default": 5,
+        "type": "int",
+        "doc": "Iterations of a solve before stalls are judged."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/soft_iteration_limit",
+        "default": -1,
+        "type": "int",
+        "doc": "Also restart after this many iterations of one attempt; -1 (default) disables it, so only small steps trigger a restart."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/max_restarts",
+        "default": 20,
+        "type": "int",
+        "doc": "Maximum number of restarts per subsolve."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/alpha_basis",
+        "default": "feasible_bound",
+        "type": "string",
+        "options": [
+            "feasible_bound",
+            "absolute"
+        ],
+        "doc": "feasible_bound (default): a small step counts only when the line search backtracked below the bound CCD and the step validity set, so CCD-limited steps near contact never count (EF-04); absolute: every small accepted step counts."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/feasible_ratio_threshold",
+        "default": 0.999,
+        "type": "float",
+        "min": 0,
+        "max": 1,
+        "doc": "feasible_bound basis: an accepted step at least this fraction of the feasible bound is not a backtrack."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/remedy",
+        "default": "force_psd_projection",
+        "type": "string",
+        "options": [
+            "force_psd_projection",
+            "none"
+        ],
+        "doc": "force_psd_projection (default): from the first stall of a step to its end, Newton projects the Hessian to PSD (Newton/force_psd_projection), which frees a crawl along a barrier wall; none: restart with a fresh solver only."
     },
     {
         "pointer": "/solver/advanced/line_search_failure_restarts",
         "default": 1,
         "min": 0,
         "type": "int",
-        "doc": "Recovery from a line search that failed on every strategy, for every nonlinear solve that has no stall restarts (every contact mode, and no contact, except semi-implicit with solver/contact/semi_implicit/restart/enabled, whose stall controller handles the failure itself): the subsolve restarts from the iterate it reached with a fresh nonlinear solver (no descent-strategy or regularization history), at most this many times per subsolve; with the classic adaptive barrier stiffness, its initialization first runs again at that iterate, as at every solve start. A failure after the last restart ends the step exactly as before (named failure, rollback to the last accepted state). Solves whose line search never fails on every strategy are unchanged. 0 restores the historical behaviour (the first such failure ends the step)."
+        "doc": "Recovery from a line search that failed on every strategy, for every nonlinear solve that has no stall restarts (stall restarts handle the failure themselves: semi-implicit with solver/contact/semi_implicit/restart/enabled, and every other configuration while solver/advanced/stall_restart/enabled, the default): the subsolve restarts from the iterate it reached with a fresh nonlinear solver (no descent-strategy or regularization history), at most this many times per subsolve; with the classic adaptive barrier stiffness, its initialization first runs again at that iterate, as at every solve start. A failure after the last restart ends the step exactly as before (named failure, rollback to the last accepted state). Solves whose line search never fails on every strategy are unchanged. 0 restores the historical behaviour (the first such failure ends the step)."
     },
     {
         "pointer": "/solver/advanced/failure_injection",

@@ -196,7 +196,7 @@ namespace polyfem::solver
 		const double characteristic_length,
 		const std::shared_ptr<NLSolver> &nl_solverin)
 	{
-		const bool detect_stalls = stall_opts.enabled && on_stall != nullptr;
+		const bool detect_stalls = stall_opts.enabled && (on_stall != nullptr || general_stall_restarts_);
 		solve_info_ = {{"outcome", "failed"}};
 
 		// A restart from a wedged iterate (a contact hotspot at CCD scale)
@@ -252,8 +252,20 @@ namespace polyfem::solver
 			double stall_alpha = std::numeric_limits<double>::quiet_NaN();
 
 			const auto scale = nl_problem.normalize_forms();
+			json forced_psd_params;
+			if (psd_forced_)
+			{
+				// PolySolve's Newton sets the problem's projection from its own
+				// parameters every iteration; use_psd_projection only adds a
+				// projected fallback strategy, force_psd_projection replaces
+				// the unprojected one.
+				forced_psd_params = nl_solver_params;
+				forced_psd_params["Newton"]["use_psd_projection"] = true;
+				forced_psd_params["Newton"]["force_psd_projection"] = true;
+			}
 			auto nl_solver = nl_solverin == nullptr ? polysolve::nonlinear::Solver::create(
-														  nl_solver_params, linear_solver, characteristic_length * scale, logger())
+														  psd_forced_ ? forced_psd_params : nl_solver_params,
+														  linear_solver, characteristic_length * scale, logger())
 													: nl_solverin;
 
 			if (direction_filter)
@@ -345,6 +357,8 @@ namespace polyfem::solver
 				solve_info_["unchanged_restarts"] = unchanged_restarts;
 				record_alpha_basis();
 				record_recoveries();
+				if (psd_forced_)
+					solve_info_["psd_projection_forced"] = true;
 				if (converged)
 				{
 					nl_solver->set_iteration_callback(nullptr);
@@ -458,13 +472,20 @@ namespace polyfem::solver
 			// Identity when the problem is in full size
 			const Eigen::VectorXd full_sol = nl_problem.reduced_to_full(tmp_sol);
 			logger().warn(
-				"Line-search stall detected (trigger: {}); retuning barrier stiffness and restarting ({}/{})",
-				stall_description, restarts, stall_opts.max_restarts);
+				"Line-search stall detected (trigger: {}); {} ({}/{})",
+				stall_description, on_stall ? "retuning barrier stiffness and restarting" : "restarting",
+				restarts, stall_opts.max_restarts);
 
 			// on_stall is responsible for retuning the barrier stiffness at
 			// full_sol (the update_barrier_stiffness callback may capture a
 			// stale solution vector, so it is NOT called here).
-			const bool retuned = on_stall(full_sol);
+			bool retuned = on_stall ? on_stall(full_sol) : false;
+			if (psd_stall_remedy_ && !psd_forced_ && nl_solverin == nullptr)
+			{
+				psd_forced_ = true;
+				retuned = true;
+				logger().warn("Stall remedy: Newton projects the Hessian to PSD (force_psd_projection) for the rest of this step");
+			}
 			// Compare the next restart with this attempt's starting point,
 			// after any hard-stall rollback. Soft interruptions may have made
 			// useful progress without a retune; repeating a failed trajectory
