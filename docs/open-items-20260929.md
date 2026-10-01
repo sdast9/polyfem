@@ -17,6 +17,7 @@ governs; fix this page.
 | D5 | ~~Whether the `*-work/` evidence directories move to the Pitt share~~ **Done 2026-09-29 for the finished ones** (39,347 files, 108 GB, SHA-256-verified, log `work-evidence-transfer-20260929.log`; isolated builds deleted). Still local and undecided: `test_cases/*/output` (about 580 GB of Houdini output; the `.hipnc` scenes reference `/output` paths), `r3-ogden-work`, `retune-default-work` | Only disk hygiene | `AGENTS.md`, *Archived test outputs* |
 | D6 | What to do about the `gcp-contact/parallel-edge` scene's own fragility: raise `max_iterations`, `use_psd_projection`, or lower `barrier_stiffness`. The CI side is handled (`MKL_CBWR=COMPATIBLE`), the scene is not | Nothing in CI; robustness of that scene on other CPUs | [parallel-edge-regression-20260930.md](parallel-edge-regression-20260930.md) |
 | D7 | Whether to report the upstream defects found 2026-09-30 (Debug friction-Hessian segfault, the nearly-parallel-edge 2x2 solve, `parallel-edge` fragility) to the upstream projects | Nothing local | [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) |
+| D8 | Whether **small-step stall restarts** apply in every mode that has none (classic/fixed barrier, GCP, no contact), with the soft iteration limit off, the `feasible_bound` trigger and a forced-PSD remedy for the rest of the step; default on or opt-in. Measured 2026-10-01 on an uncommitted experiment: rescues the emulated-AMD `parallel-edge` crawl with one restart (436 iterations, metrics within 9.4e-7), never fires on the 50 classic `contact_3d` scenes (50/50 authenticated) | Nothing in CI; also answers D6 at the solver level | [stall-recovery-generalization-20261001.md](stall-recovery-generalization-20261001.md) |
 
 Decided and closed (do not reopen without new evidence): production trim
 controller stays `rms` with no estimate; force-weighted is experimental and
@@ -27,7 +28,7 @@ budget method-independent; L-BFGS not pursued (EF-06 retired); automatic
 timestep retry off (RB-08); mixed hexahedral orders refused (RB-23);
 `friction_iterations: 2` with `realized_force` lag (RB-10); the CI-05 and
 CI-06 reference policies (2026-09-29); the default stall-restart budget
-`max_restarts` is 200 (2026-09-29, R3).
+`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)).
 
 ## 2. Open work
 
