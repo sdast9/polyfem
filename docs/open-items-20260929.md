@@ -74,10 +74,11 @@ and CI-06 are complete. Open:
   36755168744](https://github.com/sdast9/polyfem/actions/runs/36755168744) at
   `3495bb41e` passed **all six lanes** (Linux, macOS and Windows; Debug and
   Release), the first completed fully green native Build since the CI-04/05/06
-  merges. Merging the CI-fix branch (`0a367634a`) started run 36799322242:
-  Linux Release and macOS Release passed; the Debug lanes and Windows Release
-  were still running when this was written (check it before citing a final
-  result). Caveats that still apply: Windows does not run the `[run]` scene
+  merges. The Build on the merge commit `0a367634a` (run 36799322242) passed Linux
+  Release and macOS Release and was then **cancelled** by the next push to `main`
+  (every push cancels the running Build), so a completed Build of the merged
+  head is still wanted: it needs about 2.5 hours without a push to `main`, or a
+  manual run on a fixed commit. Caveats that still apply: Windows does not run the `[run]` scene
   groups, and the Debug lanes hide the AL-budget rollback test (about an hour
   in Debug). What was diagnosed, for the record: CI-04, CI-05
   and CI-06 were validated on one cloud Linux GCC host; the GitHub Builds that
