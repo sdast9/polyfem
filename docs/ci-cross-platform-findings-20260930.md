@@ -206,8 +206,12 @@ The toolkit's work branch `semi-implicit-stiffness` and `main` were not touched;
    The `[.][run]` scene groups (`contact_2d`, `contact_3d`, `standard`, ...) are hidden in Debug by
    design, so the Debug lane does not run them.
 6. *The hidden AL-budget test in Debug with the new pin* (explicit name, single process):
-   a first run was killed after 75 minutes by a restart of my shell (289 stall restarts, no assertion or error
-   other than the test's own expected stall messages); a complete rerun is listed below when finished.
+   not completed. Two runs (the first killed after 75 minutes by a restart of my shell, the rerun stopped by me
+   after about 2 h 20 min, 386 stall restarts) ran through the stalled AL passes with no assertion abort or crash
+   (the abort of section 4b would have ended the process), but neither reached the end of the test; the
+   earlier ~1 h figure ("Open items after this pass" below, `build-dbg2`) was not reproduced in this build.
+   Its Debug completion is therefore unconfirmed. The test is hidden in Debug (so no CI lane depends on it),
+   and it is still checked in Release, where it takes about 2.5 minutes.
 
 **Left for the user**: fast-forward `sdast9/ipc-toolkit` `semi-implicit-stiffness` to `1f1b5dbf`; a completed
 native GitHub Build of the branch (Linux lanes with `MKL_CBWR=COMPATIBLE`, Windows restart test, macOS
