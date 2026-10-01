@@ -31,11 +31,12 @@ to the data fork first, then pinned.
 The fork keeps `option(POLYFEM_WITH_MISO ... OFF)`. Every upstream merge brings
 back a plain `set(... ON)`; re-apply the option after merging.
 
-Unit-suite baseline: the two golden scenes that used to fail
-(`gcp-contact/cube-on-floor`, `multi-material/stretch-cubes`) were repaired by
-CI-06 and CI-04 and pass on cloud Linux; macOS and Windows runs and a complete
-suite since 2026-09-29 are unconfirmed, so treat a failure as new unless
-[docs/open-items-20260929.md](docs/open-items-20260929.md) says otherwise.
+Unit-suite baseline: the CTest-registered suite is green on all six native CI
+lanes (Build 36755168744 at `3495bb41e`); a failure is new unless
+[docs/open-items-20260929.md](docs/open-items-20260929.md) says otherwise. Windows
+does not run the `[run]` scene groups and the Debug lanes hide the one-hour
+AL-budget rollback test. The Linux and Windows CI test steps set `MKL_CBWR=COMPATIBLE`; set it for
+scene runs you compare across machines.
 
 ## Working rules
 

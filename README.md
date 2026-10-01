@@ -11,7 +11,7 @@ PolyFEM is a polyvalent C++ FEM library.
 
 ### sdast9 fork
 
-State as of **September 29, 2026** (`main`, `2a619cd38`). The dated project
+State as of **September 30, 2026** (`main`, `0a367634a`). The dated project
 state lives in the parent workspace's README; this section keeps the
 repository's own claims current. **Open decisions, work and verification gaps:
 [docs/open-items-20260929.md](docs/open-items-20260929.md).**
@@ -87,12 +87,16 @@ repository's own claims current. **Open decisions, work and verification gaps:
   Since then CI-03, CI-05 and CI-06 are complete and CI-04 is done locally
   (2026-09-28/29; [CI-04](docs/ci-04-validation.md), [CI-06](docs/ci-06-validation.md#2026-09-29--reference-regenerated-ci-06-closed));
   a cloud Linux run passed `standard` and `contact_3d`, and after CI-05/06
-  `contact_2d` 29/29 and `triangle_data` 7/7. The one native run that
-  covered them ([Build 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097),
-  `d53b9e444`) is **not green and not yet diagnosed**: Linux Release fails
-  `contact_3d`, macOS Release `contact_2d`, Linux DebugNoSymbols four
-  rollback/AL-budget tests (SEGFAULT), Windows Release `restart from restart
-  json`; the macOS/Windows Debug lanes were cancelled.
+  `contact_2d` 29/29 and `triangle_data` 7/7. The first native Builds after them failed in four jobs; those were
+  diagnosed ([findings](docs/ci-cross-platform-findings-20260930.md),
+  [upstream vs fork](docs/upstream-vs-fork-20260930.md)) and fixed, and
+  [Build run 36755168744](https://github.com/sdast9/polyfem/actions/runs/36755168744)
+  at `3495bb41e` passed **all six lanes** (Linux, macOS, Windows; Debug and
+  Release). The Linux and Windows test steps set `MKL_CBWR=COMPATIBLE` (the `parallel-edge`
+  scene's chaotic barrier-wall crawl depends on MKL's CPU dispatch) and the Debug
+  lanes build with `EIGEN_DONT_VECTORIZE=1` uniformly (an ODR mismatch between
+  the toolkit and PolySolve); Windows does not run the `[run]` scene groups and
+  the Debug lanes hide the one-hour AL-budget rollback test.
   CI-03 is complete (2026-09-21, [record](docs/ci-03-validation.md)): the
   three friction fixtures that RB-10's `friction_iterations` default had
   moved now state the budget their references were generated under and have
@@ -107,9 +111,9 @@ repository's own claims current. **Open decisions, work and verification gaps:
   ([schema](scenes/semi-implicit/README.md#run-manifest-rb-12)) and
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
-- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@f8dafef39e8`
+- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@1f1b5dbf`
   (branch `semi-implicit-stiffness`), `sdast9/polysolve@43ca2e66` (branch
-  `iteration-callback`) and the test data `sdast9/polyfem-data@b7ae0d9`
+  `iteration-callback`) and the test data `sdast9/polyfem-data@aed03ab`
   (branch `fable-fixtures`; `main` mirrors upstream `polyfem/polyfem-data`);
   both code forks' `Build` workflows run on those branches
   (PolySolve 6/6 lanes green; IPC Toolkit green on Linux/macOS, its two Windows

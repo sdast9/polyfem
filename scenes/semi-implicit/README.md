@@ -175,6 +175,13 @@ bit-identically ([record](../../docs/it-reproducibility-20260928.md)). Two
 different deterministic realizations of a trajectory-sensitive scene can still
 differ (IT: up to 23.5 %).
 
+Across CPU vendors, MKL's runtime dispatch can change low-order bits of a dense
+factorization; on contact scenes with a chaotic trim or barrier-wall history
+(the `parallel-edge` GCP scene) that decides whether a step takes 56 iterations
+or runs past the Newton limit. The CI Linux and Windows test steps set `MKL_CBWR=COMPATIBLE`
+([record](../../docs/parallel-edge-regression-20260930.md)); set it too when
+comparing runs across machines.
+
 ### Augmented-Lagrangian budget (RB-07)
 
 The AL stage that prepares a geometrically safe snap to the prescribed
@@ -284,15 +291,15 @@ smoke scene.
 
 ## Companion revisions
 
-CMake pins `sdast9/ipc-toolkit@f8dafef39e8` (branch `semi-implicit-stiffness`:
+CMake pins `sdast9/ipc-toolkit@1f1b5dbf` (branch `semi-implicit-stiffness`:
 per-collision `stiffness_scale`, `compute_avg_distance`, the RB-21 parent
 contributions on built collisions, the RB-05 broad-phase budget with checked
 counting, the merged upstream `869e489e`, Tight-Inclusion 1.1.0 and the
-canonical smooth-contact collision order) and `sdast9/polysolve@43ca2e66`
+canonical smooth-contact collision order, and the `solve_spd_2x2` iterative refinement for nearly parallel edges) and `sdast9/polysolve@43ca2e66`
 (branch `iteration-callback`: the PF-06 derivative correction, the RB-19
 line-search fallback, the slope tolerance limited to Hessian-based strategies,
 the opt-in Wolfe search, the uphill refusal in Armijo, and the merged upstream
-hybrid solvers). Test data is pinned to `sdast9/polyfem-data@b7ae0d9`
+hybrid solvers). Test data is pinned to `sdast9/polyfem-data@aed03ab`
 (`fable-fixtures`). Dependency feature branches and `main` branches are not
 interchangeable. A run's `run-manifest.json` records the effective checkouts
 next to these pins.

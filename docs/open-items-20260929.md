@@ -1,8 +1,8 @@
 # Open items, decisions and questions — 2026-09-29
 
-A reconciliation of the project records as of PolyFEM `main` at `2a619cd38`
-(IPC Toolkit pin `f8dafef39e8`, PolySolve pin `43ca2e66`, data pin
-`sdast9/polyfem-data@b7ae0d9`). It adds no evidence: every line points at the
+A reconciliation of the project records, written 2026-09-29 and brought up to
+date on 2026-09-30 (end of day) at PolyFEM `main` `0a367634a` (IPC Toolkit pin
+`1f1b5dbf`, PolySolve pin `43ca2e66`, data pin `sdast9/polyfem-data@aed03ab`). It adds no evidence: every line points at the
 record that owns the claim. When a record and this page disagree, the record
 governs; fix this page.
 
@@ -15,6 +15,8 @@ governs; fix this page.
 | D3 | Whether to pursue a **force-weighted redesign** (a target relative to the collapse threshold, no softening at stall retunes, or a cap on band moves per step) | Nothing today: the mode stays experimental | same, *Recommendation* 2; [ef-07-trim-loop.md](ef-07-trim-loop.md) |
 | D4 | **Distribution licensing** for the Linux CLI package: GPL-2.0 SuiteSparse components (UMFPACK, SPQR, parts of CHOLMOD) and the Intel MKL redistribution notice; the glibc ≥ 2.38 and `-msse4.2` baselines were measured, not decided; which macOS/Windows targets to support | Wider distribution; CI-08 macOS/Windows work | [ci-08-validation.md](ci-08-validation.md) |
 | D5 | ~~Whether the `*-work/` evidence directories move to the Pitt share~~ **Done 2026-09-29 for the finished ones** (39,347 files, 108 GB, SHA-256-verified, log `work-evidence-transfer-20260929.log`; isolated builds deleted). Still local and undecided: `test_cases/*/output` (about 580 GB of Houdini output; the `.hipnc` scenes reference `/output` paths), `r3-ogden-work`, `retune-default-work` | Only disk hygiene | `AGENTS.md`, *Archived test outputs* |
+| D6 | What to do about the `gcp-contact/parallel-edge` scene's own fragility: raise `max_iterations`, `use_psd_projection`, or lower `barrier_stiffness`. The CI side is handled (`MKL_CBWR=COMPATIBLE`), the scene is not | Nothing in CI; robustness of that scene on other CPUs | [parallel-edge-regression-20260930.md](parallel-edge-regression-20260930.md) |
+| D7 | Whether to report the upstream defects found 2026-09-30 (Debug friction-Hessian segfault, the nearly-parallel-edge 2x2 solve, `parallel-edge` fragility) to the upstream projects | Nothing local | [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) |
 
 Decided and closed (do not reopen without new evidence): production trim
 controller stays `rms` with no estimate; force-weighted is experimental and
@@ -68,7 +70,16 @@ realization noise), and a repeat of `pup_push` for steps 1–3.
 [ci-portability-plan.md](ci-portability-plan.md). CI-01, CI-02, CI-03, CI-05
 and CI-06 are complete. Open:
 
-- **Native acceptance — diagnosed 2026-09-30, not yet green.** CI-04, CI-05
+- **Native acceptance — diagnosed and green (2026-09-30).** [Build run
+  36755168744](https://github.com/sdast9/polyfem/actions/runs/36755168744) at
+  `3495bb41e` passed **all six lanes** (Linux, macOS and Windows; Debug and
+  Release), the first completed fully green native Build since the CI-04/05/06
+  merges. Merging the CI-fix branch (`0a367634a`) started run 36799322242:
+  Linux Release and macOS Release passed; the Debug lanes and Windows Release
+  were still running when this was written (check it before citing a final
+  result). Caveats that still apply: Windows does not run the `[run]` scene
+  groups, and the Debug lanes hide the AL-budget rollback test (about an hour
+  in Debug). What was diagnosed, for the record: CI-04, CI-05
   and CI-06 were validated on one cloud Linux GCC host; the GitHub Builds that
   covered them are [run 36576988097](https://github.com/sdast9/polyfem/actions/runs/36576988097)
   (`d53b9e444`) and the partly completed [run 36609059244](https://github.com/sdast9/polyfem/actions/runs/36609059244)
@@ -79,7 +90,7 @@ and CI-06 are complete. Open:
     deterministic but differs from the Linux reference by up to 6.52e-4.
     The scene is roundoff-sensitive because of the fork's AL mass
     normalization (one-ulp spread up to 3e-3); margin now `5e-3` (data
-    `aed03ab`, user decision 2026-09-30); needs one completed Build.
+    `aed03ab`, user decision 2026-09-30); green in Build 36755168744.
   - **Linux Release `contact_3d`:** `gcp-contact/parallel-edge/run.json` hits
     the 500-iteration Newton limit on GitHub Linux only (macOS and the cloud
     Linux host solve it). It already failed at `5143c15a9` (run 36485520601),
@@ -93,7 +104,7 @@ and CI-06 are complete. Open:
     on every CPU. **Adopted 2026-09-30 on branch `ci/fixes-20260930`** (verified
     under emulated EPYC-Milan: 60 steps, no limit hit;
     [resolution](ci-cross-platform-findings-20260930.md#6-resolution-2026-09-30-cloud-session-brief-tasksci-fixes-20260930md));
-    a native GitHub Build of the branch is still needed. The scene's own
+    green in the completed native Build 36755168744 (all lanes). The scene's own
     fragility (raise `max_iterations`, `use_psd_projection`, lower
     `barrier_stiffness`) stays a user decision. Related: Linux Debug
     segfaults = Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch, Windows restart =
@@ -104,7 +115,7 @@ and CI-06 are complete. Open:
   - **Linux DebugNoSymbols:** four rollback/AL-budget scene tests SEGFAULT
     (`test_step_rollback.cpp:407`); already known before CI-04–06 (the
     2026-09-20 golden plan records the same four). **Fixed 2026-09-30 on
-    branch `ci/fixes-20260930`, pending a native Build:** uniform
+    branch `ci/fixes-20260930`; Debug green in Build 36755168744:** uniform
     `EIGEN_DONT_VECTORIZE=1` in the Debug lanes (the ODR mismatch); the toolkit
     `solve_spd_2x2` refinement (toolkit `1f1b5dbf`, pinned) removes the Debug
     assertion the fourth test then hit; that test (about an hour in Debug) is
@@ -115,8 +126,10 @@ and CI-06 are complete. Open:
     Merged to `main` 2026-10-01; the toolkit's `semi-implicit-stiffness` was
     fast-forwarded to `1f1b5dbf` the same day.
   - **Windows Release:** `restart from restart json` (`test_restart.cpp:244`)
-    also fails in runs 36485520601 and 36524461889, before the CI-05/06
-    changes. **Open.** Windows does not run the `[run]` scene groups.
+    failed in runs 36485520601 and 36524461889, before the CI-05/06 changes;
+    test hygiene (`sim.pvd` was still open when the directory was removed),
+    **fixed in `2de3553ca`**, green in Build 36755168744. Windows does not run
+    the `[run]` scene groups.
   (The `pre-commit` failure that accompanied these runs was formatting in
   `tests/test_trim_loop_guard.cpp`, repaired in `bd2f4db44`.) Every push to
   `main` cancels the running Build; a completed native result needs a quiet
@@ -140,14 +153,33 @@ and CI-06 are complete. Open:
   (CI-04), and `shape-transient-friction`, whose forward tolerance was then
   tightened). A cloud Linux run on 2026-09-28 gave
   403/405 (`contact_2d`, `triangle_data`); CI-05/CI-06 then repaired both
-  groups, confirmed locally on Linux only. No full suite has run
-  since `clamped_contacts` became a default or since the Accelerate thread cap
-  (`ba3ea76b6`); RB-02 was not rerun for the cap either. A full run needs a
-  cap of at least two hours.
+  groups. Since then the CTest-registered suite has run green on all six native
+  lanes (Build 36755168744; the resolution record counts 425 registered tests in
+  Release and 391 in Debug, where the AL-budget rollback test is hidden), which covers the `clamped_contacts` default and the
+  Accelerate thread cap on Linux, macOS and Windows within those exclusions.
+  Not rerun since the defaults changed (`clamped_contacts`, `max_restarts` 200)
+  or the toolkit's `solve_spd_2x2` refinement: the RB-02 probe (`tools/rb02`),
+  which the repository's own rule says to rerun after any default change.
+  (`test_step_rollback.cpp` pins `max_restarts: 20` in the AL-budget test,
+  because the new default made it about ten times slower.)
 - `tools/ef02/sequence.py` `PRODUCTION_CONTROLLER` pins
   `clamped_contacts: "keep"`, stale since `eb8286b7c`. It matters only if a
   scene file sets the key; recorded, not changed.
 - BFGS audit review follow-ups ([bfgs-convergence-audit-20260922.md](bfgs-convergence-audit-20260922.md)).
+
+### Attribution of the 2026-09-30 CI findings
+
+[upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) measured which
+findings are upstream's. **Upstream defects:** the Debug friction-Hessian segfault
+(toolkit `PUBLIC EIGEN_DONT_VECTORIZE` against vectorized PolySolve; reproduced on
+upstream's own Debug build), the Cramer 2x2 closest-point accuracy loss for nearly
+parallel edges, the `parallel-edge` fragility (2 of 64 roundoff draws crawl past the
+500-iteration limit on upstream code), and hash-seeded non-determinism of GCP smooth
+contact. **Fork-specific:** which `parallel-edge` draw fails (the toolkit merge), the
+whole `cube-on-floor` problem (the AL mass normalization `63e06378e`), the Windows
+restart test, and the AL-budget test slowdown (the `max_restarts` default). I found no
+record saying whether the upstream defects were reported to `polyfem/polyfem` or
+`ipc-sim/ipc-toolkit`; that is a decision for you (D7 below).
 
 ### Known limits (documented, not defects)
 
@@ -181,10 +213,15 @@ is settled, treat merges of cloud branches as needing the user's go-ahead.
 
 ## 3. Repository state
 
-- `polyfem` `main` = `origin/main` = `2a619cd38` (fast-forwarded 2026-09-29).
+- `polyfem` `main` = `origin/main` = `0a367634a` (fast-forwarded 2026-09-30; the
+  records and fixes of the CI cloud sessions are merged, branch
+  `ci/fixes-20260930` included).
 - The `cloud/*` branches on `origin` (`ci-04`, `ci-05-06-refs`, `ci-06-order`,
   `ci-08-linux`, `linux-evidence`, `locale-fix`) were cherry-picked onto `main`; `git cherry`
   finds no unmerged work except the cloud full-suite log, which `main` carries
   as `09e95bd83`. The branches are safe to delete.
-- `ipc-toolkit-fork` and `polysolve-merged` match their `origin` branches.
+- `ipc-toolkit-fork` is at `1f1b5dbf` (`semi-implicit-stiffness` fast-forwarded
+  2026-10-01 to the `solve_spd_2x2` refinement; the toolkit's `main` was not
+  touched) and `polysolve-merged` at `43ca2e66`; both match their `origin`
+  branches.
 - The HDA sources are not a repository; see `houdini_HDAs/AGENTS.md`.
