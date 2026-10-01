@@ -37,7 +37,15 @@ namespace
 	public:
 		QuarticProblem() : NLProblem(1, 0, {std::make_shared<Quartic>()}, {}, nullptr, 1, 1, mass(), 1) {}
 		bool block_steps = false;
+		bool unblock_on_reinit = false; ///< block_steps lasts until the problem is initialized again
+		int inits = 0;
 		bool custom_stop = false;
+		void init(const TVector &x0) override
+		{
+			if (unblock_on_reinit && inits++ > 0)
+				block_steps = false;
+			NLProblem::init(x0);
+		}
 		bool stop(const TVector &) override { return custom_stop; }
 		double max_step_size(const TVector &x0, const TVector &x1) override
 		{
@@ -1634,5 +1642,70 @@ TEST_CASE("AL stage without a budget retains no carried state", "[al_solver][al_
 		CHECK(row["retained_states"] == 0);
 		CHECK(row["moved"] == 0.0);
 		CHECK(row["drift_over_window"].is_null());
+	}
+}
+
+// Line-search failure recovery (solver/advanced/line_search_failure_restarts):
+// without stall restarts, a line search that fails on every strategy restarts
+// the subsolve once per budget unit from the reached iterate with a fresh
+// solver and the optional recalibration; a failure after the budget, or with
+// none, is rethrown unchanged.
+TEST_CASE("AL recovers from a line search that failed on every strategy", "[al_solver][line_search_failure]")
+{
+	SECTION("a transient failure is recovered by a fresh restart")
+	{
+		QuarticProblem problem;
+		problem.block_steps = true;
+		problem.unblock_on_reinit = true;
+		int recalibrations = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+		solver.set_line_search_failure_recovery(1, [&](const auto &x) {
+			++recalibrations;
+			CHECK(x[0] == 10); // the reached iterate: the blocked search never moved it
+			return true;
+		});
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_NOTHROW(solver.solve_reduced(problem, sol, parameters(), linear, 1));
+		CHECK(std::abs(std::pow(sol(0, 0), 3)) < 1e-12);
+		CHECK(recalibrations == 1);
+		CHECK(solver.info()["outcome"] == "converged");
+		CHECK(solver.info()["line_search_failure_restarts"] == 1);
+	}
+
+	SECTION("a persistent failure is rethrown after the budget")
+	{
+		QuarticProblem problem;
+		problem.block_steps = true;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+		solver.set_line_search_failure_recovery(2);
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Line search failed"));
+		CHECK(sol(0, 0) == 10);
+		CHECK(solver.info()["outcome"] == "failed");
+		CHECK(solver.info()["line_search_failure_restarts"] == 2);
+	}
+
+	SECTION("no budget keeps the historical failure")
+	{
+		QuarticProblem problem;
+		problem.block_steps = true;
+		problem.unblock_on_reinit = true;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {});
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Line search failed"));
+		CHECK_FALSE(solver.info().contains("line_search_failure_restarts"));
+	}
+
+	SECTION("stall restarts own the failure when they are on")
+	{
+		QuarticProblem problem;
+		problem.block_steps = true;
+		int recalibrations = 0, retunes = 0;
+		ALSolver solver({}, 1, 2, 1e8, .99, [](const auto &) {}, restart_options(20), [&](const auto &) { ++retunes; return false; });
+		solver.set_line_search_failure_recovery(5, [&](const auto &) { ++recalibrations; return true; });
+		Eigen::MatrixXd sol = Eigen::VectorXd::Constant(1, 10);
+		REQUIRE_THROWS_WITH(solver.solve_reduced(problem, sol, parameters(), linear, 1), ContainsSubstring("Final reduced solve did not converge"));
+		CHECK(recalibrations == 0);
+		CHECK(retunes == 2);
 	}
 }

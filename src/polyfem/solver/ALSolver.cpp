@@ -230,6 +230,13 @@ namespace polyfem::solver
 		};
 
 		int restarts = 0;
+		// Line-search failure recovery (set_line_search_failure_recovery):
+		// only where stall restarts are off, which own the failure otherwise.
+		int line_search_recoveries = 0;
+		const auto record_recoveries = [&]() {
+			if (line_search_recoveries > 0)
+				solve_info_["line_search_failure_restarts"] = line_search_recoveries;
+		};
 		while (true)
 		{
 			const Eigen::VectorXd attempt_initial_sol = detect_stalls ? tmp_sol : Eigen::VectorXd();
@@ -337,6 +344,7 @@ namespace polyfem::solver
 				solve_info_["restarts"] = restarts;
 				solve_info_["unchanged_restarts"] = unchanged_restarts;
 				record_alpha_basis();
+				record_recoveries();
 				if (converged)
 				{
 					nl_solver->set_iteration_callback(nullptr);
@@ -357,13 +365,33 @@ namespace polyfem::solver
 				// hotspot at CCD scale). Retuning the barrier stiffness and
 				// restarting is exactly the remedy, so treat it like one
 				// while restart budget remains instead of crashing.
-				if (detect_stalls && restarts < stall_opts.max_restarts
-					&& std::string(e.what()).find("Line search failed") != std::string::npos)
+				const bool line_search_failed = std::string(e.what()).find("Line search failed") != std::string::npos;
+				if (detect_stalls && restarts < stall_opts.max_restarts && line_search_failed)
 				{
 					hard_stall = true;
 				}
+				else if (!detect_stalls && line_search_failed && line_search_recoveries < line_search_failure_restarts_)
+				{
+					// Restart from the iterate the failed attempt reached with
+					// a fresh solver: the failure is often the descent
+					// strategy's state (regularization, fallbacks) rather than
+					// the iterate. The mode's own calibration may run first.
+					++line_search_recoveries;
+					const Eigen::VectorXd full_sol = nl_problem.reduced_to_full(tmp_sol);
+					const bool recalibrated = recalibrate_after_line_search_failure_ && recalibrate_after_line_search_failure_(full_sol);
+					logger().warn(
+						"Line search failed on every strategy ({}); restarting from the reached iterate with a fresh solver{} ({}/{})",
+						e.what(), recalibrated ? " and recalibrated barrier stiffness" : "",
+						line_search_recoveries, line_search_failure_restarts_);
+					nl_problem.init(full_sol);
+					tmp_sol = nl_problem.full_to_reduced(full_sol);
+					continue;
+				}
 				else
+				{
+					record_recoveries();
 					throw;
+				}
 			}
 			catch (...)
 			{

@@ -437,6 +437,9 @@ namespace polyfem::legacy
 			},
 			stall_opts, on_stall);
 		al_solver.set_budget(ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
+		al_solver.set_line_search_failure_recovery(
+			args["solver"]["advanced"]["line_search_failure_restarts"].get<int>(),
+			solver::SolveData::classic_stiffness_recalibration(solve_data));
 
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(

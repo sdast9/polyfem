@@ -7,6 +7,7 @@
 
 #include <Eigen/Core>
 
+#include <algorithm>
 #include <deque>
 #include <functional>
 #include <limits>
@@ -151,6 +152,26 @@ namespace polyfem::solver
 		///        `retained_states`.
 		size_t retained_state_count() const { return carried_.size(); }
 
+		/// @brief Line-search failure recovery for solves without stall
+		///        restarts (every mode but semi-implicit with restarts on, whose
+		///        stall controller handles the failure itself). When the line
+		///        search fails on every strategy, the subsolve restarts from the
+		///        iterate it reached with a fresh nonlinear solver (no strategy
+		///        or regularization history), at most `restarts` times per
+		///        subsolve; `recalibrate`, when set, is called first with that
+		///        iterate (classic adaptive stiffness re-runs its own
+		///        initialization there) and returns whether it changed
+		///        anything. A failure after the last restart is rethrown
+		///        unchanged, so the step fails exactly as without recovery.
+		///        Default 0: no recovery (the historical behaviour).
+		void set_line_search_failure_recovery(
+			const int restarts,
+			std::function<bool(const Eigen::VectorXd &)> recalibrate = nullptr)
+		{
+			line_search_failure_restarts_ = std::max(0, restarts);
+			recalibrate_after_line_search_failure_ = std::move(recalibrate);
+		}
+
 		/// @brief Optional filter applied to every Newton update direction
 		///        (installed on the nonlinear solver for each subsolve).
 		///        The objective derivative remains gradient.dot(direction).
@@ -219,5 +240,9 @@ namespace polyfem::solver
 		///        consecutive stall from the same iterate with nothing changed
 		///        interrupts the subsolve instead of repeating identical restarts.
 		std::function<bool(const Eigen::VectorXd &)> on_stall;
+
+		/// @brief See set_line_search_failure_recovery
+		int line_search_failure_restarts_ = 0;
+		std::function<bool(const Eigen::VectorXd &)> recalibrate_after_line_search_failure_;
 	};
 } // namespace polyfem::solver

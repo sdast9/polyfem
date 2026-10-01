@@ -14,6 +14,7 @@
 
 #include <Eigen/Core>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -165,6 +166,15 @@ namespace polyfem::solver
 		/// @brief update the barrier stiffness for the forms
 		/// @param x current solution
 		void update_barrier_stiffness(const Eigen::VectorXd &x);
+
+		/// @brief The recalibration a line-search failure recovery runs
+		///        before restarting (ALSolver::set_line_search_failure_recovery):
+		///        for the classic adaptive barrier stiffness, its own
+		///        initialization at the reached iterate (what every solve start
+		///        does), returning whether the stiffness changed; null for every
+		///        other configuration (fixed, semi-implicit, smooth or no contact),
+		///        which restart with a fresh solver only.
+		static std::function<bool(const Eigen::VectorXd &)> classic_stiffness_recalibration(SolveData &solve_data);
 
 		/// @brief updates the dt inside the different forms
 		void update_dt();

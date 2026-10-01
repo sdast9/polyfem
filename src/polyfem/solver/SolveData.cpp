@@ -652,6 +652,18 @@ namespace polyfem::solver
 		contact_form->update_barrier_stiffness(x, grad_energy);
 	}
 
+	std::function<bool(const Eigen::VectorXd &)> SolveData::classic_stiffness_recalibration(SolveData &solve_data)
+	{
+		const auto barrier_form = std::dynamic_pointer_cast<BarrierContactForm>(solve_data.contact_form);
+		if (barrier_form == nullptr || barrier_form->uses_semi_implicit_stiffness() || !barrier_form->use_adaptive_barrier_stiffness())
+			return nullptr;
+		return [&solve_data, barrier_form](const Eigen::VectorXd &x) {
+			const double before = barrier_form->barrier_stiffness();
+			solve_data.update_barrier_stiffness(x);
+			return barrier_form->barrier_stiffness() != before;
+		};
+	}
+
 	void SolveData::update_dt()
 	{
 		if (time_integrator == nullptr) // if is not time dependent

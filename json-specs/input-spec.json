@@ -2144,9 +2144,17 @@
             "conservative_max_iter",
             "characteristic_length",
             "characteristic_force_density",
-            "failure_injection"
+            "failure_injection",
+            "line_search_failure_restarts"
         ],
         "doc": "Advanced settings for the solver"
+    },
+    {
+        "pointer": "/solver/advanced/line_search_failure_restarts",
+        "default": 1,
+        "min": 0,
+        "type": "int",
+        "doc": "Recovery from a line search that failed on every strategy, for every nonlinear solve that has no stall restarts (every contact mode, and no contact, except semi-implicit with solver/contact/semi_implicit/restart/enabled, whose stall controller handles the failure itself): the subsolve restarts from the iterate it reached with a fresh nonlinear solver (no descent-strategy or regularization history), at most this many times per subsolve; with the classic adaptive barrier stiffness, its initialization first runs again at that iterate, as at every solve start. A failure after the last restart ends the step exactly as before (named failure, rollback to the last accepted state). Solves whose line search never fails on every strategy are unchanged. 0 restores the historical behaviour (the first such failure ends the step)."
     },
     {
         "pointer": "/solver/advanced/failure_injection",

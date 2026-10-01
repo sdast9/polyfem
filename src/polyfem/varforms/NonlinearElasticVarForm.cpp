@@ -2431,6 +2431,11 @@ namespace polyfem::varform
 				stall_opts, on_stall);
 			// RB-07: opt-in AL pass budget / stagnation exit (off by default).
 			al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"]));
+			// Line-search failure recovery for every solve without stall
+			// restarts (solver/advanced/line_search_failure_restarts).
+			al_solver.set_line_search_failure_recovery(
+				args["solver"]["advanced"]["line_search_failure_restarts"].get<int>(),
+				solver::SolveData::classic_stiffness_recalibration(solve_data_));
 
 			al_solver.post_subsolve = [&](const double al_weight) {
 				diagnostic_termination = al_solver.info();
