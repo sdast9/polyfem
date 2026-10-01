@@ -162,8 +162,8 @@ GCC 13.3, 4 vCPU, Sapphire-Rapids-class Xeon; every PolyFEM run single-threaded 
 | Toolkit | `solve_spd_2x2` iterative refinement (section 4b), with a regression test, on `sdast9/ipc-toolkit` branch `cloud/parallel-edge-fix` = `1f1b5dbf` (`dacf5ea7` + test `8a353ad9` + a comment-only correction; `f8dafef3` = `main`'s pin is the parent of `dacf5ea7`); `cmake/recipes/ipc_toolkit.cmake` pins `1f1b5dbf` (first `8a353ad9`, `5c7a1288`) | toolkit `1f1b5dbf`; PolyFEM `5c7a1288` and the repin below |
 | Debug runtime | "An AL stage ended by its budget is rolled back to the accepted state and recorded" (`test_step_rollback.cpp`) is registered in release builds only and hidden (`[.]`) in debug builds, as in `tests/verify_run.cpp` (`tagsrun`) and `test_diff.cpp`; its body is unchanged. Catch2 does not list hidden tests, so CTest does not register them (Debug: 391 tests; Release: 425) | `3495bb41` |
 
-The toolkit's work branch `semi-implicit-stiffness` and `main` were not touched; fast-forwarding
-`semi-implicit-stiffness` to `1f1b5dbf` is left to the user.
+The toolkit's `main` was not touched; its work branch `semi-implicit-stiffness` was fast-forwarded to
+`1f1b5dbf` on 2026-10-01 at the user's decision.
 
 **Evidence**
 
@@ -213,7 +213,8 @@ The toolkit's work branch `semi-implicit-stiffness` and `main` were not touched;
    Its Debug completion is therefore unconfirmed. The test is hidden in Debug (so no CI lane depends on it),
    and it is still checked in Release, where it takes about 2.5 minutes.
 
-**Left for the user**: fast-forward `sdast9/ipc-toolkit` `semi-implicit-stiffness` to `1f1b5dbf`; a completed
+**Done 2026-10-01**: branch merged to `main`; `sdast9/ipc-toolkit` `semi-implicit-stiffness` fast-forwarded to
+`1f1b5dbf`. **Left for the user**: a completed
 native GitHub Build of the branch (Linux lanes with `MKL_CBWR=COMPATIBLE`, Windows restart test, macOS
 `cube-on-floor` at margin 5e-3); a CI run with `MKL_VERBOSE=1` would still confirm the inferred AMD CPU model.
 The Windows Release lane hides the `[run]` scene groups (`tests/verify_run.cpp`), which this change does not alter;

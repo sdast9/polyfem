@@ -112,8 +112,8 @@ and CI-06 are complete. Open:
     per-test limit. Local DebugNoSymbols run with the CI flags: 391/391 pass,
     longest test 1231 s
     ([resolution](ci-cross-platform-findings-20260930.md#6-resolution-2026-09-30-cloud-session-brief-tasksci-fixes-20260930md)).
-    Left for the user: fast-forward the toolkit's `semi-implicit-stiffness` to
-    `1f1b5dbf`.
+    Merged to `main` 2026-10-01; the toolkit's `semi-implicit-stiffness` was
+    fast-forwarded to `1f1b5dbf` the same day.
   - **Windows Release:** `restart from restart json` (`test_restart.cpp:244`)
     also fails in runs 36485520601 and 36524461889, before the CI-05/06
     changes. **Open.** Windows does not run the `[run]` scene groups.
