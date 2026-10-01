@@ -77,8 +77,9 @@ and CI-06 are complete. Open:
   - **CI-05 microstructure pair:** green on Linux and macOS Release.
   - **CI-06 cube-on-floor:** green on Linux Release; macOS Release is
     deterministic but differs from the Linux reference by up to 6.52e-4.
-    Margin set to `1e-3` from that gap (data `5d76dcb`, user decision of
-    2026-09-29); needs one completed Build to confirm.
+    The scene is roundoff-sensitive because of the fork's AL mass
+    normalization (one-ulp spread up to 3e-3); margin now `5e-3` (data
+    `aed03ab`, user decision 2026-09-30); needs one completed Build.
   - **Linux Release `contact_3d`:** `gcp-contact/parallel-edge/run.json` hits
     the 500-iteration Newton limit on GitHub Linux only (macOS and the cloud
     Linux host solve it). It already failed at `5143c15a9` (run 36485520601),
@@ -89,7 +90,12 @@ and CI-06 are complete. Open:
     1-3 % of draws for the old and the new toolkit alike); MKL's AMD dispatch
     (`DGETRF`) gives the post-merge build the crawling draw (reproduced under
     `qemu -cpu EPYC-Milan`); `MKL_CBWR=COMPATIBLE` in the test lanes fixes it
-    on every CPU; scene/CI change is the user's decision. Related: Linux Debug
+    on every CPU. **Adopted 2026-09-30 on branch `ci/fixes-20260930`** (verified
+    under emulated EPYC-Milan: 60 steps, no limit hit;
+    [resolution](ci-cross-platform-findings-20260930.md#6-resolution-2026-09-30-cloud-session-brief-tasksci-fixes-20260930md));
+    a native GitHub Build of the branch is still needed. The scene's own
+    fragility (raise `max_iterations`, `use_psd_projection`, lower
+    `barrier_stiffness`) stays a user decision. Related: Linux Debug
     segfaults = Eigen `EIGEN_DONT_VECTORIZE` ODR mismatch, Windows restart =
     test hygiene (fixed), macOS deviation = tolerance-limited reference, all in
     [ci-cross-platform-findings-20260930.md](ci-cross-platform-findings-20260930.md); which of these are
@@ -97,7 +103,17 @@ and CI-06 are complete. Open:
     (macOS cube-on-floor corrected there: fork AL mass normalization `63e06378e`).
   - **Linux DebugNoSymbols:** four rollback/AL-budget scene tests SEGFAULT
     (`test_step_rollback.cpp:407`); already known before CI-04–06 (the
-    2026-09-20 golden plan records the same four). **Open.**
+    2026-09-20 golden plan records the same four). **Fixed 2026-09-30 on
+    branch `ci/fixes-20260930`, pending a native Build:** uniform
+    `EIGEN_DONT_VECTORIZE=1` in the Debug lanes (the ODR mismatch); the toolkit
+    `solve_spd_2x2` refinement (toolkit `1f1b5dbf`, pinned) removes the Debug
+    assertion the fourth test then hit; that test (about an hour in Debug) is
+    now hidden in Debug builds so the lane stays under CTest's 1500 s
+    per-test limit. Local DebugNoSymbols run with the CI flags: 391/391 pass,
+    longest test 1231 s
+    ([resolution](ci-cross-platform-findings-20260930.md#6-resolution-2026-09-30-cloud-session-brief-tasksci-fixes-20260930md)).
+    Left for the user: fast-forward the toolkit's `semi-implicit-stiffness` to
+    `1f1b5dbf`.
   - **Windows Release:** `restart from restart json` (`test_restart.cpp:244`)
     also fails in runs 36485520601 and 36524461889, before the CI-05/06
     changes. **Open.** Windows does not run the `[run]` scene groups.

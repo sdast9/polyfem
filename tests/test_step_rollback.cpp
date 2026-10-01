@@ -613,7 +613,18 @@ TEST_CASE("A publication failure after an accepted solve publishes nothing of th
 // the attempt like any other -- rolled back, unpublished, on record -- and
 // the prescribed motion that cannot be snapped is the public fixture's top
 // face driven below the slab at step 2.
+//
+// Computationally expensive: the stalled line search restarts many times, about
+// 2.5 minutes in Release and about an hour in DebugNoSymbols, far over CTest's
+// default 1500 s per-test timeout. As for the other heavy scene tests (see
+// tests/verify_run.cpp, tests/test_diff.cpp), it is registered in release
+// builds only and hidden (`[.]`) in debug builds; it can still be run there
+// by naming it explicitly.
+#ifdef NDEBUG
 TEST_CASE("An AL stage ended by its budget is rolled back to the accepted state and recorded", "[rollback][scene][al_budget]")
+#else
+TEST_CASE("An AL stage ended by its budget is rolled back to the accepted state and recorded", "[.][rollback][scene][al_budget]")
+#endif
 {
 	logger().set_level(spdlog::level::warn);
 	const auto dir = scratch_dir("rb07-al-budget");
