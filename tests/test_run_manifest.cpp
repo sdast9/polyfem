@@ -12,6 +12,7 @@
 #include <polyfem/io/RunManifest.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/utils/Sha256.hpp>
+#include <polyfem/utils/StringUtils.hpp>
 #include <polyfem/utils/par_for.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -254,6 +255,33 @@ TEST_CASE("Referenced files are the input's strings that resolve to existing fil
 	CHECK(pointers == std::vector<std::string>{"/geometry/0/mesh", "/materials/E", "/space/discr_order"});
 	CHECK(files[0]["sha256"] == utils::Sha256::of_file(mesh));
 	CHECK(files[0]["value"] == "beam.mesh");
+	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("A value string longer than the path limit is not a file and does not stop the run", "[run_manifest][referenced_files]")
+{
+	const auto dir = scratch_dir("polyfem-manifest-long-string");
+	const std::string mesh = write_beam(dir);
+	// A time curve written as one long expression, far beyond PATH_MAX
+	// (1024 on macOS, 4096 on Linux): the filesystem queries used to throw
+	// "File name too long" and stop the run before it started.
+	std::string expression = "0";
+	for (int i = 0; i < 400; ++i)
+		expression += "+0.5*min(max(t-" + std::to_string(i) + ",0),1)";
+	REQUIRE(expression.size() > 8192);
+
+	CHECK(utils::resolve_path(expression, (dir / "params.json").string(), /*only_if_exists=*/true) == expression);
+	CHECK_NOTHROW(utils::resolve_path(expression, (dir / "params.json").string()));
+
+	json args = json::object();
+	args["root_path"] = (dir / "params.json").string();
+	args["geometry"] = json::array({{{"mesh", "beam.mesh"}}});
+	args["boundary_conditions"] = {{"pressure_boundary", json::array({{{"id", 1}, {"value", expression}}})}};
+
+	json files;
+	REQUIRE_NOTHROW(files = io::RunManifest::referenced_files(args, args["root_path"]));
+	REQUIRE(files.size() == 1);
+	CHECK(files[0]["pointer"] == "/geometry/0/mesh");
 	std::filesystem::remove_all(dir);
 }
 

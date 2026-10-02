@@ -992,7 +992,12 @@ namespace polyfem
 					if (j_boundary[i - offset].contains("time_reference") && j_boundary[i - offset]["time_reference"].size() > 0)
 						pressures_[i].value.set_t(j_boundary[i - offset]["time_reference"]);
 
-					pressures_[i].interpolation = std::make_shared<NoInterpolation>();
+					// The time function multiplies the value, as for the
+					// normal-aligned Neumann condition.
+					if (j_boundary[i - offset].contains("interpolation"))
+						pressures_[i].interpolation = Interpolation::build(j_boundary[i - offset]["interpolation"]);
+					else
+						pressures_[i].interpolation = std::make_shared<NoInterpolation>();
 				}
 			}
 
@@ -1017,7 +1022,10 @@ namespace polyfem
 						auto ff = j_boundary[i - offset]["value"];
 						cavity_pressures_[boundary_id].value.init(ff, root_path);
 
-						cavity_pressures_[boundary_id].interpolation = std::make_shared<NoInterpolation>();
+						if (j_boundary[i - offset].contains("interpolation"))
+							cavity_pressures_[boundary_id].interpolation = Interpolation::build(j_boundary[i - offset]["interpolation"]);
+						else
+							cavity_pressures_[boundary_id].interpolation = std::make_shared<NoInterpolation>();
 					}
 				}
 			}

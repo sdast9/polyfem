@@ -2619,7 +2619,8 @@
             "value"
         ],
         "optional": [
-            "time_reference"
+            "time_reference",
+            "interpolation"
         ],
         "doc": "pressure BC entry"
     },
@@ -2659,6 +2660,12 @@
         "doc": "Values of pressure boundary condition for timestep"
     },
     {
+        "pointer": "/boundary_conditions/pressure_boundary/*/interpolation",
+        "type": "include",
+        "spec_file": "interpolation.json",
+        "doc": "Time function multiplying the pressure value, as for the other boundary conditions"
+    },
+    {
         "pointer": "/boundary_conditions/pressure_cavity",
         "default": [],
         "type": "list",
@@ -2671,6 +2678,9 @@
         "required": [
             "id",
             "value"
+        ],
+        "optional": [
+            "interpolation"
         ],
         "doc": "pressure BC entry"
     },
@@ -2686,6 +2696,12 @@
         "type": "include",
         "spec_file": "value-no.json",
         "doc": "Values of pressure boundary condition as a function of $x,y,z,t$"
+    },
+    {
+        "pointer": "/boundary_conditions/pressure_cavity/*/interpolation",
+        "type": "include",
+        "spec_file": "interpolation.json",
+        "doc": "Time function multiplying the cavity pressure, as for the other boundary conditions"
     },
     {
         "pointer": "/boundary_conditions/obstacle_displacements",
