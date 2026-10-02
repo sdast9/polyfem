@@ -86,12 +86,16 @@ Each step's state file now also holds, after `u`/`v`/`a`:
 * `contact_scalars` — the contact form's global stiffness (the trim in
   semi-implicit mode), its adaptive bound and previous distance (classic
   adaptive IPC stiffness carries these across steps too);
-* `contact_si_*` (semi-implicit only, layout version 1) — the per-contact
+* `contact_si_*` (semi-implicit only, layout version 2) — the per-contact
   coefficient cache, the previous snapshot's cache, the endpoint
   (continuation) coefficients and continued keys, the batch cap/floor/median,
-  the trim anchor, controller counters, the first-contact flag and the
-  refresh id. Empty tables are not written; their counts are in
-  `contact_si_scalars`.
+  the trim anchor, controller counters, the first-contact flag, the
+  refresh id and (since version 2, 2026-10-02) whether the initial trim
+  estimate was already used, which `initial_trim_estimate_scope: run` needs
+  so a resumed run does not seed again. Version 1 files (23 scalars) are
+  still read; the flag is then derived from the saved pending flag, exact
+  when the saved run also used scope `run` (a warning says so). Empty
+  tables are not written; their counts are in `contact_si_scalars`.
 * `friction_scalars` / `friction_normal_force` — the lagged trim and the
   lagged normal force of every friction collision. With the default
   `friction_lag: realized_force` the step-end lag carries the forces that

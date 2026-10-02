@@ -3,7 +3,9 @@
 Status: **assessment only. No default, solver, Houdini asset or scene was
 changed.** Changing a default is the user's decision. This record gives the
 evidence, proposes an accuracy standard for the user to agree to, and makes a
-recommendation.
+recommendation. **D2 decided 2026-10-02** except the seed bound (see *Decision on
+D2*): no default change; scope `run` preferred if the estimate is ever
+adopted; E5 repaired (restart layout version 2).
 
 Question (user, 2026-09-29): should `solver/contact/semi_implicit/band_statistic:
 "force_weighted"` (EF-03, with its enforced `collapse_guard_basis: pair`)
@@ -397,7 +399,7 @@ Status: **observed** (with where), **not observed** (where tested),
 | E2 | Large upward seed (×4096 allowed) → over-stiff barrier | est | **Observed but benign so far:** IT seeds up ×4–7 (E) and ×47 (Er simplicial); no failure. |
 | E3 | Step-scope re-seeding → step-to-step oscillation on dynamic scenes | est | **Observed:** IT steps 154–197, alternating ×4–7 up and ×0.04–0.6 down. Ensemble statistics unchanged (ρ = 1.00). R4 re-seeds every step at ≈1 (benign). |
 | E4 | Seed is not a trajectory optimum; later steps not cheaper | est | **Partly observed:** R4 5 steps 426 (E) and 373 (Er); production 832 [577, 68, 60, 63, 64] here. After step 1, E costs 297 and Er 282 against production's 255: the seed saves step 1 only. |
-| E5 | Scope `run` state lost on restart | est (run) | **Observed** (see *Restart and resume*). |
+| E5 | Scope `run` state lost on restart | est (run) | **Observed** (see *Restart and resume*). **Repaired 2026-10-02** (restart layout version 2, see *Decision on D2*). |
 | E6 | Rejected estimate evaluated at every accepted iterate (one system-gradient evaluation each) | est | **Observed:** 187–2,158 rejected evaluations per run; cost only, results byte-identical. |
 | X1 | Friction interaction (`realized_force` lag, 2 iterations) | both | **Tested on ITF:** no failure; E = P; F/B ρ 1.13 (within the tolerance proposed below), observables 0.5. Friction smoke: identical. |
 | X2 | AL passes / AL budget (RB-07) | both | R4 (the AL-pass scene) completed in every arm. AL budget off (default); budget on is untested. |
@@ -544,3 +546,58 @@ holds on every scene of the agreed set.
 * Production itself is marginal on PP: it failed 1 of 4 runs and needed 18/20
   restarts in others. That is a separate robustness question for the
   production controller and scene.
+
+## Decision on D2 (user, 2026-10-02)
+
+D2 of the [open-items page](open-items-20260929.md) asked whether the
+estimate alone becomes the default, which scope, and whether to lower or cap
+the 4096× seed bound. A review of the seed records of this assessment's runs
+(`trim-predictors.jsonl` on the Pitt share,
+`work-evidence/default-controller-work/runs/`) added:
+
+* **R4: the bound binds by a wide margin.** The raw step-1 estimate is
+  1.33–1.45e-5 of the trim in force (about 70,000× down) in all three R4 runs;
+  the 4096× bound clamps it to 2⁻¹². Steps 2–5 seed by 0.999–1.0 at cosine
+  ≥ 0.99. The whole R4 saving is this one clamped downward seed, so lowering
+  the downward bound would remove most of the only large measured benefit.
+* **Coverage is set by the diluted cosine gate.** Under
+  `gradient_balance_dofs: all` the gate cosine is diluted by Dirichlet
+  reactions and clamped contacts ([gradient balance](gradient-balance-free-dofs-20260929.md):
+  smokes ≤ 0.23, R1 0.25, BBT 0.33, IT median 0.064). "Inert" therefore does
+  not mean those scenes are already well trimmed, and the estimate under
+  `free` (with the rms band) is unmeasured.
+* **IT seeds sit just above the gate and differ by realization.** Cosine
+  0.80–0.95; acc1 13 seeds (×0.04–×7.3), cholmod 8 (down to ×0.025),
+  simplicial 9 (one ×47 upward, also the single Er seed). Ensemble statistics
+  are unchanged (ρ = 1.00).
+* **PP: E's 4/4 completions rest on one small seed per run** (×0.71/×0.76 at
+  iterations 80–94, cosine 0.80–0.84); production's one failure was the
+  non-reproducible multithreaded run. Not a robustness result. The PP scene
+  pins `max_restarts: 20`, so these runs still describe that file.
+
+**Decided:**
+
+1. **No default change.** `initial_trim_estimate` stays `false` in PolyFEM and
+   in the Houdini asset. The scene that benefits opts in per scene: R4
+   (`test_cases/uniax_mesh_constraintfloor_zero_b/input/params.json`, local,
+   not in this repository) was switched on 2026-10-02 from arm B
+   (`force_weighted` + estimate) to arm E (`rms` + estimate); the Houdini
+   source `test_cases/uniax_mesh/sim.hipnc` still holds `force_weighted` and
+   would restore it on re-export. Revisit the default after D1.
+2. **Scope `run` is the preferred scope if the estimate is adopted later.**
+   It keeps R4's step-1 benefit and removes most of the IT re-seeding; it
+   does not prevent a single large upward seed. The default scope stays
+   `step` until then.
+3. **E5 repaired.** `BarrierContactForm::write_restart_state` writes
+   `contact_si_scalars` layout version 2 (24 scalars, `trim_seed_used_`
+   last). Version 1 files are still read: the flag is derived as "not
+   pending" under scope `run`, which is exact when the saved run also used
+   scope `run`; a warning says so. Regression: `[restart]` *restart keeps the
+   run-scope initial trim estimate* (version 2 resume and version 1 resume
+   bit-identical to the uninterrupted run at the first resumed step; with the
+   flag cleared the resumed run seeds again and differs).
+
+**Still open (part of D2):** the 4096× seed bound. Recommendation: keep it
+for downward seeds (R4 binds there); an upward-only cap would leave R4 alone
+but is untested. It matters only once the estimate is enabled somewhere,
+which today is R4 alone.

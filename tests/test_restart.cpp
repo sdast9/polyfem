@@ -250,6 +250,119 @@ TEST_CASE("restart from restart json", "[.][restart]")
 	std::filesystem::remove_all(outdir);
 }
 
+// initial_trim_estimate_scope: run accepts the estimate once per run; the
+// "already used" flag is restart state (layout version 2). Version 1 files did
+// not store it, so a resumed run re-armed the estimate and seeded again
+// (default-controller assessment, E5). A version 1 file still resumes, with
+// the flag derived from the saved pending flag.
+#ifdef NDEBUG
+TEST_CASE("restart keeps the run-scope initial trim estimate", "[restart]")
+#else
+TEST_CASE("restart keeps the run-scope initial trim estimate", "[.][restart]")
+#endif
+{
+	const std::string scene_file = POLYFEM_DATA_DIR "/contact/examples/3D/unit-tests/2-cubes.json";
+	constexpr int total_time_steps = 6;
+	constexpr int restart_step = 3;
+	constexpr int seed_used_index = 23;
+
+	const std::filesystem::path outdir = std::filesystem::current_path() / "DELETE_ME_restart_estimate_test_output";
+	const std::filesystem::path full_outdir = outdir / "full";
+	std::filesystem::remove_all(outdir);
+	std::filesystem::create_directories(outdir);
+
+	json args = load_sim_json(scene_file, total_time_steps);
+	apply_common_params(args);
+	for (auto &geometry : args["geometry"])
+		geometry["mesh"] = resolve_path(geometry["mesh"], scene_file);
+	args["/output/directory"_json_pointer] = full_outdir.string();
+	args["/output/data/state"_json_pointer] = "state_{:d}.hdf5";
+	args["/output/restart_json"_json_pointer] = "restart_{:d}.json";
+	args["/solver/contact/barrier_stiffness"_json_pointer] = "semi_implicit";
+	args["/solver/contact/semi_implicit/initial_trim_estimate"_json_pointer] = true;
+	args["/solver/contact/semi_implicit/initial_trim_estimate_scope"_json_pointer] = "run";
+	// Accept the estimate at the first contact (the default 0.8 gate is
+	// rarely passed on a Dirichlet-loaded scene), so the seed lies before
+	// the restart step and would be taken again if re-armed.
+	args["/solver/contact/semi_implicit/initial_trim_cosine"_json_pointer] = 0.01;
+	args["/boundary_conditions/dirichlet_boundary/value"_json_pointer] = json::array({0, "if(t - 0.15, 0.2, 2*t) + if(t - 0.35, 0.2, 0)", 0});
+	const std::filesystem::path params_file = outdir / "params.json";
+	args["root_path"] = params_file.string();
+	{
+		std::ofstream file(params_file);
+		file << args;
+	}
+
+	State full_state;
+	const auto full_sol = run_sim(full_state, args);
+
+	json restart_args;
+	REQUIRE(load_json((full_outdir / fmt::format("restart_{:d}.json", restart_step)).string(), restart_args));
+	const std::string saved_state = restart_args["/input/data/state"_json_pointer];
+	Eigen::MatrixXd scalars;
+	REQUIRE(io::read_matrix(saved_state, "contact_si_scalars", scalars));
+	REQUIRE(scalars.size() == 24);
+	CHECK(scalars(0) == 2);
+	// The estimate was accepted before the restart step and is not pending.
+	REQUIRE(scalars(seed_used_index) == 1);
+	CHECK(scalars(13) == 0);
+
+	const std::string step_name = fmt::format("state_{:d}.hdf5", restart_step + 1);
+	Eigen::MatrixXd full_u;
+	REQUIRE(io::read_matrix((full_outdir / step_name).string(), "u", full_u));
+
+	// Resume from a copy of the saved state whose contact_si_scalars are
+	// replaced by the given row.
+	const auto resume = [&](const std::string &label, const Eigen::MatrixXd &row) {
+		const std::filesystem::path dir = outdir / label;
+		std::filesystem::create_directories(dir);
+		const std::filesystem::path state = dir / "input_state.hdf5";
+		std::filesystem::copy_file(saved_state, state, std::filesystem::copy_options::overwrite_existing);
+		{
+			h5pp::File file(state.string(), h5pp::FileAccess::READWRITE);
+			REQUIRE(H5Ldelete(file.openFileHandle(), "contact_si_scalars", H5P_DEFAULT) >= 0);
+		}
+		REQUIRE(io::write_matrix(state.string(), "contact_si_scalars", row, false));
+		json resume_args = restart_args;
+		resume_args["/input/data/state"_json_pointer] = state.string();
+		resume_args["/output/directory"_json_pointer] = (dir / "out").string();
+		State resumed;
+		const auto sol = run_sim(resumed, resume_args);
+		Eigen::MatrixXd u;
+		REQUIRE(io::read_matrix((dir / "out" / step_name).string(), "u", u));
+		return std::make_pair(sol, u);
+	};
+
+	{
+		// Version 2 as written.
+		const auto [sol, u] = resume("v2", scalars);
+		CAPTURE((full_u - u).lpNorm<Eigen::Infinity>());
+		CHECK(full_u == u);
+		CHECK(full_sol.isApprox(sol, 1e-10));
+	}
+	{
+		// Version 1: 23 scalars, flag derived from the pending flag.
+		Eigen::MatrixXd v1 = scalars.leftCols(23);
+		v1(0) = 1;
+		const auto [sol, u] = resume("v1", v1);
+		CAPTURE((full_u - u).lpNorm<Eigen::Infinity>());
+		CHECK(full_u == u);
+		CHECK(full_sol.isApprox(sol, 1e-10));
+	}
+	{
+		// The test discriminates: with the flag cleared (what version 1
+		// readers did) the resumed run seeds again and leaves the full run.
+		Eigen::MatrixXd cleared = scalars;
+		cleared(seed_used_index) = 0;
+		cleared(13) = 1;
+		const auto [sol, u] = resume("cleared", cleared);
+		CAPTURE((full_u - u).lpNorm<Eigen::Infinity>());
+		CHECK(full_u != u);
+	}
+
+	std::filesystem::remove_all(outdir);
+}
+
 TEST_CASE("state file size stays near its payload", "[restart][matrix_io]")
 {
 	// h5pp's default square chunks (256 x 256) stored a 652,440 x 1 restart

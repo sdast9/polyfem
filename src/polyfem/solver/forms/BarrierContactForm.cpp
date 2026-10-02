@@ -1524,8 +1524,11 @@ namespace polyfem::solver
 	namespace
 	{
 		using CoefficientKey = std::array<long, 5>;
-		// Restart layout version of the "contact_si_*" datasets.
-		constexpr double restart_state_version = 1;
+		// Restart layout version of the "contact_si_*" datasets. Version 2
+		// appends trim_seed_used_ (initial_trim_estimate_scope: run); version 1
+		// files (23 scalars) are still read.
+		constexpr double restart_state_version = 2;
+		constexpr int restart_scalar_count = 24;
 
 		Eigen::MatrixXd coefficient_rows(const std::map<CoefficientKey, double> &map)
 		{
@@ -1589,7 +1592,8 @@ namespace polyfem::solver
 			double(kappa_continued_count_), double(kappa_fresh_count_),
 			double(kappa_fallback_count_), double(kappa_abs_fallback_count_),
 			double(kappa_global_fallback_count_), double(kappa_interpolated_count_),
-			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_)};
+			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_),
+			double(trim_seed_used_)};
 		io::write_matrix(path, "contact_si_scalars", Eigen::MatrixXd(Eigen::Map<const Eigen::MatrixXd>(scalars.data(), 1, scalars.size())), false);
 		if (!kappa_cache_.empty())
 			io::write_matrix(path, "contact_si_kappa_cache", coefficient_rows(kappa_cache_), false);
@@ -1609,8 +1613,9 @@ namespace polyfem::solver
 		Eigen::MatrixXd s;
 		if (!io::read_matrix(path, "contact_si_scalars", s))
 			return false;
-		if (s.size() != 23 || s(0) != restart_state_version)
-			log_and_throw_error("Restart state {}: contact_si_scalars has {} entries (version {}), expected 23 (version {})", path, s.size(), s.size() > 0 ? s(0) : -1.0, restart_state_version);
+		const bool version_1 = s.size() == 23 && s(0) == 1;
+		if (!version_1 && (s.size() != restart_scalar_count || s(0) != restart_state_version))
+			log_and_throw_error("Restart state {}: contact_si_scalars has {} entries (version {}), expected {} (version {}) or 23 (version 1)", path, s.size(), s.size() > 0 ? s(0) : -1.0, restart_scalar_count, restart_state_version);
 		ContactForm::read_restart_state(path, x);
 
 		const Eigen::MatrixXd cache = read_rows(path, "contact_si_kappa_cache", size_t(s(1)), 6);
@@ -1648,6 +1653,18 @@ namespace polyfem::solver
 		kappa_interpolated_count_ = int(s(20));
 		kappa_direction_fallback_count_ = int(s(21));
 		diagnostic_refresh_id_ = uint64_t(s(22));
+		if (!version_1)
+			trim_seed_used_ = s(23) != 0;
+		else
+		{
+			// Version 1 did not store trim_seed_used_. Under scope run the
+			// pending flag at a step boundary is exactly its negation (it is
+			// re-armed only while no estimate was used, and cleared together
+			// with setting it); under scope step the flag is never read.
+			trim_seed_used_ = loop_guard_.estimate_once && !trim_seed_pending_;
+			if (initial_trim_estimate_ && loop_guard_.estimate_once)
+				logger().warn("Restart state {}: layout version 1 has no initial-estimate flag; derived 'already used' = {} from the pending flag, which is exact only if the saved run also used initial_trim_estimate_scope: run", path, trim_seed_used_);
+		}
 		trim_decision_ = nullptr;
 		batch_first_pass_ = false;
 		pull_toward_fresh_ = false;
