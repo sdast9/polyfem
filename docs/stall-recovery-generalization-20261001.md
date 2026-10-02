@@ -114,7 +114,9 @@ callback; on the first stall of a step the remedy creates every later solver of 
 a line search that fails on every strategy (the semi-implicit hard-stall path: restart, then
 revert to the subsolve start), so `line_search_failure_restarts` acts only with them off.
 `max_restarts` is 20, not the semi-implicit 200: the measured crawl needed one restart with the
-remedy, and the cap bounds the cost of a stall the remedy cannot free. Semi-implicit mode, with or
+remedy, and the cap bounds the cost of a stall the remedy cannot free. The user confirmed 20 for the
+non-semi-implicit modes on 2026-10-01, to be revisited if real-world scenes run into it
+(`Line-search stall persisted after 20 restart(s)`); semi-implicit mode keeps 200. Semi-implicit mode, with or
 without its own restarts, is unchanged.
 
 Verification (Release, `b55166de` + this change): `[al_solver]` 28 cases / 4,111 assertions
