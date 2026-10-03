@@ -122,6 +122,26 @@ def _(d):
     fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene())
 
 
+@case("ctl-msh22", "control", "accepted", "valid cube as a Gmsh 2.2 ASCII file")
+def _(d):
+    V, T = fx.tet_cube(2)
+    fx.write_msh22(os.path.join(d, "cube.msh"), V, T)
+    fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene())
+
+
+@case("g1-msh22-coordinate-numpy-repr", "geometry", "named_failure", "Gmsh 2.2 coordinate written as a numpy-2 repr, np.float64(0.0) (2026-10-02: the run never got past 'Loading mesh')", "ctl-msh22", expect_error='line 6, $Nodes: "np.float64(0.0)" is not a number (the x coordinate of node 1)')
+def _(d):
+    V, T = fx.tet_cube(2)
+    fx.write_msh22(os.path.join(d, "cube.msh"), V, T, raw_coords={(0, 0): "np.float64(0.0)"})
+    fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene())
+
+
+@case("g1-msh41-coordinate-numpy-repr", "geometry", "named_failure", "the same numpy-2 repr as a Gmsh 4.1 coordinate", "ctl-nocontact", expect_error='$Nodes: "np.float64(0.0)" is not a number (the x coordinate of node 1)')
+def _(d):
+    _cube(d, raw_coords={(0, 0): "np.float64(0.0)"})
+    fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene())
+
+
 @case("g1-medit-index-out-of-range", "geometry", "named_failure", "MEDIT .mesh tetrahedron references vertex 999 of 27", "ctl-medit", expect_error='Unable to load the FE mesh')
 def _(d):
     V, T = fx.tet_cube(2)

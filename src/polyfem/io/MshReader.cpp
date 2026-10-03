@@ -6,6 +6,8 @@
 #include <mshio/mshio.h>
 
 #include <fstream>
+#include <limits>
+#include <set>
 #include <string>
 #include <iostream>
 #include <vector>
@@ -74,6 +76,10 @@ namespace polyfem::io
 			return false;
 		}
 
+		// A malformed file stops the run with mshio's reason (the line, the
+		// section, the offending token and the value it should have been: the
+		// checked ASCII reader of cmake/recipes/patches/mshio-checked-ascii-read.patch).
+		// The unchecked reader looped forever on a value it could not convert.
 		mshio::MshSpec spec;
 		try
 		{
@@ -81,27 +87,43 @@ namespace polyfem::io
 		}
 		catch (const std::exception &err)
 		{
-			logger().error("{}", err.what());
-			return false;
+			log_and_throw_error("MSH file {}: {}", path, err.what());
 		}
 		catch (...)
 		{
-			logger().error("Unknown error while reading MSH file: {}", path);
-			return false;
+			log_and_throw_error("MSH file {}: unknown error while reading it", path);
 		}
 
 		const auto &nodes = spec.nodes;
 		const auto &els = spec.elements;
-		const int n_vertices = nodes.num_nodes;
-		const int max_tag = nodes.max_node_tag;
-		int dim = -1;
 
-		assert(els.entity_blocks.size() > 0);
+		// These were asserts, compiled out of release builds: a file without
+		// surface or volume elements reached Eigen as a negative column count
+		// and stopped as "memory allocation failed".
+		int dim = -1;
 		for (const auto &e : els.entity_blocks)
 		{
 			dim = std::max(dim, e.entity_dim);
 		}
-		assert(dim == 2 || dim == 3);
+		if (dim != 2 && dim != 3)
+			log_and_throw_error(
+				"MSH file {}: the file has no surface or volume elements{}", path,
+				dim < 0 ? std::string() : fmt::format(" (its elements have dimension {} at most)", dim));
+
+		// Node tags index tag_to_index. A tag of 0, a tag above the largest
+		// tag the file declares (a binary file's header is not cross-checked)
+		// or one beyond int was written out of bounds; a tag used twice left a
+		// vertex row unset.
+		if (nodes.max_node_tag >= static_cast<size_t>(std::numeric_limits<int>::max()))
+			log_and_throw_error("MSH file {}: node tag {} is too large (PolyFEM numbers nodes with int)", path, nodes.max_node_tag);
+		size_t n_tagged = 0;
+		for (const auto &n : nodes.entity_blocks)
+			n_tagged += n.tags.size();
+		if (n_tagged != nodes.num_nodes)
+			log_and_throw_error("MSH file {}: $Nodes declares {} nodes, but its blocks hold {}", path, nodes.num_nodes, n_tagged);
+
+		const int n_vertices = nodes.num_nodes;
+		const int max_tag = nodes.max_node_tag;
 
 		vertices.resize(n_vertices, dim);
 		std::vector<int> tag_to_index = std::vector<int>(max_tag + 1, -1);
@@ -113,15 +135,20 @@ namespace polyfem::io
 		{
 			for (int i = 0; i < n.num_nodes_in_block * 3; i += 3)
 			{
-				const int node_id = n_vertices != max_tag ? (index++) : (n.tags[i / 3] - 1);
+				const size_t tag = n.tags[i / 3];
+				if (tag < 1 || tag > static_cast<size_t>(max_tag))
+					log_and_throw_error("MSH file {}: node tag {} lies outside the tag range 1 to {} of the file", path, tag, max_tag);
+				if (tag_to_index[tag] >= 0)
+					log_and_throw_error("MSH file {}: node tag {} is used by two nodes", path, tag);
+
+				const int node_id = n_vertices != max_tag ? (index++) : (tag - 1);
 
 				if (dim == 2)
 					vertices.row(node_id) << n.data[i], n.data[i + 1];
 				if (dim == 3)
 					vertices.row(node_id) << n.data[i], n.data[i + 1], n.data[i + 2];
 
-				assert(n.tags[i / 3] < tag_to_index.size());
-				tag_to_index[n.tags[i / 3]] = node_id;
+				tag_to_index[tag] = node_id;
 			}
 		}
 
@@ -174,7 +201,17 @@ namespace polyfem::io
 				num_els += e.num_elements_in_block;
 			}
 		}
-		assert(cells_cols > 0);
+		if (cells_cols < 0)
+		{
+			std::set<int> types;
+			for (const auto &e : els.entity_blocks)
+				if (e.entity_dim == dim)
+					types.insert(e.element_type);
+			std::string type_list;
+			for (const int type : types)
+				type_list += (type_list.empty() ? "" : ", ") + std::to_string(type);
+			log_and_throw_error("MSH file {}: none of its {}D elements has a type PolyFEM reads (Gmsh element types {})", path, dim, type_list);
+		}
 
 		std::unordered_map<int, int> entity_tag_to_physical_tag;
 		std::unordered_map<int, int> boundary_entity_tag_to_physical_tag;
@@ -216,8 +253,7 @@ namespace polyfem::io
 					const int node_tag = e.data[i + j + 1];
 					if (!node_index_of(node_tag, corners[j]))
 					{
-						logger().error("MSH file {}: tagged side element {} references node tag {}, which is not a node of the file", path, e.data[i], node_tag);
-						return false;
+						log_and_throw_error("MSH file {}: tagged side element {} references node tag {}, which is not a node of the file", path, e.data[i], node_tag);
 					}
 				}
 				boundary_elements.emplace_back(std::move(corners));
@@ -262,8 +298,7 @@ namespace polyfem::io
 						int v_index = -1;
 						if (!node_index_of(e.data[j], v_index))
 						{
-							logger().error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
-							return false;
+							log_and_throw_error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
 						}
 						cells(cell_index, index++) = v_index;
 					}
@@ -273,8 +308,7 @@ namespace polyfem::io
 						int v_index = -1;
 						if (!node_index_of(e.data[j], v_index))
 						{
-							logger().error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
-							return false;
+							log_and_throw_error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
 						}
 						elements[cell_index].push_back(v_index);
 					}

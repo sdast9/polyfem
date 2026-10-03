@@ -888,3 +888,133 @@ of the same sources, IPC library identical). Published as `0028d637a` on
 - The exported "gradient" that `NLProblem::post_step` hands the forms and
   the observer is `reduced_to_full(grad)` (upstream's affine map applied
   to a gradient); unchanged here, and the observers do not read it.
+
+## Gmsh files with malformed numbers stop by name instead of hanging (2026-10-03)
+
+**Status: repaired and validated within stated scope.** On 2026-10-02 a
+numpy-2 repr leaked into a mesh file written while prototyping a Read PVD
+export: node 1 of a one-tet MSH 2.2 ASCII file read `1 np.float64(0.0) 0 0`.
+`PolyFEM_bin` stopped logging at `Loading mesh ...` and never finished (more
+than 10 minutes at full CPU on a 27-node hex file). This item's contract is
+that invalid inputs are refused by name, so the repair belongs here.
+
+Started on `main` at `89c314321` (clean tree, shared `build/`,
+RelWithDebInfo). Evidence, not committed: `msh-malformed-work/` at the
+workspace root (baseline binary `PolyFEM_bin.baseline` `ce879caf…`, the probe
+`probe.py` with `probe-baseline/` and `probe-fixed/`, the reader corpus
+results, the MshIO checkouts and harnesses under `bench/`, the smokes, the
+matrix run). No default, model, solver, tolerance or HDA asset changed.
+
+### Reproduction and cause
+
+- The reported file and scene (NeoHookean, quasistatic, one step) with the
+  baseline binary: no output after `Loading mesh ...`; `sample` shows the
+  process spinning in `mshio::forward_to` (`load_msh.cpp:25`, `in >> buf`)
+  called from `load_msh` (`load_msh.cpp:64`).
+- MshIO's ASCII readers read every value with an unchecked `in >> value`
+  (their `assert(in.good())` lines are compiled out under `NDEBUG`). A token
+  that does not convert leaves the stream failed; `forward_to` and the
+  top-level `while (!in.eof())` then never reach the end of the input. With
+  libc++ a token such as `1.2.3` or `2.0` (a tag) converts partly without
+  failing, so the rest of the section shifts silently; MSH 2.2's
+  post-processing then indexed its dense node tables with the shifted tags,
+  out of bounds (the segfaults below). Upstream MshIO (`e18c8a6`, 0.1.1) has
+  the same reader.
+- A probe of 62 one-tet variants of both formats (`probe-baseline/`, 15 s
+  limit) on the baseline binary: 37 hung (malformed coordinates, tags,
+  counts, element nodes and types in `$Nodes` and `$Elements` of 2.2 and
+  4.1, and in `$MeshFormat`, `$Entities`, `$PhysicalNames`, `$NodeData`);
+  2 segfaulted (`1.2.3`, node tag `2.0`); 3 stopped as "memory allocation
+  failed" with exit 3 (truncated `$Nodes`, an element count of 0: no
+  elements reached Eigen as a negative column count); 2 loaded silently (a
+  4.1 header declaring 5 nodes for 4, or 0 elements for 1); 10 stopped by
+  name; the 8 valid controls completed.
+
+### What changed
+
+- `cmake/recipes/patches/mshio-checked-ascii-read.patch`, applied through CPM
+  `PATCHES` (the MshIO pin `29d0263b` is unchanged; CPM keys its source cache
+  on the patch's path, so a changed patch needs a new name). Every value of the
+  ASCII `$MeshFormat`, `$PhysicalNames`, `$Entities`, `$Nodes` and `$Elements`
+  sections (2.2 and 4.1) is one checked token: integers are digits only and
+  fit their field (node tags at least 1, 2.2 numbers within `int`, dimensions
+  and the parametric flag 0 to 3, the file type 0 or 1); reals convert
+  completely and are finite (`strtod`, with a classic-locale fallback so that
+  neither a comma locale nor a comma token changes the result). A section
+  marker or the end of the input where a value belongs, or a value left over
+  before the end marker, is a count that disagrees with the data. A 4.1
+  header must agree with its blocks (node count, node tag range, element
+  count). Counts reserve at most 2^20 entries, so a wrong count fails at the
+  data's end instead of allocating for it. Each error names the line, the
+  section, the token and the value expected, with a hint when an integer
+  field holds a number (a value missing or extra earlier shifts the rest).
+  MSH 2.2 post-processing refuses an element node outside the node tag range
+  (`element E references node tag T, which is not a node of the file`, the
+  phrase PolyFEM already used). The top-level loop and `forward_to` stop
+  wherever reading stops; a section whose reader leaves the stream failed
+  (the data sections and the binary readers are not read value by value) is
+  refused with its line quoted. The readers' `assert(in.good())` lines are
+  gone (a Debug build aborted there), and their count variables start at 0.
+- `src/polyfem/io/MshReader.cpp`: mshio's reason is the run's stop reason
+  (`PolyFEM stopped: MSH file <path>: line 6, $Nodes: "np.float64(0.0)" is
+  not a number (the x coordinate of node 1)`), and the existing RB-11 node
+  reference errors now stop the run with their own text instead of the
+  generic "could not be read". The asserts compiled out of release builds
+  are named errors: no surface or volume elements, no element type PolyFEM
+  reads, a node tag of 0, above the declared largest tag or beyond `int`, a
+  node tag used twice, a node count that disagrees with the blocks (binary
+  files are not cross-checked by the reader).
+- Tests: `tests/test_input_validation.cpp` `[input_validation][mesh][msh]`,
+  2 cases: the reported file and scene through `State::init` and
+  `State::load_mesh` (the calls `PolyFEM_bin` makes), and 50 assertions over
+  valid controls (2.2, 4.1, CRLF, tabs and exponents, an escaped quoted
+  name) and malformed variants of both formats.
+- `tools/rb11`: `write_msh22` and `raw_coords` in `fixtures.py`; cases
+  `ctl-msh22` (accepted), `g1-msh22-coordinate-numpy-repr` and
+  `g1-msh41-coordinate-numpy-repr` (named failures) in `cases.py`.
+
+### Validation
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| Reported file, repaired binary (`5e31b85f…`) | Exit 1, named | `PolyFEM stopped: MSH file …/one_tet.msh: line 6, $Nodes: "np.float64(0.0)" is not a number (the x coordinate of node 1)` within 1 ms of `Loading mesh ...`; manifest `failed`, exit 1, same message; no output | Pass |
+| Probe, 82 cases (`probe-fixed/`, 60 s limit) | Malformed: exit 1 named, no output; valid: complete | 72 named failures, 10 completions, 82/82 as declared; slowest 6.3 s (process start-up). The 62 baseline cases: 37 hangs, 3 exit-3 misreports, 2 segfaults and 2 silent loads became named failures | Pass |
+| The user's 27-node hex observation (probe `v22-hex27-numpy`) | Named failure | `line 19, $Nodes: "np.float64(0.5)" is not a number (the x coordinate of node 14)`; its valid twin completes | Pass |
+| Reader corpus: every `.msh` on disk (975 files: 620 4.1 ASCII, 174 4.1 binary, 76 2.2 ASCII, 103 2.2 binary, 2 other; polyfem data, test cases, CPM caches) | Parsed spec identical | Hash of the whole parsed spec (format, nodes, elements, entities, physical names, data) identical for all 975, original vs patched reader; summed parse time 17.3 s → 8.3 s | Pass |
+| The same corpus through `MshReader`'s new checks | No valid file refused | Only json-spec-engine's two 0-byte `dummy.msh` placeholders (not meshes; they stopped as "memory allocation failed" before) | Pass |
+| MshIO's own suite, original and patched | Pass | 893 assertions in 9 cases, both | Pass |
+| AddressSanitizer + UBSan reader on the 82 probe files | No report | None | Pass |
+| `[msh]` | Pass | 2 cases / 52 assertions | Pass |
+| `[input_validation],[rb23]` | Pass | 28 cases / 12,312 assertions | Pass |
+| Five public smokes, `--threads 1`, baseline vs repaired binary | Byte-identical | 55 output files identical (manifests excluded) | Pass |
+| RB-11 matrix, verify mode (`rb11-matrix/`) | 97/97 | 97/97 as declared: `g1-msh-unknown-node-tag` and `g1-msh-node-tag-zero` now stop with their own text instead of "could not be read"; `ctl-msh22` completes; both numpy cases stop by name | Pass |
+| New compiler warnings (`-Wall -Wextra -Wconversion -Wsign-conversion -Wshadow` on the changed MshIO files) | None | None; the 7 in `load_msh_elements.cpp` are the original's | Pass |
+
+### Publication
+
+Published with this section on `sdast9/polyfem:main`. The shared `build/`
+fetched the patched MshIO into `~/.cache/CPM/mshio/d857` (the unpatched
+`d192` is untouched for other checkouts) and was rebuilt in full (mshio's
+include path is part of every `polyfem` compile line).
+
+### Limits
+
+- The data sections (`$NodeData`, `$ElementData`, `$ElementNodeData`) and the
+  nanospline sections are not read value by value: a malformed value there
+  stops the load by name with its line quoted, but a partly convertible token
+  such as `1.2.3` can still shift the rest of that section. PolyFEM's FE path
+  does not use them.
+- Binary files go through the unchanged binary readers; a truncated section
+  stops by name, and PolyFEM's reader checks node counts and tags, but a
+  binary header is otherwise not cross-checked.
+- MSH values are whitespace-separated, not line-bound, so a missing value is
+  reported where the shift becomes visible (with the hint), not on the short
+  line itself.
+- MSH 2.2 post-processing still sizes its tables by the node tag range; a
+  sparse file with very large tags costs memory in proportion (unchanged).
+- Found, not repaired: `MshReader` reads a 4.1 parametric node block
+  (`parametric` 1, `3 + dim` values per node) with a stride of 3, so such a
+  valid file loads silently with wrong vertex positions (probe
+  `msh-malformed-work/parametric/`: the vertices became (0,0,0),
+  (.1,.2,.3), (1,0,0), (.4,.5,.6)). Gmsh writes such blocks only with
+  `Mesh.SaveParametric`.

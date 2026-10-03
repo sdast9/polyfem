@@ -1,0 +1,1233 @@
+diff --git a/src/io_utils.cpp b/src/io_utils.cpp
+index 56ef54a..8d8c504 100644
+--- a/src/io_utils.cpp
++++ b/src/io_utils.cpp
+@@ -1,6 +1,14 @@
+ #include "io_utils.h"
+ 
++#include <mshio/exception.h>
++
++#include <algorithm>
++#include <cerrno>
++#include <cmath>
++#include <cstdlib>
+ #include <istream>
++#include <locale>
++#include <sstream>
+ 
+ namespace mshio {
+ 
+@@ -18,5 +26,193 @@ void eat_white_space(std::istream& in, size_t count)
+     }
+ }
+ 
+-} // namespace mshio
++std::string describe_position(
++    std::istream& in, std::streampos pos, const std::string& section, std::string* line_text)
++{
++    in.clear();
++    const std::streamoff end = static_cast<std::streamoff>(pos);
++    if (end < 0 || !in.seekg(0, std::ios::beg)) {
++        in.clear();
++        return section + ": ";
++    }
++
++    // 1 + the number of line breaks before `pos`; the line starts after the last one.
++    size_t line = 1;
++    std::streamoff offset = 0, line_start = 0;
++    char buffer[1 << 14];
++    while (offset < end) {
++        const std::streamsize wanted =
++            static_cast<std::streamsize>(std::min<std::streamoff>(sizeof(buffer), end - offset));
++        in.read(buffer, wanted);
++        const std::streamsize got = in.gcount();
++        if (got <= 0) break;
++        for (std::streamsize i = 0; i < got; i++) {
++            if (buffer[i] == '\n') {
++                line++;
++                line_start = offset + i + 1;
++            }
++        }
++        offset += got;
++    }
++
++    if (line_text != nullptr) {
++        in.clear();
++        in.seekg(line_start, std::ios::beg);
++        std::getline(in, *line_text);
++        if (!line_text->empty() && line_text->back() == '\r') line_text->pop_back();
++        constexpr size_t max_length = 160;
++        if (line_text->size() > max_length) line_text->replace(max_length, std::string::npos, "...");
++    }
++    in.clear();
++    return "line " + std::to_string(line) + ", " + section + ": ";
++}
++
++void throw_unreadable_section(std::istream& in, const std::string& section)
++{
++    in.clear();
++    const std::streampos pos = in.tellg();
++    if (in.peek() == std::char_traits<char>::eof()) {
++        throw InvalidFormat(section + ": the file ends inside the section");
++    }
++    std::string line_text;
++    const std::string where = describe_position(in, pos, section, &line_text);
++    throw InvalidFormat(where + "a value could not be read from the line \"" + line_text + "\"");
++}
++
++void expect_section_end(std::istream& in, const std::string& section, const std::string& end_marker)
++{
++    std::string token;
++    if (!(in >> token)) return; // the end of the input closes the last section, as before
++    if (token == end_marker) return;
++    const std::string where = describe_position(in, in.tellg(), section, nullptr);
++    throw InvalidFormat(where + "\"" + token + "\" appears where " + end_marker + " was expected" +
++                        (token[0] == '$' ? " (the section's end marker is missing)"
++                                         : " (the section holds more values than its counts declare)"));
++}
++
++AsciiReader::Token AsciiReader::next()
++{
++    if (!(m_in >> m_token)) return Token::EndOfInput;
++    return m_token[0] == '$' ? Token::SectionMarker : Token::Value;
++}
++
++bool AsciiReader::parse_unsigned(unsigned long long& value, bool& too_large) const
++{
++    const char* c = m_token.c_str();
++    if (*c == '+') c++;
++    if (*c == '\0') return false;
++    value = 0;
++    too_large = false;
++    for (; *c != '\0'; c++) {
++        if (*c < '0' || *c > '9') return false;
++        const unsigned digit = static_cast<unsigned>(*c - '0');
++        if (value > (std::numeric_limits<unsigned long long>::max() - digit) / 10) {
++            too_large = true;
++        } else {
++            value = value * 10 + digit;
++        }
++    }
++    return true;
++}
+ 
++bool AsciiReader::parse_signed(long long& value, bool& too_large) const
++{
++    const bool negative = m_token[0] == '-';
++    const char* c = m_token.c_str() + ((negative || m_token[0] == '+') ? 1 : 0);
++    if (*c == '\0') return false;
++    unsigned long long magnitude = 0;
++    too_large = false;
++    for (; *c != '\0'; c++) {
++        if (*c < '0' || *c > '9') return false;
++        const unsigned digit = static_cast<unsigned>(*c - '0');
++        if (magnitude > (std::numeric_limits<unsigned long long>::max() - digit) / 10) {
++            too_large = true;
++        } else {
++            magnitude = magnitude * 10 + digit;
++        }
++    }
++    const unsigned long long limit =
++        static_cast<unsigned long long>(std::numeric_limits<long long>::max()) +
++        (negative ? 1 : 0);
++    if (too_large || magnitude > limit) {
++        too_large = true;
++        return true;
++    }
++    value = negative ? static_cast<long long>(0ULL - magnitude) : static_cast<long long>(magnitude);
++    return true;
++}
++
++bool AsciiReader::parse_real(double& value, bool& too_large, bool& finite) const
++{
++    const char* begin = m_token.c_str();
++    const char* end_of_token = begin + m_token.size();
++    too_large = false;
++    finite = true;
++
++    // strtod depends on the C locale's decimal point. A token with a comma is
++    // never a number in an MSH file; leave it to the "C"-locale parse below so
++    // that a comma locale cannot accept it.
++    if (m_token.find(',') == std::string::npos) {
++        char* end = nullptr;
++        errno = 0;
++        value = std::strtod(begin, &end);
++        if (end == end_of_token) {
++            if (errno == ERANGE && std::abs(value) == HUGE_VAL) {
++                too_large = true;
++            } else if (!std::isfinite(value)) {
++                finite = false; // nan, inf, infinity spelled out
++            }
++            return true;
++        }
++    }
++
++    // strtod stopped early: a malformed token, or a C locale whose decimal
++    // point is not '.'. iostreams parse with the classic locale, as the
++    // original reader did.
++    std::istringstream token(m_token);
++    token.imbue(std::locale::classic());
++    token >> value;
++    if (token.fail() || token.peek() != std::char_traits<char>::eof()) return false;
++    finite = std::isfinite(value);
++    return true;
++}
++
++std::string AsciiReader::int_kind(int min_value, int max_value)
++{
++    if (min_value == INT_MIN && max_value == INT_MAX) return "an integer";
++    if (max_value == INT_MAX) {
++        return min_value == 0 ? "a non-negative integer"
++                              : (min_value == 1 ? "a positive integer"
++                                                : "an integer >= " + std::to_string(min_value));
++    }
++    return "an integer from " + std::to_string(min_value) + " to " + std::to_string(max_value);
++}
++
++void AsciiReader::reject(Token token, bool too_large, const std::string& kind, const std::string& what)
++{
++    if (token == Token::EndOfInput) {
++        throw InvalidFormat(m_section + ": the file ends where " + what +
++                            " was expected (the section holds fewer values than its counts declare)");
++    }
++    const std::string where = describe_position(m_in, m_in.tellg(), m_section, nullptr);
++    if (token == Token::SectionMarker) {
++        throw InvalidFormat(where + m_token + " appears where " + what +
++                            " was expected (the section holds fewer values than its counts declare)");
++    }
++    if (too_large) {
++        throw InvalidFormat(where + "\"" + m_token + "\" is too large (" + what + ")");
++    }
++    // A number where an integer belongs (a coordinate read as a tag, say) is
++    // usually a value missing or left over earlier: every later value shifts.
++    std::string hint;
++    double ignored = 0;
++    bool ignored_large = false, ignored_finite = true;
++    if (kind.find("integer") != std::string::npos &&
++        parse_real(ignored, ignored_large, ignored_finite)) {
++        const std::string line = where.substr(0, where.find(','));
++        hint = "; if " + line + " looks right, a value is missing or extra before it";
++    }
++    throw InvalidFormat(where + "\"" + m_token + "\" is not " + kind + " (" + what + ")" + hint);
++}
++
++} // namespace mshio
+diff --git a/src/io_utils.h b/src/io_utils.h
+index a8255cb..202e622 100644
+--- a/src/io_utils.h
++++ b/src/io_utils.h
+@@ -1,11 +1,159 @@
+ #pragma once
+ 
++#include <climits>
++#include <cstddef>
++#include <iomanip>
+ #include <istream>
+ #include <limits>
++#include <string>
++#include <utility>
+ 
+ namespace mshio {
+ 
+ void eat_white_space(std::istream& in, size_t count = std::numeric_limits<size_t>::max());
+ 
+-} // namespace mshio
++/// Reserve room for `n` entries announced by a count in the file, but no more
++/// than a fixed amount: a wrong count must not allocate memory that the file's
++/// data does not back (the reader stops at the missing values instead).
++template <typename Vector>
++void reserve_for_count(Vector& v, size_t n)
++{
++    constexpr size_t max_reserve = size_t(1) << 20;
++    v.reserve(n < max_reserve ? n : max_reserve);
++}
++
++/// Describe where reading stopped: "line N, <section>: " for the line holding
++/// the stream position `pos`, or "<section>: " when the position is unknown.
++/// When `line_text` is given it receives that line (without its line break).
++/// Rewinds the stream; only for building an error message.
++std::string describe_position(
++    std::istream& in, std::streampos pos, const std::string& section, std::string* line_text);
++
++/// Throw InvalidFormat for a section whose reader left the stream failed (a
++/// value it could not convert, or the end of the input inside the section),
++/// naming the line where reading stopped and quoting it.
++[[noreturn]] void throw_unreadable_section(std::istream& in, const std::string& section);
++
++/// Read the token after an ASCII section's values; anything but `end_marker`
++/// means the section holds more values than its counts declare.
++void expect_section_end(std::istream& in, const std::string& section, const std::string& end_marker);
++
++/// Checked reading of the values of an ASCII section.
++///
++/// Every value is one whitespace-separated token that must convert completely:
++/// an integer has no fraction, exponent or trailing characters and fits its
++/// type; a real converts in full and is finite. A token that does not, a
++/// section marker in its place or the end of the input throws InvalidFormat
++/// naming the line, the section, the token and the value that was expected.
++/// The plain `in >> value` this replaces stopped at the first character it
++/// could not use and left the stream failed, and load_msh() then looped
++/// forever looking for the end of the section.
++///
++/// Each read takes `what`, a callable returning a description of the value
++/// ("the x coordinate of node 7"); it is only called to build an error.
++class AsciiReader
++{
++public:
++    AsciiReader(std::istream& in, std::string section)
++        : m_in(in)
++        , m_section(std::move(section))
++    {}
++
++    /// An integer >= 0 (a count, an element tag, a node reference).
++    template <typename What>
++    size_t read_count(const What& what)
++    {
++        return static_cast<size_t>(read_unsigned(0, what));
++    }
++
++    /// An integer >= 1 (a node tag; Gmsh tags start at 1).
++    template <typename What>
++    size_t read_tag(const What& what)
++    {
++        return static_cast<size_t>(read_unsigned(1, what));
++    }
++
++    /// An integer in [min_value, max_value].
++    template <typename What>
++    int read_int(const What& what, int min_value = INT_MIN, int max_value = INT_MAX)
++    {
++        const Token token = next();
++        long long value = 0;
++        bool too_large = false;
++        if (token == Token::Value && parse_signed(value, too_large)) {
++            if (value < INT_MIN || value > INT_MAX) too_large = true;
++            if (!too_large && value >= min_value && value <= max_value) {
++                return static_cast<int>(value);
++            }
++        }
++        reject(token, too_large, int_kind(min_value, max_value), what());
++    }
++
++    /// A finite real number.
++    template <typename What>
++    double read_real(const What& what)
++    {
++        const Token token = next();
++        double value = 0;
++        bool too_large = false;
++        bool finite = true;
++        if (token == Token::Value && parse_real(value, too_large, finite) && !too_large &&
++            finite) {
++            return value;
++        }
++        reject(token, too_large, finite ? "a number" : "a finite number", what());
++    }
+ 
++    /// A name: a quoted string (std::quoted escapes) or a single word.
++    template <typename What>
++    std::string read_quoted(const What& what)
++    {
++        std::string value;
++        m_in >> std::ws;
++        const bool quoted = m_in.peek() == '"';
++        if (!(m_in >> std::quoted(value))) reject(Token::EndOfInput, false, "a name", what());
++        if (!quoted && !value.empty() && value[0] == '$') {
++            m_token = value;
++            reject(Token::SectionMarker, false, "a name", what());
++        }
++        return value;
++    }
++
++    /// "line N, <section>: " for the value read last; rewinds the stream, so
++    /// only for an error message.
++    std::string position() { return describe_position(m_in, m_in.tellg(), m_section, nullptr); }
++
++private:
++    enum class Token { Value, SectionMarker, EndOfInput };
++
++    Token next();
++    bool parse_signed(long long& value, bool& too_large) const;
++    bool parse_unsigned(unsigned long long& value, bool& too_large) const;
++    bool parse_real(double& value, bool& too_large, bool& finite) const;
++    static std::string int_kind(int min_value, int max_value);
++
++    template <typename What>
++    unsigned long long read_unsigned(unsigned long long min_value, const What& what)
++    {
++        const Token token = next();
++        unsigned long long value = 0;
++        bool too_large = false;
++        if (token == Token::Value && parse_unsigned(value, too_large) && !too_large &&
++            value >= min_value && value <= std::numeric_limits<size_t>::max()) {
++            return value;
++        }
++        reject(token,
++            too_large,
++            min_value == 0 ? "a non-negative integer" : "a positive integer",
++            what());
++    }
++
++    [[noreturn]] void reject(
++        Token token, bool too_large, const std::string& kind, const std::string& what);
++
++    std::istream& m_in;
++    std::string m_section;
++    std::string m_token;
++};
++
++} // namespace mshio
+diff --git a/src/load_msh.cpp b/src/load_msh.cpp
+index 1c65163..05c82bb 100644
+--- a/src/load_msh.cpp
++++ b/src/load_msh.cpp
+@@ -10,6 +10,9 @@
+ #include "load_msh_patches.h"
+ #include "load_msh_physical_groups.h"
+ #include "load_msh_post_process.h"
++#include "io_utils.h"
++
++#include <mshio/exception.h>
+ 
+ #include <cassert>
+ #include <fstream>
+@@ -20,9 +23,11 @@ namespace mshio {
+ 
+ void forward_to(std::istream& in, const std::string& flag)
+ {
++    // Stops at the flag or wherever reading stops. A failed stream never
++    // reaches the end of the input, so the old `while (!in.eof())` spun on it
++    // forever.
+     std::string buf;
+-    while (!in.eof() && buf != flag) {
+-        in >> buf;
++    while (in >> buf && buf != flag) {
+     }
+ }
+ 
+@@ -31,10 +36,8 @@ MshSpec load_msh(std::istream& in)
+     MshSpec spec;
+     std::string buf, end_str;
+ 
+-    while (!in.eof()) {
+-        buf.clear();
+-        in >> buf;
+-        if (buf.size() == 0 || buf[0] != '$') continue;
++    while (in >> buf) {
++        if (buf[0] != '$') continue;
+         end_str = "$End" + buf.substr(1);
+         if (buf == "$MeshFormat") {
+             load_mesh_format(in, spec);
+@@ -61,8 +64,23 @@ MshSpec load_msh(std::istream& in)
+         } else {
+             std::cerr << "Warning: skipping section \"" << buf << "\"" << std::endl;
+         }
+-        forward_to(in, end_str);
++
++        // A reader that could not convert a value, or met the end of the input,
++        // leaves the stream failed: name the section and the line.
++        if (in.fail()) throw_unreadable_section(in, buf);
++
++        // The checked ASCII readers consume exactly the values their counts
++        // declare, so the end marker must follow ($MeshFormat and
++        // $PhysicalNames are ASCII in binary files too).
++        const bool ascii = spec.mesh_format.file_type == 0;
++        if (buf == "$MeshFormat" || buf == "$PhysicalNames" ||
++            (ascii && (buf == "$Entities" || buf == "$Nodes" || buf == "$Elements"))) {
++            expect_section_end(in, buf, end_str);
++        } else {
++            forward_to(in, end_str);
++        }
+     }
++    if (in.bad()) throw CorruptData("Reading the MSH input failed.");
+ 
+     load_msh_post_process(spec);
+     return spec;
+diff --git a/src/load_msh_data.cpp b/src/load_msh_data.cpp
+index 9063532..83dc563 100644
+--- a/src/load_msh_data.cpp
++++ b/src/load_msh_data.cpp
+@@ -15,7 +15,7 @@ namespace internal {
+ 
+ void load_data_header(std::istream& in, DataHeader& header)
+ {
+-    size_t num_string_tags, num_real_tags, num_int_tags;
++    size_t num_string_tags = 0, num_real_tags = 0, num_int_tags = 0;
+ 
+     in >> num_string_tags;
+     header.string_tags.resize(num_string_tags);
+@@ -34,7 +34,6 @@ void load_data_header(std::istream& in, DataHeader& header)
+     for (size_t i = 0; i < num_int_tags; i++) {
+         in >> header.int_tags[i];
+     }
+-    assert(in.good());
+ }
+ 
+ namespace v41 {
+@@ -129,7 +128,6 @@ void load_data(std::istream& in,
+             }
+         }
+     }
+-    assert(in.good());
+ }
+ 
+ } // namespace internal
+diff --git a/src/load_msh_elements.cpp b/src/load_msh_elements.cpp
+index 9ec3bc6..090cddb 100644
+--- a/src/load_msh_elements.cpp
++++ b/src/load_msh_elements.cpp
+@@ -18,34 +18,72 @@
+ 
+ namespace mshio {
+ 
++namespace {
++/// An element type this reader knows how many nodes to read for.
++template <typename What>
++int read_element_type(AsciiReader& reader, const What& what)
++{
++    const int type = reader.read_int(what);
++    if (type <= 0 || type >= 32) {
++        throw UnsupportedFeature(reader.position() + "element type " + std::to_string(type) +
++                                 " is not supported (" + what() + ")");
++    }
++    return type;
++}
++} // namespace
++
+ namespace v41 {
+ 
+ void load_elements_ascii(std::istream& in, MshSpec& spec)
+ {
++    AsciiReader reader(in, "$Elements");
+     Elements& elements = spec.elements;
+-    in >> elements.num_entity_blocks;
+-    in >> elements.num_elements;
+-    in >> elements.min_element_tag;
+-    in >> elements.max_element_tag;
+-    assert(in.good());
+-
+-    elements.entity_blocks.resize(elements.num_entity_blocks);
++    elements.num_entity_blocks =
++        reader.read_count([] { return std::string("the number of entity blocks"); });
++    elements.num_elements = reader.read_count([] { return std::string("the number of elements"); });
++    elements.min_element_tag =
++        reader.read_count([] { return std::string("the smallest element tag"); });
++    elements.max_element_tag =
++        reader.read_count([] { return std::string("the largest element tag"); });
++
++    elements.entity_blocks.clear();
++    reserve_for_count(elements.entity_blocks, elements.num_entity_blocks);
++    size_t num_elements_in_blocks = 0;
+     for (size_t i = 0; i < elements.num_entity_blocks; i++) {
+-        ElementBlock& block = elements.entity_blocks[i];
++        elements.entity_blocks.emplace_back();
++        ElementBlock& block = elements.entity_blocks.back();
++        const auto block_name = [i] { return "element block " + std::to_string(i + 1); };
+ 
+-        in >> block.entity_dim;
+-        in >> block.entity_tag;
+-        in >> block.element_type;
+-        in >> block.num_elements_in_block;
++        block.entity_dim =
++            reader.read_int([&] { return "the entity dimension of " + block_name(); }, 0, 3);
++        block.entity_tag = reader.read_int([&] { return "the entity tag of " + block_name(); });
++        block.element_type =
++            read_element_type(reader, [&] { return "the element type of " + block_name(); });
++        block.num_elements_in_block =
++            reader.read_count([&] { return "the number of elements in " + block_name(); });
+ 
+         const size_t n = nodes_per_element(block.element_type);
+-        block.data.resize(block.num_elements_in_block * (n + 1));
+-        for (size_t j = 0; j < block.num_elements_in_block; j++) {
+-            for (size_t k = 0; k <= n; k++) {
+-                in >> block.data[j * (n + 1) + k];
++        const size_t m = block.num_elements_in_block;
++        reserve_for_count(block.data, m * (n + 1));
++        for (size_t j = 0; j < m; j++) {
++            const size_t tag = reader.read_count([&] {
++                return "the tag of element entry " + std::to_string(j + 1) + " of " +
++                       std::to_string(m) + " in " + block_name();
++            });
++            block.data.push_back(tag);
++            for (size_t k = 0; k < n; k++) {
++                block.data.push_back(reader.read_count([&] {
++                    return "node " + std::to_string(k + 1) + " of element " + std::to_string(tag);
++                }));
+             }
+         }
+-        assert(in.good());
++        num_elements_in_blocks += m;
++    }
++
++    if (num_elements_in_blocks != elements.num_elements) {
++        throw InvalidFormat("$Elements: the header declares " +
++                            std::to_string(elements.num_elements) + " elements, but its blocks hold " +
++                            std::to_string(num_elements_in_blocks));
+     }
+ }
+ 
+@@ -57,7 +95,6 @@ void load_elements_binary(std::istream& in, MshSpec& spec)
+     in.read(reinterpret_cast<char*>(&elements.num_elements), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&elements.min_element_tag), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&elements.max_element_tag), sizeof(size_t));
+-    assert(in.good());
+ 
+     elements.entity_blocks.resize(elements.num_entity_blocks);
+     for (size_t i = 0; i < elements.num_entity_blocks; i++) {
+@@ -72,7 +109,6 @@ void load_elements_binary(std::istream& in, MshSpec& spec)
+         block.data.resize(block.num_elements_in_block * (n + 1));
+         in.read(reinterpret_cast<char*>(block.data.data()),
+             static_cast<std::streamsize>(sizeof(size_t) * block.data.size()));
+-        assert(in.good());
+     }
+ }
+ } // namespace v41
+@@ -96,36 +132,43 @@ void create_entities(
+ 
+ void load_elements_ascii(std::istream& in, MshSpec& spec)
+ {
++    AsciiReader reader(in, "$Elements");
+     Elements& elements = spec.elements;
+-    size_t num_elements;
+-    in >> num_elements;
++    const size_t num_elements =
++        reader.read_count([] { return std::string("the number of elements"); });
+ 
+     // Due to v2.2 constraints, each element is parsed as a separate block, and
+     // a regrouping will happen at post-processing time.
+     elements.num_entity_blocks += num_elements;
+     elements.num_elements += num_elements;
+ 
+-    int element_num, element_type;
+-    int num_tags;
+     std::vector<int> tags;
+-    std::vector<int> node_ids;
+ 
+     std::array<std::map<int, std::set<int>>, 4> entity_tag_to_physical_tags;
+ 
++    // MSH 2.2 element numbers, tag counts and node numbers are ints; the tags
++    // themselves may be negative (ghost partitions). Whether a node number
++    // names a node of the file is checked after loading.
++    reserve_for_count(elements.entity_blocks, elements.entity_blocks.size() + num_elements);
+     for (size_t i = 0; i < num_elements; i++) {
+-        in >> element_num;
+-        in >> element_type;
+-        in >> num_tags;
+-        tags.resize(static_cast<size_t>(num_tags));
++        const int element_num = reader.read_int(
++            [&] {
++                return "the tag of element entry " + std::to_string(i + 1) + " of " +
++                       std::to_string(num_elements);
++            },
++            0);
++        const auto element_name = [&] { return "element " + std::to_string(element_num); };
++        const int element_type =
++            read_element_type(reader, [&] { return "the type of " + element_name(); });
++        const int num_tags =
++            reader.read_int([&] { return "the number of tags of " + element_name(); }, 0);
++        tags.clear();
+         for (int j = 0; j < num_tags; j++) {
+-            in >> tags[static_cast<size_t>(j)];
++            tags.push_back(reader.read_int(
++                [&] { return "tag " + std::to_string(j + 1) + " of " + element_name(); }));
+         }
+ 
+         const size_t n = nodes_per_element(element_type);
+-        node_ids.resize(n);
+-        for (size_t j = 0; j < n; j++) {
+-            in >> node_ids[j];
+-        }
+ 
+         elements.min_element_tag =
+             std::min(elements.min_element_tag, static_cast<size_t>(element_num));
+@@ -159,7 +202,8 @@ void load_elements_ascii(std::istream& in, MshSpec& spec)
+ 
+         block.data[0] = static_cast<size_t>(element_num);
+         for (size_t j = 0; j < n; j++) {
+-            block.data[j + 1] = static_cast<size_t>(node_ids[j]);
++            block.data[j + 1] = static_cast<size_t>(reader.read_int(
++                [&] { return "node " + std::to_string(j + 1) + " of " + element_name(); }, 0));
+         }
+     }
+ 
+diff --git a/src/load_msh_entities.cpp b/src/load_msh_entities.cpp
+index 83f0cc1..910071b 100644
+--- a/src/load_msh_entities.cpp
++++ b/src/load_msh_entities.cpp
+@@ -10,116 +10,102 @@ namespace mshio {
+ 
+ namespace v41 {
+ 
+-void load_entities_ascii(std::istream& in, MshSpec& spec)
++namespace {
++template <typename What>
++void read_tags(AsciiReader& reader, std::vector<int>& tags, const char* kind, const What& owner)
+ {
+-    size_t num_points, num_curves, num_surfaces, num_volumes;
+-    in >> num_points;
+-    in >> num_curves;
+-    in >> num_surfaces;
+-    in >> num_volumes;
+-    assert(in.good());
+-
+-    Entities& entities = spec.entities;
+-    entities.points.resize(num_points);
+-    entities.curves.resize(num_curves);
+-    entities.surfaces.resize(num_surfaces);
+-    entities.volumes.resize(num_volumes);
+-
+-    for (size_t i = 0; i < num_points; i++) {
+-        PointEntity& point = entities.points[i];
+-        in >> point.tag;
+-        in >> point.x;
+-        in >> point.y;
+-        in >> point.z;
+-        size_t num_physical_groups;
+-        in >> num_physical_groups;
+-        point.physical_group_tags.resize(num_physical_groups);
+-        for (size_t j = 0; j < num_physical_groups; j++) {
+-            in >> point.physical_group_tags[j];
+-        }
++    const size_t n = reader.read_count(
++        [&] { return std::string("the number of ") + kind + " tags of " + owner(); });
++    tags.clear();
++    reserve_for_count(tags, n);
++    for (size_t j = 0; j < n; j++) {
++        tags.push_back(reader.read_int([&] {
++            return std::string(kind) + " tag " + std::to_string(j + 1) + " of " + owner();
++        }));
+     }
++}
+ 
+-    for (size_t i = 0; i < num_curves; i++) {
+-        CurveEntity& curve = entities.curves[i];
+-        in >> curve.tag;
+-        in >> curve.min_x;
+-        in >> curve.min_y;
+-        in >> curve.min_z;
+-        in >> curve.max_x;
+-        in >> curve.max_y;
+-        in >> curve.max_z;
+-        size_t num_physical_groups;
+-        in >> num_physical_groups;
+-        curve.physical_group_tags.resize(num_physical_groups);
+-        for (size_t j = 0; j < num_physical_groups; j++) {
+-            in >> curve.physical_group_tags[j];
+-        }
+-        size_t num_boundary_points;
+-        in >> num_boundary_points;
+-        curve.boundary_point_tags.resize(num_boundary_points);
+-        for (size_t j = 0; j < num_boundary_points; j++) {
+-            in >> curve.boundary_point_tags[j];
+-        }
+-    }
++template <typename Entity>
++void read_bounding_box(AsciiReader& reader, Entity& entity, const std::string& owner)
++{
++    entity.min_x = reader.read_real([&] { return "the smallest x of " + owner; });
++    entity.min_y = reader.read_real([&] { return "the smallest y of " + owner; });
++    entity.min_z = reader.read_real([&] { return "the smallest z of " + owner; });
++    entity.max_x = reader.read_real([&] { return "the largest x of " + owner; });
++    entity.max_y = reader.read_real([&] { return "the largest y of " + owner; });
++    entity.max_z = reader.read_real([&] { return "the largest z of " + owner; });
++}
+ 
+-    for (size_t i = 0; i < num_surfaces; i++) {
+-        SurfaceEntity& surface = entities.surfaces[i];
+-        in >> surface.tag;
+-        in >> surface.min_x;
+-        in >> surface.min_y;
+-        in >> surface.min_z;
+-        in >> surface.max_x;
+-        in >> surface.max_y;
+-        in >> surface.max_z;
+-        size_t num_physical_groups;
+-        in >> num_physical_groups;
+-        surface.physical_group_tags.resize(num_physical_groups);
+-        for (size_t j = 0; j < num_physical_groups; j++) {
+-            in >> surface.physical_group_tags[j];
+-        }
+-        size_t num_boundary_curves;
+-        in >> num_boundary_curves;
+-        surface.boundary_curve_tags.resize(num_boundary_curves);
+-        for (size_t j = 0; j < num_boundary_curves; j++) {
+-            in >> surface.boundary_curve_tags[j];
+-        }
++/// Curves, surfaces and volumes: tag, bounding box, physical tags and the
++/// tags of the bounding entities one dimension lower.
++template <typename Entity>
++void read_entities(AsciiReader& reader,
++    std::vector<Entity>& entities,
++    size_t n,
++    const char* name,
++    const char* bounding,
++    std::vector<int> Entity::*bounding_tags)
++{
++    entities.clear();
++    reserve_for_count(entities, n);
++    for (size_t i = 0; i < n; i++) {
++        entities.emplace_back();
++        Entity& entity = entities.back();
++        entity.tag = reader.read_int([&] {
++            return std::string("the tag of ") + name + " entry " + std::to_string(i + 1) + " of " +
++                   std::to_string(n);
++        });
++        const std::string owner = std::string(name) + " " + std::to_string(entity.tag);
++        read_bounding_box(reader, entity, owner);
++        read_tags(reader, entity.physical_group_tags, "physical", [&] { return owner; });
++        read_tags(reader, entity.*bounding_tags, bounding, [&] { return owner; });
+     }
++}
++} // namespace
+ 
+-    for (size_t i = 0; i < num_volumes; i++) {
+-        VolumeEntity& volume = entities.volumes[i];
+-        in >> volume.tag;
+-        in >> volume.min_x;
+-        in >> volume.min_y;
+-        in >> volume.min_z;
+-        in >> volume.max_x;
+-        in >> volume.max_y;
+-        in >> volume.max_z;
+-        size_t num_physical_groups;
+-        in >> num_physical_groups;
+-        volume.physical_group_tags.resize(num_physical_groups);
+-        for (size_t j = 0; j < num_physical_groups; j++) {
+-            in >> volume.physical_group_tags[j];
+-        }
+-        size_t num_boundary_surfaces;
+-        in >> num_boundary_surfaces;
+-        volume.boundary_surface_tags.resize(num_boundary_surfaces);
+-        for (size_t j = 0; j < num_boundary_surfaces; j++) {
+-            in >> volume.boundary_surface_tags[j];
+-        }
++void load_entities_ascii(std::istream& in, MshSpec& spec)
++{
++    AsciiReader reader(in, "$Entities");
++    const size_t num_points = reader.read_count([] { return std::string("the number of points"); });
++    const size_t num_curves = reader.read_count([] { return std::string("the number of curves"); });
++    const size_t num_surfaces =
++        reader.read_count([] { return std::string("the number of surfaces"); });
++    const size_t num_volumes =
++        reader.read_count([] { return std::string("the number of volumes"); });
++
++    Entities& entities = spec.entities;
++    entities.points.clear();
++    reserve_for_count(entities.points, num_points);
++    for (size_t i = 0; i < num_points; i++) {
++        entities.points.emplace_back();
++        PointEntity& point = entities.points.back();
++        point.tag = reader.read_int([&] {
++            return "the tag of point entry " + std::to_string(i + 1) + " of " +
++                   std::to_string(num_points);
++        });
++        const std::string owner = "point " + std::to_string(point.tag);
++        point.x = reader.read_real([&] { return "the x coordinate of " + owner; });
++        point.y = reader.read_real([&] { return "the y coordinate of " + owner; });
++        point.z = reader.read_real([&] { return "the z coordinate of " + owner; });
++        read_tags(reader, point.physical_group_tags, "physical", [&] { return owner; });
+     }
+ 
+-    assert(in.good());
++    read_entities(reader, entities.curves, num_curves, "curve", "bounding point",
++        &CurveEntity::boundary_point_tags);
++    read_entities(reader, entities.surfaces, num_surfaces, "surface", "bounding curve",
++        &SurfaceEntity::boundary_curve_tags);
++    read_entities(reader, entities.volumes, num_volumes, "volume", "bounding surface",
++        &VolumeEntity::boundary_surface_tags);
+ }
+ 
+ void load_entities_binary(std::istream& in, MshSpec& spec)
+ {
+     eat_white_space(in, 1);
+-    size_t num_points, num_curves, num_surfaces, num_volumes;
++    size_t num_points = 0, num_curves = 0, num_surfaces = 0, num_volumes = 0;
+     in.read(reinterpret_cast<char*>(&num_points), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&num_curves), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&num_surfaces), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&num_volumes), sizeof(size_t));
+-    assert(in.good());
+ 
+     Entities& entities = spec.entities;
+     entities.points.resize(num_points);
+@@ -133,14 +119,12 @@ void load_entities_binary(std::istream& in, MshSpec& spec)
+         in.read(reinterpret_cast<char*>(&point.x), sizeof(double));
+         in.read(reinterpret_cast<char*>(&point.y), sizeof(double));
+         in.read(reinterpret_cast<char*>(&point.z), sizeof(double));
+-        size_t num_physical_groups;
++        size_t num_physical_groups = 0;
+         in.read(reinterpret_cast<char*>(&num_physical_groups), sizeof(size_t));
+-        assert(in.good());
+ 
+         point.physical_group_tags.resize(num_physical_groups);
+         in.read(reinterpret_cast<char*>(point.physical_group_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_physical_groups));
+-        assert(in.good());
+     }
+ 
+     for (size_t i = 0; i < num_curves; i++) {
+@@ -152,23 +136,19 @@ void load_entities_binary(std::istream& in, MshSpec& spec)
+         in.read(reinterpret_cast<char*>(&curve.max_x), sizeof(double));
+         in.read(reinterpret_cast<char*>(&curve.max_y), sizeof(double));
+         in.read(reinterpret_cast<char*>(&curve.max_z), sizeof(double));
+-        size_t num_physical_groups;
++        size_t num_physical_groups = 0;
+         in.read(reinterpret_cast<char*>(&num_physical_groups), sizeof(size_t));
+-        assert(in.good());
+ 
+         curve.physical_group_tags.resize(num_physical_groups);
+         in.read(reinterpret_cast<char*>(curve.physical_group_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_physical_groups));
+-        assert(in.good());
+ 
+-        size_t num_boundary_points;
++        size_t num_boundary_points = 0;
+         in.read(reinterpret_cast<char*>(&num_boundary_points), sizeof(size_t));
+-        assert(in.good());
+ 
+         curve.boundary_point_tags.resize(num_boundary_points);
+         in.read(reinterpret_cast<char*>(curve.boundary_point_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_boundary_points));
+-        assert(in.good());
+     }
+ 
+     for (size_t i = 0; i < num_surfaces; i++) {
+@@ -180,23 +160,19 @@ void load_entities_binary(std::istream& in, MshSpec& spec)
+         in.read(reinterpret_cast<char*>(&surface.max_x), sizeof(double));
+         in.read(reinterpret_cast<char*>(&surface.max_y), sizeof(double));
+         in.read(reinterpret_cast<char*>(&surface.max_z), sizeof(double));
+-        size_t num_physical_groups;
++        size_t num_physical_groups = 0;
+         in.read(reinterpret_cast<char*>(&num_physical_groups), sizeof(size_t));
+-        assert(in.good());
+ 
+         surface.physical_group_tags.resize(num_physical_groups);
+         in.read(reinterpret_cast<char*>(surface.physical_group_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_physical_groups));
+-        assert(in.good());
+ 
+-        size_t num_boundary_curves;
++        size_t num_boundary_curves = 0;
+         in.read(reinterpret_cast<char*>(&num_boundary_curves), sizeof(size_t));
+-        assert(in.good());
+ 
+         surface.boundary_curve_tags.resize(num_boundary_curves);
+         in.read(reinterpret_cast<char*>(surface.boundary_curve_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_boundary_curves));
+-        assert(in.good());
+     }
+ 
+     for (size_t i = 0; i < num_volumes; i++) {
+@@ -208,23 +184,19 @@ void load_entities_binary(std::istream& in, MshSpec& spec)
+         in.read(reinterpret_cast<char*>(&volume.max_x), sizeof(double));
+         in.read(reinterpret_cast<char*>(&volume.max_y), sizeof(double));
+         in.read(reinterpret_cast<char*>(&volume.max_z), sizeof(double));
+-        size_t num_physical_groups;
++        size_t num_physical_groups = 0;
+         in.read(reinterpret_cast<char*>(&num_physical_groups), sizeof(size_t));
+-        assert(in.good());
+ 
+         volume.physical_group_tags.resize(num_physical_groups);
+         in.read(reinterpret_cast<char*>(volume.physical_group_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_physical_groups));
+-        assert(in.good());
+ 
+-        size_t num_boundary_surfaces;
++        size_t num_boundary_surfaces = 0;
+         in.read(reinterpret_cast<char*>(&num_boundary_surfaces), sizeof(size_t));
+-        assert(in.good());
+ 
+         volume.boundary_surface_tags.resize(num_boundary_surfaces);
+         in.read(reinterpret_cast<char*>(volume.boundary_surface_tags.data()),
+             static_cast<std::streamsize>(sizeof(int) * num_boundary_surfaces));
+-        assert(in.good());
+     }
+ }
+ 
+diff --git a/src/load_msh_format.cpp b/src/load_msh_format.cpp
+index 6288d0c..4197d38 100644
+--- a/src/load_msh_format.cpp
++++ b/src/load_msh_format.cpp
+@@ -22,8 +22,9 @@ void load_mesh_format(std::istream& in, MshSpec& spec)
+         throw UnsupportedFeature(msg.str());
+     }
+ 
+-    in >> format.file_type;
+-    in >> format.data_size;
++    AsciiReader reader(in, "$MeshFormat");
++    format.file_type = reader.read_int([] { return std::string("the file type"); }, 0, 1);
++    format.data_size = reader.read_int([] { return std::string("the data size"); });
+ 
+     if (format.version == "4.1" && sizeof(size_t) != format.data_size) {
+         std::stringstream msg;
+diff --git a/src/load_msh_nodes.cpp b/src/load_msh_nodes.cpp
+index f6c4627..c430e5f 100644
+--- a/src/load_msh_nodes.cpp
++++ b/src/load_msh_nodes.cpp
+@@ -12,41 +12,76 @@
+ #include <limits>
+ 
+ namespace mshio {
++
++namespace {
++std::string coordinate_name(size_t k)
++{
++    static const char* const names[] = {"the x coordinate", "the y coordinate", "the z coordinate"};
++    return k < 3 ? names[k] : "parametric coordinate " + std::to_string(k - 2);
++}
++} // namespace
++
+ namespace v41 {
+ 
+ void load_nodes_ascii(std::istream& in, MshSpec& spec)
+ {
++    AsciiReader reader(in, "$Nodes");
+     Nodes& nodes = spec.nodes;
+-    in >> nodes.num_entity_blocks;
+-    in >> nodes.num_nodes;
+-    in >> nodes.min_node_tag;
+-    in >> nodes.max_node_tag;
+-    assert(in.good());
+-    nodes.entity_blocks.resize(nodes.num_entity_blocks);
++    nodes.num_entity_blocks = reader.read_count([] { return std::string("the number of entity blocks"); });
++    nodes.num_nodes = reader.read_count([] { return std::string("the number of nodes"); });
++    nodes.min_node_tag = reader.read_count([] { return std::string("the smallest node tag"); });
++    nodes.max_node_tag = reader.read_count([] { return std::string("the largest node tag"); });
++
++    nodes.entity_blocks.clear();
++    reserve_for_count(nodes.entity_blocks, nodes.num_entity_blocks);
++    size_t num_nodes_in_blocks = 0;
++    size_t min_tag = std::numeric_limits<size_t>::max(), max_tag = 0;
+     for (size_t i = 0; i < nodes.num_entity_blocks; i++) {
+-        NodeBlock& block = nodes.entity_blocks[i];
+-        in >> block.entity_dim;
+-        in >> block.entity_tag;
+-        in >> block.parametric;
+-        in >> block.num_nodes_in_block;
+-        assert(in.good());
+-
+-        block.tags.resize(block.num_nodes_in_block);
+-        for (size_t j = 0; j < block.num_nodes_in_block; j++) {
+-            in >> block.tags[j];
++        nodes.entity_blocks.emplace_back();
++        NodeBlock& block = nodes.entity_blocks.back();
++        const auto block_name = [i] { return "node block " + std::to_string(i + 1); };
++        block.entity_dim =
++            reader.read_int([&] { return "the entity dimension of " + block_name(); }, 0, 3);
++        block.entity_tag = reader.read_int([&] { return "the entity tag of " + block_name(); });
++        block.parametric =
++            reader.read_int([&] { return "the parametric flag of " + block_name(); }, 0, 3);
++        block.num_nodes_in_block =
++            reader.read_count([&] { return "the number of nodes in " + block_name(); });
++
++        const size_t n = block.num_nodes_in_block;
++        reserve_for_count(block.tags, n);
++        for (size_t j = 0; j < n; j++) {
++            block.tags.push_back(reader.read_tag([&] {
++                return "the tag of node entry " + std::to_string(j + 1) + " of " +
++                       std::to_string(n) + " in " + block_name();
++            }));
++            min_tag = std::min(min_tag, block.tags.back());
++            max_tag = std::max(max_tag, block.tags.back());
+         }
+-        assert(in.good());
+ 
+-        assert(block.parametric >= 0 && block.parametric <= 3);
+         const size_t entries_per_node =
+             static_cast<size_t>(3 + ((block.parametric == 1) ? block.entity_dim : 0));
+-        block.data.resize(block.num_nodes_in_block * entries_per_node);
+-        for (size_t j = 0; j < block.num_nodes_in_block; j++) {
++        reserve_for_count(block.data, n * entries_per_node);
++        for (size_t j = 0; j < n; j++) {
+             for (size_t k = 0; k < entries_per_node; k++) {
+-                in >> block.data[j * entries_per_node + k];
++                block.data.push_back(reader.read_real(
++                    [&] { return coordinate_name(k) + " of node " + std::to_string(block.tags[j]); }));
+             }
+         }
+-        assert(in.good());
++        num_nodes_in_blocks += n;
++    }
++
++    // The header's count and tag range size the readers' tables (PolyFEM
++    // indexes nodes by tag up to the declared largest tag).
++    if (num_nodes_in_blocks != nodes.num_nodes) {
++        throw InvalidFormat("$Nodes: the header declares " + std::to_string(nodes.num_nodes) +
++                            " nodes, but its blocks hold " + std::to_string(num_nodes_in_blocks));
++    }
++    if (num_nodes_in_blocks > 0 && (min_tag < nodes.min_node_tag || max_tag > nodes.max_node_tag)) {
++        throw InvalidFormat("$Nodes: the node tags run from " + std::to_string(min_tag) + " to " +
++                            std::to_string(max_tag) + ", outside the range " +
++                            std::to_string(nodes.min_node_tag) + " to " +
++                            std::to_string(nodes.max_node_tag) + " that the header declares");
+     }
+ }
+ 
+@@ -58,7 +93,6 @@ void load_nodes_binary(std::istream& in, MshSpec& spec)
+     in.read(reinterpret_cast<char*>(&nodes.num_nodes), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&nodes.min_node_tag), sizeof(size_t));
+     in.read(reinterpret_cast<char*>(&nodes.max_node_tag), sizeof(size_t));
+-    assert(in.good());
+     nodes.entity_blocks.resize(nodes.num_entity_blocks);
+     for (size_t i = 0; i < nodes.num_entity_blocks; i++) {
+         NodeBlock& block = nodes.entity_blocks[i];
+@@ -66,12 +100,10 @@ void load_nodes_binary(std::istream& in, MshSpec& spec)
+         in.read(reinterpret_cast<char*>(&block.entity_tag), sizeof(int));
+         in.read(reinterpret_cast<char*>(&block.parametric), sizeof(int));
+         in.read(reinterpret_cast<char*>(&block.num_nodes_in_block), sizeof(size_t));
+-        assert(in.good());
+ 
+         block.tags.resize(block.num_nodes_in_block);
+         in.read(reinterpret_cast<char*>(block.tags.data()),
+             static_cast<std::streamsize>(sizeof(size_t) * block.num_nodes_in_block));
+-        assert(in.good());
+ 
+         const size_t entries_per_node =
+             static_cast<size_t>(3 + ((block.parametric == 1) ? block.entity_dim : 0));
+@@ -79,7 +111,6 @@ void load_nodes_binary(std::istream& in, MshSpec& spec)
+         in.read(reinterpret_cast<char*>(block.data.data()),
+             static_cast<std::streamsize>(
+                 sizeof(double) * block.num_nodes_in_block * entries_per_node));
+-        assert(in.good());
+     }
+ }
+ 
+@@ -89,6 +120,7 @@ namespace v22 {
+ 
+ void load_nodes_ascii(std::istream& in, MshSpec& spec)
+ {
++    AsciiReader reader(in, "$Nodes");
+     Nodes& nodes = spec.nodes;
+     nodes.num_entity_blocks++;
+     nodes.entity_blocks.emplace_back();
+@@ -97,18 +129,25 @@ void load_nodes_ascii(std::istream& in, MshSpec& spec)
+     block.entity_dim = 0; // Will be determined once elements are loaded.
+     block.entity_tag = 0; // Same as above.
+     block.parametric = 0;
+-    in >> block.num_nodes_in_block;
+-    assert(in.good());
++    block.num_nodes_in_block = reader.read_count([] { return std::string("the number of nodes"); });
+     nodes.num_nodes += block.num_nodes_in_block;
+ 
+-    block.tags.resize(block.num_nodes_in_block);
+-    block.data.resize(block.num_nodes_in_block * 3);
+-    for (size_t i = 0; i < block.num_nodes_in_block; i++) {
+-        in >> block.tags[i];
+-        in >> block.data[i * 3];
+-        in >> block.data[i * 3 + 1];
+-        in >> block.data[i * 3 + 2];
+-        assert(in.good());
++    // MSH 2.2 node numbers are positive ints.
++    const size_t n = block.num_nodes_in_block;
++    reserve_for_count(block.tags, n);
++    reserve_for_count(block.data, 3 * n);
++    for (size_t i = 0; i < n; i++) {
++        const size_t tag = static_cast<size_t>(reader.read_int(
++            [&] {
++                return "the tag of node entry " + std::to_string(i + 1) + " of " +
++                       std::to_string(n);
++            },
++            1));
++        block.tags.push_back(tag);
++        for (size_t k = 0; k < 3; k++) {
++            block.data.push_back(reader.read_real(
++                [&] { return coordinate_name(k) + " of node " + std::to_string(tag); }));
++        }
+     }
+ 
+     if (block.num_nodes_in_block > 0) {
+@@ -130,14 +169,12 @@ void load_nodes_binary(std::istream& in, MshSpec& spec)
+     block.entity_tag = 0; // Same as above.
+     block.parametric = 0;
+     in >> block.num_nodes_in_block;
+-    assert(in.good());
+     nodes.num_nodes += block.num_nodes_in_block;
+ 
+     block.tags.resize(block.num_nodes_in_block);
+     block.data.resize(block.num_nodes_in_block * 3);
+     eat_white_space(in, 1);
+     for (size_t i = 0; i < block.num_nodes_in_block; i++) {
+-        assert(in.good());
+         int tag;
+         in.read(reinterpret_cast<char*>(&tag), sizeof(int));
+         block.tags[i] = static_cast<size_t>(tag);
+diff --git a/src/load_msh_physical_groups.cpp b/src/load_msh_physical_groups.cpp
+index c857d4a..86a586d 100644
+--- a/src/load_msh_physical_groups.cpp
++++ b/src/load_msh_physical_groups.cpp
+@@ -1,5 +1,7 @@
+ #include "load_msh_physical_groups.h"
+ 
++#include "io_utils.h"
++
+ #include <mshio/MshSpec.h>
+ 
+ #include <cassert>
+@@ -11,17 +13,23 @@ namespace mshio {
+ 
+ void load_physical_groups(std::istream& in, MshSpec& spec)
+ {
++    AsciiReader reader(in, "$PhysicalNames");
+     auto& groups = spec.physical_groups;
+-    int num_groups;
+-    in >> num_groups;
+-    spec.physical_groups.resize(num_groups);
+-    for (int i = 0; i < num_groups; i++) {
+-        auto& group = groups[i];
+-        in >> group.dim;
+-        in >> group.tag;
+-        in >> std::quoted(group.name);
++    const size_t num_groups =
++        reader.read_count([] { return std::string("the number of physical names"); });
++    groups.clear();
++    reserve_for_count(groups, num_groups);
++    for (size_t i = 0; i < num_groups; i++) {
++        groups.emplace_back();
++        auto& group = groups.back();
++        const auto entry = [&] {
++            return "physical name entry " + std::to_string(i + 1) + " of " +
++                   std::to_string(num_groups);
++        };
++        group.dim = reader.read_int([&] { return "the dimension of " + entry(); }, 0, 3);
++        group.tag = reader.read_int([&] { return "the tag of " + entry(); });
++        group.name = reader.read_quoted([&] { return "the name of " + entry(); });
+     }
+-    assert(in.good());
+ }
+ 
+ } // namespace mshio
+diff --git a/src/load_msh_post_process.cpp b/src/load_msh_post_process.cpp
+index 77d9dc3..b451034 100644
+--- a/src/load_msh_post_process.cpp
++++ b/src/load_msh_post_process.cpp
+@@ -2,9 +2,11 @@
+ #include "element_utils.h"
+ 
+ #include <mshio/MshSpec.h>
++#include <mshio/exception.h>
+ 
+ #include <cassert>
+ #include <limits>
++#include <string>
+ 
+ namespace mshio {
+ namespace v22 {
+@@ -24,7 +26,17 @@ void regroup_nodes_into_blocks(MshSpec& spec)
+         const auto n = nodes_per_element(block.element_type);
+         for (size_t i = 0; i < block.num_elements_in_block; i++) {
+             for (size_t j = 0; j < n; j++) {
+-                size_t idx = node_index(block.data[i * (n + 1) + j + 1]);
++                // The tables span the node tags only; a reference outside them
++                // was written out of bounds.
++                const size_t node_tag = block.data[i * (n + 1) + j + 1];
++                if (nodes.num_nodes == 0 || node_tag < nodes.min_node_tag ||
++                    node_tag > nodes.max_node_tag) {
++                    throw InvalidFormat("$Elements: element " +
++                                        std::to_string(block.data[i * (n + 1)]) +
++                                        " references node tag " + std::to_string(node_tag) +
++                                        ", which is not a node of the file");
++                }
++                size_t idx = node_index(node_tag);
+                 entity_dims[idx] = block.entity_dim;
+                 entity_tags[idx] = block.entity_tag;
+             }

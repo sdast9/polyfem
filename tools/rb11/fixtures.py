@@ -78,13 +78,39 @@ def boundary_faces(T):
     return [fs[0] for fs in count.values() if len(fs) == 1]
 
 
+def _coordinate_lines(V3, raw_coords):
+    """``x y z`` per vertex; ``raw_coords`` maps (vertex, axis) to a token
+    written verbatim instead of the number (malformed-number fixtures)."""
+    raw_coords = raw_coords or {}
+    return [" ".join(raw_coords.get((v, a), f"{V3[v, a]:.17g}") for a in range(3))
+            for v in range(len(V3))]
+
+
+def write_msh22(path, V, T, body_ids=None, raw_coords=None):
+    """Gmsh 2.2 ASCII writer for tets: physical and elementary tag = body id."""
+    V = np.asarray(V)
+    T = np.asarray(T)
+    if body_ids is None:
+        body_ids = np.ones(len(T), dtype=int)
+    lines = ["$MeshFormat", "2.2 0 8", "$EndMeshFormat", "$Nodes", str(len(V))]
+    lines += [f"{v + 1} {xyz}" for v, xyz in enumerate(_coordinate_lines(V, raw_coords))]
+    lines += ["$EndNodes", "$Elements", str(len(T))]
+    for r, t in enumerate(T):
+        b = int(body_ids[r])
+        lines.append(f"{r + 1} 4 2 {b} {b} " + " ".join(str(int(i) + 1) for i in t))
+    lines.append("$EndElements")
+    with open(path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+
 def write_msh41(path, V, T, body_ids=None, node_tags=None, elem_tag_offset=1,
-                bad_node_refs=None):
+                bad_node_refs=None, raw_coords=None):
     """Gmsh 4.1 ASCII writer for tets; one volume entity per body id.
 
     ``node_tags`` overrides the (1-based) node tag of each vertex, and
     ``bad_node_refs`` is a list of (element row, corner, tag) substitutions
-    applied verbatim -- used to build invalid-index fixtures."""
+    applied verbatim -- used to build invalid-index fixtures; ``raw_coords``
+    replaces coordinates verbatim (see ``_coordinate_lines``)."""
     V = np.asarray(V)
     T = np.asarray(T)
     dim = V.shape[1]
@@ -110,7 +136,7 @@ def write_msh41(path, V, T, body_ids=None, node_tags=None, elem_tag_offset=1,
     lines += ["$Nodes", f"1 {len(V)} {node_tags.min()} {node_tags.max()}",
               f"{dim} {bodies[0]} 0 {len(V)}"]
     lines += [str(int(t)) for t in node_tags]
-    lines += [f"{x:.17g} {y:.17g} {z:.17g}" for x, y, z in V3]
+    lines += _coordinate_lines(V3, raw_coords)
     lines.append("$EndNodes")
     lines += ["$Elements", f"{len(bodies)} {len(T)} {elem_tag_offset} {elem_tag_offset + len(T) - 1}"]
     refs = {}
