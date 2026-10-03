@@ -316,6 +316,117 @@ TEST_CASE("malformed values in Gmsh files are refused with their line and token"
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Gmsh files: parametric node blocks
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	/// A one-tet MSH 4.1 binary file whose single node block has entity
+	/// dimension `entity_dim` and parametric flag 1; mshio reads 3 +
+	/// `entity_dim` of `values` per node.
+	std::string write_msh41_binary(const std::filesystem::path &path, const int entity_dim, const std::vector<double> &values)
+	{
+		std::ofstream out(path, std::ios::binary);
+		const auto put = [&](const auto value) { out.write(reinterpret_cast<const char *>(&value), sizeof(value)); };
+		out << "$MeshFormat\n4.1 1 8\n";
+		put(int(1));
+		out << "\n$EndMeshFormat\n$Nodes\n";
+		for (const size_t v : {1, 4, 1, 4}) // blocks, nodes, smallest and largest tag
+			put(v);
+		for (const int v : {entity_dim, 1, 1}) // entity dimension and tag, parametric flag
+			put(v);
+		for (const size_t v : {4, 1, 2, 3, 4}) // nodes in the block, their tags
+			put(v);
+		for (const double v : values)
+			put(v);
+		out << "\n$EndNodes\n$Elements\n";
+		for (const size_t v : {1, 1, 1, 1}) // blocks, elements, smallest and largest tag
+			put(v);
+		for (const int v : {3, 1, 4}) // entity dimension and tag, element type (tet)
+			put(v);
+		for (const size_t v : {1, 1, 1, 2, 3, 4}) // elements in the block, the tet's tag and nodes
+			put(v);
+		out << "\n$EndElements\n";
+		return path.string();
+	}
+} // namespace
+
+TEST_CASE("parametric Gmsh node blocks keep their positions", "[input_validation][mesh][msh]")
+{
+	// A node block with parametric flag 1 (MSH 4.1 written with Gmsh's
+	// Mesh.SaveParametric) stores x y z and then the node's coordinates on its
+	// entity: u on a curve, u v on a surface, u v w in a volume. MshReader read
+	// every block with a stride of 3: the reported file below loaded and solved
+	// with the vertices (0,0,0), (.1,.2,.3), (1,0,0), (.4,.5,.6), and
+	// Gmsh-written meshes stopped as "element N is flipped".
+	const auto dir = scratch_dir("rb11-msh-parametric");
+	int file = 0;
+	const auto load = [&](const std::vector<std::string> &lines) {
+		return Mesh::create(write_msh(dir / ("case" + std::to_string(file++) + ".msh"), lines), false);
+	};
+	const auto check_vertices = [](const std::unique_ptr<Mesh> &mesh, const Eigen::MatrixXd &expected) {
+		REQUIRE(mesh != nullptr);
+		REQUIRE(mesh->n_vertices() == expected.rows());
+		for (int v = 0; v < expected.rows(); ++v)
+		{
+			const RowVectorNd p = mesh->point(v);
+			INFO("vertex " << v << " at (" << p << ")");
+			REQUIRE(p.size() == expected.cols());
+			for (int d = 0; d < expected.cols(); ++d)
+				CHECK(p(d) == expected(v, d));
+		}
+	};
+
+	Eigen::MatrixXd unit_tet(4, 3);
+	unit_tet << 0, 0, 0,
+		1, 0, 0,
+		0, 1, 0,
+		0, 0, 1;
+
+	SECTION("a volume block: the 2026-10-03 reproduction")
+	{
+		check_vertices(load({"$MeshFormat", "4.1 0 8", "$EndMeshFormat",
+							 "$Entities", "0 0 0 1", "1 0 0 0 1 1 1 1 1 0", "$EndEntities",
+							 "$Nodes", "1 4 1 4", "3 1 1 4", "1", "2", "3", "4",
+							 "0 0 0 0.1 0.2 0.3", "1 0 0 0.4 0.5 0.6", "0 1 0 0.7 0.8 0.9", "0 0 1 0.11 0.12 0.13", "$EndNodes",
+							 "$Elements", "1 1 1 1", "3 1 4 1", "1 1 2 3 4", "$EndElements"}),
+					   unit_tet);
+		// its non-parametric twin
+		check_vertices(load(one_tet_v41), unit_tet);
+	}
+	SECTION("a surface mesh: the three kinds of block Gmsh writes")
+	{
+		// A unit square in six triangles. The boundary loop's start point
+		// stores x y z, the loop x y z u (u its arc-length fraction) and the
+		// surface x y z u v.
+		Eigen::MatrixXd square(6, 2);
+		square << 0, 0,
+			1, 0,
+			1, 1,
+			0, 1,
+			0.25, 0.5,
+			0.75, 0.5;
+		check_vertices(load({"$MeshFormat", "4.1 0 8", "$EndMeshFormat",
+							 "$Nodes", "3 6 1 6",
+							 "0 1 0 1", "1", "0 0 0",
+							 "1 1 1 3", "2", "3", "4", "1 0 0 0.25", "1 1 0 0.5", "0 1 0 0.75",
+							 "2 1 1 2", "5", "6", "0.25 0.5 0 0.25 0.5", "0.75 0.5 0 0.75 0.5", "$EndNodes",
+							 "$Elements", "1 6 1 6", "2 1 2 6",
+							 "1 1 2 6", "2 1 6 5", "3 2 3 6", "4 3 4 5", "5 3 5 6", "6 4 1 5", "$EndElements"}),
+					   square);
+	}
+	SECTION("binary files")
+	{
+		check_vertices(Mesh::create(write_msh41_binary(dir / "binary.msh", 3, {0, 0, 0, 0.1, 0.2, 0.3, 1, 0, 0, 0.4, 0.5, 0.6, 0, 1, 0, 0.7, 0.8, 0.9, 0, 0, 1, 0.11, 0.12, 0.13}), false),
+					   unit_tet);
+		// mshio does not range-check a binary block header: this block holds
+		// 3 + (-1) values per node, and a stride of 3 read past their end
+		CHECK_THROWS_WITH(Mesh::create(write_msh41_binary(dir / "binary_dim.msh", -1, {0, 0, 1, 0, 0, 1, 0, 0}), false),
+						  ContainsSubstring("parametric node block 1 has entity dimension -1 (0 to 3 expected)"));
+	}
+}
+
 TEST_CASE("obstacle surfaces are validated", "[input_validation][obstacle]")
 {
 	Eigen::MatrixXd V(4, 3);

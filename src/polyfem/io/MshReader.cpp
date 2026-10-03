@@ -131,11 +131,26 @@ namespace polyfem::io
 			logger().warn("MSH file contains more node tags than nodes, condensing nodes which will break input node ordering.");
 
 		int index = 0;
-		for (const auto &n : nodes.entity_blocks)
+		for (size_t b = 0; b < nodes.entity_blocks.size(); ++b)
 		{
-			for (int i = 0; i < n.num_nodes_in_block * 3; i += 3)
+			const auto &n = nodes.entity_blocks[b];
+			// A node stores x y z. A parametric block (MSH 4.1 written with
+			// Gmsh's Mesh.SaveParametric) follows them with the node's
+			// coordinates on the block's entity: u on a curve, u v on a
+			// surface, u v w in a volume. Only x y z are positions; a fixed
+			// stride of 3 read the parametric values as the positions of the
+			// block's later nodes, and the file loaded with them silently or
+			// stopped as a flipped element. mshio range-checks the entity
+			// dimension of ASCII files only.
+			if (n.parametric == 1 && (n.entity_dim < 0 || n.entity_dim > 3))
+				log_and_throw_error("MSH file {}: parametric node block {} has entity dimension {} (0 to 3 expected)", path, b + 1, n.entity_dim);
+			const size_t stride = 3 + static_cast<size_t>(n.parametric == 1 ? n.entity_dim : 0);
+			if (n.data.size() != n.num_nodes_in_block * stride)
+				log_and_throw_error("MSH file {}: node block {} holds {} values for {} nodes, not {} per node", path, b + 1, n.data.size(), n.num_nodes_in_block, stride);
+
+			for (size_t j = 0; j < n.num_nodes_in_block; ++j)
 			{
-				const size_t tag = n.tags[i / 3];
+				const size_t tag = n.tags[j];
 				if (tag < 1 || tag > static_cast<size_t>(max_tag))
 					log_and_throw_error("MSH file {}: node tag {} lies outside the tag range 1 to {} of the file", path, tag, max_tag);
 				if (tag_to_index[tag] >= 0)
@@ -143,6 +158,7 @@ namespace polyfem::io
 
 				const int node_id = n_vertices != max_tag ? (index++) : (tag - 1);
 
+				const size_t i = j * stride; // x of node j
 				if (dim == 2)
 					vertices.row(node_id) << n.data[i], n.data[i + 1];
 				if (dim == 3)

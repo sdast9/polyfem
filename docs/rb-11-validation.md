@@ -1012,9 +1012,108 @@ include path is part of every `polyfem` compile line).
   line itself.
 - MSH 2.2 post-processing still sizes its tables by the node tag range; a
   sparse file with very large tags costs memory in proportion (unchanged).
-- Found, not repaired: `MshReader` reads a 4.1 parametric node block
-  (`parametric` 1, `3 + dim` values per node) with a stride of 3, so such a
-  valid file loads silently with wrong vertex positions (probe
+- Found here and repaired the same day: `MshReader` read a 4.1 parametric
+  node block (`parametric` 1, `3 + dim` values per node) with a stride of 3,
+  so such a valid file loaded with wrong vertex positions (probe
   `msh-malformed-work/parametric/`: the vertices became (0,0,0),
   (.1,.2,.3), (1,0,0), (.4,.5,.6)). Gmsh writes such blocks only with
-  `Mesh.SaveParametric`.
+  `Mesh.SaveParametric`. See
+  [the next section](#gmsh-parametric-node-blocks-keep-their-positions-2026-10-03).
+
+## Gmsh parametric node blocks keep their positions (2026-10-03)
+
+**Status: repaired and validated within stated scope.** Found during the
+malformed-number repair above. An MSH 4.1 node block with `parametric` 1
+stores `3 + entity_dim` values per node: x y z, then the node's coordinates
+on its entity (u on a curve, u v on a surface, u v w in a volume). MshIO reads
+them as stored (`entries_per_node` in `load_msh_nodes.cpp`, ASCII and
+binary), but `MshReader` copied positions with a fixed stride of 3, so from
+the second node of such a block on it took parametric values, or parts of the
+next node, as positions. Every node position passes through that loop:
+bodies (`Mesh::create`, higher-order nodes included) and obstacle surfaces
+(`read_surface_mesh`).
+
+Started on `main` at `ec552e866` (clean tree, shared `build/`). Evidence, not
+committed: `msh-malformed-work/parametric/` at the workspace root (the
+baseline `PolyFEM_bin.before` `9b42d8cc…` and `unit_tests.before`; the
+repaired `PolyFEM_bin.after` `275406af…`, built before the commit, so its
+embedded RB-12 identity records a modified tree, and `PolyFEM_bin.published`,
+the shared build rebuilt at the commit; `compare.py` with `runs/` and
+`runs-published/`; the Gmsh meshes and their `.geo` files in `gmsh/`;
+`param_scan.cpp` and `corpus-scan.txt`; the smokes; the matrix run). No
+default, model, solver, tolerance or HDA asset changed.
+
+### Reproduction
+
+- The reported one-tet file (`input/one_tet.msh`: one volume block
+  `3 1 1 4`, lines `x y z u v w`) loaded and solved without a word, with the
+  vertices (0,0,0), (.1,.2,.3), (1,0,0), (.4,.5,.6) instead of the unit tet.
+- What Gmsh writes (4.15.2, `-setnumber Mesh.SaveParametric 1`): point and
+  volume blocks stay `parametric` 0; curve blocks store x y z u, surface
+  blocks x y z u v. In a 3D mesh the misplaced nodes are therefore on the
+  boundary (a unit ball: 99 of its 119 nodes sit in parametric blocks). With
+  the baseline binary a unit disk (2D), a unit cube and a unit ball stopped,
+  ASCII and binary alike, as `element N is flipped`: a named failure naming
+  the wrong cause. The coarsest unit square loaded correctly by accident (each
+  of its parametric blocks holds one node, and the first node of a block was
+  always read right). MshIO's own `data/test_4.1_bin.msh` (a parametric
+  surface block of 6 nodes and a parametric curve block without nodes)
+  stopped as `element 0 is flipped`.
+- Of the 975 `.msh` files on disk (the corpus of the section above), only
+  MshIO's test file (3 copies) has a parametric block; no PolyFEM data, test
+  case or Houdini-written mesh does (`corpus-scan.txt`).
+
+### What changed
+
+- `src/polyfem/io/MshReader.cpp`: each node block is read with its own stride,
+  `3 + entity_dim` when `parametric` is 1 and 3 otherwise, and only x y z
+  (x y in 2D) are kept. Two named errors guard the stride: a parametric block
+  whose entity dimension lies outside 0 to 3 (`parametric node block B has
+  entity dimension D (0 to 3 expected)`; MshIO range-checks it in ASCII files
+  only, and a binary parametric block of dimension −1 holds two values per
+  node, past whose end the old stride read), and a block whose stored values
+  disagree with its stride (unreachable with the current MshIO; it keeps a
+  future disagreement from passing silently).
+- Tests: `[input_validation][mesh][msh]` case "parametric Gmsh node blocks
+  keep their positions" (75 assertions): the reported file and its
+  non-parametric twin; a 2D unit square whose six nodes sit in the three kinds
+  of block Gmsh writes (point x y z, curve x y z u, surface x y z u v); a
+  binary parametric volume block; and the binary block of dimension −1,
+  refused by name. Against the original reader 20 of the 75 assertions fail
+  (the reported positions in the ASCII and the binary file, three 2D
+  coordinates, no error for the binary block of dimension −1).
+
+### Validation
+
+| Check | Criterion | Result | Outcome |
+| --- | --- | --- | --- |
+| Reported file, repaired binary | Unit tet | VTUs byte-identical to its non-parametric twin's (baseline: points off by up to 1) | Pass |
+| Gmsh meshes (`compare.py`): unit square, disk, cube, ball; `SaveParametric` 1 against 0; ASCII and binary; one quasistatic step, 1 thread | VTUs byte-identical to the twin of the same encoding | 8/8 (baseline: 6 stopped as `element N is flipped`, the square's 2 identical) | Pass |
+| The 9 non-parametric meshes, baseline against repaired | Byte-identical | 45 output files identical (manifests excluded) | Pass |
+| MshIO `test_4.1_bin.msh` | Loads with the points of `test_4.1_ascii.msh` | Identical points (baseline: `element 0 is flipped`) | Pass |
+| The new test against the original reader | Fails | 20 of 75 assertions fail | Pass |
+| `[msh]` | Pass | 3 cases / 127 assertions | Pass |
+| `[input_validation]` | Pass | 24 cases / 334 assertions | Pass |
+| RB-11 matrix, verify mode (`rb11-matrix/`) | 97/97 | 97/97 as declared; most cases write their mesh as MSH 4.1, so each passes the new loop | Pass |
+| Five public smokes, `--threads 1`, baseline against repaired | Byte-identical | 55 output files identical (the scenes read no `.msh`) | Pass |
+| The shared build rebuilt at the commit (clean RB-12 identity): `compare.py`, MshIO's file, `[input_validation]`, `[msh]` | As above | Same results; its 90 `compare.py` outputs byte-identical to `PolyFEM_bin.after`'s | Pass |
+
+ASCII and binary twins differ by up to 5.6e-17 in position, before the
+repair and after it (Gmsh prints ASCII coordinates to 16 digits), hence the
+comparison within an encoding.
+
+### Publication
+
+Published with this section on `sdast9/polyfem:main`; the shared `build/`
+(`PolyFEM_bin`, `unit_tests`) was rebuilt.
+
+### Limits
+
+- The parametric coordinates are read and dropped: nothing in PolyFEM uses
+  them.
+- Gmsh 4.15.2 does not write the reported kind of block (a parametric volume
+  block); its curve and surface blocks are what Gmsh users meet. Both kinds
+  are covered.
+- A binary node block's entity dimension is checked only where it sets the
+  stride (parametric blocks); the rest of a binary header is still not
+  cross-checked (unchanged).

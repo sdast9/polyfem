@@ -68,10 +68,13 @@ realization noise), and a repeat of `pup_push` for steps 1–3.
 
 ### Gmsh input (found 2026-10-03)
 
-The malformed-number hang is repaired ([RB-11 record](rb-11-validation.md#gmsh-files-with-malformed-numbers-stop-by-name-instead-of-hanging-2026-10-03)).
-Found there and not repaired: `MshReader` reads a 4.1 parametric node block
-(`parametric` 1, written by Gmsh only with `Mesh.SaveParametric`) with a
-stride of 3, so the file loads silently with wrong vertex positions.
+Nothing open. The malformed-number hang is repaired ([RB-11 record](rb-11-validation.md#gmsh-files-with-malformed-numbers-stop-by-name-instead-of-hanging-2026-10-03)).
+The defect found there is repaired the same day ([record](rb-11-validation.md#gmsh-parametric-node-blocks-keep-their-positions-2026-10-03)):
+`MshReader` read a 4.1 parametric node block (`parametric` 1, written by Gmsh
+only with `Mesh.SaveParametric`) with a stride of 3, so such a file loaded
+with wrong vertex positions, silently or as a misleading `element N is
+flipped`; each block is now read with its own stride. No mesh on disk outside
+MshIO's own test data had such a block.
 
 ### CI and portability
 
