@@ -248,7 +248,9 @@ TEST_CASE("malformed values in Gmsh files are refused with their line and token"
 		}
 		CHECK(Mesh::create(write_msh(dir / "crlf.msh", one_tet_v41, "\r\n"), false) != nullptr);
 		CHECK(load(with_line(one_tet_v22, 7, "2\t1.0e+00 0.0E0 -0")) != nullptr);
-		CHECK(load(with_line(one_tet_v41, 6, R"name(3 1 "body \"one\" (soft)")name")) != nullptr);
+		// MSVC cannot take this as a raw string literal inside CHECK
+		const std::string escaped_name = "3 1 \"body \\\"one\\\" (soft)\"";
+		CHECK(load(with_line(one_tet_v41, 6, escaped_name)) != nullptr);
 	}
 	SECTION("MSH 2.2 nodes")
 	{

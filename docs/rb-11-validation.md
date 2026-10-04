@@ -997,6 +997,14 @@ fetched the patched MshIO into `~/.cache/CPM/mshio/d857` (the unpatched
 `d192` is untouched for other checkouts) and was rebuilt in full (mshio's
 include path is part of every `polyfem` compile line).
 
+CI (Build 37127119240 on `ec552e866`, and 37147908390 on `7aafb3247`):
+Linux and macOS, Release and Debug, green; both Windows lanes failed to
+compile `tests/test_input_validation.cpp`. MSVC cannot take the raw string
+literal of the escaped-name control (`R"name(3 1 "body \"one\" (soft)")name"`)
+inside `CHECK(...)` (C2017, C3680). The patched MshIO compiled on Windows.
+The commit that adds this paragraph declares that string as a plain literal
+outside the macro (same bytes).
+
 ### Limits
 
 - The data sections (`$NodeData`, `$ElementData`, `$ElementNodeData`) and the
