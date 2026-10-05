@@ -2,6 +2,25 @@
 
 **Review follow-up, 2026-09-12 (validated):** The assignment arithmetic was corrected after two finite parent coefficients overflowed their weighted sum even though their mean was representable. The parent-identity decision is retained; the bounded arithmetic repair and fresh validation are tracked in the [2026-09-12 follow-up](rb-review-followup-20260912.md).
 
+**Correction, 2026-10-05 (canonical pair keys, implemented):** the design below
+checked that a collision's parent *list* is order-insensitive, but not the
+order *inside* a pair. An edge-edge parent (and a vertex-vertex parent of
+codimensional points) was keyed on `(10 + type, id0, id1)` exactly as the
+toolkit stored the candidate, i.e. in the order the broad phase emitted it:
+the LBVH emits a pair as (query leaf, target leaf) in Morton order, and a
+line search's cached swept candidates are ordered differently from the static
+build. One physical pair could therefore carry two keys; RB-20 continuation
+then missed after a flip and re-estimated the contact at the current state
+(parent workspace `semi-implicit-roundoff-work/FINDINGS.md`, mechanism A: the
+whole 3e-4 of the 1e-15 repro; 1.6–4.3 % of continued keys per step on R4,
+pup_push and IT, 12–15 % of the contacts at every ball-burst stall retune).
+Point/edge and point/triangle parents are typed and were never affected. Such
+pairs are now keyed on the sorted primitive pair (stencil keys likewise), and
+restart state is converted on read; see the
+[canonical-pair-keys record](canonical-pair-keys-20261005.md). The validation
+below is unaffected (its fixtures have typed point/edge parents); the RB-02
+probe passes 270/270 on the change.
+
 **RBR-04, 2026-09-21 (implemented):** the improved-max seam of the analysis below was reachable through the public options and is now a checked restriction — measured on the real form (a finite `|κ₁−κ₂|/2·b(d)` jump, 62.24 on the fixture) and refused by name at input validation and at construction; see the [RBR-04 section](#rbr-04--the-improved-max-operator-is-a-checked-restriction-2026-09-21).
 
 Date: 2026-09-11

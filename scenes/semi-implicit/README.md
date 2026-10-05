@@ -118,6 +118,12 @@ with the closest point on the whole primitive. A built collision's
 `stiffness_scale` is the contribution-weighted mean of its parents, so the
 potential is continuous when the closest subfeature switches (EV↔VV, FV↔EV) and
 the historical stencil jump is gone (`"stencil"` restores the old keying).
+An edge/edge pair (and a pair of codimensional points) is keyed on its
+**sorted** primitive pair, whichever order the broad phase emitted it in
+(2026-10-05, [record](../../docs/canonical-pair-keys-20261005.md)); before,
+one such contact could carry two keys, and continuation silently re-estimated
+it whenever the emission order flipped. Point/edge and point/triangle keys are
+typed and never had two orders; `"stencil"` keys are canonical in the same way.
 
 `force_continuation` (default on) keeps, at every between-steps refresh, the
 coefficient that acted at the published endpoint for every active contact: the
@@ -165,7 +171,12 @@ one-ulp step-time roundoff. State files are sized to their data
 (`c2a57e393`). Older state files resume with a fresh controller and a warning
 ([restart](../../docs/restart-json-20260927.md),
 [AL multipliers](../../docs/restart-al-multipliers-20260928.md),
-[state files](../../docs/state-file-chunks-20260927.md)).
+[state files](../../docs/state-file-chunks-20260927.md)). State files written
+before 2026-10-05 store edge/edge and vertex/vertex coefficient keys in the
+order the broad phase emitted them; they are converted to sorted keys on read
+(where both orders of one pair are stored, the continued or endpoint entry
+wins, otherwise the sorted one), so a resumed run keeps its continuation
+([record](../../docs/canonical-pair-keys-20261005.md)).
 
 On macOS the default `Eigen::AccelerateLDLT` used vecLib threads that ignored
 `--max_threads` and were not bitwise deterministic. Since `ba3ea76b6`
@@ -217,7 +228,8 @@ the passes. See
 Every `PolyFEM_bin` run writes `run-manifest.json` into its output directory
 (`output/manifest`; `""` disables it, the library default is off) and rewrites
 it after every step and at completion, so a run that stops leaves its
-identity behind. Schema `polyfem.run-manifest` version 1:
+identity behind. Schema `polyfem.run-manifest` version 1 (fields have been
+added since, none has changed meaning):
 
 | record | content |
 | --- | --- |
@@ -226,13 +238,48 @@ identity behind. Schema `polyfem.run-manifest` version 1:
 | `input` | the input file and every `common` file with their hashes, the effective input after defaults and command-line overrides (`effective`, hashed as its canonical serialization, once as is and once without `root_path` / `output/directory` so repeats from different directories share a hash), every string of it that resolves to an existing file (meshes, per-element value files, selections, restart states — `referenced_files`, with hashes), the unit system and `characteristic_force_density` (setting and effective value, since the stopping tolerance scales with it — RB-09) |
 | `solver` | linear / nonlinear solver summary, the contact settings, and `model`: what the contact form implements (stiffness mode, the coefficient law and its lineage, coefficient identity, continuation, friction lag, controller constants, gap convention, model-selection status, the fallbacks the run can take) |
 | `diagnostics` | the opt-in RB-04 streams and the versions of every record schema this binary writes |
-| `steps` | one record per solve: outcome, phase reached, wall time, termination (restarts, iterations, reason), every subsolve, stall retunes, lagging state, and the contact form's state (active count, trim, refresh id, batch median / floor / cap, fallback and continuation counts, candidate counts) |
+| `steps` | one record per solve: outcome, phase reached, wall time, termination (restarts, iterations, reason), every subsolve, stall retunes, lagging state, and the contact form's state (active count, trim, refresh id, batch median / floor / cap, fallback and continuation counts, candidate counts, and `history_sensitivity`: what in the step depended on discrete history, below) |
 | `completion` | `completed` / `failed` / `resource_failure`, exit status, message, wall time, peak RSS |
 | `producer` | the input's `provenance` block when it carries one (the Houdini asset: producer, version, asset name / version / SHA-256, scene, export time) |
 
 The RB-04 streams of the same run carry the manifest's `run_id`. Absent
 measurements are `null` with an `unavailable_reason`; the manifest never
 guesses. Documented in [docs/rb-12-validation.md](../../docs/rb-12-validation.md).
+
+#### History sensitivity (`steps[].contact.history_sensitivity`, 2026-10-05)
+
+A semi-implicit step's result can depend on discrete history: a contact that
+lost its continued coefficient is re-estimated at a different state, and the
+trim moves in discrete steps, one of them on an iteration count
+([record](../../docs/canonical-pair-keys-20261005.md), evidence
+`semi-implicit-roundoff-work/FINDINGS.md` in the parent workspace). This block
+says how much of that happened since the previous step record (the
+between-steps refresh after a record belongs to the next one). It is
+observational: solutions are byte-identical with and without it, and a failed
+attempt's rollback restores it with the form. Other stiffness modes report
+`{value: null, unavailable_reason}`.
+
+| field | meaning |
+| --- | --- |
+| `continuation.force_continuation` | RB-20 continuation on; with it off nothing is carried and nothing can be lost |
+| `continuation.losses.orientation` | coefficient keys given a fresh estimate (at an accepted iterate or a mid-solve refresh) while the same pair was carried under its other order — **0 with canonical pair keys**; a regression guard |
+| `continuation.losses.reentry` | keys given a fresh estimate that had been carried at a capture of this step or the previous one (the endpoint refresh between steps, an AL pass or reduced-solve start, a lagging iteration) and were dropped by a later capture: not active at the last endpoint, then back |
+| `continuation.losses.other` | keys active at such a capture whose coefficient continuation could not carry (not positive and finite) |
+| `continuation.split_pairs` | edge/edge and vertex/vertex pairs memoized under both of their orders at an accepted iterate or refresh: one contact with two estimates, carried or not — **0 with canonical pair keys**; a regression guard |
+| `continuation.max_abs_log_ratio` | largest \|ln(fresh / carried)\| among the losses (null when none had a carried value) |
+| `continuation.gap_shift_dhat` | `{sum, max, contacts}` over the endpoint's contacts whose coefficient includes a lost key: ½ (1 − d/d̂) \|ln(s / s_carried)\|, s the contact's coefficient and s_carried the same with every lost key at its carried value — the first-order shift of its equilibrium gap, in units of d̂ |
+| `trim.start`, `trim.end` | the trim at the previous record (the run's first refresh for the first record) and now |
+| `trim.moves.<source>` | `{count, log2}` of the trim moves by source: `collapse` (proportional upward bumps), `calibration` (gradient balance), `conditioning_cap` (first-contact cap), `cadence_down` (the in-solve downward step after `controller_interval` iterations), `refresh_down` (a refresh's downward step without a balance signal), `stall_soften` (blind softening at a stall retune), `force_band`, `initial_estimate` (opt-in experiments), `other` (direct library calls); the log2 values add up to log2(end / start) |
+| `trim.moves_in_stall_retunes` | how many of those moves stall retunes made (the retunes are `steps[].stall_retunes`) |
+| `trim.iters_since_trim`, `trim.controller_interval` | Newton iterations since the trim last moved at the record, against the cadence of the downward step (it fires when the gap is pinned above the band and this count reaches the interval) |
+| `trim.gap_shift_per_cadence_move_dhat` | `{sum, max, contacts}` of ½ (1 − d/d̂) ln(trim_factor) over the endpoint's active contacts: how far one more or one fewer cadence step would move the equilibrium gaps; null with `controller_interval: 0` or the force-weighted band |
+| `restored_from_state` | the accumulation began at a state restored from a restart file (the refresh that preceded the save is not repeated, and the previous step's captures are not saved, so a re-entry can be missed) |
+
+Gap shifts leave fully clamped contacts out (they cannot move) and are null for
+a failed attempt. They are estimates from the log barrier at first order,
+within a factor 2–3 of measured branch differences; contacts born at a
+CCD-truncated iterate (degenerate estimates, FINDINGS mechanism B) are not
+covered.
 
 ## Scope and limitations
 

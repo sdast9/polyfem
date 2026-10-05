@@ -7,7 +7,10 @@ namespace polyfem::io
 	///        apart. Bump a version here when a record's fields change meaning.
 	namespace schemas
 	{
-		/// The run manifest itself (RunManifest.hpp).
+		/// The run manifest itself (RunManifest.hpp). Still version 1: fields
+		/// were added (process.threads.accelerate 2026-09-28,
+		/// steps[].contact.history_sensitivity and the coefficient law's
+		/// pair_key_orientation 2026-10-05), none changed meaning.
 		constexpr const char *RUN_MANIFEST = "polyfem.run-manifest";
 		constexpr int RUN_MANIFEST_VERSION = 1;
 		/// Build identity compiled into the library (BuildInfo.hpp).

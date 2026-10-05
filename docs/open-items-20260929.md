@@ -2,7 +2,8 @@
 
 A reconciliation of the project records, written 2026-09-29 and brought up to
 date on 2026-09-30 (end of day) at PolyFEM `main` `0a367634a` (IPC Toolkit pin
-`1f1b5dbf`, PolySolve pin `43ca2e66`, data pin `sdast9/polyfem-data@aed03ab`). It adds no evidence: every line points at the
+`1f1b5dbf`, PolySolve pin `43ca2e66`, data pin `sdast9/polyfem-data@aed03ab`);
+the canonical-pair-keys entries were added on 2026-10-05. It adds no evidence: every line points at the
 record that owns the claim. When a record and this page disagree, the record
 governs; fix this page.
 
@@ -28,7 +29,7 @@ budget method-independent; L-BFGS not pursued (EF-06 retired); automatic
 timestep retry off (RB-08); mixed hexahedral orders refused (RB-23);
 `friction_iterations: 2` with `realized_force` lag (RB-10); the CI-05 and
 CI-06 reference policies (2026-09-29); the default stall-restart budget
-`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)).
+`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)); semi-implicit edge-edge / vertex-vertex coefficients are keyed on the sorted pair, **without a historical switch**, and the run manifest reports per step what depended on discrete history (2026-10-05, options 1 and 4 of the roundoff investigation; options 2, 3 and 5 — robust degenerate estimates, a state-based trim cadence, continuation hysteresis — not chosen; [record](canonical-pair-keys-20261005.md)).
 
 ## 2. Open work
 
@@ -65,6 +66,25 @@ retired. What is left is the decision list above and the measurements it
 needs: a current pinned-trim ladder on R4 (no current R4 ladder exists;
 five-step R4 has one run per arm, which cannot separate accuracy from
 realization noise), and a repeat of `pup_push` for steps 1–3.
+
+### Semi-implicit roundoff sensitivity (2026-10-04/05)
+
+[canonical-pair-keys-20261005.md](canonical-pair-keys-20261005.md) (evidence:
+the parent workspace's `semi-implicit-roundoff-work/FINDINGS.md` and
+`canonical-keys-work/`). Mechanism A (pair-key orientation) is removed and the
+manifest reports continuation losses, split pair identities, trim moves by
+source and gap-shift estimates per step. Open:
+
+- the Read PVD asset does not show the report yet (follow-up; the asset was
+  not touched);
+- mechanisms B (degenerate estimates at contact birth) and C (the
+  iteration-count cadence) remain by decision; their frequency in the user's
+  scenes is not measured;
+- the change is committed locally (worktree `canonical-keys-work/polyfem`,
+  branch `canonical-pair-keys`) and **not pushed** (user, 2026-10-05: not
+  yet); with the push, fast-forward the shared `polyfem/` checkout and
+  rebuild `polyfem/build` (used by the Houdini assets and their tests), which
+  stays at `49ad24b74` until then (user's choice).
 
 ### Gmsh input (found 2026-10-03)
 
@@ -174,6 +194,10 @@ and CI-06 are complete. Open:
   which the repository's own rule says to rerun after any default change.
   (`test_step_rollback.cpp` pins `max_restarts: 20` in the AL-budget test,
   because the new default made it about ten times slower.)
+- Canonical pair keys (2026-10-05): the affected unit selection, the five
+  smokes, the repro sweep, the RB-02 probe (270/270) and before/after runs of
+  IT, pup_push, R4, R1, BBT and ball-burst were run; the full unit suite and
+  the Houdini asset tests were not.
 - `tools/ef02/sequence.py` `PRODUCTION_CONTROLLER` pins
   `clamped_contacts: "keep"`, stale since `eb8286b7c`. It matters only if a
   scene file sets the key; recorded, not changed.

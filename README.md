@@ -16,6 +16,20 @@ state lives in the parent workspace's README; this section keeps the
 repository's own claims current. **Open decisions, work and verification gaps:
 [docs/open-items-20260929.md](docs/open-items-20260929.md).**
 
+- **Canonical pair keys and the history report (October 5, 2026):** a
+  semi-implicit edge-edge (or codimensional vertex-vertex) coefficient is keyed
+  on the sorted primitive pair, so RB-20 continuation no longer misses when a
+  broad phase emits the pair in the other order (user decision, no historical
+  switch; results move in scenes that had such flips or split identities, by
+  about as much as a 1e-15 input nudge, another linear-solver realization or
+  another thread schedule moves them; the public smokes are byte-identical,
+  the 1e-15 repro drops from 3.1e-4 to 6.9e-9). Every
+  semi-implicit run-manifest step record now carries
+  `contact.history_sensitivity`: continuation losses by cause, pairs with two
+  identities, trim moves by source, how close the iteration cadence is to
+  firing and first-order gap-shift estimates
+  ([record](docs/canonical-pair-keys-20261005.md)).
+
 - **Trim controller and restart work (September 26–29, 2026):** the opt-in
   guarded initial trim estimate and force-weighted band ([EF-02/03](docs/ef-02-03-trim-controller.md))
   and the EF-07 pair guard that removes their ball-burst loop
