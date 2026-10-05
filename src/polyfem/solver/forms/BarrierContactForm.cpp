@@ -901,7 +901,7 @@ namespace polyfem::solver
 			type_tag = 2;
 		// Doubly braced: std::array wraps a C array, and GCC's
 		// -Werror=missing-braces (on in CI) rejects the flat form clang accepts.
-		return {{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}};
+		return canonical_key({{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}});
 	}
 
 	std::vector<std::pair<std::array<long, 5>, double>> BarrierContactForm::coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const
@@ -914,13 +914,24 @@ namespace polyfem::solver
 			// key space is disjoint from stencil keys (tag offset 10).
 			// Duplicate-removal corrections carry negative weights and no
 			// coefficient of their own; they only adjust the total weight.
+			// An edge-edge or vertex-vertex candidate is keyed on its sorted
+			// pair: the broad phases emit it in traversal order (the LBVH as
+			// query/target leaf, the cached swept build differently from the
+			// static one), and the same pair must find its continued value
+			// whichever order a build produced (2026-10-05).
 			for (const auto &parent : collision_set[i].parents)
 				if (parent.weight > 0)
-					keys.push_back({{{10 + long(parent.type), long(parent.id0), long(parent.id1), -1, -1}}, parent.weight});
+					keys.push_back({canonical_key({{10 + long(parent.type), long(parent.id0), long(parent.id1), -1, -1}}), parent.weight});
 		}
 		if (keys.empty())
 			keys.push_back({stencil_key(collision_set, i), 1.0});
 		return keys;
+	}
+
+	std::array<long, 5> BarrierContactForm::canonical_key(std::array<long, 5> key)
+	{
+		const auto reversed = reversed_pair_key(key);
+		return reversed < key ? reversed : key;
 	}
 
 	std::array<long, 5> BarrierContactForm::reversed_pair_key(std::array<long, 5> key)
@@ -1008,7 +1019,9 @@ namespace polyfem::solver
 				if (!carried || is_continued(key) || history_.losses.count(key))
 					continue;
 				// Fresh: was this pair carried at a capture of this step or the
-				// previous one?
+				// previous one? Keys are canonical, so the other order of a pair
+				// is never stored: an orientation loss means the
+				// canonicalization regressed.
 				HistoryLog::Loss loss{-1, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
 				if (const double *other = reversed != key ? carried_value(reversed) : nullptr)
 				{
@@ -1443,7 +1456,11 @@ namespace polyfem::solver
 		if (key[0] >= 10)
 		{
 			// RB-21 parent candidate: rebuild the candidate (AUTO distance
-			// type, closest point on the whole primitive).
+			// type, closest point on the whole primitive). An edge-edge or
+			// vertex-vertex pair is rebuilt in its canonical (sorted) order,
+			// whichever order the build emitted; the estimate is symmetric up
+			// to roundoff (a degenerate parallel pair may tie-break its
+			// closest point differently).
 			const long id0 = key[1], id1 = key[2];
 			switch (ipc::ParentContribution::Type(key[0] - 10))
 			{
@@ -1904,17 +1921,52 @@ namespace polyfem::solver
 		const Eigen::MatrixXd endpoint = read_rows(path, "contact_si_endpoint_kappa", size_t(s(3)), 6);
 		const Eigen::MatrixXd continued = read_rows(path, "contact_si_continued_keys", size_t(s(4)), 5);
 
-		const auto fill = [](const Eigen::MatrixXd &rows, std::map<CoefficientKey, double> &map) {
-			map.clear();
+		// Canonical pair keys (docs/canonical-pair-keys-20261005.md): files
+		// written before 2026-10-05 store an edge-edge or vertex-vertex key in
+		// the order the broad phase emitted the pair, and a table may hold
+		// both orders of one pair (a continued value and a fresh re-estimate
+		// after a flip). Every key is canonicalized; of two entries for one
+		// pair the one stored under a continued or endpoint key wins (the
+		// value that acted at the saved endpoint), otherwise the one stored
+		// in sorted order (the orientation this binary estimates in). The
+		// rule does not depend on the row order.
+		std::set<CoefficientKey> stored_carried;
+		for (int r = 0; r < continued.rows(); ++r)
+			stored_carried.insert(row_key(continued, r));
+		for (int r = 0; r < endpoint.rows(); ++r)
+			stored_carried.insert(row_key(endpoint, r));
+		const auto rank = [&](const CoefficientKey &stored) {
+			return (stored_carried.count(stored) ? 0 : 2) + (stored == canonical_key(stored) ? 0 : 1);
+		};
+		size_t merged = 0;
+		const auto fill = [&](const Eigen::MatrixXd &rows, std::map<CoefficientKey, double> &map) {
+			std::map<CoefficientKey, std::pair<int, double>> ranked;
 			for (int r = 0; r < rows.rows(); ++r)
-				map.emplace(row_key(rows, r), rows(r, 5));
+			{
+				const CoefficientKey stored = row_key(rows, r);
+				const std::pair<int, double> entry(rank(stored), rows(r, 5));
+				const auto [it, inserted] = ranked.emplace(canonical_key(stored), entry);
+				if (inserted)
+					continue;
+				++merged;
+				if (entry.first < it->second.first)
+					it->second = entry;
+			}
+			map.clear();
+			for (const auto &[key, entry] : ranked)
+				map.emplace(key, entry.second);
 		};
 		fill(cache, kappa_cache_);
 		fill(prev_cache, prev_kappa_cache_);
 		fill(endpoint, endpoint_kappa_);
 		continued_keys_.clear();
 		for (int r = 0; r < continued.rows(); ++r)
-			continued_keys_.insert(row_key(continued, r));
+			if (!continued_keys_.insert(canonical_key(row_key(continued, r))).second)
+				++merged;
+		if (merged > 0)
+			logger().info(
+				"Restart state {}: {} coefficient entries were stored under both orders of an edge-edge or vertex-vertex pair (a state file written before canonical pair keys); one entry per pair was kept, the continued one where there is one",
+				path, merged);
 
 		kappa_cap_ = s(5);
 		kappa_floor_ = s(6);
@@ -2030,16 +2082,12 @@ namespace polyfem::solver
 			const double energy = snapshot.value(x), derivative = g.dot(dx);
 			if (!std::isfinite(energy) || !std::isfinite(derivative))
 				throw std::runtime_error("Nonfinite contact path sample");
+			// The stencil identity of every collision (canonical: a pair the
+			// broad phase emits in the other order is not a feature switch).
 			std::vector<std::array<long, 5>> keys;
 			const auto &collisions = snapshot.collision_set();
 			for (size_t i = 0; i < collisions.size(); ++i)
-			{
-				const auto ids = collisions[i].vertex_ids(collision_mesh_.edges(), collision_mesh_.faces());
-				const long tag = collisions.is_vertex_vertex(i) ? 0 : collisions.is_edge_vertex(i) ? 1
-																  : collisions.is_edge_edge(i)     ? 2
-																								   : 3;
-				keys.push_back({{tag, long(ids[0]), long(ids[1]), long(ids[2]), long(ids[3])}});
-			}
+				keys.push_back(stencil_key(collisions, i));
 			std::sort(keys.begin(), keys.end());
 			const json key_json = keys;
 			const std::string identity = key_json.dump();
@@ -2163,11 +2211,12 @@ namespace polyfem::solver
 		if (stiffness_mode_ == BarrierStiffnessMode::SemiImplicit)
 		{
 			model["coefficient_law"] = {
-				{"version", "RB-18/RB-20/RB-21 (2026-09-12)"},
+				{"version", "RB-18/RB-20/RB-21 (2026-09-12), canonical pair keys (2026-10-05)"},
 				{"estimate", "kappa = w^T H w on the frozen weighted system Hessian per stencil (Ando 2024), positive-only batch median, relative floor median/kappa_spread, cap kappa_spread * median, d^2-normalized conditioning cap (RB-18)"},
 				{"curvature_fallbacks", "nonpositive/nonfinite w^T H w -> |w^T H w| (RB-18 F7 B), then max|H| / dhat^2 (fallback E); counted per step as curvature_fallback_count / curvature_abs_fallback_count / curvature_global_fallback_count"},
 				{"interpolated_stencils", "parent block condensed onto the stencil, (B H_PP^-1 B^T)^-1 (RB-03); gap-normalized force direction as fallback, counted as interpolated_direction_count"},
 				{"coefficient_identity", parent_keyed_ ? "parent" : "stencil"},
+				{"pair_key_orientation", "canonical: an edge-edge or vertex-vertex pair is keyed on its sorted primitive pair, whichever order the broad phase emitted it in (docs/canonical-pair-keys-20261005.md)"},
 				{"force_continuation", force_continuation_},
 				{"continuation_max_ratio", continuation_max_ratio_},
 				{"friction_lag", friction_lag_realized_ ? "realized_force" : "follow_stiffness"},

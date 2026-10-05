@@ -258,14 +258,23 @@ namespace polyfem::solver
 		/// @brief Whether a stencil's coefficient was carried over from the
 		///        state that acted at the last refresh point (RB-20).
 		bool is_continued(const std::array<long, 5> &key) const { return continued_keys_.count(key) > 0; }
-		/// @brief Memoization key of a collision stencil: (type tag, vertex ids)
+		/// @brief Memoization key of a collision stencil: (type tag, vertex
+		///        ids), canonical (see canonical_key).
 		std::array<long, 5> stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const;
 		/// @brief The coefficient keys of collision i with their positive
 		///        contribution weights: its parent candidates (RB-21,
 		///        tag 10 + candidate type, ids) when coefficient_identity is
 		///        "parent" and the builder recorded them, else the stencil key
-		///        with weight 1.
+		///        with weight 1. Every key is canonical (see canonical_key).
 		std::vector<std::pair<std::array<long, 5>, double>> coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const;
+		/// @brief One key per physical pair (docs/canonical-pair-keys-20261005.md):
+		///        a key whose two primitives have the same type -- an edge-edge
+		///        or vertex-vertex parent (tags 12, 10) or stencil (tags 2, 0)
+		///        -- names them in sorted order (an edge-edge stencil by its
+		///        edges' vertex pairs), so the order in which a broad phase
+		///        emitted the pair cannot change its identity. Typed keys
+		///        (edge-vertex, face-vertex) are returned unchanged.
+		static std::array<long, 5> canonical_key(std::array<long, 5> key);
 		/// @brief The same pair with its two primitives swapped (the other
 		///        emission order of a broad phase) for a key whose primitives
 		///        have the same type -- an edge-edge or vertex-vertex parent

@@ -181,7 +181,34 @@ namespace
 		std::map<std::array<long, 5>, double> &endpoint() { return endpoint_kappa_; }
 		std::set<std::array<long, 5>> &continued() { return continued_keys_; }
 		void observe() { observe_continuation(); }
+		/// Re-key every same-type pair in the coefficient tables to its other
+		/// order: the tables a binary before canonical pair keys could hold
+		/// after the broad phase emitted the pair that way.
+		void store_reversed()
+		{
+			const auto rekey = [](std::map<std::array<long, 5>, double> &map) {
+				std::map<std::array<long, 5>, double> out;
+				for (const auto &[key, value] : map)
+					out.emplace(reversed_pair_key(key), value);
+				map.swap(out);
+			};
+			rekey(kappa_cache_);
+			rekey(prev_kappa_cache_);
+			rekey(endpoint_kappa_);
+			std::set<std::array<long, 5>> continued;
+			for (const auto &key : continued_keys_)
+				continued.insert(reversed_pair_key(key));
+			continued_keys_.swap(continued);
+		}
 	};
+
+	// Codimensional points in 3D: the only candidates are vertex-vertex.
+	ipc::CollisionMesh make_points(double gap = .2)
+	{
+		Eigen::MatrixXd p(2, 3);
+		p << 0, 0, 0, 0, 0, gap;
+		return ipc::CollisionMesh(p, Eigen::MatrixXi(0, 2), Eigen::MatrixXi(0, 3));
+	}
 
 	// Displacement that lifts pair `i`'s point by dy (in a `count`-pair mesh)
 	Eigen::VectorXd lift(int count, int i, double dy)
@@ -906,4 +933,154 @@ TEST_CASE("History report: rollback and restart state", "[kappa_continuity][hist
 		g.reset_history_sensitivity();
 		CHECK(g.history_sensitivity(together)["restored_from_state"] == false);
 	}
+}
+
+// Canonical pair keys (docs/canonical-pair-keys-20261005.md, user decision
+// 2026-10-05): an edge-edge or vertex-vertex pair has one coefficient key
+// whichever order a broad phase emitted it in, so RB-20 continuation finds
+// the carried value after a flip (the LBVH emits a pair as query/target leaf;
+// the cached swept build orders differently from the static one).
+TEST_CASE("Canonical pair keys: one identity per physical pair", "[kappa_continuity][canonical]")
+{
+	const json on = {{"force_continuation", true}};
+
+	SECTION("same-type pairs are sorted, typed keys are unchanged")
+	{
+		using Key = std::array<long, 5>;
+		CHECK(BarrierContactForm::canonical_key(Key{{12, 73, 52, -1, -1}}) == Key{{12, 52, 73, -1, -1}});
+		CHECK(BarrierContactForm::canonical_key(Key{{12, 52, 73, -1, -1}}) == Key{{12, 52, 73, -1, -1}});
+		CHECK(BarrierContactForm::canonical_key(Key{{10, 9, 4, -1, -1}}) == Key{{10, 4, 9, -1, -1}});
+		CHECK(BarrierContactForm::canonical_key(Key{{0, 9, 4, -1, -1}}) == Key{{0, 4, 9, -1, -1}});
+		// Edge-edge stencil EE[26,28,17,18] (the repro's first flipped stencil).
+		CHECK(BarrierContactForm::canonical_key(Key{{2, 26, 28, 17, 18}}) == Key{{2, 17, 18, 26, 28}});
+		CHECK(BarrierContactForm::canonical_key(Key{{2, 17, 18, 26, 28}}) == Key{{2, 17, 18, 26, 28}});
+		CHECK(BarrierContactForm::canonical_key(Key{{11, 9, 4, -1, -1}}) == Key{{11, 9, 4, -1, -1}});
+		CHECK(BarrierContactForm::canonical_key(Key{{13, 9, 4, -1, -1}}) == Key{{13, 9, 4, -1, -1}});
+		CHECK(BarrierContactForm::canonical_key(Key{{1, 9, 4, 2, -1}}) == Key{{1, 9, 4, 2, -1}});
+		CHECK(BarrierContactForm::canonical_key(Key{{3, 9, 4, 2, 1}}) == Key{{3, 9, 4, 2, 1}});
+	}
+
+	SECTION("an edge-edge pair built in both orders keeps its continued coefficient")
+	{
+		auto mesh = make_crossing_edges();
+		for (const char *identity : {"parent", "stencil"})
+		{
+			CAPTURE(identity);
+			Probe f(mesh, {{"force_continuation", true}, {"coefficient_identity", identity}});
+			const Eigen::VectorXd x = Eigen::VectorXd::Zero(12);
+			f.start(x);
+			f.publish(x); // carried at 100
+			const auto key = f.only_key();
+			CHECK(key == BarrierContactForm::canonical_key(key));
+			const auto stencil = f.stencil_key(f.collisions(), 0);
+			const auto carried = f.scales();
+			REQUIRE(carried.size() == 1);
+			REQUIRE(carried[0] == Approx(100.));
+			f.driving *= 4;
+			f.refresh_mid_solve(x);
+			REQUIRE(f.scales() == carried);
+			// The same pair emitted in the other order: same key, still the
+			// carried value, bit for bit (a fresh estimate would be 400).
+			f.emit_reversed();
+			CHECK(f.only_key() == key);
+			CHECK(f.stencil_key(f.collisions(), 0) == stencil);
+			CHECK(f.is_continued(key));
+			CHECK(f.scales() == carried);
+			f.observe();
+			CHECK(f.history_sensitivity(x)["continuation"]["losses"]["orientation"] == 0);
+			CHECK(f.history_sensitivity(x)["continuation"]["split_pairs"] == 0);
+			// A mid-solve refresh at the reversed build keeps it as well.
+			f.refresh_semi_implicit_stiffness(x, false, false);
+			CHECK(f.scales() == carried);
+			CHECK(f.diagnostic_state()["continued_count"] == 1);
+			CHECK(f.diagnostic_state()["fresh_count"] == 0);
+		}
+	}
+
+	SECTION("a vertex-vertex pair of codimensional points likewise")
+	{
+		auto mesh = make_points();
+		Probe f(mesh, on);
+		const Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
+		f.start(x);
+		f.publish(x);
+		const auto key = f.only_key();
+		REQUIRE(key[0] == 10 + long(ipc::ParentContribution::Type::VertexVertex));
+		CHECK(key == BarrierContactForm::canonical_key(key));
+		const auto carried = f.scales();
+		REQUIRE(carried.size() == 1);
+		REQUIRE(carried[0] == Approx(100.));
+		f.driving *= 4;
+		f.refresh_mid_solve(x);
+		f.emit_reversed();
+		CHECK(f.only_key() == key);
+		CHECK(f.scales() == carried);
+	}
+}
+
+TEST_CASE("Canonical pair keys: restart state written before canonical keys", "[kappa_continuity][canonical][restart]")
+{
+	const json on = {{"force_continuation", true}};
+	auto mesh = make_crossing_edges();
+	const Eigen::VectorXd x = Eigen::VectorXd::Zero(12);
+	const auto path = std::filesystem::temp_directory_path()
+					  / ("polyfem-canonical-restart-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".hdf5");
+
+	SECTION("a key stored in the other order keeps its continuation through the round trip")
+	{
+		Probe f(mesh, on);
+		f.start(x);
+		f.publish(x);
+		const auto key = f.only_key();
+		const auto reversed = BarrierContactForm::reversed_pair_key(key);
+		REQUIRE(reversed != key);
+		f.store_reversed();
+		REQUIRE(f.endpoint().count(reversed));
+		f.write_restart_state(path.string());
+
+		Probe g(mesh, on);
+		g.init(x);
+		REQUIRE(g.read_restart_state(path.string(), x));
+		CHECK(g.endpoint() == std::map<std::array<long, 5>, double>{{key, f.endpoint().at(reversed)}});
+		CHECK(g.continued() == std::set<std::array<long, 5>>{key});
+		CHECK(g.memo().count(reversed) == 0);
+		// Continuation survives: a stiffer Hessian does not re-estimate it.
+		const auto carried = f.scales();
+		g.driving *= 4;
+		g.refresh_mid_solve(x);
+		CHECK(g.scales() == carried);
+		CHECK(g.history_sensitivity(x)["continuation"]["losses"]["orientation"] == 0);
+	}
+
+	SECTION("both orders stored: the continued or endpoint entry wins, otherwise the sorted one")
+	{
+		using Key = std::array<long, 5>;
+		Probe f(mesh, on);
+		f.start(x);
+		f.publish(x);
+		const Key key = f.only_key(), reversed = BarrierContactForm::reversed_pair_key(key);
+		// Pair Q is carried under its sorted order, pair P is carried by none.
+		const Key q{{12, 5, 9, -1, -1}}, q_reversed{{12, 9, 5, -1, -1}}, p{{12, 6, 8, -1, -1}}, p_reversed{{12, 8, 6, -1, -1}};
+		f.memo() = {{key, 1.}, {reversed, 2.}, {q, 7.}, {q_reversed, 8.}, {p, 5.}, {p_reversed, 6.}};
+		f.continued() = {reversed, q};
+		f.endpoint() = {{reversed, 2.}, {q, 7.}};
+		f.previous_memo() = {{key, 3.}, {reversed, 4.}, {p_reversed, 9.}, {p, 10.}};
+		f.write_restart_state(path.string());
+
+		Probe g(mesh, on);
+		g.init(x);
+		REQUIRE(g.read_restart_state(path.string(), x));
+		CHECK(g.continued() == std::set<Key>{key, q});
+		CHECK(g.endpoint() == std::map<Key, double>{{key, 2.}, {q, 7.}});
+		CHECK(g.memo().at(key) == 2.);          // the continued entry, stored in the other order
+		CHECK(g.memo().at(q) == 7.);            // the continued entry, stored sorted
+		CHECK(g.memo().at(p) == 5.);            // neither carried: the sorted entry
+		CHECK(g.previous_memo().at(key) == 4.); // the endpoint's order
+		CHECK(g.previous_memo().at(p) == 10.);
+		for (const auto *table : {&g.memo(), &g.previous_memo(), &g.endpoint()})
+			for (const auto &[stored, value] : *table)
+				CHECK(stored == BarrierContactForm::canonical_key(stored));
+		CHECK(g.window() == g.endpoint());
+	}
+	std::filesystem::remove(path);
 }
