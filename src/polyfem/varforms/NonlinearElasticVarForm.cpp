@@ -74,7 +74,7 @@ namespace polyfem::varform
 	void NonlinearElasticVarForm::record_manifest_step(
 		const int step, const std::string &outcome, const std::string &phase,
 		const json &termination, const json &lagging, const int stall_retunes,
-		const double elapsed, const std::string &error) const
+		const double elapsed, const std::string &error, const Eigen::VectorXd &endpoint) const
 	{
 		if (!run_manifest_)
 			return;
@@ -158,6 +158,9 @@ namespace polyfem::varform
 				for (const char *key : {"active_count", "trim_or_global_stiffness", "refresh_id", "batch_median", "batch_floor", "batch_cap", "curvature_fallback_count", "curvature_abs_fallback_count", "curvature_global_fallback_count", "interpolated_condensed_count", "interpolated_direction_count", "continued_count", "fresh_count", "coefficient_zero_count", "coefficient_nonfinite_count", "coefficient_range", "candidate_count"})
 					if (state.contains(key))
 						contact[key] = state[key];
+				// What in this step depended on discrete history (canonical
+				// pair keys record, 2026-10-05); observational.
+				contact["history_sensitivity"] = barrier->history_sensitivity(endpoint);
 				record["contact"] = contact;
 			}
 			else
@@ -2317,7 +2320,12 @@ namespace polyfem::varform
 			// opt-in RB-04 record (which may be disabled).
 			record_manifest_step(step, outcome, diagnostic_phase, diagnostic_termination, diagnostic_lagging,
 								 attempts.stall_retunes,
-								 std::chrono::duration<double>(std::chrono::steady_clock::now() - diagnostic_start_time).count(), error);
+								 std::chrono::duration<double>(std::chrono::steady_clock::now() - diagnostic_start_time).count(), error,
+								 outcome == "accepted" ? Eigen::VectorXd(sol) : Eigen::VectorXd());
+			// The next record's history accumulation starts here, written
+			// or not (a failed attempt's rollback restores the solve start's).
+			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+				barrier->reset_history_sensitivity();
 			try
 			{
 				flush_pending_proposal();

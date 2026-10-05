@@ -266,6 +266,12 @@ namespace polyfem::solver
 		///        "parent" and the builder recorded them, else the stencil key
 		///        with weight 1.
 		std::vector<std::pair<std::array<long, 5>, double>> coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const;
+		/// @brief The same pair with its two primitives swapped (the other
+		///        emission order of a broad phase) for a key whose primitives
+		///        have the same type -- an edge-edge or vertex-vertex parent
+		///        (tags 12, 10) or stencil (tags 2, 0); equal to the key for
+		///        typed keys (edge-vertex, face-vertex).
+		static std::array<long, 5> reversed_pair_key(std::array<long, 5> key);
 		/// @brief Fresh Hessian estimate of a key's coefficient on the given
 		///        stencil at the frozen snapshot, after the RB-18 F2/F4/F7
 		///        resolution (may return a 0 / +inf sentinel).
@@ -284,9 +290,43 @@ namespace polyfem::solver
 		///        coefficient, resolved against the frozen batch statistics.
 		double memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const;
 
+		/// @brief What moved the trim, for the history-sensitivity report.
+		///        Other is a direct call from outside the controller (tests,
+		///        library users).
+		enum class TrimMove
+		{
+			Collapse,
+			Calibration,
+			ConditioningCap,
+			CadenceDown,
+			RefreshDown,
+			StallSoften,
+			ForceBand,
+			InitialEstimate,
+			Other
+		};
+		static constexpr int trim_move_sources = 9;
+		static const char *trim_move_name(TrimMove move);
+
 		/// @brief Multiply the global trim factor (barrier_stiffness_) by the
 		///        given factor, clamped to [trim_min, trim_max].
-		void bump_trim(const double factor, TrimLoopGuard::Source source = TrimLoopGuard::Other);
+		void bump_trim(const double factor, TrimLoopGuard::Source source = TrimLoopGuard::Other, TrimMove move = TrimMove::Other);
+
+		/// @brief The step record's history-sensitivity block
+		///        (docs/canonical-pair-keys-20261005.md, run manifest
+		///        steps[].contact.history_sensitivity): what in the solve since
+		///        the previous record depended on discrete history --
+		///        coefficients that lost their RB-20 continuation (by cause,
+		///        with the largest |ln(fresh/continued)|), pairs memoized under
+		///        both of their orders, trim moves by source,
+		///        how close the controller_interval cadence is to firing, and
+		///        first-order estimates of the equilibrium gap shift both imply
+		///        at x, sum over contacts of (dhat - d)/2 * |delta ln kappa|.
+		///        Observational: reads the form and the current collision set,
+		///        never refreshes or mutates anything; never throws.
+		json history_sensitivity(const Eigen::VectorXd &x) const;
+		/// @brief Start the next record's accumulation (after a step record).
+		void reset_history_sensitivity();
 
 		/// @brief EF-07: squared minimum distance of the collisions that were
 		///        already active at the previous accepted iterate (or refresh);
@@ -318,6 +358,56 @@ namespace polyfem::solver
 		///        were re-evaluated for a non-empty collision set, or the trim
 		///        moved); false means a restart would repeat an identical solve.
 		bool retune_on_stall(const Eigen::VectorXd &x, const double factor);
+
+		/// @brief What continuation carried at the published captures of one
+		///        step (history report; attempt state, part of State).
+		struct HistoryWindow
+		{
+			/// Latest carried value per key.
+			std::map<std::array<long, 5>, double> carried;
+			/// Keys active at a capture whose resolved coefficient was not
+			/// positive and finite, so continuation could not carry it.
+			std::set<std::array<long, 5>> dropped;
+			bool empty() const { return carried.empty() && dropped.empty(); }
+		};
+
+		/// @brief Accumulators of the history-sensitivity report since the
+		///        last step record (attempt state, part of State).
+		struct HistoryLog
+		{
+			/// Loss causes: the pair was carried under its other order
+			/// (orientation), the key itself was carried at a capture of this
+			/// step or the previous one and dropped by a later capture, i.e.
+			/// it left the active set and came back (reentry), the key was
+			/// active at a capture but its value could not be carried (other).
+			enum Cause
+			{
+				Orientation,
+				Reentry,
+				Other
+			};
+			struct Loss
+			{
+				int cause;
+				double carried;       ///< the value continuation carried; NaN for Other
+				double abs_log_ratio; ///< |ln(fresh / carried)| at detection; NaN when unavailable
+			};
+			/// Keys assigned a fresh estimate while their pair held a carried
+			/// value, each counted once per record.
+			std::map<std::array<long, 5>, Loss> losses;
+			/// Same-type pairs whose coefficient was memoized under both of
+			/// their orders at an accepted iterate or refresh (one contact
+			/// with two identities; the key in sorted order).
+			std::set<std::array<long, 5>> split_pairs;
+			std::array<int, trim_move_sources> move_count{};
+			std::array<double, trim_move_sources> move_log2{};
+			int stall_retune_moves = 0;
+			/// Trim when the accumulation began (the previous record, or the
+			/// run's first controller event); NaN until then.
+			double trim_start = std::numeric_limits<double>::quiet_NaN();
+			/// The accumulation began at a state restored from a restart file.
+			bool restored = false;
+		};
 
 		/// @brief RB-06: the attempt-mutable state of the barrier form on top
 		///        of ContactForm::State -- the current collision set and, in
@@ -351,6 +441,8 @@ namespace polyfem::solver
 			TrimLoopGuard loop_guard;
 			bool trim_seed_used = false;
 			std::set<std::array<long, 5>> previous_iterate_keys, refresh_keys;
+			std::array<HistoryWindow, 2> history_windows;
+			HistoryLog history;
 		};
 		std::unique_ptr<FormState> save_state() const override;
 		/// @brief Restart: also writes the semi-implicit trim controller and
@@ -535,6 +627,22 @@ namespace polyfem::solver
 		///        exclude-born option and the trim-predictor stream.
 		std::set<std::array<long, 5>> previous_iterate_keys_, refresh_keys_;
 		bool track_collision_birth() const { return loop_guard_.exclude_born || bool(trim_predictor_observer_); }
+
+		// -- History-sensitivity report (docs/canonical-pair-keys-20261005.md) --
+		/// @brief What continuation carried at the published captures: [0]
+		///        since the last step boundary (update_quantities), [1] in the
+		///        step before. A fresh estimate is compared with them.
+		///        Observational; never read by the model.
+		std::array<HistoryWindow, 2> history_windows_;
+		HistoryLog history_;
+		/// @brief > 0 while retune_on_stall runs (its trim moves are counted
+		///        in moves_in_stall_retunes too).
+		int stall_retune_depth_ = 0;
+		/// @brief Record continuation losses of the current collision set
+		///        (accepted iterates and mid-solve refreshes).
+		void observe_continuation();
+		/// @brief Count a trim move for the report.
+		void note_trim_move(TrimMove move, double before, double after);
 
 		/// @brief Trial-step displacement cap, in barrier supports. Only
 		///        applied while the semi-implicit stiffness mode is active.

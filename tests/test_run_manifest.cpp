@@ -22,9 +22,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -414,6 +417,77 @@ TEST_CASE("A run's manifest records identity, input hashes, steps and completion
 		CHECK(m["completion"]["steps_recorded"] == 2);
 		CHECK(m["completion"]["wall_seconds"].get<double>() > 0);
 		CHECK(m["completion"]["finished_at"].is_string());
+	}
+	std::filesystem::remove_all(dir);
+}
+
+// The semi-implicit step record's history-sensitivity block
+// (docs/canonical-pair-keys-20261005.md) on the public quasistatic smoke:
+// every documented field, no orientation loss, and the trim accounting
+// closes (start of one record = end of the previous, the per-source log2
+// moves add up to start -> end).
+TEST_CASE("Step records carry the semi-implicit history-sensitivity report", "[run_manifest][history]")
+{
+	const auto dir = scratch_dir("polyfem-manifest-history");
+	const std::filesystem::path scene = std::filesystem::path(POLYFEM_TEST_DIR) / ".." / "scenes" / "semi-implicit" / "quasistatic-semi.json";
+	json args = read_json(scene);
+	args["root_path"] = scene.string();
+	args["/output/directory"_json_pointer] = dir.string();
+	args["/output/manifest"_json_pointer] = "manifest.json";
+	args["/output/log/level"_json_pointer] = "error";
+	args["/output/paraview/file_name"_json_pointer] = "";
+	args["/solver/max_threads"_json_pointer] = 1;
+
+	State state;
+	state.init(args, true);
+	state.load_mesh();
+	Eigen::MatrixXd sol;
+	state.solve(sol);
+	const json m = read_json(dir / "manifest.json");
+	CHECK(m["version"] == io::schemas::RUN_MANIFEST_VERSION);
+	REQUIRE(m["steps"].size() == 4);
+	const std::set<std::string> sources = {"collapse", "calibration", "conditioning_cap", "cadence_down", "refresh_down", "stall_soften", "force_band", "initial_estimate", "other"};
+	double previous_end = std::numeric_limits<double>::quiet_NaN();
+	for (const json &step : m["steps"])
+	{
+		CAPTURE(step["step"]);
+		const json &h = step["contact"]["history_sensitivity"];
+		REQUIRE(h.is_object());
+		const json &continuation = h["continuation"];
+		CHECK(continuation["force_continuation"] == true);
+		CHECK(continuation["losses"]["orientation"] == 0);
+		CHECK(continuation["split_pairs"] == 0);
+		CHECK(continuation["losses"]["reentry"].get<int>() >= 0);
+		CHECK(continuation["losses"]["other"].get<int>() >= 0);
+		CHECK((continuation["max_abs_log_ratio"].is_null() || continuation["max_abs_log_ratio"].get<double>() >= 0));
+		for (const char *key : {"sum", "max", "contacts"})
+			CHECK(continuation["gap_shift_dhat"].contains(key));
+		const json &trim = h["trim"];
+		const double start = trim["start"], end = trim["end"];
+		CHECK(end == step["contact"]["trim_or_global_stiffness"].get<double>());
+		if (std::isfinite(previous_end))
+			CHECK(start == previous_end);
+		else
+			CHECK(start == 1.0); // the initial trim
+		previous_end = end;
+		std::set<std::string> listed;
+		double log2_moves = 0;
+		for (const auto &[source, entry] : trim["moves"].items())
+		{
+			listed.insert(source);
+			CHECK(entry["count"].get<int>() >= 0);
+			log2_moves += entry["log2"].get<double>();
+		}
+		CHECK(listed == sources);
+		CHECK(std::abs(log2_moves - std::log2(end / start)) <= 1e-12);
+		if (step["stall_retunes"].get<int>() == 0)
+			CHECK(trim["moves_in_stall_retunes"] == 0);
+		CHECK(trim["iters_since_trim"].get<int>() >= 0);
+		CHECK(trim["controller_interval"] == 30);
+		for (const char *key : {"sum", "max", "contacts"})
+			CHECK(trim["gap_shift_per_cadence_move_dhat"].contains(key));
+		CHECK(trim["gap_shift_per_cadence_move_dhat"]["contacts"].get<int>() > 0);
+		CHECK(h["restored_from_state"] == false);
 	}
 	std::filesystem::remove_all(dir);
 }

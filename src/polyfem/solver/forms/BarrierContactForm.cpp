@@ -362,6 +362,11 @@ namespace polyfem::solver
 		trim_seed_pending_ = !(loop_guard_.estimate_once && trim_seed_used_);
 		trim_decision_ = nullptr;
 		loop_guard_.new_step(barrier_stiffness_);
+		// History report: the step boundary shifts the windows; this step's
+		// starts at its first capture (the between-steps refresh at the
+		// endpoint that follows), the previous step's stays for one step.
+		history_windows_[1] = std::move(history_windows_[0]);
+		history_windows_[0] = HistoryWindow();
 	}
 
 	double BarrierContactForm::force_weighted_gap(const Eigen::MatrixXd &surface) const
@@ -402,7 +407,7 @@ namespace polyfem::solver
 		{
 			trim_seed_pending_ = false;
 			trim_seed_used_ = true;
-			bump_trim(factor, TrimLoopGuard::Estimate);
+			bump_trim(factor, TrimLoopGuard::Estimate, TrimMove::InitialEstimate);
 		}
 		trim_decision_ = {{"source", "initial_estimate"}, {"before", before}, {"after", barrier_stiffness_}, {"cosine", cosine}, {"estimate", estimate}, {"collapse_guard", collapse}, {"accepted", accepted}};
 		emit_trim_predictors(x, "initial_estimate", false);
@@ -439,7 +444,7 @@ namespace polyfem::solver
 		// The non-emergency upward branch shares the existing in-solve budget.
 		if (factor > 1)
 			factor = std::min(factor, std::max(1., trim_solve_anchor_ * 256. / before));
-		bump_trim(factor, TrimLoopGuard::Band);
+		bump_trim(factor, TrimLoopGuard::Band, TrimMove::ForceBand);
 		trim_decision_ = {{"source", source}, {"before", before}, {"after", barrier_stiffness_}, {"mean_gap", gap}, {"proposed_factor", proposed_factor}, {"factor", factor}, {"collapse_guard", guarded}, {"collapse_proxy_gap", std::sqrt(severity) / dhat_}, {"min_gap", std::sqrt(min_d2) / dhat_}, {"guard_basis", loop_guard_.pair_guard ? "pair" : "proxy"}};
 		emit_trim_predictors(x, "force_band", false);
 	}
@@ -501,7 +506,7 @@ namespace polyfem::solver
 		const bool allowed = loop_guard_.allow_collapse(proxy_gap);
 		if (allowed)
 		{
-			bump_trim(factor, TrimLoopGuard::Collapse);
+			bump_trim(factor, TrimLoopGuard::Collapse, TrimMove::Collapse);
 			if (barrier_stiffness_ != before)
 				loop_guard_.collapse_bumped(proxy_gap);
 		}
@@ -509,7 +514,7 @@ namespace polyfem::solver
 		return barrier_stiffness_ != before;
 	}
 
-	void BarrierContactForm::bump_trim(const double factor, const TrimLoopGuard::Source source)
+	void BarrierContactForm::bump_trim(const double factor, const TrimLoopGuard::Source source, const TrimMove move)
 	{
 		double new_trim = std::clamp(barrier_stiffness_ * factor, trim_min_, trim_max_);
 		new_trim = std::clamp(loop_guard_.limit(barrier_stiffness_, new_trim, source), trim_min_, trim_max_);
@@ -517,6 +522,7 @@ namespace polyfem::solver
 		if (new_trim != barrier_stiffness_)
 		{
 			logger().debug("Barrier stiffness trim: {:g} -> {:g}", barrier_stiffness_, new_trim);
+			note_trim_move(move, barrier_stiffness_, new_trim);
 			barrier_stiffness_ = new_trim;
 			iters_since_trim_ = 0;
 			// The trim multiplies every contact's barrier (and, in the
@@ -530,6 +536,14 @@ namespace polyfem::solver
 		if (!uses_semi_implicit_stiffness())
 			return false;
 		CoefficientEventScope event(*this, x, "stall_retune");
+		// History report: the trim moves of this retune are also counted as
+		// stall-retune moves.
+		struct StallRetuneScope
+		{
+			int &depth;
+			explicit StallRetuneScope(int &d) : depth(d) { ++depth; }
+			~StallRetuneScope() { --depth; }
+		} stall_scope(stall_retune_depth_);
 		const double trim_before = barrier_stiffness_;
 		trim_decision_ = nullptr;
 		// A stall with the gap below the band (average OR a single collapsed
@@ -568,7 +582,7 @@ namespace polyfem::solver
 			// balance signal has no direction -- restart on the fresh
 			// snapshot with the trim untouched.
 			if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
-				bump_trim(1.0 / factor);
+				bump_trim(1.0 / factor, TrimLoopGuard::Other, TrimMove::StallSoften);
 		}
 		emit_trim_predictors(x, "stall_retune", /*full=*/true);
 		// The refresh re-evaluated every active coefficient at x; compare the
@@ -585,12 +599,16 @@ namespace polyfem::solver
 		if (!system_hessian_provider_)
 			log_and_throw_error("Semi-implicit barrier stiffness requires a system Hessian provider!");
 
+		if (!std::isfinite(history_.trim_start))
+			history_.trim_start = barrier_stiffness_;
 		kappa_surface_ = compute_displaced_surface(x);
 		system_hessian_provider_(x, kappa_hessian_);
 		kappa_hessian_max_ = 0.0;
 		for (int k = 0; k < kappa_hessian_.outerSize(); k++)
 			for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
 				kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+		// History report: active keys whose value this capture cannot carry.
+		std::set<std::array<long, 5>> dropped_at_capture;
 		// RB-20 force continuation: at a PUBLISHED endpoint every active
 		// stencil that has a coefficient keeps the value that ACTED there (the
 		// resolved effective scale, floor/cap/kappa_min included), so the
@@ -615,6 +633,8 @@ namespace polyfem::solver
 					const double k = resolve_stiffness(cached->second, is_continued(key));
 					if (k > 0 && std::isfinite(k))
 						endpoint_kappa_.emplace(key, k);
+					else
+						dropped_at_capture.insert(key);
 				}
 			}
 		}
@@ -809,12 +829,13 @@ namespace polyfem::solver
 						logger().debug(
 							"Conditioning cap on first contact: trim {:g} -> {:g}",
 							barrier_stiffness_, cap);
+						note_trim_move(TrimMove::ConditioningCap, barrier_stiffness_, cap);
 						barrier_stiffness_ = cap;
 						iters_since_trim_ = 0;
 					}
 				}
 				if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
-					bump_trim(1.0 / trim_factor_);
+					bump_trim(1.0 / trim_factor_, TrimLoopGuard::Other, TrimMove::RefreshDown);
 			}
 		}
 
@@ -832,6 +853,18 @@ namespace polyfem::solver
 			refresh_keys_ = current_stencil_keys();
 			previous_iterate_keys_ = refresh_keys_;
 		}
+
+		// History report: a published capture extends the window with the
+		// values continuation carries from here on (after the pull, if any);
+		// any other refresh re-estimated every key it did not carry.
+		if (force_continuation_ && published_endpoint)
+		{
+			for (const auto &[key, k] : endpoint_kappa_)
+				history_windows_[0].carried.insert_or_assign(key, k);
+			history_windows_[0].dropped.insert(dropped_at_capture.begin(), dropped_at_capture.end());
+		}
+		else
+			observe_continuation();
 
 		if (!collision_set_.empty())
 		{
@@ -888,6 +921,249 @@ namespace polyfem::solver
 		if (keys.empty())
 			keys.push_back({stencil_key(collision_set, i), 1.0});
 		return keys;
+	}
+
+	std::array<long, 5> BarrierContactForm::reversed_pair_key(std::array<long, 5> key)
+	{
+		constexpr long vv_parent = 10 + long(ipc::ParentContribution::Type::VertexVertex);
+		constexpr long ee_parent = 10 + long(ipc::ParentContribution::Type::EdgeEdge);
+		if (key[0] == 0 || key[0] == vv_parent || key[0] == ee_parent)
+			std::swap(key[1], key[2]);
+		else if (key[0] == 2)
+		{
+			// Edge-edge stencil: the two edges' vertex pairs swap places.
+			std::swap(key[1], key[3]);
+			std::swap(key[2], key[4]);
+		}
+		return key;
+	}
+
+	const char *BarrierContactForm::trim_move_name(const TrimMove move)
+	{
+		switch (move)
+		{
+		case TrimMove::Collapse:
+			return "collapse";
+		case TrimMove::Calibration:
+			return "calibration";
+		case TrimMove::ConditioningCap:
+			return "conditioning_cap";
+		case TrimMove::CadenceDown:
+			return "cadence_down";
+		case TrimMove::RefreshDown:
+			return "refresh_down";
+		case TrimMove::StallSoften:
+			return "stall_soften";
+		case TrimMove::ForceBand:
+			return "force_band";
+		case TrimMove::InitialEstimate:
+			return "initial_estimate";
+		case TrimMove::Other:
+		default:
+			return "other";
+		}
+	}
+
+	void BarrierContactForm::note_trim_move(const TrimMove move, const double before, const double after)
+	{
+		if (!std::isfinite(history_.trim_start))
+			history_.trim_start = before;
+		if (after == before)
+			return;
+		const int source = int(move);
+		++history_.move_count[source];
+		if (before > 0 && after > 0 && std::isfinite(before) && std::isfinite(after))
+			history_.move_log2[source] += std::log2(after / before);
+		if (stall_retune_depth_ > 0)
+			++history_.stall_retune_moves;
+	}
+
+	void BarrierContactForm::observe_continuation()
+	{
+		if (!uses_semi_implicit_stiffness())
+			return;
+		// Nothing was carried in this step or the previous one: nothing can
+		// be lost (continuation off, before the first capture).
+		const bool carried = !(history_windows_[0].empty() && history_windows_[1].empty());
+		// The latest value a key carried in the two windows, if any.
+		const auto carried_value = [&](const std::array<long, 5> &k) -> const double * {
+			for (const auto &window : history_windows_)
+				if (const auto it = window.carried.find(k); it != window.carried.end())
+					return &it->second;
+			return nullptr;
+		};
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			if (collision_set_.is_plane_vertex(i))
+				continue;
+			for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+			{
+				// One contact, two identities: the pair's coefficient is
+				// memoized under both of its orders in this snapshot (two
+				// estimates, carried or not), so which one acts depends on the
+				// order a build emitted the pair in.
+				const auto reversed = reversed_pair_key(key);
+				if (reversed != key && kappa_cache_.count(reversed))
+					history_.split_pairs.insert(std::min(key, reversed));
+				if (!carried || is_continued(key) || history_.losses.count(key))
+					continue;
+				// Fresh: was this pair carried at a capture of this step or the
+				// previous one?
+				HistoryLog::Loss loss{-1, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+				if (const double *other = reversed != key ? carried_value(reversed) : nullptr)
+				{
+					loss.cause = HistoryLog::Orientation;
+					loss.carried = *other;
+				}
+				else if (const double *same = carried_value(key))
+				{
+					loss.cause = HistoryLog::Reentry;
+					loss.carried = *same;
+				}
+				else if (history_windows_[0].dropped.count(key) || history_windows_[1].dropped.count(key))
+					loss.cause = HistoryLog::Other;
+				if (loss.cause < 0)
+					continue; // a contact new to these two steps
+				// The fresh value as it acts (resolve_stiffness only throws on a
+				// nonfinite value without a batch cap, which the assignment that
+				// memoized it would already have refused).
+				const auto cached = kappa_cache_.find(key);
+				if (cached != kappa_cache_.end() && loss.carried > 0 && std::isfinite(loss.carried)
+					&& (std::isfinite(cached->second) || std::isfinite(kappa_cap_)))
+				{
+					try
+					{
+						const double fresh = resolve_stiffness(cached->second, false);
+						if (fresh > 0 && std::isfinite(fresh))
+							loss.abs_log_ratio = std::abs(std::log(fresh / loss.carried));
+					}
+					catch (const std::exception &)
+					{
+					}
+				}
+				history_.losses.emplace(key, loss);
+			}
+		}
+	}
+
+	json BarrierContactForm::history_sensitivity(const Eigen::VectorXd &x) const
+	{
+		if (!uses_semi_implicit_stiffness())
+			return {{"value", nullptr}, {"unavailable_reason", "Semi-implicit stiffness only: the other modes have no per-contact coefficients, continuation or trim controller"}};
+		try
+		{
+			std::array<int, 3> losses{};
+			double max_ratio = -1;
+			for (const auto &[key, loss] : history_.losses)
+			{
+				++losses[std::clamp(loss.cause, 0, 2)];
+				if (std::isfinite(loss.abs_log_ratio))
+					max_ratio = std::max(max_ratio, loss.abs_log_ratio);
+			}
+			json moves = json::object();
+			for (int s = 0; s < trim_move_sources; ++s)
+				moves[trim_move_name(TrimMove(s))] = {{"count", history_.move_count[s]}, {"log2", history_.move_log2[s]}};
+			const bool cadence = controller_interval_ > 0 && !force_weighted_controller_;
+
+			// First-order equilibrium gap shifts at x, in units of dhat: a
+			// coefficient change by a factor r moves a contact at gap d by about
+			// (dhat - d) / 2 * |ln r| (log barrier); summed over the contacts
+			// concerned, with the largest single one. Fully clamped contacts
+			// cannot move and are left out.
+			struct Shift
+			{
+				double sum = 0, max = 0;
+				int contacts = 0;
+				void add(const double shift)
+				{
+					if (!std::isfinite(shift))
+						return;
+					sum += shift;
+					max = std::max(max, shift);
+					++contacts;
+				}
+				json to_json() const { return {{"sum", sum}, {"max", max}, {"contacts", contacts}}; }
+			} loss_shift, cadence_shift;
+			json loss_gap = nullptr, cadence_gap = nullptr;
+			if (x.size() > 0)
+			{
+				const Eigen::MatrixXd V = compute_displaced_surface(x);
+				const Eigen::MatrixXi &E = collision_mesh_.edges();
+				const Eigen::MatrixXi &F = collision_mesh_.faces();
+				const double ln_cadence = std::log(trim_factor_);
+				for (size_t i = 0; i < collision_set_.size(); ++i)
+				{
+					if (collision_set_.is_plane_vertex(i) || clamp_class(collision_set_, i) == 2)
+						continue;
+					const double d2 = collision_set_[i].compute_distance(collision_set_[i].dof(V, E, F));
+					const double reach = 0.5 * std::max(0.0, 1.0 - std::sqrt(d2) / dhat_);
+					if (cadence)
+						cadence_shift.add(reach * ln_cadence);
+					if (history_.losses.empty())
+						continue;
+					// The collision's coefficient now against the one it would
+					// have with every lost key at its carried value.
+					double now = 0, carried = 0;
+					bool lost = false, valid = true;
+					for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+					{
+						const auto cached = kappa_cache_.find(key);
+						if (cached == kappa_cache_.end() || (!std::isfinite(cached->second) && !std::isfinite(kappa_cap_)))
+						{
+							valid = false;
+							break;
+						}
+						const double k = resolve_stiffness(cached->second, is_continued(key));
+						double reference = k;
+						if (const auto loss = history_.losses.find(key); loss != history_.losses.end()
+																		 && loss->second.carried > 0 && std::isfinite(loss->second.carried))
+						{
+							reference = loss->second.carried;
+							lost = true;
+						}
+						now += w * k;
+						carried += w * reference;
+					}
+					if (valid && lost && now > 0 && carried > 0)
+						loss_shift.add(reach * std::abs(std::log(now / carried)));
+				}
+				loss_gap = loss_shift.to_json();
+				if (cadence)
+					cadence_gap = cadence_shift.to_json();
+			}
+			else
+			{
+				loss_gap = {{"value", nullptr}, {"unavailable_reason", "No accepted endpoint (failed attempt)"}};
+				cadence_gap = loss_gap;
+			}
+			if (!cadence)
+				cadence_gap = {{"value", nullptr}, {"unavailable_reason", controller_interval_ > 0 ? "Force-weighted band: its in-solve moves have no fixed factor" : "controller_interval 0: no in-solve downward cadence"}};
+
+			json continuation = {{"force_continuation", force_continuation_}};
+			continuation["losses"] = {{"orientation", losses[HistoryLog::Orientation]}, {"reentry", losses[HistoryLog::Reentry]}, {"other", losses[HistoryLog::Other]}};
+			continuation["split_pairs"] = history_.split_pairs.size();
+			continuation["max_abs_log_ratio"] = max_ratio >= 0 ? json(max_ratio) : json(nullptr);
+			continuation["gap_shift_dhat"] = loss_gap;
+			json trim = {{"start", std::isfinite(history_.trim_start) ? json(history_.trim_start) : json(nullptr)}, {"end", barrier_stiffness_}};
+			trim["moves"] = moves;
+			trim["moves_in_stall_retunes"] = history_.stall_retune_moves;
+			trim["iters_since_trim"] = iters_since_trim_;
+			trim["controller_interval"] = controller_interval_;
+			trim["gap_shift_per_cadence_move_dhat"] = cadence_gap;
+			return {{"continuation", continuation}, {"trim", trim}, {"restored_from_state", history_.restored}};
+		}
+		catch (const std::exception &e)
+		{
+			return {{"value", nullptr}, {"unavailable_reason", std::string("History report failed: ") + e.what()}};
+		}
+	}
+
+	void BarrierContactForm::reset_history_sensitivity()
+	{
+		if (!uses_semi_implicit_stiffness())
+			return;
+		history_ = HistoryLog();
+		history_.trim_start = barrier_stiffness_;
 	}
 
 	double BarrierContactForm::estimate_stiffness(const ipc::CollisionStencil &stencil, const std::array<long, 5> &key) const
@@ -1354,6 +1630,7 @@ namespace polyfem::solver
 			logger().debug(
 				"Gradient-balance trim calibration: {:g} -> {:g}",
 				barrier_stiffness_, new_trim);
+			note_trim_move(TrimMove::Calibration, barrier_stiffness_, new_trim);
 			barrier_stiffness_ = new_trim;
 			iters_since_trim_ = 0;
 			note_objective_change("gradient-balance trim calibration");
@@ -1462,6 +1739,8 @@ namespace polyfem::solver
 		state.trim_seed_used = trim_seed_used_;
 		state.previous_iterate_keys = previous_iterate_keys_;
 		state.refresh_keys = refresh_keys_;
+		state.history_windows = history_windows_;
+		state.history = history_;
 	}
 
 	void BarrierContactForm::restore_barrier_state(const State &state)
@@ -1497,6 +1776,8 @@ namespace polyfem::solver
 		trim_seed_used_ = state.trim_seed_used;
 		previous_iterate_keys_ = state.previous_iterate_keys;
 		refresh_keys_ = state.refresh_keys;
+		history_windows_ = state.history_windows;
+		history_ = state.history;
 		// Transient flags of a refresh in progress; a state is never captured
 		// inside one, and a rollback never lands inside one.
 		batch_first_pass_ = false;
@@ -1668,6 +1949,15 @@ namespace polyfem::solver
 		trim_decision_ = nullptr;
 		batch_first_pass_ = false;
 		pull_toward_fresh_ = false;
+		// History report: a state file is written right after the
+		// between-steps capture, so this step's window is exactly the
+		// endpoint map; the previous step's window is not saved, and the
+		// accumulation of the resumed step starts here (flagged).
+		history_windows_ = {};
+		history_windows_[0].carried = endpoint_kappa_;
+		history_ = HistoryLog();
+		history_.trim_start = barrier_stiffness_;
+		history_.restored = true;
 
 		// The snapshot was taken at the saved step's endpoint, i.e. at x.
 		kappa_surface_ = compute_displaced_surface(x);
@@ -2691,7 +2981,7 @@ namespace polyfem::solver
 					controller_interval_ > 0
 					&& std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_sq
 					&& iters_since_trim_ >= controller_interval_)
-					bump_trim(1.0 / trim_factor_);
+					bump_trim(1.0 / trim_factor_, TrimLoopGuard::Other, TrimMove::CadenceDown);
 
 				polyfem::logger().debug(
 					"Semi-implicit barrier stiffness: trim={:g}, band rms/dhat={:g}, sqrt(min d2)/dhat={:g}",
@@ -2708,6 +2998,8 @@ namespace polyfem::solver
 			emit_trim_predictors(data.x, "iteration", /*full=*/false, data.iter_num);
 			if (track_collision_birth())
 				previous_iterate_keys_ = current_stencil_keys();
+			// History report: the accepted iterate's collision set.
+			observe_continuation();
 		}
 		else if (use_adaptive_barrier_stiffness_)
 		{

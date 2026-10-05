@@ -27,8 +27,14 @@
 #include <ipc/potentials/barrier_potential.hpp>
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <limits>
+#include <map>
+#include <set>
+#include <string>
 #include <vector>
 
 using namespace polyfem;
@@ -75,6 +81,18 @@ namespace
 		return mesh;
 	}
 
+	// Two edges crossing at height gap in 3D: e0 = (v0, v1) along x, e1 =
+	// (v2, v3) along y. Without faces the only candidate is the edge-edge pair
+	// (the edges are codimensional, their vertices are not).
+	ipc::CollisionMesh make_crossing_edges(double gap = .2)
+	{
+		Eigen::MatrixXd p(4, 3);
+		p << -1, 0, 0, 1, 0, 0, 0, -1, gap, 0, 1, gap;
+		Eigen::MatrixXi e(2, 2);
+		e << 0, 1, 2, 3;
+		return ipc::CollisionMesh(p, e, Eigen::MatrixXi(0, 3));
+	}
+
 	class Probe : public BarrierContactForm
 	{
 	public:
@@ -85,7 +103,7 @@ namespace
 								 ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000,
 								 BarrierStiffnessMode::SemiImplicit, opts, Eigen::VectorXd::Ones(m.num_vertices()))
 		{
-			driving = 100 * Eigen::MatrixXd::Identity(m.num_vertices() * 2, m.num_vertices() * 2);
+			driving = 100 * Eigen::MatrixXd::Identity(m.num_vertices() * m.dim(), m.num_vertices() * m.dim());
 			set_weight(1);
 			set_barrier_stiffness(1);
 			set_system_hessian_provider([this](const Eigen::VectorXd &, StiffnessMatrix &h) {
@@ -129,6 +147,40 @@ namespace
 			first_derivative(x, g);
 			return g;
 		}
+
+		/// The broad phase emitting every same-type pair in the other order
+		/// (the LBVH emits a pair as query/target leaf): the built parents'
+		/// ids and the edge-edge / vertex-vertex stencils swap, then the set
+		/// is reassigned as after any rebuild.
+		void emit_reversed()
+		{
+			for (size_t i = 0; i < collision_set_.size(); ++i)
+				for (auto &p : collision_set_[i].parents)
+					if (p.type == ipc::ParentContribution::Type::EdgeEdge || p.type == ipc::ParentContribution::Type::VertexVertex)
+						std::swap(p.id0, p.id1);
+			for (auto &c : collision_set_.ee_collisions)
+				std::swap(c.edge0_id, c.edge1_id);
+			for (auto &c : collision_set_.vv_collisions)
+				std::swap(c.vertex0_id, c.vertex1_id);
+			assign_collision_stiffness(collision_set_);
+		}
+		std::array<long, 5> only_key() const
+		{
+			REQUIRE(collision_set_.size() == 1);
+			const auto keys = coefficient_keys(collision_set_, 0);
+			REQUIRE(keys.size() == 1);
+			return keys[0].first;
+		}
+
+		// History report internals (docs/canonical-pair-keys-20261005.md).
+		std::map<std::array<long, 5>, double> &window() { return history_windows_[0].carried; }
+		std::map<std::array<long, 5>, double> &previous_window() { return history_windows_[1].carried; }
+		std::set<std::array<long, 5>> &dropped() { return history_windows_[0].dropped; }
+		std::map<std::array<long, 5>, double> &memo() { return kappa_cache_; }
+		std::map<std::array<long, 5>, double> &previous_memo() { return prev_kappa_cache_; }
+		std::map<std::array<long, 5>, double> &endpoint() { return endpoint_kappa_; }
+		std::set<std::array<long, 5>> &continued() { return continued_keys_; }
+		void observe() { observe_continuation(); }
 	};
 
 	// Displacement that lifts pair `i`'s point by dy (in a `count`-pair mesh)
@@ -609,5 +661,249 @@ TEST_CASE("RBR-04 the improved max operator is refused under semi-implicit stiff
 		// sum of the parents' potentials: 70 b + 40 b on both sides.
 		CHECK(energy(false, at(-eps, gap), heterogeneous) == Approx(110 * b).epsilon(1e-6));
 		CHECK(energy(false, at(eps, gap), heterogeneous) == Approx(110 * b).epsilon(1e-6));
+	}
+}
+
+// History-sensitivity report (docs/canonical-pair-keys-20261005.md): the run
+// manifest's steps[].contact.history_sensitivity. Observational; these cases
+// pin what each counter means on the real form.
+TEST_CASE("History report: continuation losses by cause", "[kappa_continuity][history]")
+{
+	const json on = {{"force_continuation", true}};
+
+	SECTION("a contact that leaves and re-enters within a step is a re-entry loss, with its ratio and gap shift")
+	{
+		auto mesh = make_pairs(1, .2, 2);
+		Probe f(mesh, on);
+		const Eigen::VectorXd together = Eigen::VectorXd::Zero(12), apart = lift(2, 1, 1.5);
+		f.start(together);
+		f.publish(together); // both pairs carried at 100
+		f.solution_changed(apart);
+		f.publish(apart); // pair 1 out of support: not carried any more
+		f.driving *= 4;
+		f.refresh_mid_solve(together); // pair 1 back, re-estimated at 400
+		REQUIRE(f.scales() == std::vector<double>{100., 400.});
+		const json h = f.history_sensitivity(together);
+		CHECK(h["continuation"]["force_continuation"] == true);
+		CHECK(h["continuation"]["losses"]["reentry"] == 1);
+		CHECK(h["continuation"]["losses"]["orientation"] == 0);
+		CHECK(h["continuation"]["losses"]["other"] == 0);
+		CHECK(h["continuation"]["max_abs_log_ratio"].get<double>() == Approx(std::log(4.)));
+		// One contact at gap .2 dhat: (1 - .2) / 2 * ln 4.
+		const json &gap = h["continuation"]["gap_shift_dhat"];
+		CHECK(gap["contacts"] == 1);
+		CHECK(gap["sum"].get<double>() == Approx(.4 * std::log(4.)));
+		CHECK(gap["max"].get<double>() == Approx(.4 * std::log(4.)));
+		CHECK(h["restored_from_state"] == false);
+
+		// A loss is counted once per record, however often it is seen.
+		f.refresh_mid_solve(together);
+		CHECK(f.history_sensitivity(together)["continuation"]["losses"]["reentry"] == 1);
+
+		// After the record the accumulation starts again: nothing lost yet.
+		f.reset_history_sensitivity();
+		const json next = f.history_sensitivity(together);
+		CHECK(next["continuation"]["losses"]["reentry"] == 0);
+		CHECK(next["continuation"]["max_abs_log_ratio"].is_null());
+		CHECK(next["continuation"]["gap_shift_dhat"]["contacts"] == 0);
+
+		// The lookback spans this step and the previous one: a contact that
+		// was carried in the previous step, was not active at the last
+		// endpoint and comes back is a re-entry...
+		f.update_quantities(1, apart);
+		f.publish(apart); // the endpoint between the steps, without pair 1
+		REQUIRE(f.window().size() == 1);
+		REQUIRE(f.previous_window().size() == 2);
+		f.refresh_mid_solve(together);
+		CHECK(f.history_sensitivity(together)["continuation"]["losses"]["reentry"] == 1);
+		// ...one absent for a whole step more is a new contact.
+		f.reset_history_sensitivity();
+		for (int step = 2; step <= 3; ++step)
+		{
+			f.update_quantities(step, apart);
+			f.publish(apart);
+		}
+		f.refresh_mid_solve(together);
+		CHECK(f.history_sensitivity(together)["continuation"]["losses"]["reentry"] == 0);
+	}
+
+	SECTION("a pair carried under its other orientation is an orientation loss; a key continuation dropped is other")
+	{
+		auto mesh = make_crossing_edges();
+		Probe f(mesh, on);
+		const Eigen::VectorXd x = Eigen::VectorXd::Zero(12);
+		f.start(x);
+		f.publish(x);
+		const auto key = f.only_key();
+		REQUIRE(key[0] == 10 + long(ipc::ParentContribution::Type::EdgeEdge));
+		const auto reversed = BarrierContactForm::reversed_pair_key(key);
+		REQUIRE(reversed != key);
+		CHECK(BarrierContactForm::reversed_pair_key(reversed) == key);
+		REQUIRE(f.memo().at(key) == Approx(100.));
+
+		// The classifier itself (the regression guard): the window holds the
+		// pair under the other order, the key itself is not carried.
+		f.continued().clear();
+		f.endpoint().clear();
+		f.window().clear();
+		f.previous_window() = {{reversed, 50.}}; // carried in the previous step
+		f.dropped().clear();
+		f.observe();
+		json h = f.history_sensitivity(x);
+		CHECK(h["continuation"]["losses"]["orientation"] == 1);
+		CHECK(h["continuation"]["losses"]["reentry"] == 0);
+		CHECK(h["continuation"]["max_abs_log_ratio"].get<double>() == Approx(std::log(2.)));
+		CHECK(h["continuation"]["split_pairs"] == 0);
+		// Both orders memoized in one snapshot: one contact, two identities.
+		f.memo()[reversed] = 70.;
+		f.observe();
+		CHECK(f.history_sensitivity(x)["continuation"]["split_pairs"] == 1);
+		f.observe(); // counted once per record
+		CHECK(f.history_sensitivity(x)["continuation"]["split_pairs"] == 1);
+		f.memo().erase(reversed);
+
+		f.reset_history_sensitivity();
+		f.window().clear();
+		f.previous_window().clear();
+		f.dropped() = {key};
+		f.observe();
+		h = f.history_sensitivity(x);
+		CHECK(h["continuation"]["losses"]["other"] == 1);
+		CHECK(h["continuation"]["losses"]["orientation"] == 0);
+		CHECK(h["continuation"]["max_abs_log_ratio"].is_null()); // nothing carried to compare with
+		CHECK(h["continuation"]["gap_shift_dhat"]["contacts"] == 0);
+
+		// Typed keys have no other orientation.
+		const std::array<long, 5> face_vertex = {{13, 4, 7, -1, -1}}, edge_vertex = {{11, 4, 7, -1, -1}};
+		CHECK(BarrierContactForm::reversed_pair_key(face_vertex) == face_vertex);
+		CHECK(BarrierContactForm::reversed_pair_key(edge_vertex) == edge_vertex);
+		const std::array<long, 5> ee_stencil = {{2, 5, 6, 1, 2}}, ee_swapped = {{2, 1, 2, 5, 6}};
+		CHECK(BarrierContactForm::reversed_pair_key(ee_stencil) == ee_swapped);
+	}
+
+	SECTION("without force continuation nothing is carried and nothing is lost")
+	{
+		auto mesh = make_pairs(1, .2, 2);
+		Probe f(mesh, {{"force_continuation", false}});
+		const Eigen::VectorXd together = Eigen::VectorXd::Zero(12), apart = lift(2, 1, 1.5);
+		f.start(together);
+		f.publish(together);
+		f.solution_changed(apart);
+		f.publish(apart);
+		f.driving *= 4;
+		f.refresh_mid_solve(together);
+		const json h = f.history_sensitivity(together);
+		CHECK(h["continuation"]["force_continuation"] == false);
+		CHECK(h["continuation"]["losses"]["reentry"] == 0);
+		CHECK(f.window().empty());
+	}
+
+	SECTION("other stiffness modes report the block as unavailable")
+	{
+		auto mesh = make_pairs();
+		BarrierContactForm fixed(mesh, 1, 1, false, false, false, false, false, false,
+								 ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000);
+		const json h = fixed.history_sensitivity(Eigen::VectorXd::Zero(6));
+		CHECK(h["value"].is_null());
+		CHECK(h["unavailable_reason"].is_string());
+	}
+}
+
+TEST_CASE("History report: trim moves by source", "[kappa_continuity][history]")
+{
+	auto mesh = make_pairs();
+	Probe f(mesh);
+	const Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
+	f.start(x);
+	f.publish(x);
+	REQUIRE(f.barrier_stiffness() == 1);
+	f.bump_trim(2);
+	f.bump_trim(4, TrimLoopGuard::Collapse, BarrierContactForm::TrimMove::Collapse);
+	// A stall with the gap (.2 dhat) below the band: the retune's collapse
+	// bump is a collapse move made inside a stall retune.
+	REQUIRE(f.retune_on_stall(x, 2));
+	const double end = f.barrier_stiffness();
+	REQUIRE(end > 8);
+	json h = f.history_sensitivity(x);
+	const json &moves = h["trim"]["moves"];
+	CHECK(moves["other"]["count"] == 1);
+	CHECK(moves["other"]["log2"].get<double>() == Approx(1.));
+	CHECK(moves["collapse"]["count"] == 2);
+	CHECK(moves["collapse"]["log2"].get<double>() == Approx(std::log2(end / 2)));
+	CHECK(h["trim"]["moves_in_stall_retunes"] == 1);
+	CHECK(h["trim"]["start"].get<double>() == 1.);
+	CHECK(h["trim"]["end"].get<double>() == end);
+	// Every move of the trim is accounted for: the per-source log2 changes
+	// add up to start -> end.
+	double total = 0;
+	for (const auto &[source, entry] : moves.items())
+		total += entry["log2"].get<double>();
+	CHECK(total == Approx(std::log2(end)));
+	CHECK(h["trim"]["controller_interval"] == 30);
+	CHECK(h["trim"]["iters_since_trim"] == 0);
+	// One cadence step (factor 2) at gap .2 dhat: (1 - .2) / 2 * ln 2.
+	CHECK(h["trim"]["gap_shift_per_cadence_move_dhat"]["max"].get<double>() == Approx(.4 * std::log(2.)));
+	CHECK(h["trim"]["gap_shift_per_cadence_move_dhat"]["contacts"] == 1);
+	// Without an endpoint (failed attempt) the gap shifts are not evaluated.
+	h = f.history_sensitivity(Eigen::VectorXd());
+	CHECK(h["trim"]["gap_shift_per_cadence_move_dhat"]["value"].is_null());
+	CHECK(h["continuation"]["gap_shift_dhat"]["value"].is_null());
+
+	f.reset_history_sensitivity();
+	h = f.history_sensitivity(x);
+	CHECK(h["trim"]["start"].get<double>() == end);
+	for (const auto &[source, entry] : h["trim"]["moves"].items())
+		CHECK(entry["count"] == 0);
+	CHECK(h["trim"]["moves_in_stall_retunes"] == 0);
+
+	Probe no_cadence(mesh, {{"controller_interval", 0}});
+	no_cadence.start(x);
+	CHECK(no_cadence.history_sensitivity(x)["trim"]["gap_shift_per_cadence_move_dhat"]["value"].is_null());
+}
+
+TEST_CASE("History report: rollback and restart state", "[kappa_continuity][history]")
+{
+	const json on = {{"force_continuation", true}};
+	auto mesh = make_pairs(1, .2, 2);
+	const Eigen::VectorXd together = Eigen::VectorXd::Zero(12), apart = lift(2, 1, 1.5);
+
+	SECTION("a rollback restores the accumulators and the window")
+	{
+		Probe f(mesh, on);
+		f.start(together);
+		f.publish(together);
+		const auto saved = f.save_state();
+		const json before = f.history_sensitivity(together);
+		f.solution_changed(apart);
+		f.publish(apart);
+		f.driving *= 4;
+		f.refresh_mid_solve(together);
+		f.bump_trim(2);
+		REQUIRE(f.history_sensitivity(together) != before);
+		f.restore_state(*saved, together);
+		CHECK(f.history_sensitivity(together) == before);
+	}
+
+	SECTION("a resumed run's window is the restored endpoint, and the record says it was restored")
+	{
+		const auto path = std::filesystem::temp_directory_path()
+						  / ("polyfem-history-restart-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".hdf5");
+		Probe f(mesh, on);
+		f.start(together);
+		f.publish(together);
+		f.write_restart_state(path.string());
+
+		Probe g(mesh, on);
+		g.init(together);
+		REQUIRE(g.read_restart_state(path.string(), together));
+		std::filesystem::remove(path);
+		CHECK(g.window() == g.endpoint());
+		CHECK(g.window().size() == 2);
+		CHECK(g.previous_window().empty()); // not saved
+		const json h = g.history_sensitivity(together);
+		CHECK(h["restored_from_state"] == true);
+		CHECK(h["trim"]["start"].get<double>() == g.barrier_stiffness());
+		g.reset_history_sensitivity();
+		CHECK(g.history_sensitivity(together)["restored_from_state"] == false);
 	}
 }
