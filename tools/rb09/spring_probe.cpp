@@ -20,6 +20,10 @@
 
 #include <polysolve/nonlinear/PostStepData.hpp>
 
+#include <ipc/utils/logger.hpp>
+
+#include <spdlog/sinks/stdout_color_sinks.h>
+
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -239,6 +243,11 @@ namespace
 
 int main()
 {
+	// stdout carries only the JSON result: PolyFEM's and the IPC Toolkit's
+	// default loggers write to stdout, so both log to stderr here.
+	const auto log_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+	polyfem::set_logger(std::make_shared<spdlog::logger>("polyfem", log_sink));
+	ipc::set_logger(std::make_shared<spdlog::logger>("ipctk", log_sink));
 	logger().set_level(spdlog::level::err);
 	json out;
 	out["fixture"] = "2D point on a linear spring above a floor edge (L = 1, floor from -2 to 2); semi-implicit BarrierContactForm, form weight 1, trim 1 at start, driving Hessian k I; anchor from 2 dhat to -1 in 4 steps";

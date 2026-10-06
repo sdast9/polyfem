@@ -8,6 +8,8 @@
 #include <polyfem/mesh/Obstacle.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
+#include <ipc/utils/logger.hpp>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <h5pp/h5pp.h>
 #include <cmath>
 #include <fstream>
@@ -171,6 +173,11 @@ namespace
 } // namespace
 int main()
 {
+	// stdout carries only the JSON result: PolyFEM's and the IPC Toolkit's
+	// default loggers write to stdout, so both log to stderr here.
+	const auto log_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+	polyfem::set_logger(std::make_shared<spdlog::logger>("polyfem", log_sink));
+	ipc::set_logger(std::make_shared<spdlog::logger>("ipctk", log_sink));
 	logger().set_level(spdlog::level::off);
 	json out;
 	try

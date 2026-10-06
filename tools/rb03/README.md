@@ -11,6 +11,9 @@ The runner compiles this standalone real-library probe into the fresh directory,
 using the unit-test compiler/link recipe. It does not rebuild or alter production
 binaries, and does not run scenes. It saves source, build commands, hashes,
 stdout/stderr and exit status. The output directory must not already exist.
+The probe's stdout is only its JSON result (`probe-results.json`; the runner
+exits nonzero if that is not valid JSON); PolyFEM and IPC Toolkit log lines go
+to stderr (`probe.stderr`).
 Generated OBJ/HDF5 fixtures are public synthetic data. The probe explicitly
 supplies the transformation defaults expected by the production builder.
 

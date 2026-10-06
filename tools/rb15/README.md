@@ -9,7 +9,9 @@ python3 tools/rb15/run_probe.py --build build --output /absolute/fresh/candidate
 
 Each output directory must be new. The runner compiles the standalone source
 against the configured libraries, captures commands/exits/logs, hashes the source,
-protocol and linked archives, and saves `probe-results.json`. No production file,
+protocol and linked archives, and saves `probe-results.json` (the probe's stdout,
+which is only its JSON result; the runner exits nonzero if it is not valid JSON;
+PolyFEM and IPC Toolkit log lines go to `probe.stderr`). No production file,
 coefficient option, original baseline, scene input or existing evidence is edited.
 The probe uses real IPC/BarrierContactForm geometry, gradients and Hessians, with
 experimental assignments confined to this executable. The two-parent scale setter

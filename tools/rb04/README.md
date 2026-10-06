@@ -112,6 +112,9 @@ and units, and integrates the gradient across the boundary. See
 [candidate comparison](../../docs/rb-04-candidate-comparison.md) for normalization,
 results, interpretation and remaining scene work. Committed compact data are
 `candidate-results-20260909.json`; raw outputs retain both successful probe runs.
+The probe's stdout is only its JSON result (`probe-results.json`; the runner
+exits nonzero if that is not valid JSON); PolyFEM and IPC Toolkit log lines go
+to stderr (`probe.stderr`). The same holds for `contact_path_probe.cpp` below.
 
 
 ### Discrete trajectory budget

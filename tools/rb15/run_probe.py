@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build', type=Path, required=True)
@@ -55,4 +56,10 @@ run = subprocess.run([str(binary)], cwd=out, text=True, capture_output=True)
 (out / 'probe.stderr').write_text(run.stderr)
 (out / 'exit.json').write_text(json.dumps({'probe_exit': run.returncode}) + '\n')
 print(run.stdout)
+try:
+    json.loads(run.stdout)
+except json.JSONDecodeError as error:
+    # Library log lines belong in probe.stderr; one on stdout breaks the result file.
+    print(f'probe-results.json is not valid JSON: {error}', file=sys.stderr)
+    raise SystemExit(run.returncode or 1)
 raise SystemExit(run.returncode)

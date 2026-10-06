@@ -65,6 +65,8 @@ the production step flow (Newton with the form's line-search hooks and
 scalar root on the realized `w·trim·κ_s` (the form's `weight()` already
 carries the trim), the spring/barrier force identity, the analytical
 gradient and the hard-contact overshoot `k·g`. Five `(k, d̂)` cases; the
-trace records the first iterate's gap and the trim history.
+trace records the first iterate's gap and the trim history. Its stdout is
+only the JSON result (`probe.stdout`; `probe.json` adds the exit status);
+PolyFEM and IPC Toolkit log lines go to stderr (`probe.stderr`).
 
 Compact results of the 2026-09-13 matrix: `results-20260913.json`.

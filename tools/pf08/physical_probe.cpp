@@ -6,6 +6,8 @@
 #include <polyfem/solver/forms/lagrangian/BCLagrangianForm.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polysolve/linear/Solver.hpp>
+#include <ipc/utils/logger.hpp>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <iostream>
 #include <cmath>
 
@@ -43,6 +45,11 @@ struct SpringLoad : Form
 
 int main(int argc, char **argv)
 {
+	// stdout carries only the JSON result: PolyFEM's and the IPC Toolkit's
+	// default loggers write to stdout, so both log to stderr here.
+	const auto log_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+	polyfem::set_logger(std::make_shared<spdlog::logger>("polyfem", log_sink));
+	ipc::set_logger(std::make_shared<spdlog::logger>("ipctk", log_sink));
 	if (argc != 7)
 		return 2;
 	logger().set_level(spdlog::level::off);
