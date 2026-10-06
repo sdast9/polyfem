@@ -3,7 +3,7 @@
 A reconciliation of the project records, written 2026-09-29 and brought up to
 date on 2026-09-30 (end of day) at PolyFEM `main` `0a367634a` (IPC Toolkit pin
 `1f1b5dbf`, PolySolve pin `43ca2e66`, data pin `sdast9/polyfem-data@aed03ab`);
-the canonical-pair-keys entries were added on 2026-10-05. It adds no evidence: every line points at the
+the canonical-pair-keys and mechanisms B/C entries were added on 2026-10-05. It adds no evidence: every line points at the
 record that owns the claim. When a record and this page disagree, the record
 governs; fix this page.
 
@@ -29,7 +29,7 @@ budget method-independent; L-BFGS not pursued (EF-06 retired); automatic
 timestep retry off (RB-08); mixed hexahedral orders refused (RB-23);
 `friction_iterations: 2` with `realized_force` lag (RB-10); the CI-05 and
 CI-06 reference policies (2026-09-29); the default stall-restart budget
-`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)); semi-implicit edge-edge / vertex-vertex coefficients are keyed on the sorted pair, **without a historical switch**, and the run manifest reports per step what depended on discrete history (2026-10-05, options 1 and 4 of the roundoff investigation; options 2, 3 and 5 — robust degenerate estimates, a state-based trim cadence, continuation hysteresis — not chosen; [record](canonical-pair-keys-20261005.md)).
+`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)); semi-implicit edge-edge / vertex-vertex coefficients are keyed on the sorted pair, **without a historical switch**, and the run manifest reports per step what depended on discrete history (2026-10-05, options 1 and 4 of the roundoff investigation; options 2, 3 and 5 — robust degenerate estimates, a state-based trim cadence, continuation hysteresis — not chosen; [record](canonical-pair-keys-20261005.md)); after mechanisms B and C were measured on the user's scenes, the 30-iteration in-solve trim cadence stays as it is and stale first-estimate stamps are not repaired, while the guarded first-contact refresh (*birth0g*) is to be adopted (2026-10-05, [record](semi-implicit-mechanisms-b-c-20261005.md)).
 
 ## 2. Open work
 
@@ -69,19 +69,26 @@ realization noise), and a repeat of `pup_push` for steps 1–3.
 
 ### Semi-implicit roundoff sensitivity (2026-10-04/05)
 
-[canonical-pair-keys-20261005.md](canonical-pair-keys-20261005.md) (evidence:
-the parent workspace's `semi-implicit-roundoff-work/FINDINGS.md` and
-`canonical-keys-work/`). Mechanism A (pair-key orientation) is removed and the
+[canonical-pair-keys-20261005.md](canonical-pair-keys-20261005.md) and
+[semi-implicit-mechanisms-b-c-20261005.md](semi-implicit-mechanisms-b-c-20261005.md)
+(evidence: the parent workspace's `semi-implicit-roundoff-work/FINDINGS.md`,
+`canonical-keys-work/` and `mechanism-bc-work/`). Mechanism A (pair-key orientation) is removed and the
 manifest reports continuation losses, split pair identities, trim moves by
 source and gap-shift estimates per step. Open:
 
 - the Read PVD asset does not show the report yet (follow-up; the asset was
   not touched);
-- mechanisms B (degenerate estimates at contact birth) and C (the
-  iteration-count cadence) remain by decision; their frequency in the user's
-  scenes is not measured;
+- mechanisms B and C were measured on the user's scenes (2026-10-05): the
+  repro's degenerate first estimates do not occur there; stale first-estimate
+  stamps are frequent but without a measurable effect and are not repaired, and
+  the cadence stays (user decisions). Open: adopting the guarded first-contact
+  refresh (*birth0g*), as separate work on local branch `adopt-birth0g` (from
+  the B/C record's branch `semi-implicit-bc-record`), with the RB-02 probe, new
+  smoke references and a check on a scene with a moving obstacle. The probe
+  branch `mechanism-bc-probe` stays local for reference;
 - the change is committed locally (worktree `canonical-keys-work/polyfem`,
-  branch `canonical-pair-keys`) and **not pushed** (user, 2026-10-05: not
+  branch `canonical-pair-keys`; the B/C record on top of it, branch
+  `semi-implicit-bc-record`) and **not pushed** (user, 2026-10-05: not
   yet); with the push, fast-forward the shared `polyfem/` checkout and
   rebuild `polyfem/build` (used by the Houdini assets and their tests), which
   stays at `49ad24b74` until then (user's choice).

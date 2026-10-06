@@ -30,6 +30,16 @@ repository's own claims current. **Open decisions, work and verification gaps:
   firing and first-order gap-shift estimates
   ([record](docs/canonical-pair-keys-20261005.md)).
 
+- **Semi-implicit mechanisms B and C measured (October 5, 2026):** no code
+  change. The repro's degenerate first estimates do not occur in the user's
+  scenes; contacts born mid-solve are often estimated on a stale snapshot (IT:
+  84 % of first captures off by more than 10 %), without a measurable effect on
+  spread or on the distance to pinned-trim references, and are not repaired
+  (user decision). The 30-iteration in-solve trim cadence stays: every
+  state-based replacement failed pup_push, IT or R4 step 1. The guarded
+  first-contact refresh, which removes the repro's onset sensitivity, is to be
+  adopted separately ([record](docs/semi-implicit-mechanisms-b-c-20261005.md)).
+
 - **Trim controller and restart work (September 26–29, 2026):** the opt-in
   guarded initial trim estimate and force-weighted band ([EF-02/03](docs/ef-02-03-trim-controller.md))
   and the EF-07 pair guard that removes their ball-burst loop

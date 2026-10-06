@@ -245,7 +245,8 @@ Read:
 * Canonical keys remove mechanism A only. B (7e-9 on the repro, 2.5e-4 at
   d̂ = 0.02) and C remain. Chaotic scenes stay chaotic: the investigation's IT
   nudge ensembles and pup_push's step-1 stall marginality do not depend on
-  key orientation.
+  key orientation. (Follow-up the same day: B and C measured on the user's
+  scenes, [semi-implicit-mechanisms-b-c-20261005.md](semi-implicit-mechanisms-b-c-20261005.md).)
 * Not run: the full unit suite (the affected selection was); the Houdini
   asset's tests (the asset is unchanged and drives the shared `polyfem/build`,
   which is not rebuilt by this work); the native CI (runs on push).
