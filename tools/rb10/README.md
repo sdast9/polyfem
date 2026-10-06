@@ -36,6 +36,9 @@ normal-force transfer through trim bumps, calibration, mid-solve refresh
 refresh; the classic-adaptive rule (observation only); and the slip
 convention with no integrator (static: total displacement), ImplicitEuler and
 BDF2. The invariant parts are also the `[friction_lag]` Catch2 regression.
+The probe's stdout is only its JSON result (`probe.stdout`; `probe.json` adds
+the exit status); PolyFEM and IPC Toolkit log lines, such as the toolkit's
+`to_full_dof` deprecation warning, go to stderr (`probe.stderr`).
 
 Stages 2, 3 and classic were run before the RB-10 decision at the then
 defaults (budget 1, RB-18 F6 trim following); the runner now writes those

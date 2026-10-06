@@ -12,6 +12,9 @@
 #include <polyfem/utils/Logger.hpp>
 
 #include <ipc/friction/smooth_friction_mollifier.hpp>
+#include <ipc/utils/logger.hpp>
+
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <algorithm>
 #include <cmath>
@@ -158,6 +161,11 @@ namespace
 
 int main(int argc, char **argv)
 {
+	// stdout carries only the JSON result: PolyFEM's and the IPC Toolkit's
+	// default loggers write to stdout, so both log to stderr here.
+	const auto log_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+	polyfem::set_logger(std::make_shared<spdlog::logger>("polyfem", log_sink));
+	ipc::set_logger(std::make_shared<spdlog::logger>("ipctk", log_sink));
 	logger().set_level(spdlog::level::err);
 	json out;
 	out["failed_sections"] = json::array();
