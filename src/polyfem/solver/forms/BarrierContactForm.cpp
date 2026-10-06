@@ -591,7 +591,7 @@ namespace polyfem::solver
 		return barrier_stiffness_ != trim_before || kappa_cache_ != prev_kappa_cache_;
 	}
 
-	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller, const bool published_endpoint)
+	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller, const bool published_endpoint, const bool first_contact_refresh)
 	{
 		if (!uses_semi_implicit_stiffness())
 			return;
@@ -789,8 +789,14 @@ namespace polyfem::solver
 			const double severity = collapse_severity(avg_d2, min_d2);
 			const double dhat_sq = dhat_ * dhat_;
 			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
+			// A first-contact refresh is not a collapse: the barrier has not
+			// acted on these contacts yet, and their gaps are where the step
+			// that made them stopped (usually truncated by the CCD line
+			// search). Bumping the trim there makes the onset stiffer and
+			// itself roundoff-sensitive; the conditioning cap applies instead.
+			const bool collapsed = std::isfinite(severity) && severity < trim_lower_ * dhat_sq && !first_contact_refresh;
 
-			if (std::isfinite(severity) && severity < trim_lower_ * dhat_sq)
+			if (collapsed)
 			{
 				collapse_bump(collapse_bump_factor(severity), avg_d2, min_d2, severity, published_endpoint ? "refresh_endpoint" : "refresh");
 			}
@@ -811,9 +817,9 @@ namespace polyfem::solver
 				// are the only things allowed to move it, plus the band's
 				// downward step when the gap is pinned above the band).
 				// (Never cap during an active collapse -- a collapsed first
-				// contact needs strength, not conditioning.)
-				if (first_contact && kappa_median_ > 0 && kappa_hessian_max_ > 0
-					&& !(std::isfinite(severity) && severity < trim_lower_ * dhat_sq))
+				// contact needs strength, not conditioning. The first-contact
+				// refresh in post_step is not a collapse.)
+				if (first_contact && kappa_median_ > 0 && kappa_hessian_max_ > 0 && !collapsed)
 				{
 					// RB-18 F3: kappa carries force/length^3 (divided by dhat^2
 					// at assignment) while |H| is force/length, so the ratio
@@ -1747,6 +1753,7 @@ namespace polyfem::solver
 		state.kappa_interpolated_count = kappa_interpolated_count_;
 		state.kappa_direction_fallback_count = kappa_direction_fallback_count_;
 		state.kappa_snapshot_had_contacts = kappa_snapshot_had_contacts_;
+		state.last_post_step_x = last_post_step_x_;
 		state.trim_solve_anchor = trim_solve_anchor_;
 		state.trim_seed_pending = trim_seed_pending_;
 		state.force_band_age = force_band_age_;
@@ -1784,6 +1791,7 @@ namespace polyfem::solver
 		kappa_interpolated_count_ = state.kappa_interpolated_count;
 		kappa_direction_fallback_count_ = state.kappa_direction_fallback_count;
 		kappa_snapshot_had_contacts_ = state.kappa_snapshot_had_contacts;
+		last_post_step_x_ = state.last_post_step_x;
 		trim_solve_anchor_ = state.trim_solve_anchor;
 		trim_seed_pending_ = state.trim_seed_pending;
 		force_band_age_ = state.force_band_age;
@@ -2971,8 +2979,31 @@ namespace polyfem::solver
 			polyfem::logger().log(log_level, "Minimum distance during solve: {}, dhat: {}", sqrt(curr_distance), dhat());
 		}
 
+		// PolySolve reports its start point and its first accepted iterate
+		// both with iteration 0. An accepted state is a post_step at other
+		// coordinates than the previous one's: a solve that continues from
+		// the last iterate starts at the same coordinates.
+		bool new_coordinates = false;
+		if (uses_semi_implicit_stiffness())
+		{
+			new_coordinates = !(last_post_step_x_.size() == data.x.size() && last_post_step_x_ == data.x);
+			last_post_step_x_ = data.x;
+		}
+
 		if (data.iter_num == 0)
+		{
+			// Contact born by the first accepted iterate (or by the Dirichlet
+			// snap of the start point): the first-contact refresh runs here
+			// rather than one iterate later. The next iterate is typically the
+			// first step the CCD line search does not truncate, and estimates
+			// taken there were roundoff-sensitive (nearly parallel edge pairs).
+			if (new_coordinates && !kappa_snapshot_had_contacts_ && controller_has_contacts())
+			{
+				CoefficientEventScope event(*this, data.x, "post_step");
+				refresh_semi_implicit_stiffness(data.x, /*run_trim_controller=*/true, /*published_endpoint=*/false, /*first_contact_refresh=*/true);
+			}
 			return;
+		}
 		CoefficientEventScope event(*this, data.x, "post_step");
 		trim_decision_ = nullptr;
 
@@ -2983,7 +3014,7 @@ namespace polyfem::solver
 			// immediately (with the controller, so the conditioning cap
 			// softens the barrier while the contact is still unloaded).
 			if (!kappa_snapshot_had_contacts_ && controller_has_contacts())
-				refresh_semi_implicit_stiffness(data.x);
+				refresh_semi_implicit_stiffness(data.x, /*run_trim_controller=*/true, /*published_endpoint=*/false, /*first_contact_refresh=*/true);
 
 			// In-solve trim controller (mirrors classic IPC's emergency
 			// doubling, made two-sided): an upward proportional bump when

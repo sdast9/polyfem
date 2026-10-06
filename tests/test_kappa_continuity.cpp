@@ -16,6 +16,9 @@
 //         potentials (a finite |k1 - k2| / 2 * b(d) jump at a corner); the
 //         semi-implicit form refuses that operator by name, the other
 //         stiffness modes keep it unchanged.
+//   First-contact refresh (docs/first-contact-refresh-20261006.md): a
+//         contact born by the first accepted iterate is refreshed there, and
+//         no first-contact refresh bumps the trim for a collapse.
 // Real BarrierContactForm with a synthetic frozen Hessian and identity
 // mapping (as tools/rb02/coefficient_probe.cpp). Not a physical-accuracy test.
 #include <catch2/catch_test_macros.hpp>
@@ -25,6 +28,7 @@
 
 #include <ipc/broad_phase/hash_grid.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
+#include <polysolve/nonlinear/PostStepData.hpp>
 
 #include <algorithm>
 #include <array>
@@ -141,6 +145,8 @@ namespace
 			return result;
 		}
 		const ipc::NormalCollisions &collisions() const { return collision_set_; }
+		/// The displaced surface frozen at the last refresh
+		const Eigen::MatrixXd &snapshot_surface() const { return kappa_surface_; }
 		Eigen::VectorXd grad(const Eigen::VectorXd &x) const
 		{
 			Eigen::VectorXd g;
@@ -1083,4 +1089,110 @@ TEST_CASE("Canonical pair keys: restart state written before canonical keys", "[
 		CHECK(g.window() == g.endpoint());
 	}
 	std::filesystem::remove(path);
+}
+
+// The guarded first-contact refresh (docs/first-contact-refresh-20261006.md;
+// user decision 2026-10-05 after docs/semi-implicit-mechanisms-b-c-20261005.md):
+// PolySolve reports its start point and its first accepted iterate both with
+// iteration 0. A contact born by that iterate (in the 1e-15 repro, the step
+// the CCD line search truncated, every new contact at the same small gap) is
+// refreshed there rather than at the next iterate, which is the first
+// untruncated one and where the estimates were roundoff-sensitive. No
+// first-contact refresh bumps the trim for a collapse; the conditioning cap
+// applies.
+TEST_CASE("First-contact refresh at the first accepted iterate, without a collapse bump", "[kappa_continuity][first_contact]")
+{
+	using polysolve::nonlinear::PostStepData;
+	// One point over an edge, dhat 1; a cap low enough to bind whatever the estimate.
+	const json opts = {{"conditioning_cap", 1e-6}};
+	auto mesh = make_pairs();
+	const Eigen::VectorXd apart = lift(1, 0, 1.3), apart_too = lift(1, 0, 1.2);  // gaps 1.5 and 1.4 dhat
+	const Eigen::VectorXd truncated = lift(1, 0, -.19), next = lift(1, 0, -.18); // gaps .01 and .02 dhat
+	const Eigen::VectorXd zero = Eigen::VectorXd::Zero(6);
+	const json info = json::object();
+	const auto moves = [](const Probe &f, const Eigen::VectorXd &x, const char *source) {
+		return f.history_sensitivity(x)["trim"]["moves"][source]["count"].get<int>();
+	};
+	// A solve that starts contact-free: the published refresh at its start
+	// point, then the solver's iteration-0 report of that point.
+	const auto solve_start = [&](Probe &f) {
+		f.init(apart);
+		f.refresh_semi_implicit_stiffness(apart, true, true);
+		REQUIRE(f.collisions().empty());
+		f.solution_changed(apart);
+		const uint64_t generation = f.objective_generation();
+		f.post_step(PostStepData(0, info, apart, zero));
+		CHECK(f.objective_generation() == generation);
+	};
+
+	SECTION("a contact born by the first accepted iterate is refreshed there")
+	{
+		Probe f(mesh, opts);
+		solve_start(f);
+		f.solution_changed(truncated);
+		REQUIRE(f.collisions().size() == 1);
+		const uint64_t before = f.objective_generation();
+		f.post_step(PostStepData(0, info, truncated, zero));
+		CHECK(f.objective_generation() > before);
+		CHECK(f.snapshot_surface()(2, 1) == Approx(.01)); // the snapshot is x1
+		// .01 dhat is far below the band, but a newborn contact's gap is not a collapse.
+		CHECK(moves(f, truncated, "collapse") == 0);
+		CHECK(moves(f, truncated, "conditioning_cap") == 1);
+		const double trim = f.barrier_stiffness();
+		CHECK(trim < 1);
+
+		// The next iterate finds the contact in the snapshot: no second
+		// refresh, and the in-solve emergency bump waits for its cooldown.
+		const uint64_t after_birth = f.objective_generation();
+		f.solution_changed(next);
+		f.post_step(PostStepData(1, info, next, zero));
+		CHECK(f.objective_generation() == after_birth);
+		CHECK(f.snapshot_surface()(2, 1) == Approx(.01));
+		CHECK(f.barrier_stiffness() == trim);
+	}
+
+	SECTION("a contact born later in the solve gets the same guard")
+	{
+		Probe f(mesh, opts);
+		solve_start(f);
+		f.solution_changed(apart_too);
+		f.post_step(PostStepData(0, info, apart_too, zero)); // x1, still apart
+		f.solution_changed(truncated);
+		f.post_step(PostStepData(1, info, truncated, zero)); // x2 brings the contact
+		CHECK(f.snapshot_surface()(2, 1) == Approx(.01));
+		CHECK(moves(f, truncated, "collapse") == 0);
+		CHECK(moves(f, truncated, "conditioning_cap") == 1);
+	}
+
+	SECTION("an iteration-0 report at the previous report's coordinates is a start point")
+	{
+		Probe f(mesh, opts);
+		f.init(truncated);
+		f.refresh_semi_implicit_stiffness(truncated, true, true);
+		f.solution_changed(truncated);
+		f.post_step(PostStepData(0, info, truncated, zero));
+		// A snapshot without the contact (a refresh on another collision set)...
+		f.solution_changed(apart);
+		f.refresh_semi_implicit_stiffness(apart, false);
+		// ...then a solve that continues from the last iterate: its start
+		// point does not refresh, its first accepted iterate does.
+		f.solution_changed(truncated);
+		const uint64_t before = f.objective_generation();
+		f.post_step(PostStepData(0, info, truncated, zero));
+		CHECK(f.objective_generation() == before);
+		f.solution_changed(next);
+		f.post_step(PostStepData(0, info, next, zero));
+		CHECK(f.objective_generation() > before);
+		CHECK(f.snapshot_surface()(2, 1) == Approx(.02));
+	}
+
+	SECTION("the solve-start refresh still bumps for a collapse")
+	{
+		Probe f(mesh, opts);
+		f.init(truncated);
+		f.refresh_semi_implicit_stiffness(truncated, true, true);
+		CHECK(moves(f, truncated, "collapse") == 1);
+		CHECK(moves(f, truncated, "conditioning_cap") == 0);
+		CHECK(f.barrier_stiffness() > 1);
+	}
 }

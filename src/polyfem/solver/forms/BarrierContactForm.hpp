@@ -51,9 +51,15 @@ namespace polyfem::solver
 
 		virtual void update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy) override;
 
-		/// @brief Update fields after a step in the optimization
-		/// @param iter_num Optimization iteration number
-		/// @param x Current solution
+		/// @brief Update fields after a step in the optimization. In
+		///        semi-implicit mode a contact born after a contact-free
+		///        snapshot gets its first-contact refresh at the first
+		///        post_step that reports new coordinates. PolySolve reports its
+		///        start point and its first accepted iterate both with
+		///        iteration 0, so an iteration-0 call refreshes only at
+		///        coordinates that differ from the previous call's: the first
+		///        accepted iterate, or a start point the Dirichlet snap moved.
+		/// @param data Iteration number, solver info and current solution
 		void post_step(const polysolve::nonlinear::PostStepData &data) override;
 		void update_quantities(double t, const Eigen::VectorXd &x) override;
 
@@ -243,7 +249,12 @@ namespace polyfem::solver
 		///        the coefficients that acted there. Mid-solve refreshes
 		///        (birth, stall retune, interval) keep the captured values and
 		///        re-estimate everything else from the fresh Hessian.
-		void refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller = true, const bool published_endpoint = false);
+		/// @param first_contact_refresh True only for the first-contact
+		///        refresh in post_step. Newborn contacts sit where the step
+		///        that made them stopped (usually truncated by CCD), which is
+		///        not a collapse: it never bumps the trim for a collapse, and
+		///        the conditioning cap applies.
+		void refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller = true, const bool published_endpoint = false, const bool first_contact_refresh = false);
 
 		/// @brief Assign per-collision stiffness scales computed from the
 		///        frozen snapshot to the given collision set. Deterministic
@@ -443,6 +454,7 @@ namespace polyfem::solver
 			int kappa_fallback_count = 0, kappa_abs_fallback_count = 0, kappa_global_fallback_count = 0;
 			int kappa_interpolated_count = 0, kappa_direction_fallback_count = 0;
 			bool kappa_snapshot_had_contacts = false;
+			Eigen::VectorXd last_post_step_x;
 			bool trim_seed_pending = true;
 			int force_band_age = 0;
 			json trim_decision;
@@ -592,6 +604,12 @@ namespace polyfem::solver
 		/// @brief Whether the collision set was non-empty at the last refresh
 		///        (detects contact born mid-solve in post_step)
 		bool kappa_snapshot_had_contacts_ = false;
+		/// @brief Coordinates of the last post_step (semi-implicit mode): an
+		///        iteration-0 post_step at other coordinates reports an
+		///        accepted state, not the solver's start point. Not written to
+		///        restart files: a resumed run's first post_step follows the
+		///        solve-start refresh and has no previous point to compare.
+		Eigen::VectorXd last_post_step_x_;
 		/// @brief Trim value at the end of the last refresh; the in-solve
 		///        emergency bumps may climb at most a fixed factor above it
 		///        (unbounded in-solve climbing rails the trim to trim_max
