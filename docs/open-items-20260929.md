@@ -91,13 +91,10 @@ source and gap-shift estimates per step. Open:
   obstacle) cannot exercise it: the knit membrane is in self-contact from
   t = 0, so no snapshot is ever contact-free. The probe branch
   `mechanism-bc-probe` stays local for reference;
-- the change is committed locally (worktree `canonical-keys-work/polyfem`,
-  branch `canonical-pair-keys`; the B/C record on top of it, branch
-  `semi-implicit-bc-record`; *birth0g* on top of that, branch `adopt-birth0g`,
-  worktree `birth0g-work/polyfem`) and **not pushed** (user, 2026-10-05: not
-  yet; the three go together); with the push, fast-forward the shared `polyfem/` checkout and
-  rebuild `polyfem/build` (used by the Houdini assets and their tests), which
-  stays at `49ad24b74` until then (user's choice).
+- canonical keys, the B/C record and *birth0g* were pushed together on
+  2026-10-06 (fast-forward `49ad24b74..db2a8bb12`, user decision); the shared
+  `polyfem/` checkout was fast-forwarded and `polyfem/build` rebuilt at
+  `db2a8bb12` ([publication](first-contact-refresh-20261006.md#publication)).
 
 ### Gmsh input (found 2026-10-03)
 
@@ -214,8 +211,10 @@ and CI-06 are complete. Open:
 - First-contact refresh (2026-10-06): byte comparisons with the measured
   prototype and with production (repro family, five smokes, R1, BBT, IT,
   pup_push), the affected unit selection, the full CTest suite (438/438), the RB-02 and RB-10
-  probes and the ball-burst obstacle check were run; the Houdini asset tests
-  were not (the shared build is not rebuilt until the push).
+  probes and the ball-burst obstacle check were run; after the push, with the
+  rebuilt shared binary, the five smokes are byte-identical to the new
+  references and all 25 test scripts of the published Houdini assets
+  (`sdast9/houdini-plugins@6591c3b`) pass.
 - `tools/ef02/sequence.py` `PRODUCTION_CONTROLLER` pins
   `clamped_contacts: "keep"`, stale since `eb8286b7c`. It matters only if a
   scene file sets the key; recorded, not changed.
@@ -267,9 +266,11 @@ is settled, treat merges of cloud branches as needing the user's go-ahead.
 
 ## 3. Repository state
 
-- `polyfem` `main` = `origin/main` = `0a367634a` (fast-forwarded 2026-09-30; the
-  records and fixes of the CI cloud sessions are merged, branch
-  `ci/fixes-20260930` included).
+- `polyfem` `main` = `origin/main` = `db2a8bb12` (fast-forwarded 2026-10-06:
+  canonical pair keys, the B/C record and the first-contact refresh; before
+  that `49ad24b74`, and on 2026-09-30 `0a367634a` with the records and fixes of
+  the CI cloud sessions, branch `ci/fixes-20260930` included). The shared
+  `polyfem/build` is built at `db2a8bb12`.
 - The `cloud/*` branches on `origin` (`ci-04`, `ci-05-06-refs`, `ci-06-order`,
   `ci-08-linux`, `linux-evidence`, `locale-fix`) were cherry-picked onto `main`; `git cherry`
   finds no unmerged work except the cloud full-suite log, which `main` carries

@@ -370,4 +370,6 @@ adapted); `inputs/` (repro meshes, the fibers resume state, copied).
 Local commit on branch `semi-implicit-bc-record`, on top of
 `canonical-pair-keys` (`a7d39fc7b`). **Not pushed**: it builds on canonical
 keys, which the user has not pushed yet (2026-10-05: "not yet"); push it with
-them. The probe branch `mechanism-bc-probe` stays local.
+them. The probe branch `mechanism-bc-probe` stays local. **Pushed
+2026-10-06** with canonical keys and the first-contact refresh (fast-forward
+`49ad24b74..db2a8bb12`, [publication](first-contact-refresh-20261006.md#publication)).

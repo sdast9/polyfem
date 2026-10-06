@@ -268,4 +268,7 @@ of `49ad24b74`: `448fa8830` (report), `2a60cfa47` (canonical keys) and the
 records. **Not pushed** (user, 2026-10-05: "not yet"; no Build was running at
 the time). When it is pushed, the shared `polyfem/` checkout is to be
 fast-forwarded and `polyfem/build` rebuilt at the new head in the same step
-(user's choice), since the Houdini assets run that binary.
+(user's choice), since the Houdini assets run that binary. **Pushed
+2026-10-06** together with the mechanisms B/C record and the first-contact
+refresh (fast-forward `49ad24b74..db2a8bb12`); the shared checkout and build
+followed ([publication](first-contact-refresh-20261006.md#publication)).

@@ -3,7 +3,8 @@
 Date: 2026-10-06. Status: **adopted as production behaviour, no historical
 setting** (user decisions of 2026-10-05 and 2026-10-06). Local branch
 `adopt-birth0g`, on top of the canonical pair keys (`a7d39fc7b`) and the
-mechanisms B/C record (`435c08a63`); **not pushed** (see *Publication*).
+mechanisms B/C record (`435c08a63`); pushed to `main` on 2026-10-06 (see
+*Publication*).
 Measurement that led here: [semi-implicit-mechanisms-b-c-20261005.md](semi-implicit-mechanisms-b-c-20261005.md),
 sections *B — the repro's floor and the prototypes* and *What adopting birth0g
 involves*; the full record is the parent workspace's
@@ -231,8 +232,6 @@ agree to d ≤ 0.0026.
   the user's runs are threaded.
 * The narrower variant (guard only at the iteration-0 refresh) was neither
   measured nor implemented.
-* Not run: the Houdini asset tests. They drive the shared `polyfem/build`,
-  which stays at `49ad24b74` until the push (the user's choice).
 
 ## Evidence
 
@@ -252,10 +251,16 @@ variants); `tools/` (`cmp_family.py`, `cmp_ens.py`, `repro_accuracy.py`,
 
 ## Publication
 
-Local commits on branch `adopt-birth0g` (worktree `birth0g-work/polyfem`):
-the code and the new case (`ca8435035`) and this record with the documentation
-updates, on top of `435c08a63` (the B/C record) and `a7d39fc7b` (canonical pair
-keys). **Not pushed**: canonical keys are not pushed yet (user, 2026-10-05:
-"not yet"), and the three go together. With that push the shared `polyfem/`
-checkout is fast-forwarded and `polyfem/build` rebuilt (the Houdini assets run
-that binary); then the asset tests run against it.
+Pushed 2026-10-06 (user decision the same day) to `sdast9/polyfem` `main`: a
+fast-forward `49ad24b74..db2a8bb12` that carries canonical pair keys
+(`448fa8830`, `2a60cfa47`, `a7d39fc7b`), the B/C record (`435c08a63`) and this
+work (`ca8435035`, `db2a8bb12`). The shared `polyfem/` checkout was
+fast-forwarded to `db2a8bb12` and `polyfem/build` rebuilt there
+(RelWithDebInfo; PolyFEM `db2a8bb12`, IPC Toolkit `1f1b5dbf`, PolySolve
+`43ca2e66`, all clean; the previous binaries are in the workspace's
+`bin-backups/` as `PolyFEM_bin-49ad24b74` and `unit_tests-49ad24b74`). With the
+rebuilt binary the five smokes are byte-identical to the new references, and
+all 25 test scripts of the published Houdini assets
+(`sdast9/houdini-plugins@6591c3b`) pass against it. On GitHub the `pre-commit`
+check passed on `db2a8bb12` (run 37463031788); the native Build runs on the
+head of `main`.
