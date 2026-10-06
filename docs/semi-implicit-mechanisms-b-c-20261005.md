@@ -9,6 +9,11 @@ top of canonical keys (`2a60cfa47`). The complete record, with every table and
 the per-run evidence, is the parent workspace's `mechanism-bc-work/FINDINGS.md`;
 this page keeps what the decisions rest on.
 
+**Follow-up (2026-10-06):** *birth0g* is adopted as production behaviour,
+without a historical setting; the adopted build reproduces the measured
+*birth0g* runs byte for byte. See
+[first-contact-refresh-20261006.md](first-contact-refresh-20261006.md).
+
 **User decisions (2026-10-05), after this measurement:**
 
 * **C: the 30-iteration in-solve trim cadence stays as it is.** No redesign and
@@ -204,6 +209,8 @@ back once per newborn contact the post-publication force change RB-20 removed;
 *regular* IT +25 % iterations and twice the retunes.
 
 ### What adopting *birth0g* involves
+
+(Done 2026-10-06: [first-contact-refresh-20261006.md](first-contact-refresh-20261006.md).)
 
 * The first-contact refresh for the accepted iterate that `post_step` reports
   with iteration 0 (the solver also reports its start point with iteration 0;

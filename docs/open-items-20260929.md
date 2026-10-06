@@ -3,7 +3,8 @@
 A reconciliation of the project records, written 2026-09-29 and brought up to
 date on 2026-09-30 (end of day) at PolyFEM `main` `0a367634a` (IPC Toolkit pin
 `1f1b5dbf`, PolySolve pin `43ca2e66`, data pin `sdast9/polyfem-data@aed03ab`);
-the canonical-pair-keys and mechanisms B/C entries were added on 2026-10-05. It adds no evidence: every line points at the
+the canonical-pair-keys and mechanisms B/C entries were added on 2026-10-05, the
+first-contact refresh entries on 2026-10-06. It adds no evidence: every line points at the
 record that owns the claim. When a record and this page disagree, the record
 governs; fix this page.
 
@@ -29,7 +30,7 @@ budget method-independent; L-BFGS not pursued (EF-06 retired); automatic
 timestep retry off (RB-08); mixed hexahedral orders refused (RB-23);
 `friction_iterations: 2` with `realized_force` lag (RB-10); the CI-05 and
 CI-06 reference policies (2026-09-29); the default stall-restart budget
-`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)); semi-implicit edge-edge / vertex-vertex coefficients are keyed on the sorted pair, **without a historical switch**, and the run manifest reports per step what depended on discrete history (2026-10-05, options 1 and 4 of the roundoff investigation; options 2, 3 and 5 — robust degenerate estimates, a state-based trim cadence, continuation hysteresis — not chosen; [record](canonical-pair-keys-20261005.md)); after mechanisms B and C were measured on the user's scenes, the 30-iteration in-solve trim cadence stays as it is and stale first-estimate stamps are not repaired, while the guarded first-contact refresh (*birth0g*) is to be adopted (2026-10-05, [record](semi-implicit-mechanisms-b-c-20261005.md)).
+`max_restarts` is 200 (2026-09-29, R3); a line search that fails on every strategy restarts the subsolve once with a fresh solver in every mode without stall restarts (`solver/advanced/line_search_failure_restarts` 1, 2026-10-01, [record](stall-recovery-generalization-20261001.md)); semi-implicit edge-edge / vertex-vertex coefficients are keyed on the sorted pair, **without a historical switch**, and the run manifest reports per step what depended on discrete history (2026-10-05, options 1 and 4 of the roundoff investigation; options 2, 3 and 5 — robust degenerate estimates, a state-based trim cadence, continuation hysteresis — not chosen; [record](canonical-pair-keys-20261005.md)); after mechanisms B and C were measured on the user's scenes, the 30-iteration in-solve trim cadence stays as it is and stale first-estimate stamps are not repaired, while the guarded first-contact refresh (*birth0g*) is adopted as production behaviour **without a historical setting** (2026-10-05 and 2026-10-06, [record](semi-implicit-mechanisms-b-c-20261005.md), [adoption](first-contact-refresh-20261006.md)).
 
 ## 2. Open work
 
@@ -81,15 +82,20 @@ source and gap-shift estimates per step. Open:
 - mechanisms B and C were measured on the user's scenes (2026-10-05): the
   repro's degenerate first estimates do not occur there; stale first-estimate
   stamps are frequent but without a measurable effect and are not repaired, and
-  the cadence stays (user decisions). Open: adopting the guarded first-contact
-  refresh (*birth0g*), as separate work on local branch `adopt-birth0g` (from
-  the B/C record's branch `semi-implicit-bc-record`), with the RB-02 probe, new
-  smoke references and a check on a scene with a moving obstacle. The probe
-  branch `mechanism-bc-probe` stays local for reference;
+  the cadence stays (user decisions). The guarded first-contact refresh
+  (*birth0g*) is adopted (2026-10-06, local branch `adopt-birth0g` on top of
+  the B/C record's branch `semi-implicit-bc-record`;
+  [record](first-contact-refresh-20261006.md)): the adopted build reproduces
+  the measured prototype's runs byte for byte, RB-02 270/270, new smoke
+  references. The moving-obstacle check on ball-burst (ball head as an
+  obstacle) cannot exercise it: the knit membrane is in self-contact from
+  t = 0, so no snapshot is ever contact-free. The probe branch
+  `mechanism-bc-probe` stays local for reference;
 - the change is committed locally (worktree `canonical-keys-work/polyfem`,
   branch `canonical-pair-keys`; the B/C record on top of it, branch
-  `semi-implicit-bc-record`) and **not pushed** (user, 2026-10-05: not
-  yet); with the push, fast-forward the shared `polyfem/` checkout and
+  `semi-implicit-bc-record`; *birth0g* on top of that, branch `adopt-birth0g`,
+  worktree `birth0g-work/polyfem`) and **not pushed** (user, 2026-10-05: not
+  yet; the three go together); with the push, fast-forward the shared `polyfem/` checkout and
   rebuild `polyfem/build` (used by the Houdini assets and their tests), which
   stays at `49ad24b74` until then (user's choice).
 
@@ -205,6 +211,11 @@ and CI-06 are complete. Open:
   smokes, the repro sweep, the RB-02 probe (270/270) and before/after runs of
   IT, pup_push, R4, R1, BBT and ball-burst were run; the full unit suite and
   the Houdini asset tests were not.
+- First-contact refresh (2026-10-06): byte comparisons with the measured
+  prototype and with production (repro family, five smokes, R1, BBT, IT,
+  pup_push), the affected unit selection, the full CTest suite (438/438), the RB-02 and RB-10
+  probes and the ball-burst obstacle check were run; the Houdini asset tests
+  were not (the shared build is not rebuilt until the push).
 - `tools/ef02/sequence.py` `PRODUCTION_CONTROLLER` pins
   `clamped_contacts: "keep"`, stale since `eb8286b7c`. It matters only if a
   scene file sets the key; recorded, not changed.

@@ -16,6 +16,18 @@ state lives in the parent workspace's README; this section keeps the
 repository's own claims current. **Open decisions, work and verification gaps:
 [docs/open-items-20260929.md](docs/open-items-20260929.md).**
 
+- **Guarded first-contact refresh (October 6, 2026):** a contact born after a
+  contact-free snapshot is refreshed at the first accepted iterate (which
+  PolySolve reports with iteration 0, like its start point) instead of one
+  iterate later, and no first-contact refresh bumps the trim for a collapse;
+  the conditioning cap applies (user decision, no historical setting). On the
+  1e-15 repro family the perturbations that jump drop from 40 of 56 (max
+  2.5e-4) to 15 (max 1.0e-7); the four semi-implicit smokes move by about
+  6e-6 (new references), IT's trajectories move within production's run-to-run
+  scatter, and R1, BBT and pup_push are byte-identical. The adopted build
+  reproduces the measured prototype's runs byte for byte
+  ([record](docs/first-contact-refresh-20261006.md)).
+
 - **Canonical pair keys and the history report (October 5, 2026):** a
   semi-implicit edge-edge (or codimensional vertex-vertex) coefficient is keyed
   on the sorted primitive pair, so RB-20 continuation no longer misses when a
@@ -37,8 +49,8 @@ repository's own claims current. **Open decisions, work and verification gaps:
   spread or on the distance to pinned-trim references, and are not repaired
   (user decision). The 30-iteration in-solve trim cadence stays: every
   state-based replacement failed pup_push, IT or R4 step 1. The guarded
-  first-contact refresh, which removes the repro's onset sensitivity, is to be
-  adopted separately ([record](docs/semi-implicit-mechanisms-b-c-20261005.md)).
+  first-contact refresh, which removes the repro's onset sensitivity, was
+  adopted on October 6 (above) ([record](docs/semi-implicit-mechanisms-b-c-20261005.md)).
 
 - **Trim controller and restart work (September 26–29, 2026):** the opt-in
   guarded initial trim estimate and force-weighted band ([EF-02/03](docs/ef-02-03-trim-controller.md))

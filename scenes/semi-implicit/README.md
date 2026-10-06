@@ -16,7 +16,13 @@ are capped relative to the batch median and applied through IPC's
 
 With `refresh_interval = 0`, the per-contact snapshot is normally held between
 solve starts and stall restarts. Contact appearing after an empty snapshot also
-triggers a refresh. The **global trim is not frozen**: gradient balance calibrates
+triggers a refresh, at the first accepted state that has it: since 2026-10-06
+the first accepted iterate, which PolySolve reports with iteration 0 like its
+start point (before, the refresh came one iterate later). This first-contact
+refresh never bumps the trim for a collapse, since the new contacts' gaps are
+where the step that made them stopped (usually truncated by CCD); the
+conditioning cap applies instead
+([record](../../docs/first-contact-refresh-20261006.md)). The **global trim is not frozen**: gradient balance calibrates
 it at refresh points; in-solve control can raise it for collapsing gaps and lower
 it at `controller_interval` when the average gap remains above the band. Emergency
 control considers the minimum gap as well as the average. Do not describe the
