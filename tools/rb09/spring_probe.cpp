@@ -10,6 +10,19 @@
 // controller, then update_quantities and the between-steps
 // update_barrier_stiffness refresh (calibration, continuation, controller).
 //
+// The Newton follows PolySolve's Solver::minimize where it matters here:
+//  * post_step order: post_step(0) at the start point, post_step(i - 1) after
+//    accepted iterate i, none at the convergence check (the solver's counter
+//    increments after the call, so its first accepted iterate is reported with
+//    iteration 0, like the start point);
+//  * line-search acceptance: the energy does not rise, or, at roundoff
+//    (|dE| <= eps (1 + |E|), eps = Armijo's default roundoff_tolerance), the
+//    gradient norm decreases. Without the fallback a step whose true decrease
+//    is below the last digit of the energy is rejected, and the search can stall
+//    on a rounding step of the computed energy (rb09-t11-work, 2026-10-06);
+//  * a solve that reaches the iteration cap is reported as a failure of its
+//    own: T11 is a statement about converged solves.
+//
 // Reference: with one active vertex-edge collision the form's potential is
 // w * trim * kappa_s * b(g^2, dhat^2), b(d, D) = -(d - D)^2 ln(d / D) (the form's
 // weight() is w * trim), so the
@@ -101,14 +114,29 @@ namespace
 		}
 		return .5 * (lo + hi);
 	}
+	constexpr int max_newton_iterations = 200;
+	// Armijo's default roundoff_tolerance (polysolve nonlinear-solver-spec.json).
+	constexpr double roundoff_tolerance = 2.220446049250313e-16;
 	// One production-like step: Newton on spring + barrier with the form's
-	// hooks; returns iterations. x is full size (floor nodes fixed).
-	int newton(Probe &f, V &x, json &trace)
+	// hooks, called in PolySolve's order (see the header). Returns the number of
+	// iterations; `converged` is false when the cap is reached. x is full size
+	// (floor nodes fixed).
+	int newton(Probe &f, V &x, json &trace, bool &converged)
 	{
 		const double tol = 1e-13 * f.k * std::max(1.0, std::abs(f.anchor[5]));
 		f.init(x);
+		converged = false;
+		{
+			// the start point, reported with iteration 0 like PolySolve does
+			f.solution_changed(x);
+			V gb, g = f.spring_gradient(x);
+			f.first_derivative(x, gb);
+			g += gb;
+			polysolve::nonlinear::PostStepData data(0, json::object(), x, g);
+			f.post_step(data);
+		}
 		int it = 0;
-		for (; it < 200; ++it)
+		for (; it < max_newton_iterations; ++it)
 		{
 			f.solution_changed(x);
 			V gb, g = f.spring_gradient(x);
@@ -120,8 +148,7 @@ namespace
 			const Eigen::Vector2d gp = g.segment<2>(4);
 			if (gp.norm() <= tol)
 			{
-				polysolve::nonlinear::PostStepData data(it, json::object(), x, g);
-				f.post_step(data);
+				converged = true; // no post_step at the convergence check
 				break;
 			}
 			const Eigen::Vector2d dir = -h.block<2, 2>(4, 4).ldlt().solve(gp);
@@ -140,6 +167,18 @@ namespace
 				const double e1 = f.spring_energy(xa) + f.value(xa);
 				if (std::isfinite(e1) && e1 <= e0)
 					break;
+				// Armijo::criteria's fallback: the energy change is at roundoff,
+				// so measure progress on the gradient norm instead.
+				if (std::isfinite(e1) && std::abs(e1 - e0) <= roundoff_tolerance * (1 + std::abs(e0)))
+				{
+					// as Armijo::gradient_decreased: the gradient at the trial point,
+					// no solution_changed
+					V gb_a, g_a = f.spring_gradient(xa);
+					f.first_derivative(xa, gb_a);
+					g_a += gb_a;
+					if (g_a.segment<2>(4).norm() < gp.norm())
+						break;
+				}
 			}
 			f.line_search_end();
 			x = xa;
@@ -147,7 +186,9 @@ namespace
 			V gb2, g2 = f.spring_gradient(x);
 			f.first_derivative(x, gb2);
 			g2 += gb2;
-			polysolve::nonlinear::PostStepData data(it + 1, json::object(), x, g2);
+			// PolySolve increments its counter after post_step: the first
+			// accepted iterate is reported with iteration 0.
+			polysolve::nonlinear::PostStepData data(it, json::object(), x, g2);
 			f.post_step(data);
 			trace.push_back({{"iteration", it + 1}, {"alpha", alpha}, {"gap", x[5]}, {"trim", f.barrier_stiffness()}, {"gradient_norm", g2.segment<2>(4).norm()}});
 		}
@@ -166,12 +207,16 @@ namespace
 		f.update_barrier_stiffness(x, M()); // production's initial refresh (no contact yet)
 		const double y_final = -1.0;
 		double max_gap_err = 0, max_force_mismatch = 0, max_gradient_mismatch = 0, max_identity = 0;
+		int unconverged_steps = 0;
 		for (int t = 1; t <= steps; ++t)
 		{
 			f.anchor[5] = 2 * dhat + (y_final - 2 * dhat) * t / steps;
 			json step = {{"step", t}, {"anchor_y", f.anchor[5]}, {"trace", json::array()}};
-			const int iters = newton(f, x, step["trace"]);
+			bool converged = false;
+			const int iters = newton(f, x, step["trace"], converged);
 			step["newton_iterations"] = iters;
+			step["newton_converged"] = converged;
+			unconverged_steps += converged ? 0 : 1;
 			if (!step["trace"].empty())
 				step["first_iterate_gap_over_dhat"] = step["trace"][0]["gap"].get<double>() / dhat;
 			step["gap"] = x[5];
@@ -226,12 +271,14 @@ namespace
 		r["max_spring_vs_barrier_force"] = max_force_mismatch;
 		r["max_form_vs_analytical_gradient"] = max_gradient_mismatch;
 		r["max_hard_contact_identity"] = max_identity;
+		r["unconverged_steps"] = unconverged_steps;
 		r["failures"] = json::array();
 		auto require = [&](bool ok, const std::string &why) {
 			++checks;
 			if (!ok)
 				r["failures"].push_back(why);
 		};
+		require(unconverged_steps == 0, "T11: every Newton solve converged (a solve at the iteration cap is not measured)");
 		require(max_gap_err <= 1e-10, "T11: equilibrium gap matches the exact scalar root to 1e-10 dhat");
 		require(max_force_mismatch <= 1e-10, "T11: spring force equals the barrier force to 1e-10");
 		require(max_gradient_mismatch <= 1e-10, "T11: the form's gradient equals w trim kappa_s b'(g^2) 2g to 1e-10");
@@ -250,7 +297,7 @@ int main()
 	ipc::set_logger(std::make_shared<spdlog::logger>("ipctk", log_sink));
 	logger().set_level(spdlog::level::err);
 	json out;
-	out["fixture"] = "2D point on a linear spring above a floor edge (L = 1, floor from -2 to 2); semi-implicit BarrierContactForm, form weight 1, trim 1 at start, driving Hessian k I; anchor from 2 dhat to -1 in 4 steps";
+	out["fixture"] = "2D point on a linear spring above a floor edge (L = 1, floor from -2 to 2); semi-implicit BarrierContactForm, form weight 1, trim 1 at start, driving Hessian k I; anchor from 2 dhat to -1 in 4 steps; Newton in PolySolve's post_step order with Armijo's roundoff fallback, 200-iteration cap";
 	out["cases"] = json::array();
 	bool passed = true;
 	std::string error;

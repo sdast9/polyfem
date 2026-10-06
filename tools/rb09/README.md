@@ -68,5 +68,16 @@ gradient and the hard-contact overshoot `k·g`. Five `(k, d̂)` cases; the
 trace records the first iterate's gap and the trim history. Its stdout is
 only the JSON result (`probe.stdout`; `probe.json` adds the exit status);
 PolyFEM and IPC Toolkit log lines go to stderr (`probe.stderr`).
+Its Newton follows PolySolve's call order (`post_step(0)` at the start point,
+`post_step(i - 1)` after accepted iterate i, none at the convergence check)
+and accepts a step at roundoff on a smaller gradient norm, as Armijo's
+fallback does; a solve that reaches its 200-iteration cap is a named failure
+(`passed` is then false, `unconverged_steps` counts them). Both are since
+2026-10-06: the first version had neither, and once *birth0g* changed the
+trim path a solve stalled and T11 failed (the record's 2026-10-06 section).
+25 checks: the four T11 quantities and the convergence check, per case.
 
-Compact results of the 2026-09-13 matrix: `results-20260913.json`.
+Compact results of the 2026-09-13 matrix: `results-20260913.json` (its
+`spring` section is from the first probe version; superseded by
+`results-spring-20261006.json`, the repaired probe on the shared build at
+`db2a8bb12`).

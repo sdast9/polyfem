@@ -95,6 +95,16 @@ per step: Newton on `½k|x − x_p|² + w·trim·κ·b(d², d̂²)` with the for
 | T11 | Equilibrium gap vs the scalar root; spring force vs barrier force; hard-contact force error `= k·g` | `|g − g_ref| ≤ 1e-10·d̂`; `1e-10` relative; identity to `1e-12` relative |
 | T11b | Sweeps `k ∈ {1, 1e2, 1e4}`, `d̂ ∈ {1, .1, .01}` (`L = 1`): gap/`d̂` stays in the band after the between-steps controller | reported (controller property; not an acceptance) |
 
+**Amendment 2026-10-06 (T11 precondition; thresholds unchanged).** T11's
+quantities are statements about a converged equilibrium, so the probe now also
+requires every Newton solve to converge before its cap (a fifth check per case,
+25 in all), and its Newton follows PolySolve's `post_step` order and Armijo's
+roundoff fallback. The first probe's Newton had neither; on 2026-10-06 a solve
+stalled at a gradient of 2.6e-7 on a rounding step of the computed energy and
+T11 measured the stalled iterate (see [rb-09-validation.md](rb-09-validation.md),
+*Update 2026-10-06*). The thresholds (`1e-10·d̂`, `1e-10`, `1e-12`) are the
+declared ones.
+
 ## Benchmark C — public clamped-top cube (no continuum solution)
 
 The public `quasistatic-semi.json` / `transient-semi.json` (top face fully

@@ -1,6 +1,6 @@
 # RB-09 — Reference benchmarks and refinement envelope
 
-Date: 2026-09-13
+Date: 2026-09-13 (spring probe repaired and its rows re-measured 2026-10-06, see *Update 2026-10-06*)
 Status: characterized—limits documented (contracts, analytical references, separate sweeps, controller comparison, public-smoke refinement; the `physical_balance_pass` decision was taken and implemented on 2026-09-13 — see the decision section; the gap sensitivity and the T7 unit-conversion failure keep the item short of `validated within stated scope`)
 Selected stage: the plan's full RB-09 scope on public inputs (no RB-17 candidate: retired), all sweeps separate; then the user's acceptance decision (1)–(3) below.
 
@@ -87,13 +87,13 @@ lifted-plane run measuring the reference's conditioning `c_h`.
 | Unit conversion (m → mm, raw numbers) is not equivalent: `R_z` differs by 1.06e-3 (raw), 8.7e-4 (dimensional solver constants converted), 8.7e-4 (equal force tolerance); the difference is entirely the realized gap (.98–.99 vs .835 `d̂`). Cause: upstream IPC `TightInclusionCCD::ccd_strategy` caps the minimum separation of a truncated step at an absolute `1e-4` length units (`min(0.2·gap, 1e-4)`), so the first-contact iterate sits at .1·`d̂` in metres but 1e-4·`d̂` in millimetres; the emergency controller's collapse bump is then ×7.6 (m) versus the ×256 cap (mm), the trim climbs to 65 536, the linear solves lose accuracy, a stall retune/restart follows and the conditioning cap resets the trim (6 474 → 3 237 → 1 619 / 8 192) | T7 (declared 1e-6, failed as declared); logs `block-units-mm*/run.log`; `ipc-toolkit-fork/src/ipc/ccd/tight_inclusion_ccd.cpp:45-48` (unchanged upstream code) | reproduced — limit documented; no CCD change (plan: preserve CCD); RB-11/RB-12 items |
 | PolyFEM's nonlinear stopping tolerance is `grad_norm · F0 · L^1.5` (3D, L2 norm; `NLProblem::grad_norm_rescaling`) with `F0 = solver/advanced/characteristic_force_density` (default 1e4) and `L` the bounding-box diagonal: it is not a force density; equal force tolerances across a length rescaling by `s` need `F0` scaled by `s^-1.5` (10 000 → .316 for mm), not by `s^-3` | `block-units-mm-converted` (F0·1e-9: tolerance 7.2e-11) vs `-equal-tolerance` (F0·1000^-1.5: 2.27951e-6 = the metre tolerance) | reproduced — RB-11/RB-12 observation |
 | Classic `adaptive` and Fixed (at the classic endpoint κ = 5.796e9) give `e_R` = 1.1e-6 with the gap at 2.4e-7 m (2.4e-4 `d̂`, min 6e-8 m) at 63/66 Newton iterations and 25 s, versus semi-implicit 4.8e-3 at 34 iterations and 9 s | controller table | characterized — comparison only; no default change |
-| Material contrast: `E` ×0.1 / ×10 reproduce the same relative state (`e_R` 4.81e-3, gap .8328, trim 30.47, 34 iterations): the semi-implicit law is homogeneous in the driving stiffness (the spring probe gives identical gaps for `k` = 1, 100, 1e4) | material table; spring cases | reproduced |
+| Material contrast: `E` ×0.1 / ×10 reproduce the same relative state (`e_R` 4.81e-3, gap .8328, trim 30.47, 34 iterations): the semi-implicit law is homogeneous in the driving stiffness (the spring probe gives identical gaps for `k` = 1, 100, 1e4; re-verified 2026-10-06 with the repaired probe on the adopted law) | material table; spring cases | reproduced |
 | Density ×10 and approach speed ×½/×2 (transient) change the endpoint only through inertia: `I_z` = 0.95 / 3.8 / 15 N (speed) and 37 N (ρ ×10) against 3.0e6 N; `e` vs the quasistatic reference 3.1e-5 / 3.8e-5 / 6.4e-5 / 1.2e-4 | density/speed tables | reproduced — the transient fixtures are quasistatic to 1e-4 |
 | Load/unload: the unloading reactions retrace the loading ones at equal `δ` to 3e-10; at `t = 2` the contact is inactive (`active_count` 0, `R_z` = −4.5e-7 N against 3.0e6); both band limits acted (upward bumps 1 → 7.6 → 15.7 → 31.4 at first contact, one downward step 31.4 → 15.7 when the gap rose above the band at step 7) | T9 | reproduced |
 | Coupled contact (two stacked identical blocks, deformable–deformable interface with coincident vertices + floor): floor load, interface load and `R_z` balance to 1e-14/6e-13; `e_R` = 4.85e-3 explained by the per-block effective gap `(g_floor + g_interface)/2` (.757 and .92 `d̂`); 174 Newton iterations against 34 for one block | T10 | reproduced |
-| Spring/contact: the production form's equilibrium equals the exact scalar root to 4e-16·`d̂`, spring = barrier force to 5e-13, the form gradient equals `w·trim·κ_s·b'(g²)·2g` to 1.4e-14 and the hard-contact overshoot is exactly `k·g` (20 checks, 5 cases) | T11 | reproduced |
-| Spring/contact characterization: with a CCD-truncated first iterate (absolute 1e-4 clearance = 1e-3 `d̂` at `d̂` = .1) the in-solve controller ramps the trim to 65 536 within 6 iterations and the gap settles at .9989 `d̂` (above the band); the between-steps gradient-balance calibration reproduces the equilibrium trim (a fixed point), and the downward band step (÷2 per 30 iterations above the band) is never reached by a 4–7-iteration solve, so the trim decays only 65 536 → 32 768 over 4 steps. Contact born inside the support (`d̂` = 1, anchor approaching through it) sits in the band at trim 2 | probe cases (`k`, `d̂`) = (100, .1), (1, .1), (1e4, .1), (100, .01) vs (100, 1) | characterized — the same mechanism as the mm block runs; the accuracy bound `g < d̂` still holds |
-| The barrier's relative force error is `ḡ/compression`: when the imposed compression is smaller than `d̂` the overshoot exceeds the hard-contact load itself (spring `d̂` = 1, anchor −.25: 3.4×) | probe `d̂` = 1 steps 3–4 | reproduced — the model is accurate only for compressions ≫ `d̂` |
+| Spring/contact: the production form's equilibrium equals the exact scalar root to 1.6e-14·`d̂`, spring = barrier force to 4.3e-13, the form gradient equals `w·trim·κ_s·b'(g²)·2g` to 7.2e-16 and the hard-contact overshoot is exactly `k·g` to 2.2e-16 (25 checks, 5 cases, every Newton solve converged; repaired probe on the shared build at `db2a8bb12`). The 2026-09-13 numbers (4e-16·`d̂`, 5e-13, 1.4e-14; 20 checks) came from the first probe, whose Newton failed T11 once *birth0g* moved the trim path | T11; `tools/rb09/results-spring-20261006.json` | reproduced (re-measured 2026-10-06) |
+| Spring/contact characterization (re-measured 2026-10-06, repaired probe, adopted law): with a CCD-truncated first iterate (absolute 1e-4 clearance = 1e-3 `d̂` at `d̂` = .1) the first-contact refresh is no longer read as a collapse (*birth0g*), and the in-solve controller raises the trim 1 → 88.5 → 256 within 7 iterations (256 is its in-solve climb limit); the gap settles at .982 `d̂` (above the band), then .971 / .964 / .957 over the next steps at trim 256 (the between-steps calibration reproduces it; the downward band step, ÷2 per 30 iterations above the band, is not reached by a 4–18-iteration solve). `d̂` = .01: trim 25.9 → 51.8 → 51.8 → 103.6, gaps .787 / .785 / .730 / .783 (inside the band). Contact born inside the support (`d̂` = 1, anchor approaching through it): trim 1, then 2, gaps 1.25 / .870 / .777 / .793. Identical gaps for `k` = 1, 100, 1e4. Before *birth0g* (same probe on the 2026-09-13 law): trim 65 536 at `d̂` = .1 for all four steps (gaps .9989 / .9982 / .9977 / .9974) and 697.6 at `d̂` = .01 (gaps .961 → .920). The 2026-09-13 trims 65 536 → 32 768 (`d̂` = .1) and 2 491 → 1 245 (`d̂` = .01) were the first probe's extra `post_step` at the converged point, not PolySolve's flow | probe cases (`k`, `d̂`) = (100, .1), (1, .1), (1e4, .1), (100, .01) vs (100, 1); `results-spring-20261006.json` | characterized — the same mechanism as the mm block runs; the accuracy bound `g < d̂` still holds |
+| The barrier's relative force error is `ḡ/compression`: when the imposed compression is smaller than `d̂` the overshoot exceeds the hard-contact load itself (spring `d̂` = 1, anchor −.25: 3.1× with the repaired probe, 3.4× in the first) | probe `d̂` = 1 steps 3–4 | reproduced — the model is accurate only for compressions ≫ `d̂` |
 | Public coarse smoke: the same-mesh hard reference converges as −3.6257e6 (h), −3.3864e6 (h/2), −3.3014e6 (h/4), observed order 1.49, Richardson limit −3.2545e6: the 4×4×4 smoke's reaction is 11.4 % above the extrapolated value (8×8×8: 4.1 %, 16×16×16: 1.4 %) while the contact-model offset is −.35 / −.50 / −.50 % on the three meshes | T13 | reproduced — discretisation error dominates the contact-model error by 20–30× on the public fixture |
 | Same-mesh hard-contact reference validity: no tensile bottom reaction on any mesh (bilateral constraint = unilateral solution) | `bottom_reaction_tensile_count` 0/0/0 | reproduced |
 | Coefficient coverage: no active coefficient at the batch floor or cap in any run; active range .20–2.9 × the batch median; no curvature fallback; force continuation carried every persisting contact (fresh coefficients only at contact birth — step 2 for dt ≤ .0625 — 5 on the fine clamped mesh at step 4, and 275–477 per step on the stacked interface, where the coincident vertex pairs keep producing new parent pairs) | record `contact.*` fields | reproduced |
@@ -152,7 +152,7 @@ Hard-reference conditioning on the clamped cube: `c_h` = 5.79 /m (`n_refs`
 | T8 transient vs quasistatic reference | dt .25 … .03125 | ≤ 1e-2, non-increasing | ≤ 4.2e-5; not monotone (gap-dominated, inertia 1e-6) | pass (rate not resolvable) |
 | T9 load/unload | tend 2 | T2 per step; final 0 contacts, `|R_z| ≤ 1e-6·max` | all steps; 0 contacts, 1.5e-13 | pass |
 | T10 stacked | two blocks + floor | interfaces ≤ 1e-5; T2–T4 | 1.2e-14 / 5.7e-13; pass | pass |
-| T11 spring/contact | 5 (`k`, `d̂`) cases | roundoff | 20/20 checks | pass |
+| T11 spring/contact | 5 (`k`, `d̂`) cases | roundoff, every solve converged | 20/20 checks (2026-09-13, first probe); **25/25** (2026-10-06, repaired probe, adopted law; the 2026-09-13 law passes too). The first probe fails T11 on the adopted law (k = 100, d̂ = .01: gap 5.0e-10·`d̂`, force 3.4e-9) | pass |
 | T12 clamped barrier vs same-mesh hard | `n_refs` 0, 1 (lift runs) | `|e_R − c_h·ḡ| ≤ .1·c_h·ḡ + 1e-5` | 5.1e-5 / 1.5e-6 | pass |
 | T13 mesh convergence | hard reference `n_refs` 0/1/2 | reported | order 1.49, limit −3.2545e6, barrier offsets −.35/−.50/−.50 % | reported |
 | T14 clamped increments / transient / `d̂` | see table | spread ≤ 10 187 N; ≤ 1e-2; slope 1 ± .15 | 87 N; 2.7e-5; 1.018 | pass |
@@ -237,6 +237,98 @@ Not performed: the full unit-test suite; other platforms; the HDA tests (no
 HDA change; the tolerance is not exposed in the Houdini node — a separate
 choice).
 
+## Update 2026-10-06 — T11 after the guarded first-contact refresh
+
+**What happened.** Running the standalone probes again (2026-10-06, shared
+build at `db2a8bb12`) the first spring probe failed T11 in one of its five
+cases, `k` = 100, `d̂` = .01 (gap 4.97e-10·`d̂` against 1e-10, spring/barrier
+force 3.4e-9 against 1e-10); on 2026-09-13 it passed at about 4e-16·`d̂`.
+
+**Which change moved it.** The guarded first-contact refresh (*birth0g*,
+`ca8435035`, [record](first-contact-refresh-20261006.md)), its second part: a
+first-contact refresh in `post_step` no longer bumps the trim for a collapse.
+The probe's output equals the 2026-09-13 results on every build up to
+`a7d39fc7b` (all 217 values of the compact results) and the failure is
+byte-identical on every build with *birth0g*; `ca8435035` is the only source
+commit between them. In the B/C prototype binary the switch
+`POLYFEM_SI_PROBE_B` unset or `birth0` (the timing part) passes and `birth0g`
+fails exactly as today. The probe reports its first accepted iterate to
+`post_step` as iteration 1, so the timing part never acts in it. The trim after
+the first contact fell from 2 491 to 52.7 (`d̂` = .01) and from 65 536 to 256
+(`d̂` = .1), and the gap at `d̂` = .01 moved into the band. The change was
+intended; this probe was not in its verification list.
+
+**Why T11 failed: the probe's Newton, not the form.** In step 3 the first
+probe's Newton reached its 200-iteration cap at a gradient of 2.6e-7 (its
+tolerance is 1e-11) and T11 measured that stalled iterate. Its line search
+accepted only steps that do not raise the computed energy; at a gradient of
+7.9e-7 the full Newton step lowers the energy by 6e-18, which is 0.002 of the
+last digit of E ≈ 28, and the computed energy is a staircase in the gap
+(one ulp of the gap moves it by 0 to 4 ulps of E). The full step evaluated 3
+ulps higher and was rejected, and the search ended on a step where every
+point along the Newton direction evaluates higher. The form is consistent: its
+value equals `w·trim·κ_s·b(g², d̂²)` to 2e-16 relative and the energy's slope
+(Richardson-extrapolated differences) equals its gradient. The 2026-09-13
+law met the same trap in the same solve and escaped it only because its gap
+(.964 `d̂`) was above the band, so the 30-iteration downward step halved the
+trim and restarted Newton. The first probe also called `post_step` once more
+at the converged point, which PolySolve does not; when that call fires the
+cadence the trim halves after convergence and T11 compares the endpoint with
+the root of the halved coefficient (a force mismatch of exactly 0.5). Over 600
+roundoff-level perturbations per case (k, `d̂` or the final anchor scaled by
+1 + j·2⁻⁴⁰) the first probe fails T11 in 3–13 % of runs even on the 2026-09-13
+law and in 4–48 % on the adopted law: the 20/20 of 2026-09-13 was a favourable
+draw of a fragile probe, not a measured margin.
+
+**Repair (tools only; user decision 2026-10-06).** `tools/rb09/spring_probe.cpp`
+now (1) calls `post_step` in PolySolve's order (`post_step(0)` at the start
+point, `post_step(i − 1)` after accepted iterate i, none at the convergence
+check), (2) accepts a step whose energy change is at roundoff
+(`|ΔE| ≤ ε(1 + |E|)`, ε = Armijo's default `roundoff_tolerance`) when the
+gradient norm decreases, as `Armijo::criteria` does, and (3) reports a solve
+at the iteration cap as a failure of its own (`unconverged_steps`; the fifth
+check per case, 25 in all). The thresholds are the declared ones
+([contract amendment](rb-09-contract.md)); no library code, default or
+tolerance changed.
+
+**Verification.**
+
+| Configuration | T11 | Notes |
+| --- | --- | --- |
+| Repaired probe, shared build `db2a8bb12` | 25/25 pass | all solves converge; gap ≤ 1.6e-14·`d̂`, force ≤ 4.3e-13 |
+| Same, `birth0g-work` build `85a18430d` and the B/C prototype with `birth0g` | identical `probe.json` | byte for byte |
+| Same, builds of the 2026-09-13 law (`e5-work` `48f15d26d`, `canonical-keys-work` `a7d39fc7b`, the prototype switch unset) | 25/25 pass | the repair is not an artefact of the new law |
+| Experiment copy of the probe with the three changes (`--ls roundoff --flow polysolve`), 3 families × 200 perturbed runs per law | 0 numeric T11 failures of 3 000 on the adopted law (2 of 3 000 on the 2026-09-13 law) | each change alone leaves failures on the adopted law: the roundoff fallback alone leaves the converged-point `post_step` artefact (27 and 30 of 600 for `k` = 100 and 1e4 at `d̂` = .1), the `post_step` order alone leaves the stall (51–80 of 600 at `d̂` = .1, 129 at `d̂` = .01) |
+
+**Residual limit of the repaired probe.** The probe itself is deterministic
+(unperturbed runs are byte-identical). In the perturbed families 40 of 3 000
+runs on the adopted law (22 of 3 000 on the 2026-09-13 law) still reach the
+iteration cap in one solve and would fail the named convergence check; T11's
+numeric checks pass on all of them on the adopted law. At `d̂` = .01, step 4 the cap is reached at a
+gradient of 1.0–1.3 × the probe's tolerance (1e-13·`k`·max(1, |y_p|) is at the
+roundoff floor of a gradient of size ~100). At `d̂` = 1, step 3 the Newton step is
+1e-12 and the gap is exact to about 1e-12·`d̂`, but the solve cannot move on
+(gradient up to 95 × the tolerance): diagnosed on one run, the step is
+rejected 15 times and the roundoff fallback accepts none; the cause was not
+pinned down further (the fallback's bound is about 2 ulps of E ≈ 61). The probe is not run
+in CI. Loosening its stopping tolerance or the fallback bound was not part of
+the decision and was not done.
+
+**Consequences for this record.** The spring rows above are re-measured. The
+2026-09-13 characterization of the trim path was partly the first probe's
+flow: it numbered accepted iterates from 1 (PolySolve reports the first as 0),
+which put the first-contact refresh at the CCD-truncated iterate for every law,
+and it called `post_step` at the converged point. Under PolySolve's order the
+2026-09-13 law gives trim 65 536 at `d̂` = .1 and 697.6 at `d̂` = .01 (not
+2 491). T11b (reported, not accepted) now reads: gap/`d̂` is above the band at
+`d̂` = .1 (.957–.982), inside it at `d̂` = .01 (.73–.79) and `d̂` = 1 after the
+first contact (.78–.87). The Benchmark A and C results are unaffected (they
+run `PolyFEM_bin`, not the probe).
+
+Evidence (parent workspace, not committed): `rb09-t11-work/` (`README.md`,
+`runs/existing-builds`, `runs/mechanism-bc-switch`, `runs/exp-equivalence`,
+`runs/matrix`, `runs/families`, `runs/repaired`, `experiments/spring_probe_exp.cpp`).
+
 ## Publication and reproducibility
 
 - Rebuilt targets: none (no C++ production change); the probe compiles
@@ -301,3 +393,10 @@ Append-only. Newest entry last.
   runner, RB-09 reruns (bit-identical endpoints) and the five smokes pass;
   the friction smoke's finite-lag mismatch measured at 0.2–0.3 % of the
   peak force.
+- **2026-10-06** — The first spring probe failed T11 at `k` = 100, `d̂` = .01
+  on the shared build at `db2a8bb12`; traced to *birth0g* (`ca8435035`) by
+  bracketing existing builds and the prototype switch; cause: the probe's own
+  Newton (rounding stall, extra `post_step`), not the form. Probe repaired
+  with the user's decision (PolySolve's `post_step` order, Armijo's roundoff
+  fallback, named convergence check); spring rows re-measured; contract
+  amendment; `results-spring-20261006.json`. See *Update 2026-10-06*.

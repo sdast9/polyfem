@@ -16,6 +16,16 @@ state lives in the parent workspace's README; this section keeps the
 repository's own claims current. **Open decisions, work and verification gaps:
 [docs/open-items-20260929.md](docs/open-items-20260929.md).**
 
+- **RB-09 spring probe repaired (October 6, 2026; tools and records only):** the
+  standalone spring probe failed its T11 check at `k` = 100, `d̂` = .01 after
+  the guarded first-contact refresh below moved the trim path. The failure was
+  the probe's own Newton loop (a rounding stall on the computed energy and a
+  `post_step` call PolySolve does not make), not an accuracy change of the
+  form: the probe now follows PolySolve's call order, accepts a roundoff-level
+  step on a smaller gradient norm and reports a capped solve as a failure, and
+  passes 25/25 on the adopted law and on the September 13 law. The record's
+  spring rows are re-measured ([update](docs/rb-09-validation.md)).
+
 - **Guarded first-contact refresh (October 6, 2026):** a contact born after a
   contact-free snapshot is refreshed at the first accepted iterate (which
   PolySolve reports with iteration 0, like its start point) instead of one

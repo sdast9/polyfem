@@ -215,6 +215,16 @@ and CI-06 are complete. Open:
   rebuilt shared binary, the five smokes are byte-identical to the new
   references and all 25 test scripts of the published Houdini assets
   (`sdast9/houdini-plugins@6591c3b`) pass.
+- RB-09 spring probe (2026-10-06): it failed T11 at `k` = 100, `d̂` = .01 after
+  *birth0g*, which moved the trim path (a first-contact refresh no longer bumps
+  the trim for a collapse); the failure was the probe's own Newton (a rounding
+  stall, an extra `post_step`), not the form. Repaired in `tools/rb09` (PolySolve's
+  `post_step` order, Armijo's roundoff fallback, a named convergence check):
+  25/25 on the adopted law and on the 2026-09-13 law. Residual: in a roundoff
+  perturbation stress test 40 of 3 000 runs still hit the iteration cap while
+  T11's numbers pass (the probe's stopping tolerance sits at the gradient's
+  roundoff floor); not changed. The record's spring rows are re-measured
+  ([rb-09-validation.md](rb-09-validation.md), *Update 2026-10-06*).
 - `tools/ef02/sequence.py` `PRODUCTION_CONTROLLER` pins
   `clamped_contacts: "keep"`, stale since `eb8286b7c`. It matters only if a
   scene file sets the key; recorded, not changed.

@@ -253,9 +253,9 @@ def main():
     if a.spring and a.spring.exists():
         pr = json.loads(a.spring.read_text())
         out['spring'] = {'passed': pr.get('passed'), 'checks': pr.get('checks'), 'cases': [
-            {k: c.get(k) for k in ('k', 'dhat', 'passed', 'max_gap_error_over_dhat', 'max_spring_vs_barrier_force', 'max_form_vs_analytical_gradient', 'max_hard_contact_identity')}
+            {k: c.get(k) for k in ('k', 'dhat', 'passed', 'max_gap_error_over_dhat', 'max_spring_vs_barrier_force', 'max_form_vs_analytical_gradient', 'max_hard_contact_identity', 'unconverged_steps')}
             | {'steps': [{k: s.get(k) for k in ('step', 'anchor_y', 'gap_over_dhat', 'first_iterate_gap_over_dhat', 'trim_at_endpoint', 'trim_after_between_steps_refresh',
-                                                 'newton_iterations', 'hard_contact_relative_error', 'kappa_s')} for s in c.get('steps', [])]}
+                                                 'newton_iterations', 'newton_converged', 'hard_contact_relative_error', 'kappa_s')} for s in c.get('steps', [])]}
             for c in pr.get('cases', [])]}
     a.out.write_text(json.dumps(out, indent=1) + '\n')
     for section, content in out.items():
