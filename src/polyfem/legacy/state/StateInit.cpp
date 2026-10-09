@@ -3,6 +3,7 @@
 #include <polyfem/problem/ProblemFactory.hpp>
 #include <polyfem/assembler/GenericProblem.hpp>
 #include <polyfem/assembler/Mass.hpp>
+#include <polyfem/assembler/MatParams.hpp>
 
 #include <polyfem/autogen/auto_p_bases.hpp>
 #include <polyfem/autogen/auto_q_bases.hpp>
@@ -139,6 +140,7 @@ namespace polyfem::legacy
 
 	void State::init(const json &p_args_in, const bool strict_validation)
 	{
+		material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 		json args_in = p_args_in; // mutable copy
 
 		has_constraints_ = p_args_in.contains("constraints");
@@ -235,6 +237,18 @@ namespace polyfem::legacy
 		has_dhat = args_in["contact"].contains("dhat");
 
 		init_time();
+
+		// RB-11: remeshing re-binds materials on local patches by patch-local
+		// element ids; a per-element value/fibre file cannot be carried through
+		// that (the previous behaviour was a silent misindexing).
+		if (args.value("/space/remesh/enabled"_json_pointer, false) && is_param_valid(args, "materials"))
+		{
+			std::string where;
+			if (assembler::materials_use_per_element_files(args["materials"], root_path(), where))
+				log_and_throw_error(
+					"space.remesh is enabled and {} is a per-element material file: remeshing rebuilds the material on local patches by patch-local element ids and cannot transfer per-element data, so this combination is not supported. Use constant or expression-valued parameters with remeshing, or disable remeshing.",
+					where);
+		}
 
 		if (is_contact_enabled())
 		{
@@ -423,7 +437,7 @@ namespace polyfem::legacy
 			body_ids[i] = mesh->get_body_id(i);
 
 		for (auto &a : assemblers)
-			a->set_materials(body_ids, args["materials"], units, root_path());
+			a->set_materials(body_ids, args["materials"], units, root_path(), material_file_cache_);
 	}
 
 	void State::set_materials(assembler::Assembler &assembler) const
@@ -438,7 +452,7 @@ namespace polyfem::legacy
 		for (int i = 0; i < mesh->n_elements(); ++i)
 			body_ids[i] = mesh->get_body_id(i);
 
-		assembler.set_materials(body_ids, args["materials"], units, root_path());
+		assembler.set_materials(body_ids, args["materials"], units, root_path(), material_file_cache_);
 	}
 
 } // namespace polyfem::legacy

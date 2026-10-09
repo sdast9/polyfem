@@ -3,6 +3,7 @@
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/Timer.hpp>
 
+#include <limits>
 #include <vector>
 
 void polyfem::utils::show_matrix_stats(const Eigen::MatrixXd &M)
@@ -98,6 +99,51 @@ Eigen::SparseMatrix<double> polyfem::utils::lump_matrix(const Eigen::SparseMatri
 	lumped.makeCompressed();
 
 	return lumped;
+}
+
+long polyfem::utils::check_lumped_mass(const Eigen::SparseMatrix<double> &M)
+{
+	std::vector<double> row_sum(M.rows(), 0.0);
+	std::vector<char> has_mass(M.rows(), 0);
+	for (int k = 0; k < M.outerSize(); ++k)
+	{
+		for (Eigen::SparseMatrix<double>::InnerIterator it(M, k); it; ++it)
+		{
+			row_sum[it.row()] += it.value();
+			if (it.value() != 0.0)
+				has_mass[it.row()] = 1;
+		}
+	}
+
+	long n_negative = 0, n_zero = 0, n_nonfinite = 0, n_with_mass = 0, n_structural_zero = 0, first = -1;
+	double smallest = std::numeric_limits<double>::infinity();
+	for (Eigen::Index r = 0; r < M.rows(); ++r)
+	{
+		if (!has_mass[r])
+		{
+			++n_structural_zero; // an all-zero row: obstacle vertex or codimensional point, massless by construction
+			continue;
+		}
+		++n_with_mass;
+		const double v = row_sum[r];
+		if (!std::isfinite(v))
+			++n_nonfinite;
+		else if (v < 0)
+			++n_negative;
+		else if (v == 0)
+			++n_zero;
+		else
+			continue;
+		if (first < 0)
+			first = r;
+		smallest = std::min(smallest, v);
+	}
+	const long n_nonpositive = n_negative + n_zero + n_nonfinite;
+	if (n_nonpositive > 0)
+		logger().warn(
+			"solver.advanced.lump_mass_matrix: row-sum lumping gives {} of the {} DOFs that carry mass a nonpositive nodal mass ({} negative, {} zero, {} nonfinite; smallest row sum {}, first at DOF {}; {} all-zero rows of obstacle/codimensional vertices are massless by construction and not counted). Some higher-order bases have nonpositive row sums at their corner nodes, so the inertia term is indefinite on those DOFs; this regime is outside the measured physical envelope (RB-22 recorded a Q2 hexahedral impact that failed under lumping). A consistent mass matrix (lump_mass_matrix: false) avoids it.",
+			n_nonpositive, n_with_mass, n_negative, n_zero, n_nonfinite, smallest, first, n_structural_zero);
+	return n_nonpositive;
 }
 
 Eigen::SparseMatrix<double> polyfem::utils::lump_matrix_hrz(const Eigen::SparseMatrix<double> &M)

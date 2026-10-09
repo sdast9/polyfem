@@ -30,6 +30,9 @@ namespace polyfem::assembler
 
 		// initialized multi models
 		inline void init_multimodels(const std::vector<std::string> &mats) { multi_material_models_ = mats; }
+		/// @brief The material model name of every element (RB-11 validation
+		///        reads only a model's own parameters on its elements).
+		const std::vector<std::string> &element_models() const { return multi_material_models_; }
 
 		std::string name() const override { return "MultiModels"; }
 		bool allow_inversion() const override { return true; }

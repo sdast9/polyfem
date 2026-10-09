@@ -1,76 +1,1689 @@
 #include "BarrierContactForm.hpp"
 
+#include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MaybeParallelFor.hpp>
 #include <polyfem/utils/Timer.hpp>
 #include <polyfem/utils/Types.hpp>
 
 #include <ipc/barrier/adaptive_stiffness.hpp>
+#include <ipc/candidates/edge_edge.hpp>
+#include <ipc/candidates/edge_vertex.hpp>
+#include <ipc/candidates/face_vertex.hpp>
+#include <ipc/candidates/vertex_vertex.hpp>
+#include <ipc/barrier/barrier.hpp>
 #include <ipc/utils/world_bbox_diagonal_length.hpp>
 
+#include <memory>
+
 #include <algorithm>
+#include <vector>
 #include <cassert>
 #include <cmath>
+#include <exception>
 
 namespace polyfem::solver
 {
-	BarrierContactForm::BarrierContactForm(
-		const ipc::CollisionMesh &collision_mesh,
-		const double dhat,
-		const double avg_mass,
-		const bool use_area_weighting,
-		const bool use_improved_max_operator,
-		const bool use_physical_barrier,
-		const bool use_adaptive_barrier_stiffness,
-		const bool is_time_dependent,
-		const bool enable_shape_derivatives,
-		const ipc::BroadPhaseMethod broad_phase_method,
-		const double ccd_tolerance,
-		const int ccd_max_iterations)
-		: BarrierContactForm(
-			  collision_mesh, dhat, avg_mass,
-			  use_area_weighting, use_improved_max_operator,
-			  use_adaptive_barrier_stiffness, is_time_dependent,
-			  enable_shape_derivatives, broad_phase_method,
-			  ccd_tolerance, ccd_max_iterations,
-			  ipc::BarrierPotential(dhat, 1.0, use_physical_barrier))
+	namespace
 	{
+		// The collapse proxy relaxes the minimum gap by this factor on the
+		// squared distance (collapse_severity): the minimum may sit well below
+		// the average in healthy states.
+		constexpr double min_gap_slack = 1e2;
+	} // namespace
+
+	class BarrierContactForm::CoefficientEventScope
+	{
+	public:
+		CoefficientEventScope(BarrierContactForm &form, const Eigen::VectorXd &x, const char *operation)
+			: form_(form), x_(x), exceptions_(std::uncaught_exceptions())
+		{
+			if (!form_.coefficient_observer_ || !form_.uses_semi_implicit_stiffness())
+				return;
+			active_ = true;
+			outer_ = form_.coefficient_event_depth_++ == 0;
+			if (!outer_)
+				return;
+			try
+			{
+				event_ = {{"event_id", ++form_.coefficient_event_id_}, {"operation", operation}, {"coordinates", std::vector<double>(x.data(), x.data() + x.size())}, {"before", measurement()}};
+			}
+			catch (const std::exception &e)
+			{
+				logger().warn("Coefficient event preparation failed: {}", e.what());
+			}
+		}
+
+		~CoefficientEventScope() noexcept
+		{
+			if (!active_)
+				return;
+			--form_.coefficient_event_depth_;
+			if (!outer_)
+				return;
+			try
+			{
+				event_["operation_threw"] = std::uncaught_exceptions() > exceptions_;
+				event_["after"] = measurement();
+				const auto &before = event_["before"]["objective"];
+				const auto &after = event_["after"]["objective"];
+				if (before.is_number() && after.is_number())
+				{
+					const double delta = after.get<double>() - before.get<double>();
+					event_["objective_change_at_fixed_coordinates"] = std::isfinite(delta) ? json(delta) : json(nullptr);
+				}
+				else
+				{
+					event_["objective_change_at_fixed_coordinates"] = nullptr;
+					event_["unavailable_reason"] = "Before/after objective unavailable; initial snapshot is not an established prior model";
+				}
+				form_.coefficient_observer_(event_);
+			}
+			catch (const std::exception &e)
+			{
+				logger().warn("Coefficient event observation failed: {}", e.what());
+			}
+			catch (...)
+			{
+				logger().warn("Coefficient event observation failed with unknown exception");
+			}
+		}
+
+	private:
+		json measurement() const
+		{
+			json result = {{"state", form_.diagnostic_state()}, {"objective", nullptr}, {"gradient_objective", nullptr}, {"weight", form_.weight()}};
+			if (form_.kappa_surface_.size() == 0)
+			{
+				result["unavailable_reason"] = "No prior coefficient snapshot";
+				return result;
+			}
+			const auto snapshot = form_.diagnostic_snapshot(x_);
+			const double energy = snapshot.value(x_);
+			Eigen::VectorXd gradient;
+			snapshot.first_derivative(x_, gradient);
+			if (gradient.allFinite())
+				result["gradient_objective"] = std::vector<double>(gradient.data(), gradient.data() + gradient.size());
+			if (std::isfinite(energy))
+				result["objective"] = energy;
+			else
+				result["unavailable_reason"] = "Nonfinite objective";
+			result["evaluated_state"] = snapshot.diagnostic_state();
+			return result;
+		}
+		BarrierContactForm &form_;
+		const Eigen::VectorXd &x_;
+		int exceptions_;
+		bool active_ = false, outer_ = false;
+		json event_;
+	};
+
+	namespace
+	{
+		/// Clamped-log barrier with a C1 linear continuation below a
+		/// squared-distance floor: the force saturates at b'(floor) instead
+		/// of blowing up as d -> 0. A single pair driven to the
+		/// floating-point floor of the coordinates (scissored thin surfaces,
+		/// impact at first contact) otherwise injects ~1/d^4 terms into the
+		/// gradient/Hessian and poisons the Newton direction for the whole
+		/// mesh; CCD already guarantees non-penetration, so a bounded
+		/// push-back is safe.
+		class FlooredClampedLogBarrier : public ipc::ClampedLogBarrier<>
+		{
+		public:
+			FlooredClampedLogBarrier(const double floor_sq) : floor_sq_(floor_sq) {}
+
+			double operator()(const double d, const double dhat) const override
+			{
+				if (d >= floor_sq_)
+					return ipc::ClampedLogBarrier<>::operator()(d, dhat);
+				return ipc::ClampedLogBarrier<>::operator()(floor_sq_, dhat)
+					   + ipc::ClampedLogBarrier<>::first_derivative(floor_sq_, dhat)
+							 * (d - floor_sq_);
+			}
+
+			double first_derivative(const double d, const double dhat) const override
+			{
+				return ipc::ClampedLogBarrier<>::first_derivative(
+					std::max(d, floor_sq_), dhat);
+			}
+
+			double second_derivative(const double d, const double dhat) const override
+			{
+				return d < floor_sq_
+						   ? 0.0
+						   : ipc::ClampedLogBarrier<>::second_derivative(d, dhat);
+			}
+
+		private:
+			double floor_sq_;
+		};
+
+		ipc::BarrierPotential make_barrier_potential(
+			const double dhat,
+			const bool use_physical_barrier,
+			const BarrierStiffnessMode stiffness_mode,
+			const json &semi_implicit_opts)
+		{
+			if (stiffness_mode == BarrierStiffnessMode::SemiImplicit)
+			{
+				// Disabled by default: saturating the barrier removes the
+				// direction poisoning but lets a tension-driven pair collapse
+				// freely to the fp floor (measured: 1e-11 -> 6.6e-15 on the
+				// draping wall) where CCD becomes the deadlock instead.
+				// This experimental force saturation is not hard contact.
+				const double gap_floor =
+					semi_implicit_opts.is_object()
+						? semi_implicit_opts.value("gap_floor", 0.0)
+						: 0.0;
+				if (gap_floor > 0)
+					return ipc::BarrierPotential(
+						std::make_shared<FlooredClampedLogBarrier>(
+							std::pow(gap_floor * dhat, 2)),
+						dhat, 1.0, use_physical_barrier);
+			}
+			return ipc::BarrierPotential(dhat, 1.0, use_physical_barrier);
+		}
+	} // namespace
+
+	std::string BarrierContactForm::unsupported_improved_max_message()
+	{
+		return "Semi-implicit barrier stiffness does not support the improved max operator "
+			   "(contact.use_convergent_formulation with contact.use_improved_max_operator): "
+			   "its duplicate-removal corrections are negative collision weights, and the "
+			   "parent-keyed coefficient law is a sum of the parents' potentials only for "
+			   "positive contributions (the energy jumps by |k1 - k2| / 2 * b(d) where two "
+			   "edges with unequal coefficients meet; docs/rb-21-parent-keyed-kappa.md, RBR-04). "
+			   "Supported alternatives: contact.use_convergent_formulation = false (the "
+			   "validated semi-implicit configuration), the convergent formulation with "
+			   "use_improved_max_operator = false and use_physical_barrier = false (area "
+			   "weighting alone keeps every contribution positive), or the improved max "
+			   "operator with solver.contact.barrier_stiffness = \"adaptive\" or a fixed value.";
 	}
 
-	BarrierContactForm::BarrierContactForm(
-		const ipc::CollisionMesh &collision_mesh,
-		const double dhat,
-		const double avg_mass,
-		const bool use_area_weighting,
-		const bool use_improved_max_operator,
-		const bool use_adaptive_barrier_stiffness,
-		const bool is_time_dependent,
-		const bool enable_shape_derivatives,
-		const ipc::BroadPhaseMethod broad_phase_method,
-		const double ccd_tolerance,
-		const int ccd_max_iterations,
-		const ipc::BarrierPotential &barrier_potential)
-		: ContactForm(
-			  collision_mesh, dhat, avg_mass,
-			  use_adaptive_barrier_stiffness, is_time_dependent,
-			  enable_shape_derivatives, broad_phase_method,
-			  ccd_tolerance, ccd_max_iterations),
-		  barrier_potential_(barrier_potential)
+	BarrierContactForm::BarrierContactForm(const ipc::CollisionMesh &collision_mesh,
+										   const double dhat,
+										   const double avg_mass,
+										   const bool use_area_weighting,
+										   const bool use_improved_max_operator,
+										   const bool use_physical_barrier,
+										   const bool use_adaptive_barrier_stiffness,
+										   const bool is_time_dependent,
+										   const bool enable_shape_derivatives,
+										   const ipc::BroadPhaseMethod broad_phase_method,
+										   const double ccd_tolerance,
+										   const int ccd_max_iterations,
+										   const BarrierStiffnessMode stiffness_mode,
+										   const json &semi_implicit_opts,
+										   const Eigen::VectorXd &lumped_vertex_masses) : ContactForm(collision_mesh, dhat, avg_mass, use_adaptive_barrier_stiffness, is_time_dependent, enable_shape_derivatives, broad_phase_method, ccd_tolerance, ccd_max_iterations), barrier_potential_(make_barrier_potential(dhat, use_physical_barrier, stiffness_mode, semi_implicit_opts)), stiffness_mode_(stiffness_mode), lumped_vertex_masses_(lumped_vertex_masses)
 	{
+		// collision_set_.set_use_convergent_formulation(use_convergent_formulation);
 		collision_set_.set_use_area_weighting(use_area_weighting);
 		collision_set_.set_use_improved_max_approximator(use_improved_max_operator);
 		collision_set_.set_enable_shape_derivatives(enable_shape_derivatives);
+
+		if (uses_semi_implicit_stiffness())
+		{
+			// IPC's to_full_vertex_id reverses surface selection only: its
+			// result is a proxy ID, not necessarily a system Hessian node ID.
+			// Read S*T once in O(nnz + rows + cols), without a dense map.
+			// Exact unit selectors extract their Hessian blocks directly;
+			// every other row (interpolated, scaled, empty) keeps its
+			// (node, weight) parents for the RB-03 condensed stiffness.
+			const auto &map = collision_mesh_.displacement_map();
+			stiffness_node_ids_ = Eigen::VectorXi::Constant(map.rows(), -1);
+			interpolation_parents_.assign(map.rows(), {});
+			Eigen::VectorXi counts = Eigen::VectorXi::Zero(map.rows());
+			for (int col = 0; col < map.outerSize(); ++col)
+				for (Eigen::SparseMatrix<double>::InnerIterator it(map, col); it; ++it)
+					if (it.value() != 0.)
+					{
+						++counts[it.row()];
+						stiffness_node_ids_[it.row()] = it.value() == 1. ? it.col() : -1;
+						interpolation_parents_[it.row()].emplace_back(int(it.col()), it.value());
+					}
+			for (int row = 0; row < counts.size(); ++row)
+			{
+				if (counts[row] != 1)
+					stiffness_node_ids_[row] = -1;
+				if (stiffness_node_ids_[row] >= 0)
+				{
+					interpolation_parents_[row].clear();
+					interpolation_parents_[row].shrink_to_fit();
+				}
+			}
+
+			if (enable_shape_derivatives)
+				log_and_throw_error("Semi-implicit barrier stiffness does not support shape derivatives!");
+			if (use_physical_barrier)
+				log_and_throw_error("Semi-implicit barrier stiffness does not support the physical barrier; set use_physical_barrier=false!");
+			// RBR-04: the improved max operator removes duplicate counting with
+			// negative contributions (a vertex beyond a corner: two edge
+			// parents +1 each and a -1 vertex-vertex correction). The
+			// coefficient law scales a built collision by the positive-parent
+			// mean, which is the sum of the parents' potentials only when
+			// every contribution is positive; with the correction and unequal
+			// parent coefficients the energy jumps by |k1 - k2| / 2 * b(d) at
+			// the corner (measured, docs/rb-21-parent-keyed-kappa.md). A signed
+			// parent law is a separate model decision, so the combination is
+			// refused here rather than silently disabled or averaged away.
+			if (use_improved_max_operator)
+				log_and_throw_error(unsupported_improved_max_message());
+
+			if (semi_implicit_opts.is_object())
+			{
+				refresh_interval_ = semi_implicit_opts.value("refresh_interval", refresh_interval_);
+				trim_lower_ = semi_implicit_opts.value("trim_lower", trim_lower_);
+				trim_upper_ = semi_implicit_opts.value("trim_upper", trim_upper_);
+				trim_factor_ = semi_implicit_opts.value("trim_factor", trim_factor_);
+				trim_min_ = semi_implicit_opts.value("trim_min", trim_min_);
+				trim_max_ = semi_implicit_opts.value("trim_max", trim_max_);
+				kappa_min_ = semi_implicit_opts.value("kappa_min", kappa_min_);
+				kappa_spread_ = semi_implicit_opts.value("kappa_spread", kappa_spread_);
+				conditioning_cap_ = semi_implicit_opts.value("conditioning_cap", conditioning_cap_);
+				controller_interval_ = semi_implicit_opts.value("controller_interval", controller_interval_);
+				const auto mode = semi_implicit_opts.value("band_statistic", std::string("rms"));
+				if (mode != "rms" && mode != "force_weighted")
+					log_and_throw_error("semi_implicit.band_statistic must be rms or force_weighted");
+				force_weighted_controller_ = mode == "force_weighted";
+				initial_trim_estimate_ = semi_implicit_opts.value("initial_trim_estimate", false);
+				force_trim_.lower = semi_implicit_opts.value("force_band_lower", force_trim_.lower);
+				force_trim_.upper = semi_implicit_opts.value("force_band_upper", force_trim_.upper);
+				force_trim_.hysteresis = semi_implicit_opts.value("force_band_hysteresis", force_trim_.hysteresis);
+				force_trim_.max_factor = semi_implicit_opts.value("force_band_max_factor", force_trim_.max_factor);
+				force_trim_.interval = semi_implicit_opts.value("force_band_interval", force_trim_.interval);
+				force_trim_.seed_max_factor = semi_implicit_opts.value("initial_trim_max_factor", force_trim_.seed_max_factor);
+				force_trim_.seed_cosine = semi_implicit_opts.value("initial_trim_cosine", force_trim_.seed_cosine);
+				// EF-07 loop guards (docs/ef-07-trim-loop.md). The band's downward
+				// guard exists only in the force-weighted mode; there it is
+				// evaluated per collapse term (pair) unless the EF-02/03 proxy is
+				// requested explicitly (user decision 2026-09-28).
+				const auto basis = semi_implicit_opts.value("collapse_guard_basis", std::string("pair"));
+				if (basis != "proxy" && basis != "pair")
+					log_and_throw_error("semi_implicit.collapse_guard_basis must be proxy or pair");
+				loop_guard_.pair_guard = force_weighted_controller_ && basis == "pair";
+				if (force_weighted_controller_ && basis == "proxy")
+					logger().warn("semi_implicit.collapse_guard_basis = proxy reproduces the EF-02/03 downward guard, which loops on contact-dense scenes (docs/ef-07-trim-loop.md); pair is the default for the force-weighted band");
+				loop_guard_.partial_guard = semi_implicit_opts.value("collapse_guard_partial", false);
+				loop_guard_.exclude_born = semi_implicit_opts.value("collapse_exclude_born", false);
+				loop_guard_.responsiveness_veto = semi_implicit_opts.value("collapse_responsiveness_veto", false);
+				loop_guard_.step_excursion = semi_implicit_opts.value("trim_step_excursion", 0.0);
+				loop_guard_.reversal_limit = semi_implicit_opts.value("trim_reversal_limit", 0);
+				const auto seed_scope = semi_implicit_opts.value("initial_trim_estimate_scope", std::string("step"));
+				if (seed_scope != "step" && seed_scope != "run")
+					log_and_throw_error("semi_implicit.initial_trim_estimate_scope must be step or run");
+				loop_guard_.estimate_once = seed_scope == "run";
+				if (!(loop_guard_.step_excursion == 0 || (loop_guard_.step_excursion > 1 && std::isfinite(loop_guard_.step_excursion)))
+					|| loop_guard_.reversal_limit < 0)
+					log_and_throw_error("semi_implicit.trim_step_excursion must be 0 or a finite value > 1 and trim_reversal_limit must be >= 0");
+				if (!(force_trim_.lower > 0 && force_trim_.lower < force_trim_.upper && force_trim_.upper < 1
+					  && force_trim_.hysteresis >= 0 && force_trim_.hysteresis < force_trim_.lower
+					  && force_trim_.upper + force_trim_.hysteresis < 1
+					  && force_trim_.max_factor > 1 && std::isfinite(force_trim_.max_factor)
+					  && force_trim_.seed_max_factor >= 1 && std::isfinite(force_trim_.seed_max_factor)
+					  && force_trim_.seed_cosine > 0 && force_trim_.seed_cosine <= 1 && force_trim_.interval > 0))
+					log_and_throw_error("Invalid semi_implicit force band or initial trim estimate parameters");
+
+				if (semi_implicit_opts.value("constraint_floor", 0.0) != 0.0)
+					logger().warn("solver.contact.semi_implicit.constraint_floor has been retired and is ignored; barrier deletion and floor projection are no longer supported.");
+				trial_displacement_cap_ = semi_implicit_opts.value("trial_displacement_cap", trial_displacement_cap_);
+				force_continuation_ = semi_implicit_opts.value("force_continuation", force_continuation_);
+				continuation_max_ratio_ = semi_implicit_opts.value("continuation_max_ratio", continuation_max_ratio_);
+				const std::string identity = semi_implicit_opts.value("coefficient_identity", std::string("parent"));
+				if (identity == "parent")
+					parent_keyed_ = true;
+				else if (identity == "stencil")
+					parent_keyed_ = false;
+				else
+					log_and_throw_error("Semi-implicit barrier stiffness: coefficient_identity must be \"parent\" or \"stencil\" (got \"{}\")", identity);
+				clamped_contacts_ = parse_clamped_contacts(semi_implicit_opts);
+				balance_free_dofs_ = parse_balance_free_dofs(semi_implicit_opts);
+				const std::string friction_lag = semi_implicit_opts.value("friction_lag", std::string("realized_force"));
+				if (friction_lag == "follow_stiffness")
+					friction_lag_realized_ = false;
+				else if (friction_lag == "realized_force")
+					friction_lag_realized_ = true;
+				else
+					log_and_throw_error("Semi-implicit barrier stiffness: friction_lag must be \"follow_stiffness\" or \"realized_force\" (got \"{}\")", friction_lag);
+			}
+			if (continuation_max_ratio_ != 0.0 && !(continuation_max_ratio_ > 1.0))
+				log_and_throw_error("Semi-implicit barrier stiffness: continuation_max_ratio must be 0 (pure continuation) or > 1!");
+
+			refresh_interval_ = std::max(refresh_interval_, 0);
+			kappa_min_ = std::max(kappa_min_, 0.0);
+			if (!(trim_lower_ < trim_upper_))
+				log_and_throw_error("Semi-implicit barrier stiffness requires trim_lower < trim_upper!");
+		}
 	}
 
-	void BarrierContactForm::update_barrier_stiffness(
-		const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy)
+	void BarrierContactForm::update_quantities(const double t, const Eigen::VectorXd &x)
 	{
+		ContactForm::update_quantities(t, x);
+		trim_seed_pending_ = !(loop_guard_.estimate_once && trim_seed_used_);
+		trim_decision_ = nullptr;
+		loop_guard_.new_step(barrier_stiffness_);
+		// History report: the step boundary shifts the windows; this step's
+		// starts at its first capture (the between-steps refresh at the
+		// endpoint that follows), the previous step's stays for one step.
+		history_windows_[1] = std::move(history_windows_[0]);
+		history_windows_[0] = HistoryWindow();
+	}
+
+	double BarrierContactForm::force_weighted_gap(const Eigen::MatrixXd &surface) const
+	{
+		ForceWeightedGap statistic;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			if (controller_skips(i))
+				continue;
+			const auto dof = collision_set_[i].dof(surface, collision_mesh_.edges(), collision_mesh_.faces());
+			const double d2 = collision_set_[i].compute_distance(dof);
+			if (d2 <= dhat_ * dhat_)
+				statistic.add(std::sqrt(d2) / dhat_, barrier_potential_.gradient(collision_set_[i], dof).stableNorm());
+		}
+		return statistic.mean();
+	}
+
+	bool BarrierContactForm::estimate_initial_trim(const Eigen::VectorXd &x, const double severity)
+	{
+		if (!initial_trim_estimate_ || !trim_seed_pending_ || !system_gradient_provider_ || collision_set_.empty())
+			return false;
+		Eigen::VectorXd ge;
+		system_gradient_provider_(x, ge);
+		Eigen::VectorXd gb = collision_mesh_.to_full_dof(controller_barrier_gradient(compute_displaced_surface(x)));
+		restrict_balance_rows(gb, ge);
+		const double bn = gb.stableNorm(), en = ge.stableNorm();
+		if (!(bn > 0 && en > 0) || gb.size() != ge.size())
+			return false;
+		const double cosine = -(gb / bn).dot(ge / en);
+		const double estimate = cosine * (en / bn) / weight_;
+		const bool collapse = !std::isfinite(severity) || severity < trim_lower_ * dhat_ * dhat_;
+		const double factor = force_trim_.seed_factor(barrier_stiffness_, estimate, cosine, collapse);
+		const double before = barrier_stiffness_;
+		// A rejected first-refresh signal may become informative at the first stall.
+		const bool accepted = std::isfinite(estimate) && estimate > 0 && std::isfinite(cosine)
+							  && cosine >= force_trim_.seed_cosine && !(collapse && estimate < before);
+		if (accepted)
+		{
+			trim_seed_pending_ = false;
+			trim_seed_used_ = true;
+			bump_trim(factor, TrimLoopGuard::Estimate, TrimMove::InitialEstimate);
+		}
+		trim_decision_ = {{"source", "initial_estimate"}, {"before", before}, {"after", barrier_stiffness_}, {"cosine", cosine}, {"estimate", estimate}, {"collapse_guard", collapse}, {"accepted", accepted}};
+		emit_trim_predictors(x, "initial_estimate", false);
+		return accepted;
+	}
+
+	void BarrierContactForm::apply_force_band(const Eigen::VectorXd &x, const double avg_d2, const double min_d2, const double severity, const char *source)
+	{
+		force_band_age_ = 0;
+		const double gap = force_weighted_gap(compute_displaced_surface(x));
+		const double proposed_factor = force_trim_.factor(gap);
+		double factor = proposed_factor;
+		// EF-02/03 guards the proxy sqrt(severity) against sqrt(trim_lower);
+		// when the slack-relaxed minimum binds, that is 10x the pair's gap
+		// and the scalar force law says nothing about the pair. EF-07's pair
+		// basis guards each term on its own gap and threshold.
+		const bool guarded = loop_guard_.pair_guard
+								 ? !(ForceWeightedTrim::safe_band_step(factor, std::sqrt(avg_d2) / dhat_, std::sqrt(trim_lower_))
+									 && ForceWeightedTrim::safe_band_step(factor, std::sqrt(min_d2) / dhat_, std::sqrt(trim_lower_ / min_gap_slack)))
+								 : !ForceWeightedTrim::safe_band_step(factor, std::sqrt(severity) / dhat_, std::sqrt(trim_lower_));
+		if (guarded && factor < 1)
+		{
+			// EF-07 partial guard: soften only as far as the scalar force law
+			// keeps every collapse term above its threshold.
+			double floor = 1;
+			if (loop_guard_.partial_guard)
+				floor = loop_guard_.pair_guard
+							? std::max(ForceWeightedTrim::min_safe_factor(std::sqrt(avg_d2) / dhat_, std::sqrt(trim_lower_)),
+									   ForceWeightedTrim::min_safe_factor(std::sqrt(min_d2) / dhat_, std::sqrt(trim_lower_ / min_gap_slack)))
+							: ForceWeightedTrim::min_safe_factor(std::sqrt(severity) / dhat_, std::sqrt(trim_lower_));
+			factor = std::min(1., std::max(factor, floor));
+		}
+		const double before = barrier_stiffness_;
+		// The non-emergency upward branch shares the existing in-solve budget.
+		if (factor > 1)
+			factor = std::min(factor, std::max(1., trim_solve_anchor_ * 256. / before));
+		bump_trim(factor, TrimLoopGuard::Band, TrimMove::ForceBand);
+		trim_decision_ = {{"source", source}, {"before", before}, {"after", barrier_stiffness_}, {"mean_gap", gap}, {"proposed_factor", proposed_factor}, {"factor", factor}, {"collapse_guard", guarded}, {"collapse_proxy_gap", std::sqrt(severity) / dhat_}, {"min_gap", std::sqrt(min_d2) / dhat_}, {"guard_basis", loop_guard_.pair_guard ? "pair" : "proxy"}};
+		emit_trim_predictors(x, "force_band", false);
+	}
+
+	double BarrierContactForm::collapse_severity(const double avg_d2, const double min_d2) const
+	{
+		// A single contact collapsing far below the band is as dangerous as
+		// the average collapsing: take the worse of the average gap and the
+		// minimum gap relaxed by min_gap_slack (the minimum may sit well
+		// below the average in healthy states).
+		double severity = std::numeric_limits<double>::infinity();
+		if (std::isfinite(avg_d2))
+			severity = avg_d2;
+		if (std::isfinite(min_d2))
+			severity = std::min(severity, min_d2 * min_gap_slack);
+		return severity;
+	}
+
+	double BarrierContactForm::collapse_bump_factor(const double avg_d2) const
+	{
+		// Force balance gives kappa_eff ~ F / gap, so the trim needed to lift
+		// the average gap back to the band scales with sqrt(band / avg_d2).
+		return std::min(256.0, std::max(trim_factor_, std::sqrt(trim_lower_ * dhat_ * dhat_ / avg_d2)));
+	}
+
+	std::set<std::array<long, 5>> BarrierContactForm::current_stencil_keys() const
+	{
+		std::set<std::array<long, 5>> keys;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			keys.insert(stencil_key(collision_set_, i));
+		return keys;
+	}
+
+	double BarrierContactForm::min_distance_excluding_born(const Eigen::MatrixXd &displaced_surface) const
+	{
+		double min_d2 = std::numeric_limits<double>::infinity();
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			if (!previous_iterate_keys_.count(stencil_key(collision_set_, i)) || controller_skips(i))
+				continue;
+			const double d2 = collision_set_[i].compute_distance(
+				collision_set_[i].dof(displaced_surface, collision_mesh_.edges(), collision_mesh_.faces()));
+			if (d2 < min_d2)
+				min_d2 = d2;
+		}
+		return min_d2;
+	}
+
+	double BarrierContactForm::collapse_min_distance(const Eigen::MatrixXd &displaced_surface, const double all_min_d2) const
+	{
+		return loop_guard_.exclude_born ? min_distance_excluding_born(displaced_surface)
+										: controller_min_distance(displaced_surface, all_min_d2);
+	}
+
+	bool BarrierContactForm::collapse_bump(const double factor, const double avg_d2, const double min_d2, const double severity, const char *context)
+	{
+		const double proxy_gap = std::sqrt(severity) / dhat_;
+		const double before = barrier_stiffness_;
+		const bool allowed = loop_guard_.allow_collapse(proxy_gap);
+		if (allowed)
+		{
+			bump_trim(factor, TrimLoopGuard::Collapse, TrimMove::Collapse);
+			if (barrier_stiffness_ != before)
+				loop_guard_.collapse_bumped(proxy_gap);
+		}
+		trim_decision_ = {{"source", "collapse"}, {"context", context}, {"before", before}, {"after", barrier_stiffness_}, {"factor", factor}, {"collapse_proxy_gap", proxy_gap}, {"avg_gap", std::sqrt(avg_d2) / dhat_}, {"min_gap", std::sqrt(min_d2) / dhat_}, {"min_binds", min_d2 * min_gap_slack < avg_d2}, {"responsiveness_veto", !allowed}, {"reference_gap", std::isfinite(loop_guard_.collapse_ref) ? json(loop_guard_.collapse_ref) : json(nullptr)}};
+		return barrier_stiffness_ != before;
+	}
+
+	void BarrierContactForm::bump_trim(const double factor, const TrimLoopGuard::Source source, const TrimMove move)
+	{
+		double new_trim = std::clamp(barrier_stiffness_ * factor, trim_min_, trim_max_);
+		new_trim = std::clamp(loop_guard_.limit(barrier_stiffness_, new_trim, source), trim_min_, trim_max_);
+		loop_guard_.moved(barrier_stiffness_, new_trim);
+		if (new_trim != barrier_stiffness_)
+		{
+			logger().debug("Barrier stiffness trim: {:g} -> {:g}", barrier_stiffness_, new_trim);
+			note_trim_move(move, barrier_stiffness_, new_trim);
+			barrier_stiffness_ = new_trim;
+			iters_since_trim_ = 0;
+			// The trim multiplies every contact's barrier (and, in the
+			// follow-stiffness friction lag, the friction potential with it).
+			note_objective_change("barrier stiffness trim");
+		}
+	}
+
+	bool BarrierContactForm::retune_on_stall(const Eigen::VectorXd &x, const double factor)
+	{
+		if (!uses_semi_implicit_stiffness())
+			return false;
+		CoefficientEventScope event(*this, x, "stall_retune");
+		// History report: the trim moves of this retune are also counted as
+		// stall-retune moves.
+		struct StallRetuneScope
+		{
+			int &depth;
+			explicit StallRetuneScope(int &d) : depth(d) { ++depth; }
+			~StallRetuneScope() { --depth; }
+		} stall_scope(stall_retune_depth_);
+		const double trim_before = barrier_stiffness_;
+		trim_decision_ = nullptr;
+		// A stall with the gap below the band (average OR a single collapsed
+		// contact) means the barrier is too soft (the solver is crawling
+		// against CCD); otherwise the barrier is likely dominating the
+		// elasticity: recalibrate it against the driving forces, falling
+		// back to a blind softening when the balance is degenerate.
+		refresh_semi_implicit_stiffness(x, /*run_trim_controller=*/false);
+		if (collision_set_.empty())
+			return false; // stall unrelated to contact; nothing to retune
+		if (!controller_has_contacts())
+		{
+			// Only fully clamped contacts (clamped_contacts exclude_statistics):
+			// nothing the trim can act on; report the refresh as usual.
+			emit_trim_predictors(x, "stall_retune", /*full=*/true);
+			return barrier_stiffness_ != trim_before || kappa_cache_ != prev_kappa_cache_;
+		}
+
+		const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_, controller_skip()).mean_sq;
+		const double min_d2 = collapse_min_distance(kappa_surface_, collision_set_.compute_minimum_distance(
+																		collision_mesh_, kappa_surface_));
+		const double severity = collapse_severity(avg_d2, min_d2);
+		loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
+
+		if (std::isfinite(severity) && severity < trim_lower_ * dhat_ * dhat_)
+			collapse_bump(std::max(factor, collapse_bump_factor(severity)), avg_d2, min_d2, severity, "stall");
+		else if (estimate_initial_trim(x, severity))
+		{
+		}
+		else if (force_weighted_controller_)
+			apply_force_band(x, avg_d2, min_d2, severity, "stall");
+		else if (!calibrate_trim(x))
+		{
+			// Only soften blindly when the gap is pinned above the band
+			// (barrier clearly dominating); a mid-band stall with no
+			// balance signal has no direction -- restart on the fresh
+			// snapshot with the trim untouched.
+			if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
+				bump_trim(1.0 / factor, TrimLoopGuard::Other, TrimMove::StallSoften);
+		}
+		emit_trim_predictors(x, "stall_retune", /*full=*/true);
+		// The refresh re-evaluated every active coefficient at x; compare the
+		// memoized values against the previous snapshot so a stall at an
+		// unchanged iterate with an unmoved trim is reported as "no change".
+		return barrier_stiffness_ != trim_before || kappa_cache_ != prev_kappa_cache_;
+	}
+
+	void BarrierContactForm::refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller, const bool published_endpoint, const bool first_contact_refresh)
+	{
+		if (!uses_semi_implicit_stiffness())
+			return;
+		CoefficientEventScope event(*this, x, "refresh");
+		if (!system_hessian_provider_)
+			log_and_throw_error("Semi-implicit barrier stiffness requires a system Hessian provider!");
+
+		if (!std::isfinite(history_.trim_start))
+			history_.trim_start = barrier_stiffness_;
+		kappa_surface_ = compute_displaced_surface(x);
+		system_hessian_provider_(x, kappa_hessian_);
+		kappa_hessian_max_ = 0.0;
+		for (int k = 0; k < kappa_hessian_.outerSize(); k++)
+			for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
+				kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+		// History report: active keys whose value this capture cannot carry.
+		std::set<std::array<long, 5>> dropped_at_capture;
+		// RB-20 force continuation: at a PUBLISHED endpoint every active
+		// stencil that has a coefficient keeps the value that ACTED there (the
+		// resolved effective scale, floor/cap/kappa_min included), so the
+		// barrier force at these coordinates is unchanged by the refresh for
+		// every persisting contact. Those values are re-seeded at every
+		// following refresh until the next endpoint; everything else (stencils
+		// born during a solve, trial-state memo entries) is estimated from
+		// the fresh Hessian as before -- a mid-solve birth/stall refresh
+		// therefore still re-estimates contacts that no endpoint has vetted.
+		if (force_continuation_ && published_endpoint)
+		{
+			endpoint_kappa_.clear();
+			for (size_t i = 0; i < collision_set_.size(); i++)
+			{
+				if (collision_set_.is_plane_vertex(i))
+					continue;
+				for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+				{
+					const auto cached = kappa_cache_.find(key);
+					if (cached == kappa_cache_.end())
+						continue;
+					const double k = resolve_stiffness(cached->second, is_continued(key));
+					if (k > 0 && std::isfinite(k))
+						endpoint_kappa_.emplace(key, k);
+					else
+						dropped_at_capture.insert(key);
+				}
+			}
+		}
+		else if (!force_continuation_)
+			endpoint_kappa_.clear();
+		// The previous snapshot's values back stencils whose fresh curvature
+		// is invalid (RB-18 F2); only a non-empty snapshot is worth keeping.
+		if (!kappa_cache_.empty())
+			prev_kappa_cache_.swap(kappa_cache_);
+		kappa_cache_.clear();
+		continued_keys_.clear();
+		for (const auto &[key, k] : endpoint_kappa_)
+		{
+			kappa_cache_.emplace(key, k);
+			continued_keys_.insert(key);
+		}
+		kappa_continued_count_ = 0;
+		kappa_fresh_count_ = 0;
+		iters_since_refresh_ = 0;
+		const bool pull_toward_fresh = published_endpoint && continuation_max_ratio_ > 1.0;
+
+		// First pass uncapped to freeze the cap at kappa_spread * median of
+		// the batch (guards against exploded Hessian blocks of crushed
+		// elements) and the floor at median / kappa_spread (RB-18 F1: a
+		// contact can never be more than kappa_spread below its batch, so a
+		// nonpositive local curvature cannot delete its barrier); both are
+		// part of the snapshot for determinism. The median is taken over the
+		// POSITIVE finite values only: a zero median previously zeroed every
+		// contact in the batch (RB-02).
+		kappa_cap_ = std::numeric_limits<double>::infinity();
+		kappa_floor_ = 0.0;
+		kappa_median_ = 0.0;
+		kappa_fallback_count_ = 0;
+		kappa_abs_fallback_count_ = 0;
+		kappa_global_fallback_count_ = 0;
+		kappa_interpolated_count_ = 0;
+		kappa_direction_fallback_count_ = 0;
+		const bool first_contact = !kappa_snapshot_had_contacts_ && controller_has_contacts();
+		kappa_snapshot_had_contacts_ = controller_has_contacts();
+		batch_first_pass_ = true;
+		pull_toward_fresh_ = pull_toward_fresh;
+		try
+		{
+			assign_collision_stiffness(collision_set_);
+		}
+		catch (...)
+		{
+			batch_first_pass_ = false;
+			pull_toward_fresh_ = false;
+			throw;
+		}
+		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+		for (size_t i = 0; i < collision_set_.size(); i++)
+		{
+			if (collision_set_.is_plane_vertex(i))
+				continue;
+			bool all_continued = true;
+			for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+				all_continued = all_continued && is_continued(key);
+			if (all_continued)
+				++kappa_continued_count_;
+		}
+		if (!collision_set_.empty())
+		{
+			// RB-20 D4: the batch statistics (median, floor, cap) describe
+			// the FRESH estimates; continued values already acted and are
+			// neither clamped by them nor allowed to distort them. When the
+			// batch has no fresh value the continued ones stand in, so an F2/F7
+			// sentinel of a new stencil still has a reference. The batch is
+			// the memo after the first pass: exactly the continued seeds plus
+			// every coefficient key (parent or stencil) assigned at this x.
+			std::vector<double> kappas, continued_kappas;
+			kappas.reserve(kappa_cache_.size());
+			// clamped_contacts exclude_statistics: the coefficients of fully
+			// clamped collisions are resolved against the batch but do not
+			// shape it.
+			std::set<std::array<long, 5>> skipped_keys;
+			if (clamped_contacts_ == ClampedContacts::ExcludeStatistics)
+				for (size_t i = 0; i < collision_set_.size(); i++)
+					if (!collision_set_.is_plane_vertex(i) && controller_skips(i))
+						for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+							skipped_keys.insert(key);
+			for (const auto &[key, k] : kappa_cache_)
+			{
+				if (!(k > 0 && std::isfinite(k)) || skipped_keys.count(key))
+					continue;
+				(is_continued(key) ? continued_kappas : kappas).push_back(k);
+			}
+			if (kappas.empty())
+				kappas.swap(continued_kappas);
+			if (!kappas.empty())
+			{
+				std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
+				kappa_median_ = kappas[kappas.size() / 2];
+			}
+			else
+			{
+				logger().warn(
+					"Semi-implicit barrier stiffness: no contact in the refresh batch of {} has positive local curvature; no batch cap/floor available",
+					collision_set_.size());
+			}
+
+			if (kappa_median_ > 0 && std::isfinite(kappa_spread_) && kappa_spread_ > 0)
+			{
+				const double cap = kappa_spread_ * kappa_median_;
+				if (std::isfinite(cap))
+					kappa_cap_ = cap;
+				else
+					logger().warn(
+						"Semi-implicit barrier stiffness: kappa_spread * median overflows ({} * {:g}); batch cap disabled",
+						kappa_spread_, kappa_median_);
+				kappa_floor_ = kappa_median_ / kappa_spread_;
+			}
+			// Re-resolve the already-assigned scales with the frozen batch
+			// statistics (this also replaces the invalid-curvature sentinels);
+			// every key is memoized now, so this is a pure lookup pass.
+			assign_collision_stiffness(collision_set_);
+			if (kappa_continued_count_ > 0)
+				logger().debug(
+					"Semi-implicit barrier stiffness: {} of {} contacts continued from the refresh point, {} estimated fresh (continuation_max_ratio={:g})",
+					kappa_continued_count_, collision_set_.size(), kappa_fresh_count_, continuation_max_ratio_);
+			if (kappa_fallback_count_ + kappa_abs_fallback_count_ + kappa_global_fallback_count_ > 0)
+				logger().debug(
+					"Semi-implicit barrier stiffness: {} of {} contacts had invalid curvature and no previous value: {} used |w^T H w|, {} used max|H|/dhat^2, {} resolved to floor={:g} / cap={:g}",
+					kappa_fallback_count_ + kappa_abs_fallback_count_ + kappa_global_fallback_count_,
+					collision_set_.size(), kappa_abs_fallback_count_, kappa_global_fallback_count_,
+					kappa_fallback_count_, kappa_floor_, kappa_cap_);
+			if (kappa_interpolated_count_ + kappa_direction_fallback_count_ > 0)
+				logger().debug(
+					"Semi-implicit barrier stiffness: {} of {} contacts have interpolated map rows: {} condensed the parent block, {} used the gap-normalized direction fallback",
+					kappa_interpolated_count_ + kappa_direction_fallback_count_, collision_set_.size(),
+					kappa_interpolated_count_, kappa_direction_fallback_count_);
+		}
+
+		// Trim controller, one step per refresh: below the gap band the
+		// barrier is too soft (proportional upward bump); otherwise calibrate
+		// the trim by gradient balance against the current driving forces.
+		// When the balance is degenerate (unloaded contact, no gradient
+		// provider) fall back to a conditioning cap on the effective
+		// stiffness plus the band's downward step.
+		if (run_trim_controller)
+			trim_decision_ = nullptr;
+		if (run_trim_controller && controller_has_contacts())
+		{
+			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, kappa_surface_, dhat_, controller_skip()).mean_sq;
+			// Every active collision persists at a refresh point (the born
+			// filter is relative to the previous accepted iterate, which is
+			// this one): the minimum is taken over all of them.
+			const double min_d2 = controller_min_distance(kappa_surface_, collision_set_.compute_minimum_distance(
+																			  collision_mesh_, kappa_surface_));
+			const double severity = collapse_severity(avg_d2, min_d2);
+			const double dhat_sq = dhat_ * dhat_;
+			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
+			// A first-contact refresh is not a collapse: the barrier has not
+			// acted on these contacts yet, and their gaps are where the step
+			// that made them stopped (usually truncated by the CCD line
+			// search). Bumping the trim there makes the onset stiffer and
+			// itself roundoff-sensitive; the conditioning cap applies instead.
+			const bool collapsed = std::isfinite(severity) && severity < trim_lower_ * dhat_sq && !first_contact_refresh;
+
+			if (collapsed)
+			{
+				collapse_bump(collapse_bump_factor(severity), avg_d2, min_d2, severity, published_endpoint ? "refresh_endpoint" : "refresh");
+			}
+			else if (!published_endpoint && estimate_initial_trim(x, severity))
+			{
+			}
+			else if (force_weighted_controller_)
+			{
+				apply_force_band(x, avg_d2, min_d2, severity, published_endpoint ? "refresh_endpoint" : "refresh");
+			}
+			else if (!calibrate_trim(x))
+			{
+				// No force-balance signal. On a first-contact event the
+				// fresh kappas have never been vetted, so cap the effective
+				// stiffness by conditioning; on later refreshes the
+				// persistent trim carries the accumulated load history and
+				// must NOT be reset (the emergency bumps and the calibration
+				// are the only things allowed to move it, plus the band's
+				// downward step when the gap is pinned above the band).
+				// (Never cap during an active collapse -- a collapsed first
+				// contact needs strength, not conditioning. The first-contact
+				// refresh in post_step is not a collapse.)
+				if (first_contact && kappa_median_ > 0 && kappa_hessian_max_ > 0 && !collapsed)
+				{
+					// RB-18 F3: kappa carries force/length^3 (divided by dhat^2
+					// at assignment) while |H| is force/length, so the ratio
+					// needs a dhat^2 to be dimensionless: trim * kappa * weight
+					// * dhat^2 is the barrier's interface stiffness at gaps
+					// ~dhat, which is what the cap compares to max|H|.
+					const double cap = std::clamp(
+						conditioning_cap_ * kappa_hessian_max_
+							/ (weight_ * kappa_median_ * dhat_ * dhat_),
+						trim_min_, trim_max_);
+					if (barrier_stiffness_ > cap)
+					{
+						logger().debug(
+							"Conditioning cap on first contact: trim {:g} -> {:g}",
+							barrier_stiffness_, cap);
+						note_trim_move(TrimMove::ConditioningCap, barrier_stiffness_, cap);
+						barrier_stiffness_ = cap;
+						iters_since_trim_ = 0;
+					}
+				}
+				if (std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_ * dhat_)
+					bump_trim(1.0 / trim_factor_, TrimLoopGuard::Other, TrimMove::RefreshDown);
+			}
+		}
+
+		++diagnostic_refresh_id_;
+
+		// The per-contact coefficients are re-estimated against a new frozen
+		// Hessian, so the barrier is a different function of the coordinates
+		// from here on, whatever the trim did.
+		note_objective_change("semi-implicit stiffness refresh");
+
+		// Re-anchor the in-solve emergency climbing budget.
+		trim_solve_anchor_ = barrier_stiffness_;
+		if (track_collision_birth())
+		{
+			refresh_keys_ = current_stencil_keys();
+			previous_iterate_keys_ = refresh_keys_;
+		}
+
+		// History report: a published capture extends the window with the
+		// values continuation carries from here on (after the pull, if any);
+		// any other refresh re-estimated every key it did not carry.
+		if (force_continuation_ && published_endpoint)
+		{
+			for (const auto &[key, k] : endpoint_kappa_)
+				history_windows_[0].carried.insert_or_assign(key, k);
+			history_windows_[0].dropped.insert(dropped_at_capture.begin(), dropped_at_capture.end());
+		}
+		else
+			observe_continuation();
+
+		if (!collision_set_.empty())
+		{
+			double min_kappa = std::numeric_limits<double>::infinity();
+			double max_kappa = 0, mean_kappa = 0;
+			for (size_t i = 0; i < collision_set_.size(); i++)
+			{
+				const double k = collision_set_[i].stiffness_scale;
+				min_kappa = std::min(min_kappa, k);
+				max_kappa = std::max(max_kappa, k);
+				mean_kappa += k;
+			}
+			mean_kappa /= collision_set_.size();
+			logger().debug(
+				"Refreshed semi-implicit barrier stiffness over {} contacts: min={:g} mean={:g} max={:g} (trim={:g})",
+				collision_set_.size(), min_kappa, mean_kappa, max_kappa, barrier_stiffness_);
+		}
+
+		// A retune refresh (no controller) is reported by retune_on_stall
+		// once it has moved the trim.
+		if (run_trim_controller)
+			emit_trim_predictors(x, published_endpoint ? "refresh_endpoint" : "refresh", /*full=*/true);
+	}
+
+	std::array<long, 5> BarrierContactForm::stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const
+	{
+		const auto vids = collision_set[i].vertex_ids(collision_mesh_.edges(), collision_mesh_.faces());
+		long type_tag = 3; // face-vertex
+		if (collision_set.is_vertex_vertex(i))
+			type_tag = 0;
+		else if (collision_set.is_edge_vertex(i))
+			type_tag = 1;
+		else if (collision_set.is_edge_edge(i))
+			type_tag = 2;
+		// Doubly braced: std::array wraps a C array, and GCC's
+		// -Werror=missing-braces (on in CI) rejects the flat form clang accepts.
+		return canonical_key({{type_tag, long(vids[0]), long(vids[1]), long(vids[2]), long(vids[3])}});
+	}
+
+	std::vector<std::pair<std::array<long, 5>, double>> BarrierContactForm::coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const
+	{
+		std::vector<std::pair<std::array<long, 5>, double>> keys;
+		if (parent_keyed_)
+		{
+			// RB-21: one coefficient per candidate primitive pair that built
+			// this collision, weighted by its (positive) contribution. The
+			// key space is disjoint from stencil keys (tag offset 10).
+			// Duplicate-removal corrections carry negative weights and no
+			// coefficient of their own; they only adjust the total weight.
+			// An edge-edge or vertex-vertex candidate is keyed on its sorted
+			// pair: the broad phases emit it in traversal order (the LBVH as
+			// query/target leaf, the cached swept build differently from the
+			// static one), and the same pair must find its continued value
+			// whichever order a build produced (2026-10-05).
+			for (const auto &parent : collision_set[i].parents)
+				if (parent.weight > 0)
+					keys.push_back({canonical_key({{10 + long(parent.type), long(parent.id0), long(parent.id1), -1, -1}}), parent.weight});
+		}
+		if (keys.empty())
+			keys.push_back({stencil_key(collision_set, i), 1.0});
+		return keys;
+	}
+
+	std::array<long, 5> BarrierContactForm::canonical_key(std::array<long, 5> key)
+	{
+		const auto reversed = reversed_pair_key(key);
+		return reversed < key ? reversed : key;
+	}
+
+	std::array<long, 5> BarrierContactForm::reversed_pair_key(std::array<long, 5> key)
+	{
+		constexpr long vv_parent = 10 + long(ipc::ParentContribution::Type::VertexVertex);
+		constexpr long ee_parent = 10 + long(ipc::ParentContribution::Type::EdgeEdge);
+		if (key[0] == 0 || key[0] == vv_parent || key[0] == ee_parent)
+			std::swap(key[1], key[2]);
+		else if (key[0] == 2)
+		{
+			// Edge-edge stencil: the two edges' vertex pairs swap places.
+			std::swap(key[1], key[3]);
+			std::swap(key[2], key[4]);
+		}
+		return key;
+	}
+
+	const char *BarrierContactForm::trim_move_name(const TrimMove move)
+	{
+		switch (move)
+		{
+		case TrimMove::Collapse:
+			return "collapse";
+		case TrimMove::Calibration:
+			return "calibration";
+		case TrimMove::ConditioningCap:
+			return "conditioning_cap";
+		case TrimMove::CadenceDown:
+			return "cadence_down";
+		case TrimMove::RefreshDown:
+			return "refresh_down";
+		case TrimMove::StallSoften:
+			return "stall_soften";
+		case TrimMove::ForceBand:
+			return "force_band";
+		case TrimMove::InitialEstimate:
+			return "initial_estimate";
+		case TrimMove::Other:
+		default:
+			return "other";
+		}
+	}
+
+	void BarrierContactForm::note_trim_move(const TrimMove move, const double before, const double after)
+	{
+		if (!std::isfinite(history_.trim_start))
+			history_.trim_start = before;
+		if (after == before)
+			return;
+		const int source = int(move);
+		++history_.move_count[source];
+		if (before > 0 && after > 0 && std::isfinite(before) && std::isfinite(after))
+			history_.move_log2[source] += std::log2(after / before);
+		if (stall_retune_depth_ > 0)
+			++history_.stall_retune_moves;
+	}
+
+	void BarrierContactForm::observe_continuation()
+	{
+		if (!uses_semi_implicit_stiffness())
+			return;
+		// Nothing was carried in this step or the previous one: nothing can
+		// be lost (continuation off, before the first capture).
+		const bool carried = !(history_windows_[0].empty() && history_windows_[1].empty());
+		// The latest value a key carried in the two windows, if any.
+		const auto carried_value = [&](const std::array<long, 5> &k) -> const double * {
+			for (const auto &window : history_windows_)
+				if (const auto it = window.carried.find(k); it != window.carried.end())
+					return &it->second;
+			return nullptr;
+		};
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			if (collision_set_.is_plane_vertex(i))
+				continue;
+			for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+			{
+				// One contact, two identities: the pair's coefficient is
+				// memoized under both of its orders in this snapshot (two
+				// estimates, carried or not), so which one acts depends on the
+				// order a build emitted the pair in.
+				const auto reversed = reversed_pair_key(key);
+				if (reversed != key && kappa_cache_.count(reversed))
+					history_.split_pairs.insert(std::min(key, reversed));
+				if (!carried || is_continued(key) || history_.losses.count(key))
+					continue;
+				// Fresh: was this pair carried at a capture of this step or the
+				// previous one? Keys are canonical, so the other order of a pair
+				// is never stored: an orientation loss means the
+				// canonicalization regressed.
+				HistoryLog::Loss loss{-1, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+				if (const double *other = reversed != key ? carried_value(reversed) : nullptr)
+				{
+					loss.cause = HistoryLog::Orientation;
+					loss.carried = *other;
+				}
+				else if (const double *same = carried_value(key))
+				{
+					loss.cause = HistoryLog::Reentry;
+					loss.carried = *same;
+				}
+				else if (history_windows_[0].dropped.count(key) || history_windows_[1].dropped.count(key))
+					loss.cause = HistoryLog::Other;
+				if (loss.cause < 0)
+					continue; // a contact new to these two steps
+				// The fresh value as it acts (resolve_stiffness only throws on a
+				// nonfinite value without a batch cap, which the assignment that
+				// memoized it would already have refused).
+				const auto cached = kappa_cache_.find(key);
+				if (cached != kappa_cache_.end() && loss.carried > 0 && std::isfinite(loss.carried)
+					&& (std::isfinite(cached->second) || std::isfinite(kappa_cap_)))
+				{
+					try
+					{
+						const double fresh = resolve_stiffness(cached->second, false);
+						if (fresh > 0 && std::isfinite(fresh))
+							loss.abs_log_ratio = std::abs(std::log(fresh / loss.carried));
+					}
+					catch (const std::exception &)
+					{
+					}
+				}
+				history_.losses.emplace(key, loss);
+			}
+		}
+	}
+
+	json BarrierContactForm::history_sensitivity(const Eigen::VectorXd &x) const
+	{
+		if (!uses_semi_implicit_stiffness())
+			return {{"value", nullptr}, {"unavailable_reason", "Semi-implicit stiffness only: the other modes have no per-contact coefficients, continuation or trim controller"}};
+		try
+		{
+			std::array<int, 3> losses{};
+			double max_ratio = -1;
+			for (const auto &[key, loss] : history_.losses)
+			{
+				++losses[std::clamp(loss.cause, 0, 2)];
+				if (std::isfinite(loss.abs_log_ratio))
+					max_ratio = std::max(max_ratio, loss.abs_log_ratio);
+			}
+			json moves = json::object();
+			for (int s = 0; s < trim_move_sources; ++s)
+				moves[trim_move_name(TrimMove(s))] = {{"count", history_.move_count[s]}, {"log2", history_.move_log2[s]}};
+			const bool cadence = controller_interval_ > 0 && !force_weighted_controller_;
+
+			// First-order equilibrium gap shifts at x, in units of dhat: a
+			// coefficient change by a factor r moves a contact at gap d by about
+			// (dhat - d) / 2 * |ln r| (log barrier); summed over the contacts
+			// concerned, with the largest single one. Fully clamped contacts
+			// cannot move and are left out.
+			struct Shift
+			{
+				double sum = 0, max = 0;
+				int contacts = 0;
+				void add(const double shift)
+				{
+					if (!std::isfinite(shift))
+						return;
+					sum += shift;
+					max = std::max(max, shift);
+					++contacts;
+				}
+				json to_json() const { return {{"sum", sum}, {"max", max}, {"contacts", contacts}}; }
+			} loss_shift, cadence_shift;
+			json loss_gap = nullptr, cadence_gap = nullptr;
+			if (x.size() > 0)
+			{
+				const Eigen::MatrixXd V = compute_displaced_surface(x);
+				const Eigen::MatrixXi &E = collision_mesh_.edges();
+				const Eigen::MatrixXi &F = collision_mesh_.faces();
+				const double ln_cadence = std::log(trim_factor_);
+				for (size_t i = 0; i < collision_set_.size(); ++i)
+				{
+					if (collision_set_.is_plane_vertex(i) || clamp_class(collision_set_, i) == 2)
+						continue;
+					const double d2 = collision_set_[i].compute_distance(collision_set_[i].dof(V, E, F));
+					const double reach = 0.5 * std::max(0.0, 1.0 - std::sqrt(d2) / dhat_);
+					if (cadence)
+						cadence_shift.add(reach * ln_cadence);
+					if (history_.losses.empty())
+						continue;
+					// The collision's coefficient now against the one it would
+					// have with every lost key at its carried value.
+					double now = 0, carried = 0;
+					bool lost = false, valid = true;
+					for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+					{
+						const auto cached = kappa_cache_.find(key);
+						if (cached == kappa_cache_.end() || (!std::isfinite(cached->second) && !std::isfinite(kappa_cap_)))
+						{
+							valid = false;
+							break;
+						}
+						const double k = resolve_stiffness(cached->second, is_continued(key));
+						double reference = k;
+						if (const auto loss = history_.losses.find(key); loss != history_.losses.end()
+																		 && loss->second.carried > 0 && std::isfinite(loss->second.carried))
+						{
+							reference = loss->second.carried;
+							lost = true;
+						}
+						now += w * k;
+						carried += w * reference;
+					}
+					if (valid && lost && now > 0 && carried > 0)
+						loss_shift.add(reach * std::abs(std::log(now / carried)));
+				}
+				loss_gap = loss_shift.to_json();
+				if (cadence)
+					cadence_gap = cadence_shift.to_json();
+			}
+			else
+			{
+				loss_gap = {{"value", nullptr}, {"unavailable_reason", "No accepted endpoint (failed attempt)"}};
+				cadence_gap = loss_gap;
+			}
+			if (!cadence)
+				cadence_gap = {{"value", nullptr}, {"unavailable_reason", controller_interval_ > 0 ? "Force-weighted band: its in-solve moves have no fixed factor" : "controller_interval 0: no in-solve downward cadence"}};
+
+			json continuation = {{"force_continuation", force_continuation_}};
+			continuation["losses"] = {{"orientation", losses[HistoryLog::Orientation]}, {"reentry", losses[HistoryLog::Reentry]}, {"other", losses[HistoryLog::Other]}};
+			continuation["split_pairs"] = history_.split_pairs.size();
+			continuation["max_abs_log_ratio"] = max_ratio >= 0 ? json(max_ratio) : json(nullptr);
+			continuation["gap_shift_dhat"] = loss_gap;
+			json trim = {{"start", std::isfinite(history_.trim_start) ? json(history_.trim_start) : json(nullptr)}, {"end", barrier_stiffness_}};
+			trim["moves"] = moves;
+			trim["moves_in_stall_retunes"] = history_.stall_retune_moves;
+			trim["iters_since_trim"] = iters_since_trim_;
+			trim["controller_interval"] = controller_interval_;
+			trim["gap_shift_per_cadence_move_dhat"] = cadence_gap;
+			return {{"continuation", continuation}, {"trim", trim}, {"restored_from_state", history_.restored}};
+		}
+		catch (const std::exception &e)
+		{
+			return {{"value", nullptr}, {"unavailable_reason", std::string("History report failed: ") + e.what()}};
+		}
+	}
+
+	void BarrierContactForm::reset_history_sensitivity()
+	{
+		if (!uses_semi_implicit_stiffness())
+			return;
+		history_ = HistoryLog();
+		history_.trim_start = barrier_stiffness_;
+	}
+
+	double BarrierContactForm::estimate_stiffness(const ipc::CollisionStencil &stencil, const std::array<long, 5> &key) const
+	{
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const int dim = collision_mesh_.dim();
+		const int n_verts = stencil.num_vertices();
+		const auto vids = stencil.vertex_ids(E, F);
+
+		// Local positions, masses, and Hessian block come from the FROZEN
+		// snapshot, so the value is a deterministic function of the key
+		// between refreshes (well-defined objective during the line search).
+		const ipc::VectorMax12d positions = stencil.dof(kappa_surface_, E, F);
+
+		// NOTE: Ando's m/d^2 feasibility term is intentionally NOT used: with
+		// a frozen snapshot, a collapsed snapshot distance bakes an unbounded
+		// stiffness into the objective, and the log barrier already
+		// guarantees non-penetration. Inertia enters through the system
+		// Hessian provider instead (elastic + inertia curvature of the
+		// incremental potential).
+		ipc::VectorMax4d local_mass = ipc::VectorMax4d::Zero(n_verts);
+		// Exact selector/permutation stencils use system node IDs (RB-03
+		// indexing repair). A stencil with an interpolated, scaled or empty
+		// row, or two rows on the same node, has no Hessian block of its own
+		// in surface coordinates: its curvature is the parent block condensed
+		// onto the stencil (RB-03 interpolated stiffness, 2026-09-11).
+		std::array<long, 4> node_ids;
+		std::array<long, 4> surface_ids;
+		bool exact_selection = true;
+		for (int a = 0; a < n_verts; ++a)
+		{
+			surface_ids[a] = vids[a];
+			node_ids[a] = stiffness_node_ids_[vids[a]];
+			exact_selection = exact_selection && node_ids[a] >= 0;
+			for (int b = 0; b < a; ++b)
+				exact_selection = exact_selection && node_ids[a] != node_ids[b];
+		}
+
+		// kappa = avg_mass / d^2 + w^T H w [Ando 2024]; for a parent
+		// candidate the direction is the closest point on the WHOLE
+		// primitive (AUTO distance type), for a built stencil its subfeature.
+		double kappa;
+		if (exact_selection)
+		{
+			ipc::MatrixMax12d local_hess =
+				ipc::MatrixMax12d::Zero(dim * n_verts, dim * n_verts);
+			for (int a = 0; a < n_verts; a++)
+			{
+				const long va = node_ids[a];
+				for (int b = 0; b < n_verts; b++)
+				{
+					const long vb = node_ids[b];
+					if (dim * va + dim > kappa_hessian_.rows()
+						|| dim * vb + dim > kappa_hessian_.cols())
+						continue; // e.g., obstacle DOF not in the Hessian
+					for (int k = 0; k < dim; k++)
+						for (int l = 0; l < dim; l++)
+							local_hess(dim * a + k, dim * b + l) =
+								kappa_hessian_.coeff(dim * va + k, dim * vb + l);
+				}
+			}
+			kappa = ipc::semi_implicit_stiffness(
+				stencil, positions, local_mass, local_hess, dmin_);
+		}
+		else
+			kappa = interpolated_stiffness(stencil, positions, surface_ids, n_verts);
+
+		// Unit conversion: the Ando stiffness is an interface SPRING
+		// stiffness [force/length], while the clamped-log barrier acts on
+		// squared distances (units length^4), so its coefficient carries
+		// [force/length^3]. Dividing by dhat^2 makes the barrier's interface
+		// stiffness at gaps ~ dhat match the local elasticity, independent of
+		// the dhat scale (without this the trim controller must bridge a
+		// 1/dhat^2 factor and starves for small dhat).
+		kappa /= dhat_ * dhat_;
+
+		// RB-18 F4: a NaN Rayleigh quotient means the frozen Hessian block
+		// itself is NaN -- the Newton system is already invalid, so fail
+		// loudly instead of substituting a literal.
+		if (std::isnan(kappa))
+			log_and_throw_error(
+				"Semi-implicit barrier stiffness: NaN local curvature for contact key (tag {}, ids {}, {}, {}, {})",
+				key[0], key[1], key[2], key[3], key[4]);
+
+		// Remove the form weight (acceleration scaling); it is reapplied by
+		// ContactForm::weight(). The global barrier_stiffness_ acts as the
+		// trim multiplier, so the effective coefficient is trim * kappa. The
+		// weight is checked here because set_weight() can change it after
+		// construction.
+		if (!std::isfinite(weight_) || !(weight_ >= std::numeric_limits<double>::min()))
+			log_and_throw_error(
+				"Semi-implicit barrier stiffness requires a finite positive (normal) form weight (got {:g})",
+				weight_);
+		kappa /= weight_;
+
+		// RB-18 F2/F4: w^T H w is nonpositive for an unprojected indefinite
+		// or singular local Hessian, and can overflow to +inf for crushed
+		// elements. Neither may delete the barrier (kappa = 0 leaves CCD as
+		// the only protection) nor install an arbitrary literal. Keep the
+		// key's previous value when it has one; otherwise leave a sentinel
+		// (0 = needs the batch floor, +inf = needs the batch cap) that
+		// resolve_stiffness() maps onto the frozen batch statistics.
+		if (!(kappa > 0) || !std::isfinite(kappa))
+		{
+			const auto prev = prev_kappa_cache_.find(key);
+			if (prev != prev_kappa_cache_.end() && prev->second > 0
+				&& std::isfinite(prev->second))
+			{
+				kappa = prev->second;
+			}
+			else if (kappa < 0 && std::isfinite(kappa))
+			{
+				// RB-18 F7 (user choice B): an indefinite local block still
+				// has a curvature MAGNITUDE along the normal; the barrier
+				// borrows it. Heuristic, not a derivation.
+				kappa = -kappa;
+				++kappa_abs_fallback_count_;
+			}
+			else if (kappa == 0)
+			{
+				// RB-18 F7 (fallback E): singular along the normal, so use
+				// the global Hessian scale max|H| / dhat^2 (same
+				// normalization as the conditioning cap). Zero only when the
+				// system Hessian is identically zero.
+				kappa = kappa_hessian_max_ / (dhat_ * dhat_ * weight_);
+				if (std::isnan(kappa) || (kappa == 0 && kappa_hessian_max_ > 0))
+					log_and_throw_error(
+						"Semi-implicit barrier stiffness: invalid or underflowing global curvature fallback");
+				if (kappa > 0 && std::isfinite(kappa))
+					++kappa_global_fallback_count_;
+				else
+					// Keep +inf for the existing batch-cap/error resolution. An
+					// overflowing fallback must never silently delete the barrier.
+					++kappa_fallback_count_;
+			}
+			else
+			{
+				kappa = std::numeric_limits<double>::infinity();
+				++kappa_fallback_count_;
+			}
+		}
+		return kappa;
+	}
+
+	double BarrierContactForm::interpolated_stiffness(
+		const ipc::CollisionStencil &stencil, const ipc::VectorMax12d &positions,
+		const std::array<long, 4> &vids, const int n_verts) const
+	{
+		// Definition (RB-03 decision, 2026-09-11): with the map rows B of the
+		// stencil's surface vertices over their parent nodes P, the local
+		// stiffness is K = (B H_PP^-1 B^T)^-1 -- the frozen parent block
+		// statically condensed onto the stencil, i.e. the stiffness felt by a
+		// rigid stencil displacement along the contact direction when every
+		// DOF outside P is fixed and the parents settle to minimum energy.
+		// For exact selectors this IS the direct block extraction (no freedom
+		// to settle), so the two paths agree on selector stencils. Parents
+		// without a nonzero diagonal block (obstacle / prescribed proxies) or
+		// outside the Hessian are fixed and carry no motion; a row left with
+		// no movable parent is dropped and contributes zero, as its zero block
+		// does in the selector contract. Fallback (i'): if H_PP is not SPD or
+		// the kept rows are dependent (duplicate proxies, two rows on one
+		// node), use the gap-normalized force direction
+		//   |w_K|^4 (w^T B H_PP B^T w) / (w^T B B^T w)^2,
+		// which is the same energy read along u = B^T w scaled to produce the
+		// stencil's own motion, and equals w^T H w for selectors.
+		const int dim = collision_mesh_.dim();
+		const int n = dim * n_verts;
+		const auto fixed_node = [&](const long j) {
+			if (dim * j + dim > kappa_hessian_.rows() || dim * j + dim > kappa_hessian_.cols())
+				return true;
+			for (int k = 0; k < dim; ++k)
+				for (int l = 0; l < dim; ++l)
+					if (kappa_hessian_.coeff(dim * j + k, dim * j + l) != 0.)
+						return false;
+			return true;
+		};
+		std::vector<long> parents;
+		std::vector<std::vector<std::pair<int, double>>> rows(n_verts);
+		std::array<int, 4> slot = {{-1, -1, -1, -1}};
+		int n_kept = 0;
+		for (int a = 0; a < n_verts; ++a)
+		{
+			const auto add = [&](const long node, const double weight) {
+				if (weight == 0. || fixed_node(node))
+					return;
+				auto it = std::find(parents.begin(), parents.end(), node);
+				if (it == parents.end())
+					it = parents.insert(parents.end(), node);
+				rows[a].emplace_back(int(it - parents.begin()), weight);
+			};
+			const long node = stiffness_node_ids_[vids[a]];
+			if (node >= 0)
+				add(node, 1.);
+			else
+				for (const auto &[j, weight] : interpolation_parents_[vids[a]])
+					add(j, weight);
+			if (!rows[a].empty())
+				slot[a] = n_kept++;
+		}
+		if (n_kept == 0)
+			return 0.; // nothing movable: sentinel for the RB-18 F2/F7 chain
+
+		const int np = dim * int(parents.size()), nk = dim * n_kept;
+		Eigen::MatrixXd hpp(np, np);
+		for (int i = 0; i < int(parents.size()); ++i)
+			for (int j = 0; j < int(parents.size()); ++j)
+				for (int k = 0; k < dim; ++k)
+					for (int l = 0; l < dim; ++l)
+						hpp(dim * i + k, dim * j + l) =
+							kappa_hessian_.coeff(dim * parents[i] + k, dim * parents[j] + l);
+		Eigen::MatrixXd b = Eigen::MatrixXd::Zero(nk, np);
+		for (int a = 0; a < n_verts; ++a)
+			for (const auto &[p, weight] : rows[a])
+				for (int k = 0; k < dim; ++k)
+					b(dim * slot[a] + k, dim * p + k) += weight;
+
+		// Quadratic forms along the toolkit's own contact direction (zero
+		// masses: the mass term is not used by this form).
+		const ipc::VectorMax4d zero_mass = ipc::VectorMax4d::Zero(n_verts);
+		const auto quad = [&](const Eigen::MatrixXd &k) {
+			ipc::MatrixMax12d local = ipc::MatrixMax12d::Zero(n, n);
+			for (int a = 0; a < n_verts; ++a)
+				for (int c = 0; c < n_verts; ++c)
+					if (slot[a] >= 0 && slot[c] >= 0)
+						local.block(dim * a, dim * c, dim, dim) =
+							k.block(dim * slot[a], dim * slot[c], dim, dim);
+			return ipc::semi_implicit_stiffness(stencil, positions, zero_mass, local, dmin_);
+		};
+
+		Eigen::LLT<Eigen::MatrixXd> llt(hpp);
+		if (llt.info() == Eigen::Success)
+		{
+			Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(b);
+			qr.setThreshold(1e-10);
+			if (qr.rank() == nk)
+			{
+				const Eigen::MatrixXd compliance = b * llt.solve(b.transpose());
+				Eigen::LLT<Eigen::MatrixXd> llt_compliance(compliance);
+				if (llt_compliance.info() == Eigen::Success)
+				{
+					const Eigen::MatrixXd k = llt_compliance.solve(Eigen::MatrixXd::Identity(nk, nk));
+					if (k.allFinite())
+					{
+						++kappa_interpolated_count_;
+						return quad(k);
+					}
+				}
+			}
+		}
+
+		++kappa_direction_fallback_count_;
+		const double q1 = quad(b * hpp * b.transpose());
+		const double q2 = quad(b * b.transpose());
+		const double wk2 = quad(Eigen::MatrixXd::Identity(nk, nk));
+		if (!(q2 > 0) || !std::isfinite(q2))
+			return 0.;
+		return wk2 * wk2 * q1 / (q2 * q2);
+	}
+
+	double BarrierContactForm::memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const
+	{
+		const auto cached = kappa_cache_.find(key);
+		const bool continued = cached != kappa_cache_.end() && is_continued(key);
+		// RB-20 D3: with a max ratio, a continued coefficient is pulled
+		// toward the fresh estimate but by at most that factor per published
+		// endpoint. Done once, during the refresh's first pass; the memo then
+		// holds the clamped value for the rest of the snapshot.
+		const bool pull = continued && batch_first_pass_ && pull_toward_fresh_;
+		if (cached != kappa_cache_.end() && !pull)
+			return resolve_stiffness(cached->second, continued);
+
+		if (!continued)
+			++kappa_fresh_count_;
+
+		double kappa;
+		if (key[0] >= 10)
+		{
+			// RB-21 parent candidate: rebuild the candidate (AUTO distance
+			// type, closest point on the whole primitive). An edge-edge or
+			// vertex-vertex pair is rebuilt in its canonical (sorted) order,
+			// whichever order the build emitted; the estimate is symmetric up
+			// to roundoff (a degenerate parallel pair may tie-break its
+			// closest point differently).
+			const long id0 = key[1], id1 = key[2];
+			switch (ipc::ParentContribution::Type(key[0] - 10))
+			{
+			case ipc::ParentContribution::Type::VertexVertex:
+				kappa = estimate_stiffness(ipc::VertexVertexCandidate(id0, id1), key);
+				break;
+			case ipc::ParentContribution::Type::EdgeVertex:
+				kappa = estimate_stiffness(ipc::EdgeVertexCandidate(id0, id1), key);
+				break;
+			case ipc::ParentContribution::Type::EdgeEdge:
+				kappa = estimate_stiffness(ipc::EdgeEdgeCandidate(id0, id1), key);
+				break;
+			case ipc::ParentContribution::Type::FaceVertex:
+			default:
+				kappa = estimate_stiffness(ipc::FaceVertexCandidate(id0, id1), key);
+				break;
+			}
+		}
+		else
+			kappa = estimate_stiffness(collision_set[i], key);
+
+		if (!batch_first_pass_)
+			logger().trace(
+				"Semi-implicit barrier stiffness: fresh coefficient mid-solve (tag {}, ids {}, {}, {}, {}) kappa={:g} (batch median {:g})",
+				key[0], key[1], key[2], key[3], key[4], kappa, kappa_median_);
+		if (pull)
+		{
+			// An invalid fresh estimate (F2/F7 sentinel) cannot pull; the
+			// continued value stands.
+			const double base = cached->second;
+			kappa = (kappa > 0 && std::isfinite(kappa))
+						? std::clamp(kappa, base / continuation_max_ratio_, base * continuation_max_ratio_)
+						: base;
+			kappa_cache_[key] = kappa;
+			endpoint_kappa_[key] = kappa;
+		}
+		else
+			kappa_cache_.emplace(key, kappa);
+		return resolve_stiffness(kappa, continued);
+	}
+
+	void BarrierContactForm::assign_collision_stiffness(ipc::NormalCollisions &collision_set) const
+	{
+		if (!uses_semi_implicit_stiffness() || kappa_surface_.size() == 0)
+			return;
+
+		for (size_t i = 0; i < collision_set.size(); i++)
+		{
+			if (collision_set.is_plane_vertex(i))
+				continue; // unused by polyfem; keep the default scale
+
+			// The collision's scale is the contribution-weighted mean of its
+			// coefficient keys (RB-21: its positive parents; otherwise the
+			// stencil itself), so that weight * scale * b(d) is the sum of
+			// each parent's own potential. With every coefficient equal to
+			// one this is exactly the unkeyed potential.
+			const auto keys = coefficient_keys(collision_set, i);
+			double numerator = 0.0, denominator = 0.0;
+			double max_weight = 0.0, max_kappa = 0.0;
+			for (const auto &[key, w] : keys)
+			{
+				if (!(w > 0) || !std::isfinite(w))
+					log_and_throw_error("Semi-implicit barrier stiffness: invalid parent contribution weight");
+				const double k = memoized_stiffness(collision_set, i, key);
+				numerator += w * k;
+				denominator += w;
+				max_weight = std::max(max_weight, w);
+				max_kappa = std::max(max_kappa, k);
+			}
+			double mean = numerator / denominator;
+			if ((!std::isfinite(numerator) || !std::isfinite(denominator))
+				&& max_weight > 0 && std::isfinite(max_kappa))
+			{
+				// The weighted sum can overflow even when its mean is finite.
+				// Normalize both factors, retaining ordinary arithmetic above
+				// when it is representable. Re-resolve cached values without a
+				// second memoized call (which could repeat a continuation pull).
+				double scaled_numerator = 0.0, scaled_denominator = 0.0;
+				for (const auto &[key, w] : keys)
+				{
+					const double k = resolve_stiffness(kappa_cache_.at(key), is_continued(key));
+					const double scaled_weight = w / max_weight;
+					scaled_numerator += max_kappa > 0 ? scaled_weight * (k / max_kappa) : 0.0;
+					scaled_denominator += scaled_weight;
+				}
+				// A positive weighted mean cannot exceed its largest value;
+				// clamp only the rounding error at that endpoint.
+				mean = max_kappa * std::min(1.0, scaled_numerator / scaled_denominator);
+			}
+			// The uncapped first pass may carry +inf sentinels until the batch
+			// statistics exist. Every installed final coefficient must be finite.
+			if (!batch_first_pass_ && (!std::isfinite(mean) || (mean == 0 && max_kappa > 0)))
+				log_and_throw_error("Semi-implicit barrier stiffness: invalid or underflowing parent coefficient mean");
+			// IPC's potential and derivatives first multiply weight by scale.
+			// A finite mean alone does not make that intermediate representable.
+			if (!batch_first_pass_ && !std::isfinite(collision_set[i].weight * mean))
+				log_and_throw_error("Semi-implicit barrier stiffness: overflowing weighted collision coefficient");
+			collision_set[i].stiffness_scale = mean;
+		}
+	}
+
+	double BarrierContactForm::resolve_stiffness(const double kappa, const bool continued) const
+	{
+		// Sentinels from assign_collision_stiffness: 0 = nonpositive curvature
+		// with no previous value, +inf = overflow with no previous value.
+		// During the uncapped first pass of a refresh the batch statistics are
+		// not yet known (floor 0, cap inf) and the sentinel passes through;
+		// the refresh re-resolves every stencil once they are.
+		double k = kappa;
+		if (!continued)
+		{
+			if (k == 0.0)
+				k = kappa_floor_; // 0 when no floor is available
+			else if (!std::isfinite(k))
+				k = kappa_cap_; // still inf when no cap is available
+			if (std::isfinite(kappa_cap_))
+				k = std::min(k, kappa_cap_);
+			if (kappa_floor_ > 0)
+				k = std::max(k, kappa_floor_);
+		}
+		// kappa_min is the user's absolute floor (system units, so divided
+		// by the form weight like every other coefficient); applied last.
+		if (kappa_min_ > 0)
+			k = std::max(k, kappa_min_ / weight_);
+		// An overflowing local curvature with no previous value and no batch
+		// cap to reference has no finite meaning; an infinite coefficient
+		// would only fail the solve later with an infinite objective.
+		if (!batch_first_pass_ && !std::isfinite(k))
+			log_and_throw_error(
+				"Semi-implicit barrier stiffness: overflowing local curvature with no previous value and no batch cap to fall back on");
+		return k;
+	}
+
+	bool BarrierContactForm::calibrate_trim(const Eigen::VectorXd &x)
+	{
+		CoefficientEventScope event(*this, x, "calibration");
+		if (!system_gradient_provider_ || collision_set_.empty())
+			return false;
+
+		Eigen::VectorXd grad_energy;
+		system_gradient_provider_(x, grad_energy);
+
+		// The barrier gradient includes the per-contact stiffness_scale, so
+		// the least-squares balance ratio against the driving forces is
+		// directly the trim (up to the form weight, which multiplies the
+		// barrier but not grad_energy).
+		Eigen::VectorXd grad_barrier = controller_barrier_gradient(compute_displaced_surface(x));
+		grad_barrier = collision_mesh_.to_full_dof(grad_barrier);
+		// gradient_balance_dofs = free: the reduced solve's balance (the
+		// Dirichlet reactions and the clamped half of partly clamped
+		// contacts drop out).
+		restrict_balance_rows(grad_barrier, grad_energy);
+
+		const double gb_norm = grad_barrier.norm();
+		const double ge_norm = grad_energy.norm();
+		if (!(gb_norm > 0) || !(ge_norm > 0))
+			return false;
+
+		// The balance is only meaningful when the driving forces actually
+		// load the contact: require a minimum opposition between the energy
+		// gradient and the barrier force. A barely-touching contact has
+		// ||grad B|| ~ 0 and a near-random direction, so the raw quotient
+		// -<gB,gE>/||gB||^2 divides noise by noise and can explode to
+		// either clamp; the cosine gate rejects exactly those states.
+		const double cos_opposition =
+			-grad_barrier.dot(grad_energy) / (gb_norm * ge_norm);
+		constexpr double min_opposition = 0.1;
+		if (!std::isfinite(cos_opposition) || cos_opposition < min_opposition)
+			return false;
+
+		// = -<gB,gE> / (weight * ||gB||^2), the least-squares balance.
+		const double kappa_gb = cos_opposition * ge_norm / (weight_ * gb_norm);
+		if (!std::isfinite(kappa_gb) || kappa_gb <= 0)
+			return false;
+
+		// Upward-only: the balance is dominated by the comfortable bulk of
+		// the contacts and cannot see a single collapsing hotspot, so
+		// letting it LOWER the trim starves exactly the contacts that are
+		// about to fail. Downward motion belongs to the band machinery
+		// (first-contact conditioning cap + pinned-above-band steps).
+		const double new_trim = std::clamp(kappa_gb, trim_min_, trim_max_);
+		if (new_trim > barrier_stiffness_)
+		{
+			logger().debug(
+				"Gradient-balance trim calibration: {:g} -> {:g}",
+				barrier_stiffness_, new_trim);
+			note_trim_move(TrimMove::Calibration, barrier_stiffness_, new_trim);
+			barrier_stiffness_ = new_trim;
+			iters_since_trim_ = 0;
+			note_objective_change("gradient-balance trim calibration");
+		}
+		return true;
+	}
+
+	void BarrierContactForm::update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy)
+	{
+		if (uses_semi_implicit_stiffness())
+		{
+			// barrier_stiffness_ is the trim multiplier in this mode; it is
+			// initialized to 1 by SolveData and persists across (sub)solves.
+			// The refresh recalibrates it by gradient balance (via the
+			// injected gradient provider), so the grad_energy argument is
+			// unused here.
+			refresh_semi_implicit_stiffness(x, true, /*published_endpoint=*/true);
+			return;
+		}
+
 		if (!use_adaptive_barrier_stiffness())
 			return;
 
 		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
 
+		// The adative stiffness is designed for the non-convergent formulation,
+		// so we need to compute the gradient of the non-convergent barrier.
+		// After we can map it to a good value for the convergent formulation.
 		ipc::NormalCollisions nonconvergent_constraints;
+		// nonconvergent_constraints.set_use_convergent_formulation(false);
 		nonconvergent_constraints.set_use_area_weighting(false);
 		nonconvergent_constraints.set_use_improved_max_approximator(false);
 		nonconvergent_constraints.build(
@@ -80,8 +1693,7 @@ namespace polyfem::solver
 		grad_barrier = collision_mesh_.to_full_dof(grad_barrier);
 
 		barrier_stiffness_ = ipc::initial_barrier_stiffness(
-			ipc::world_bbox_diagonal_length(displaced_surface),
-			barrier_potential_.barrier(), dhat_, avg_mass_,
+			ipc::world_bbox_diagonal_length(displaced_surface), barrier_potential_.barrier(), dhat_, avg_mass_,
 			grad_energy, grad_barrier, max_barrier_stiffness_);
 
 		if (use_convergent_formulation())
@@ -100,12 +1712,15 @@ namespace polyfem::solver
 			}
 			else
 			{
+				// Hardcoded difference between the non-convergent and convergent barrier
 				scaling_factor = dhat_ * std::pow(dhat_ + 2 * dmin_, 2);
 			}
 			barrier_stiffness_ *= scaling_factor;
 			max_barrier_stiffness_ *= scaling_factor;
 		}
 
+		// The barrier stiffness is choosen based on including the acceleration scaling,
+		// but the acceleration scaling will be applied later. Therefore, we need to remove it.
 		barrier_stiffness_ /= weight_;
 		max_barrier_stiffness_ /= weight_;
 
@@ -114,12 +1729,326 @@ namespace polyfem::solver
 			barrier_stiffness(), max_barrier_stiffness_);
 	}
 
-	void BarrierContactForm::update_collision_set(
-		const Eigen::MatrixXd &displaced_surface)
+	void BarrierContactForm::save_barrier_state(State &state) const
 	{
-		if (cached_displaced_surface_.size() == displaced_surface.size()
-			&& cached_displaced_surface_ == displaced_surface)
+		save_contact_state(state);
+		state.collision_set = collision_set_;
+		state.kappa_surface = kappa_surface_;
+		state.kappa_hessian = kappa_hessian_;
+		state.kappa_cache = kappa_cache_;
+		state.prev_kappa_cache = prev_kappa_cache_;
+		state.endpoint_kappa = endpoint_kappa_;
+		state.continued_keys = continued_keys_;
+		state.kappa_continued_count = kappa_continued_count_;
+		state.kappa_fresh_count = kappa_fresh_count_;
+		state.iters_since_refresh = iters_since_refresh_;
+		state.iters_since_trim = iters_since_trim_;
+		state.diagnostic_refresh_id = diagnostic_refresh_id_;
+		state.kappa_cap = kappa_cap_;
+		state.kappa_floor = kappa_floor_;
+		state.kappa_median = kappa_median_;
+		state.kappa_fallback_count = kappa_fallback_count_;
+		state.kappa_abs_fallback_count = kappa_abs_fallback_count_;
+		state.kappa_global_fallback_count = kappa_global_fallback_count_;
+		state.kappa_interpolated_count = kappa_interpolated_count_;
+		state.kappa_direction_fallback_count = kappa_direction_fallback_count_;
+		state.kappa_snapshot_had_contacts = kappa_snapshot_had_contacts_;
+		state.last_post_step_x = last_post_step_x_;
+		state.trim_solve_anchor = trim_solve_anchor_;
+		state.trim_seed_pending = trim_seed_pending_;
+		state.force_band_age = force_band_age_;
+		state.trim_decision = trim_decision_;
+		state.kappa_hessian_max = kappa_hessian_max_;
+		state.loop_guard = loop_guard_;
+		state.trim_seed_used = trim_seed_used_;
+		state.previous_iterate_keys = previous_iterate_keys_;
+		state.refresh_keys = refresh_keys_;
+		state.history_windows = history_windows_;
+		state.history = history_;
+	}
+
+	void BarrierContactForm::restore_barrier_state(const State &state)
+	{
+		restore_contact_state(state);
+		collision_set_ = state.collision_set;
+		kappa_surface_ = state.kappa_surface;
+		kappa_hessian_ = state.kappa_hessian;
+		kappa_cache_ = state.kappa_cache;
+		prev_kappa_cache_ = state.prev_kappa_cache;
+		endpoint_kappa_ = state.endpoint_kappa;
+		continued_keys_ = state.continued_keys;
+		kappa_continued_count_ = state.kappa_continued_count;
+		kappa_fresh_count_ = state.kappa_fresh_count;
+		iters_since_refresh_ = state.iters_since_refresh;
+		iters_since_trim_ = state.iters_since_trim;
+		diagnostic_refresh_id_ = state.diagnostic_refresh_id;
+		kappa_cap_ = state.kappa_cap;
+		kappa_floor_ = state.kappa_floor;
+		kappa_median_ = state.kappa_median;
+		kappa_fallback_count_ = state.kappa_fallback_count;
+		kappa_abs_fallback_count_ = state.kappa_abs_fallback_count;
+		kappa_global_fallback_count_ = state.kappa_global_fallback_count;
+		kappa_interpolated_count_ = state.kappa_interpolated_count;
+		kappa_direction_fallback_count_ = state.kappa_direction_fallback_count;
+		kappa_snapshot_had_contacts_ = state.kappa_snapshot_had_contacts;
+		last_post_step_x_ = state.last_post_step_x;
+		trim_solve_anchor_ = state.trim_solve_anchor;
+		trim_seed_pending_ = state.trim_seed_pending;
+		force_band_age_ = state.force_band_age;
+		trim_decision_ = state.trim_decision;
+		kappa_hessian_max_ = state.kappa_hessian_max;
+		loop_guard_ = state.loop_guard;
+		trim_seed_used_ = state.trim_seed_used;
+		previous_iterate_keys_ = state.previous_iterate_keys;
+		refresh_keys_ = state.refresh_keys;
+		history_windows_ = state.history_windows;
+		history_ = state.history;
+		// Transient flags of a refresh in progress; a state is never captured
+		// inside one, and a rollback never lands inside one.
+		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+	}
+
+	std::unique_ptr<FormState> BarrierContactForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_barrier_state(*state);
+		return state;
+	}
+
+	void BarrierContactForm::restore_state(const FormState &state, const Eigen::VectorXd &x)
+	{
+		const State &barrier_state = state_as<State>(state, "BarrierContactForm");
+		// The event's "before" is the failed attempt's coefficient state at
+		// the restored coordinates, its "after" the restored state: the
+		// objective change at fixed coordinates is the rollback's own
+		// parameter-state change, not mechanical work.
+		CoefficientEventScope event(*this, x, "rollback");
+		restore_barrier_state(barrier_state);
+	}
+
+	namespace
+	{
+		using CoefficientKey = std::array<long, 5>;
+		// Restart layout version of the "contact_si_*" datasets. Version 2
+		// appends trim_seed_used_ (initial_trim_estimate_scope: run); version 1
+		// files (23 scalars) are still read.
+		constexpr double restart_state_version = 2;
+		constexpr int restart_scalar_count = 24;
+
+		Eigen::MatrixXd coefficient_rows(const std::map<CoefficientKey, double> &map)
+		{
+			Eigen::MatrixXd rows(map.size(), 6);
+			int r = 0;
+			for (const auto &[key, value] : map)
+			{
+				for (int j = 0; j < 5; ++j)
+					rows(r, j) = double(key[j]); // exact: ids are far below 2^53
+				rows(r++, 5) = value;
+			}
+			return rows;
+		}
+
+		Eigen::MatrixXd key_rows(const std::set<CoefficientKey> &keys)
+		{
+			Eigen::MatrixXd rows(keys.size(), 5);
+			int r = 0;
+			for (const auto &key : keys)
+			{
+				for (int j = 0; j < 5; ++j)
+					rows(r, j) = double(key[j]);
+				++r;
+			}
+			return rows;
+		}
+
+		CoefficientKey row_key(const Eigen::MatrixXd &rows, const int r)
+		{
+			CoefficientKey key;
+			for (int j = 0; j < 5; ++j)
+				key[j] = long(rows(r, j));
+			return key;
+		}
+
+		// Empty tables are not written (zero-size datasets); their count says so.
+		Eigen::MatrixXd read_rows(const std::string &path, const std::string &name, const size_t count, const int cols)
+		{
+			Eigen::MatrixXd rows;
+			if (count == 0)
+				return Eigen::MatrixXd(0, cols);
+			if (!io::read_matrix(path, name, rows) || size_t(rows.rows()) != count || rows.cols() != cols)
+				log_and_throw_error("Restart state {}: {} is missing or not {}x{}", path, name, count, cols);
+			return rows;
+		}
+	} // namespace
+
+	void BarrierContactForm::write_restart_state(const std::string &path) const
+	{
+		ContactForm::write_restart_state(path);
+		if (!uses_semi_implicit_stiffness())
 			return;
+
+		const std::vector<double> scalars = {
+			restart_state_version,
+			double(kappa_cache_.size()), double(prev_kappa_cache_.size()),
+			double(endpoint_kappa_.size()), double(continued_keys_.size()),
+			kappa_cap_, kappa_floor_, kappa_median_, kappa_hessian_max_, trim_solve_anchor_,
+			double(iters_since_refresh_), double(iters_since_trim_), double(force_band_age_),
+			double(trim_seed_pending_), double(kappa_snapshot_had_contacts_),
+			double(kappa_continued_count_), double(kappa_fresh_count_),
+			double(kappa_fallback_count_), double(kappa_abs_fallback_count_),
+			double(kappa_global_fallback_count_), double(kappa_interpolated_count_),
+			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_),
+			double(trim_seed_used_)};
+		io::write_matrix(path, "contact_si_scalars", Eigen::MatrixXd(Eigen::Map<const Eigen::MatrixXd>(scalars.data(), 1, scalars.size())), false);
+		if (!kappa_cache_.empty())
+			io::write_matrix(path, "contact_si_kappa_cache", coefficient_rows(kappa_cache_), false);
+		if (!prev_kappa_cache_.empty())
+			io::write_matrix(path, "contact_si_prev_kappa_cache", coefficient_rows(prev_kappa_cache_), false);
+		if (!endpoint_kappa_.empty())
+			io::write_matrix(path, "contact_si_endpoint_kappa", coefficient_rows(endpoint_kappa_), false);
+		if (!continued_keys_.empty())
+			io::write_matrix(path, "contact_si_continued_keys", key_rows(continued_keys_), false);
+	}
+
+	bool BarrierContactForm::read_restart_state(const std::string &path, const Eigen::VectorXd &x)
+	{
+		if (!uses_semi_implicit_stiffness())
+			return ContactForm::read_restart_state(path, x);
+
+		Eigen::MatrixXd s;
+		if (!io::read_matrix(path, "contact_si_scalars", s))
+			return false;
+		const bool version_1 = s.size() == 23 && s(0) == 1;
+		if (!version_1 && (s.size() != restart_scalar_count || s(0) != restart_state_version))
+			log_and_throw_error("Restart state {}: contact_si_scalars has {} entries (version {}), expected {} (version {}) or 23 (version 1)", path, s.size(), s.size() > 0 ? s(0) : -1.0, restart_scalar_count, restart_state_version);
+		ContactForm::read_restart_state(path, x);
+
+		const Eigen::MatrixXd cache = read_rows(path, "contact_si_kappa_cache", size_t(s(1)), 6);
+		const Eigen::MatrixXd prev_cache = read_rows(path, "contact_si_prev_kappa_cache", size_t(s(2)), 6);
+		const Eigen::MatrixXd endpoint = read_rows(path, "contact_si_endpoint_kappa", size_t(s(3)), 6);
+		const Eigen::MatrixXd continued = read_rows(path, "contact_si_continued_keys", size_t(s(4)), 5);
+
+		// Canonical pair keys (docs/canonical-pair-keys-20261005.md): files
+		// written before 2026-10-05 store an edge-edge or vertex-vertex key in
+		// the order the broad phase emitted the pair, and a table may hold
+		// both orders of one pair (a continued value and a fresh re-estimate
+		// after a flip). Every key is canonicalized; of two entries for one
+		// pair the one stored under a continued or endpoint key wins (the
+		// value that acted at the saved endpoint), otherwise the one stored
+		// in sorted order (the orientation this binary estimates in). The
+		// rule does not depend on the row order.
+		std::set<CoefficientKey> stored_carried;
+		for (int r = 0; r < continued.rows(); ++r)
+			stored_carried.insert(row_key(continued, r));
+		for (int r = 0; r < endpoint.rows(); ++r)
+			stored_carried.insert(row_key(endpoint, r));
+		const auto rank = [&](const CoefficientKey &stored) {
+			return (stored_carried.count(stored) ? 0 : 2) + (stored == canonical_key(stored) ? 0 : 1);
+		};
+		size_t merged = 0;
+		const auto fill = [&](const Eigen::MatrixXd &rows, std::map<CoefficientKey, double> &map) {
+			std::map<CoefficientKey, std::pair<int, double>> ranked;
+			for (int r = 0; r < rows.rows(); ++r)
+			{
+				const CoefficientKey stored = row_key(rows, r);
+				const std::pair<int, double> entry(rank(stored), rows(r, 5));
+				const auto [it, inserted] = ranked.emplace(canonical_key(stored), entry);
+				if (inserted)
+					continue;
+				++merged;
+				if (entry.first < it->second.first)
+					it->second = entry;
+			}
+			map.clear();
+			for (const auto &[key, entry] : ranked)
+				map.emplace(key, entry.second);
+		};
+		fill(cache, kappa_cache_);
+		fill(prev_cache, prev_kappa_cache_);
+		fill(endpoint, endpoint_kappa_);
+		continued_keys_.clear();
+		for (int r = 0; r < continued.rows(); ++r)
+			if (!continued_keys_.insert(canonical_key(row_key(continued, r))).second)
+				++merged;
+		if (merged > 0)
+			logger().info(
+				"Restart state {}: {} coefficient entries were stored under both orders of an edge-edge or vertex-vertex pair (a state file written before canonical pair keys); one entry per pair was kept, the continued one where there is one",
+				path, merged);
+
+		kappa_cap_ = s(5);
+		kappa_floor_ = s(6);
+		kappa_median_ = s(7);
+		const double saved_hessian_max = s(8);
+		trim_solve_anchor_ = s(9);
+		iters_since_refresh_ = int(s(10));
+		iters_since_trim_ = int(s(11));
+		force_band_age_ = int(s(12));
+		trim_seed_pending_ = s(13) != 0;
+		kappa_snapshot_had_contacts_ = s(14) != 0;
+		kappa_continued_count_ = int(s(15));
+		kappa_fresh_count_ = int(s(16));
+		kappa_fallback_count_ = int(s(17));
+		kappa_abs_fallback_count_ = int(s(18));
+		kappa_global_fallback_count_ = int(s(19));
+		kappa_interpolated_count_ = int(s(20));
+		kappa_direction_fallback_count_ = int(s(21));
+		diagnostic_refresh_id_ = uint64_t(s(22));
+		if (!version_1)
+			trim_seed_used_ = s(23) != 0;
+		else
+		{
+			// Version 1 did not store trim_seed_used_. Under scope run the
+			// pending flag at a step boundary is exactly its negation (it is
+			// re-armed only while no estimate was used, and cleared together
+			// with setting it); under scope step the flag is never read.
+			trim_seed_used_ = loop_guard_.estimate_once && !trim_seed_pending_;
+			if (initial_trim_estimate_ && loop_guard_.estimate_once)
+				logger().warn("Restart state {}: layout version 1 has no initial-estimate flag; derived 'already used' = {} from the pending flag, which is exact only if the saved run also used initial_trim_estimate_scope: run", path, trim_seed_used_);
+		}
+		trim_decision_ = nullptr;
+		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+		// History report: a state file is written right after the
+		// between-steps capture, so this step's window is exactly the
+		// endpoint map; the previous step's window is not saved, and the
+		// accumulation of the resumed step starts here (flagged).
+		history_windows_ = {};
+		history_windows_[0].carried = endpoint_kappa_;
+		history_ = HistoryLog();
+		history_.trim_start = barrier_stiffness_;
+		history_.restored = true;
+
+		// The snapshot was taken at the saved step's endpoint, i.e. at x.
+		kappa_surface_ = compute_displaced_surface(x);
+		if (system_hessian_provider_)
+		{
+			system_hessian_provider_(x, kappa_hessian_);
+			kappa_hessian_max_ = 0.0;
+			for (int k = 0; k < kappa_hessian_.outerSize(); k++)
+				for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
+					kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+			if (kappa_hessian_max_ != saved_hessian_max)
+				logger().warn(
+					"Restart state {}: the frozen Hessian rebuilt at the restored coordinates has max |H| {:g}, the saved run had {:g}; the restart does not continue the saved snapshot exactly",
+					path, kappa_hessian_max_, saved_hessian_max);
+		}
+		update_collision_set(kappa_surface_);
+		note_objective_change("restart state restored");
+		logger().info(
+			"Restored semi-implicit contact state from {}: trim {:g}, {} coefficients ({} continued)",
+			path, barrier_stiffness_, kappa_cache_.size(), continued_keys_.size());
+		return true;
+	}
+
+	void BarrierContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
+	{
+		// Position equality is not a complete cache key: another form can use
+		// the same coordinates with different topology/configuration, and this
+		// form's candidates or mesh collision filter can change at fixed x.
+		// Rebuild on every notification; retain the instance-owned candidate
+		// and frozen per-stencil stiffness caches below. Independent forms do
+		// not share mutable collision state (same-form mutation is not concurrent).
 
 		if (use_cached_candidates_)
 			collision_set_.build(
@@ -127,7 +2056,835 @@ namespace polyfem::solver
 		else
 			collision_set_.build(
 				collision_mesh_, displaced_surface, dhat_, dmin_, broad_phase_.get());
-		cached_displaced_surface_ = displaced_surface;
+
+		// Every rebuild flows through here (init, solution_changed, and
+		// line-search trial states), so the per-collision stiffnesses are
+		// always in sync with the current collision set.
+		if (uses_semi_implicit_stiffness())
+		{
+			assign_collision_stiffness(collision_set_);
+		}
+	}
+
+	BarrierContactForm BarrierContactForm::diagnostic_snapshot(const Eigen::VectorXd &x) const
+	{
+		BarrierContactForm snapshot(*this);
+		// A fresh broad phase avoids touching the shared production broad phase.
+		auto broad_phase = ipc::create_broad_phase(broad_phase_method_);
+		snapshot.collision_set_.build(collision_mesh_, compute_displaced_surface(x), dhat_, dmin_, broad_phase.get());
+		if (uses_semi_implicit_stiffness())
+			snapshot.assign_collision_stiffness(snapshot.collision_set_);
+		return snapshot;
+	}
+
+	json BarrierContactForm::diagnostic_path(const Eigen::VectorXd &start, const Eigen::VectorXd &end) const
+	{
+		const Eigen::VectorXd dx = end - start;
+		json signatures = json::array();
+		std::vector<std::string> identities;
+		auto evaluate = [&](double t) {
+			const Eigen::VectorXd x = start + t * dx;
+			const auto snapshot = diagnostic_snapshot(x);
+			Eigen::VectorXd g;
+			snapshot.first_derivative(x, g);
+			const double energy = snapshot.value(x), derivative = g.dot(dx);
+			if (!std::isfinite(energy) || !std::isfinite(derivative))
+				throw std::runtime_error("Nonfinite contact path sample");
+			// The stencil identity of every collision (canonical: a pair the
+			// broad phase emits in the other order is not a feature switch).
+			std::vector<std::array<long, 5>> keys;
+			const auto &collisions = snapshot.collision_set();
+			for (size_t i = 0; i < collisions.size(); ++i)
+				keys.push_back(stencil_key(collisions, i));
+			std::sort(keys.begin(), keys.end());
+			const json key_json = keys;
+			const std::string identity = key_json.dump();
+			auto found = std::find(identities.begin(), identities.end(), identity);
+			const size_t index = found - identities.begin();
+			if (found == identities.end())
+			{
+				identities.push_back(identity);
+				signatures.push_back(key_json);
+			}
+			return json{{"t", t}, {"energy_objective", energy}, {"directional_derivative_objective", derivative}, {"signature", index}};
+		};
+		json samples = json::array(), quadrature = json::array(), transitions = json::array();
+		constexpr int panels = 1024;
+		for (int i = 0; i <= panels; ++i)
+			samples.push_back(evaluate(double(i) / panels));
+		const double change = double(samples.back()["energy_objective"]) - double(samples.front()["energy_objective"]);
+		for (int n : {16, 64, 256, 1024})
+		{
+			double integral = 0;
+			for (int i = 0; i <= n; ++i)
+				integral += (i == 0 || i == n ? .5 : 1.) * double(samples[i * (panels / n)]["directional_derivative_objective"]) / n;
+			quadrature.push_back({{"panels", n}, {"gradient_integral_objective", integral}, {"energy_minus_integral_objective", change - integral}});
+		}
+		for (int i = 1; i <= panels; ++i)
+		{
+			if (samples[i - 1]["signature"] == samples[i]["signature"])
+				continue;
+			json left = samples[i - 1], right = samples[i];
+			bool multiple = false;
+			for (int j = 0; j < 24; ++j)
+			{
+				const auto mid = evaluate(.5 * (double(left["t"]) + double(right["t"])));
+				if (mid["signature"] == left["signature"])
+					left = mid;
+				else
+				{
+					multiple = multiple || mid["signature"] != right["signature"];
+					right = mid;
+				}
+			}
+			transitions.push_back({{"left", left}, {"right", right}, {"multiple_signatures_in_bracket", multiple}, {"energy_jump_estimate_objective", double(right["energy_objective"]) - double(left["energy_objective"])}});
+		}
+		return {{"scope", "Straight physical-coordinate segment with this frozen coefficient snapshot; fixed-grid quadrature and detected feature transitions only, not exhaustive event isolation or a collision certificate"},
+				{"samples", samples},
+				{"quadrature", quadrature},
+				{"transitions", transitions},
+				{"signatures", signatures}};
+	}
+
+	json BarrierContactForm::diagnostic_state() const
+	{
+		json result = {{"active_count", collision_set_.size()}, {"dhat", dhat_}, {"trim_or_global_stiffness", barrier_stiffness_}, {"semi_implicit", uses_semi_implicit_stiffness()}, {"refresh_id", diagnostic_refresh_id_}, {"iterations_since_refresh", iters_since_refresh_}, {"memoized_stencil_count", kappa_cache_.size()}};
+		int zeros = 0, nonfinite = 0;
+		double lo = std::numeric_limits<double>::infinity(), hi = -lo;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const double k = collision_set_[i].stiffness_scale;
+			if (!std::isfinite(k))
+				++nonfinite;
+			else
+			{
+				lo = std::min(lo, k);
+				hi = std::max(hi, k);
+				zeros += k == 0;
+			}
+		}
+		if (!std::isfinite(barrier_stiffness_))
+			result["trim_or_global_stiffness_unavailable_reason"] = "Nonfinite production stiffness";
+		result["coefficient_zero_count"] = zeros;
+		result["coefficient_nonfinite_count"] = nonfinite;
+		result["batch_median"] = kappa_median_;
+		result["batch_floor"] = kappa_floor_;
+		result["batch_cap"] = std::isfinite(kappa_cap_) ? json(kappa_cap_) : json(nullptr);
+		result["curvature_fallback_count"] = kappa_fallback_count_;
+		result["curvature_abs_fallback_count"] = kappa_abs_fallback_count_;
+		result["curvature_global_fallback_count"] = kappa_global_fallback_count_;
+		result["interpolated_condensed_count"] = kappa_interpolated_count_;
+		result["interpolated_direction_count"] = kappa_direction_fallback_count_;
+		result["force_continuation"] = force_continuation_;
+		result["continuation_max_ratio"] = continuation_max_ratio_;
+		result["continued_count"] = kappa_continued_count_;
+		result["fresh_count"] = kappa_fresh_count_;
+		result["coefficient_identity"] = parent_keyed_ ? "parent" : "stencil";
+		result["friction_lag"] = friction_lag_realized_ ? "realized_force" : "follow_stiffness";
+		result["coefficient_range"] = std::isfinite(lo) ? json{{"value", {lo, hi}}}
+														: json{{"value", nullptr}, {"unavailable_reason", "No finite active coefficients"}};
+		// The swept cache is cleared at line_search_end, so an endpoint sees
+		// the retained counts of this solve's trial sweeps (RB-04), not a
+		// live cache. A form that never built candidates reports the reason.
+		const auto &stats = candidate_statistics();
+		if (use_cached_candidates_)
+			result["candidate_count"] = {{"value", candidates_.size()}, {"scope", "Active swept candidate cache"}};
+		else if (stats.builds > 0)
+		{
+			result["candidate_count"] = {{"value", stats.last}, {"max", stats.max}, {"builds", stats.builds}, {"scope", "Broad-phase candidates of the last trial sweep handed to CCD since the last statistics reset; max/builds over those sweeps"}};
+			// RB-05: the broad phase's own intermediates, when it measures them.
+			if (stats.intermediates_measured)
+				result["candidate_count"]["broad_phase_intermediates"] = {{"cell_items", {{"last", stats.last_cell_items}, {"max", stats.max_cell_items}}}, {"candidate_emissions", {{"last", stats.last_candidate_emissions}, {"max", stats.max_candidate_emissions}, {"saturated", stats.emissions_saturated}}}, {"scope", "Hash-grid (box, cell) items of the sweep's build and pre-filter pair emissions of its detection passes (emissions counted only while a resource limit is enabled, otherwise 0; saturated = a sum exceeded 64 bits and the values are lower bounds)"}};
+			else
+				result["candidate_count"]["broad_phase_intermediates"] = {{"value", nullptr}, {"unavailable_reason", "The configured broad phase does not measure its intermediate buffers"}};
+		}
+		else
+			result["candidate_count"] = {{"value", nullptr}, {"unavailable_reason", "No line search built a swept candidate set since the last statistics reset"}};
+		return result;
+	}
+
+	json BarrierContactForm::model_description() const
+	{
+		const char *mode = stiffness_mode_ == BarrierStiffnessMode::SemiImplicit ? "semi_implicit"
+						   : stiffness_mode_ == BarrierStiffnessMode::Adaptive   ? "adaptive"
+																				 : "fixed";
+		json model = {
+			{"form", name()},
+			{"stiffness_mode", mode},
+			{"dhat", dhat_},
+			{"gap_convention", "Unsigned distance between collision primitives in internal length units; the barrier acts below dhat; the realized gap at the endpoint is the semi-implicit model error (docs/rb-09-contract.md); collision distances are the toolkit's point-triangle / edge-edge / point-edge / point-point distances"},
+			{"convergent_formulation", {{"area_weighting", use_area_weighting()}, {"improved_max_operator", use_improved_max_operator()}, {"physical_barrier", use_physical_barrier()}}},
+			{"model_selection_status", "Production adaptive-barrier law retained by the user's decision of 2026-09-11 (docs/robustness-plan.md, decision register); no candidate estimator or controller is active"},
+			{"uncertainty_method", {{"value", nullptr}, {"unavailable_reason", "No estimator: the per-contact coefficient is a deterministic function of the frozen system Hessian; measurement limits are documented in docs/rb-09-validation.md"}}}};
+		if (stiffness_mode_ == BarrierStiffnessMode::SemiImplicit)
+		{
+			model["coefficient_law"] = {
+				{"version", "RB-18/RB-20/RB-21 (2026-09-12), canonical pair keys (2026-10-05)"},
+				{"estimate", "kappa = w^T H w on the frozen weighted system Hessian per stencil (Ando 2024), positive-only batch median, relative floor median/kappa_spread, cap kappa_spread * median, d^2-normalized conditioning cap (RB-18)"},
+				{"curvature_fallbacks", "nonpositive/nonfinite w^T H w -> |w^T H w| (RB-18 F7 B), then max|H| / dhat^2 (fallback E); counted per step as curvature_fallback_count / curvature_abs_fallback_count / curvature_global_fallback_count"},
+				{"interpolated_stencils", "parent block condensed onto the stencil, (B H_PP^-1 B^T)^-1 (RB-03); gap-normalized force direction as fallback, counted as interpolated_direction_count"},
+				{"coefficient_identity", parent_keyed_ ? "parent" : "stencil"},
+				{"pair_key_orientation", "canonical: an edge-edge or vertex-vertex pair is keyed on its sorted primitive pair, whichever order the broad phase emitted it in (docs/canonical-pair-keys-20261005.md)"},
+				{"force_continuation", force_continuation_},
+				{"continuation_max_ratio", continuation_max_ratio_},
+				{"friction_lag", friction_lag_realized_ ? "realized_force" : "follow_stiffness"},
+				{"controller", {{"kind", "global trim band on the realized collision-weighted rms gap (docs/rb-16-validation.md closure; weighting docs/band-statistic-weighting-20260927.md)"}, {"band_statistic", "sqrt(sum(w d^2) / sum(w)) over the active collisions (distance <= dhat), w = collision weight"}, {"trim_lower", trim_lower_}, {"trim_upper", trim_upper_}, {"trim_factor", trim_factor_}, {"trim_min", trim_min_}, {"trim_max", trim_max_}, {"controller_interval", controller_interval_}, {"refresh_interval", refresh_interval_}, {"kappa_min", kappa_min_}, {"kappa_spread", kappa_spread_}, {"conditioning_cap", conditioning_cap_}, {"trial_displacement_cap", trial_displacement_cap_}}},
+				{"reference_state", "Coefficients are refreshed at solve starts, stall restarts and published endpoints; the sequence of refresh/retune/continuation events is the opt-in coefficient-events.jsonl stream (output/physical_diagnostics), summarised per step by refresh_id and the continued/fresh counts"},
+				{"constraint_floor", "retired (docs/pf-02-floor-removal.md); a positive setting is ignored"}};
+		}
+		else
+			model["coefficient_law"] = stiffness_mode_ == BarrierStiffnessMode::Adaptive
+										   ? "Classic IPC adaptive stiffness (Li et al. 2020)"
+										   : "User-provided fixed stiffness";
+		if (uses_semi_implicit_stiffness() && (force_weighted_controller_ || initial_trim_estimate_))
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in EF-02/03 controller experiment active";
+			if (force_weighted_controller_)
+				model["coefficient_law"]["controller"]["kind"] = "Opt-in global force-weighted gap band (EF-02/03)";
+			model["coefficient_law"]["controller"]["ef02_03"] = {
+				{"band_statistic", force_weighted_controller_ ? "force_weighted" : "rms"},
+				{"downward_guard", "veto a band proposal whose scalar barrier-force response crosses the retained collapse threshold"},
+				{"lower", force_trim_.lower},
+				{"upper", force_trim_.upper},
+				{"hysteresis", force_trim_.hysteresis},
+				{"max_factor", force_trim_.max_factor},
+				{"interval", force_trim_.interval},
+				{"initial_trim_estimate", initial_trim_estimate_},
+				{"seed_max_factor", force_trim_.seed_max_factor},
+				{"seed_cosine", force_trim_.seed_cosine}};
+		}
+		if (uses_semi_implicit_stiffness() && loop_guard_.any())
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in EF-07 trim loop guards active";
+			model["coefficient_law"]["controller"]["ef07"] = {
+				{"collapse_guard_basis", loop_guard_.pair_guard ? "pair" : "proxy"},
+				{"collapse_guard_partial", loop_guard_.partial_guard},
+				{"collapse_exclude_born", loop_guard_.exclude_born},
+				{"collapse_responsiveness_veto", loop_guard_.responsiveness_veto},
+				{"responsive_rise", loop_guard_.responsive_rise},
+				{"worsening", loop_guard_.worsening},
+				{"trim_step_excursion", loop_guard_.step_excursion},
+				{"trim_reversal_limit", loop_guard_.reversal_limit},
+				{"initial_trim_estimate_scope", loop_guard_.estimate_once ? "run" : "step"}};
+		}
+		if (uses_semi_implicit_stiffness())
+		{
+			// exclude_statistics is the production setting since 2026-09-29;
+			// keep (earlier runs) and exclude_collisions are named as non-default.
+			if (clamped_contacts_ != ClampedContacts::ExcludeStatistics)
+				model["model_selection_status"] = clamped_contacts_ == ClampedContacts::Keep
+													  ? "Production coefficient law retained; clamped contacts kept in the controller statistics (behaviour before 2026-09-29)"
+													  : "Production coefficient law retained; opt-in clamped-contact experiment active (exclude_collisions)";
+			model["coefficient_law"]["controller"]["clamped_contacts"] = {
+				{"mode", clamped_contacts_ == ClampedContacts::Keep ? "keep" : (clamped_contacts_ == ClampedContacts::ExcludeStatistics ? "exclude_statistics" : "exclude_collisions")},
+				{"default", "exclude_statistics (since 2026-09-29)"},
+				{"definition", "fully clamped = every stencil vertex (exclude_statistics) or every vertex of both candidate primitives (exclude_collisions, IPC can_collide) has its displacement prescribed by Dirichlet DOFs"},
+				{"clamped_vertex_count", std::count(clamped_vertex_.begin(), clamped_vertex_.end(), true)},
+				{"record", "docs/clamped-contacts-20260928.md"}};
+		}
+		if (uses_semi_implicit_stiffness() && balance_free_dofs_)
+		{
+			model["model_selection_status"] = "Production coefficient law retained; opt-in free-DOF gradient balance active";
+			model["coefficient_law"]["controller"]["gradient_balance"] = {
+				{"dofs", "free"},
+				{"default", "all"},
+				{"definition", "calibrate_trim and the initial trim estimate zero the Dirichlet rows of the barrier and energy gradients before the balance"},
+				{"dirichlet_dof_count", dirichlet_dofs_.size()},
+				{"record", "docs/gradient-balance-free-dofs-20260929.md"}};
+		}
+		return model;
+	}
+
+	BarrierContactForm::BandStatistic BarrierContactForm::band_statistic(
+		const ipc::NormalCollisions &collisions,
+		const ipc::CollisionMesh &mesh,
+		const Eigen::MatrixXd &displaced_surface,
+		const double dhat,
+		const std::function<bool(size_t)> &skip)
+	{
+		assert(displaced_surface.rows() == mesh.num_vertices());
+		const Eigen::MatrixXi &edges = mesh.edges();
+		const Eigen::MatrixXi &faces = mesh.faces();
+		const double dhat_sq = dhat * dhat;
+		BandStatistic result;
+		double sum_d2 = 0, sum_wd2 = 0;
+		for (size_t i = 0; i < collisions.size(); ++i)
+		{
+			if (skip && skip(i))
+				continue;
+			const double d2 = collisions[i].compute_distance(collisions[i].dof(displaced_surface, edges, faces));
+			if (!(d2 <= dhat_sq)) // inactive or nonfinite
+				continue;
+			++result.active_count;
+			sum_d2 += d2;
+			const double w = collisions[i].weight;
+			if (std::isfinite(w) && w > 0)
+			{
+				result.total_weight += w;
+				sum_wd2 += w * d2;
+			}
+		}
+		if (result.active_count == 0)
+			return result;
+		result.weighted = result.total_weight > 0 && std::isfinite(result.total_weight);
+		result.mean_sq = result.weighted ? sum_wd2 / result.total_weight : sum_d2 / double(result.active_count);
+		return result;
+	}
+
+	BarrierContactForm::ClampedContacts BarrierContactForm::parse_clamped_contacts(const json &semi_implicit_opts)
+	{
+		// Default exclude_statistics since 2026-09-29 (user decision,
+		// docs/clamped-contacts-20260928.md); keep reproduces earlier runs.
+		if (!semi_implicit_opts.is_object())
+			return ClampedContacts::ExcludeStatistics;
+		const std::string mode = semi_implicit_opts.value("clamped_contacts", std::string("exclude_statistics"));
+		if (mode == "keep")
+			return ClampedContacts::Keep;
+		if (mode == "exclude_statistics")
+			return ClampedContacts::ExcludeStatistics;
+		if (mode == "exclude_collisions")
+			return ClampedContacts::ExcludeCollisions;
+		log_and_throw_error("semi_implicit.clamped_contacts must be keep, exclude_statistics or exclude_collisions (got \"{}\")", mode);
+	}
+
+	bool BarrierContactForm::parse_balance_free_dofs(const json &semi_implicit_opts)
+	{
+		if (!semi_implicit_opts.is_object())
+			return false;
+		const std::string dofs = semi_implicit_opts.value("gradient_balance_dofs", std::string("all"));
+		if (dofs == "all")
+			return false;
+		if (dofs == "free")
+			return true;
+		log_and_throw_error("semi_implicit.gradient_balance_dofs must be all or free (got \"{}\")", dofs);
+	}
+
+	void BarrierContactForm::restrict_balance_rows(Eigen::VectorXd &grad_barrier, Eigen::VectorXd &grad_energy) const
+	{
+		if (!balance_free_dofs_ || grad_barrier.size() != grad_energy.size())
+			return;
+		for (const int dof : dirichlet_dofs_)
+			if (dof >= 0 && dof < grad_barrier.size())
+				grad_barrier[dof] = grad_energy[dof] = 0;
+	}
+
+	std::vector<bool> BarrierContactForm::clamped_collision_vertices(
+		const ipc::CollisionMesh &mesh, const std::vector<int> &dirichlet_dofs, const int dim)
+	{
+		const auto &map = mesh.displacement_map(); // collision vertices x full nodes
+		std::vector<int> fixed_components(map.cols(), 0);
+		for (const int dof : dirichlet_dofs)
+			if (dof >= 0 && dof / dim < long(fixed_components.size()))
+				++fixed_components[dof / dim];
+		std::vector<bool> clamped(map.rows(), true); // a row without entries cannot move
+		for (int col = 0; col < map.outerSize(); ++col)
+			for (Eigen::SparseMatrix<double>::InnerIterator it(map, col); it; ++it)
+				if (it.value() != 0. && fixed_components[it.col()] < dim)
+					clamped[it.row()] = false;
+		return clamped;
+	}
+
+	ipc::CollisionFilter BarrierContactForm::clamped_collision_filter(std::vector<bool> clamped)
+	{
+		return ipc::CollisionFilter([clamped = std::move(clamped)](size_t vi, size_t vj) { return !clamped[vi] || !clamped[vj]; });
+	}
+
+	void BarrierContactForm::set_dirichlet_dofs(const std::vector<int> &dirichlet_dofs, const int dim)
+	{
+		dirichlet_dofs_ = dirichlet_dofs;
+		clamped_vertex_ = clamped_collision_vertices(collision_mesh_, dirichlet_dofs, dim);
+	}
+
+	int BarrierContactForm::clamp_class(const ipc::NormalCollisions &collisions, const size_t i) const
+	{
+		if (clamped_vertex_.empty())
+			return 0;
+		const auto vids = collisions[i].vertex_ids(collision_mesh_.edges(), collision_mesh_.faces());
+		int clamped = 0, n = 0;
+		for (int a = 0; a < collisions[i].num_vertices(); ++a)
+		{
+			++n;
+			clamped += vids[a] < 0 || clamped_vertex_[vids[a]];
+		}
+		if (collisions.is_plane_vertex(i))
+		{
+			++n; // the analytic plane does not move
+			++clamped;
+		}
+		return clamped == 0 ? 0 : (clamped == n ? 2 : 1);
+	}
+
+	std::function<bool(size_t)> BarrierContactForm::controller_skip() const
+	{
+		if (clamped_contacts_ != ClampedContacts::ExcludeStatistics || clamped_vertex_.empty())
+			return nullptr;
+		return [this](const size_t i) { return controller_skips(i); };
+	}
+
+	bool BarrierContactForm::controller_has_contacts() const
+	{
+		if (collision_set_.empty())
+			return false;
+		if (!controller_skip())
+			return true;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			if (!controller_skips(i))
+				return true;
+		return false;
+	}
+
+	double BarrierContactForm::controller_min_distance(const Eigen::MatrixXd &displaced_surface, const double all_min_d2) const
+	{
+		if (!controller_skip())
+			return all_min_d2;
+		double min_d2 = std::numeric_limits<double>::infinity();
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			if (!controller_skips(i))
+				min_d2 = std::min(min_d2, collision_set_[i].compute_distance(
+											  collision_set_[i].dof(displaced_surface, collision_mesh_.edges(), collision_mesh_.faces())));
+		return min_d2;
+	}
+
+	ipc::NormalCollisions BarrierContactForm::without_fully_clamped() const
+	{
+		// Same collision objects (weights, stiffness scales, parents) in the
+		// same order; operator[] enumerates vv, ev, ee, fv, pv.
+		ipc::NormalCollisions kept = collision_set_;
+		size_t offset = 0;
+		const auto filter = [&](auto &collisions) {
+			size_t k = 0;
+			for (size_t j = 0; j < collisions.size(); ++j)
+				if (clamp_class(collision_set_, offset + j) != 2)
+					collisions[k++] = collisions[j];
+			offset += collisions.size();
+			collisions.erase(collisions.begin() + k, collisions.end());
+		};
+		filter(kept.vv_collisions);
+		filter(kept.ev_collisions);
+		filter(kept.ee_collisions);
+		filter(kept.fv_collisions);
+		filter(kept.pv_collisions);
+		return kept;
+	}
+
+	Eigen::VectorXd BarrierContactForm::controller_barrier_gradient(const Eigen::MatrixXd &displaced_surface) const
+	{
+		// IPC's own assembly in both branches: with no collision skipped the
+		// result is the production gradient bit for bit.
+		if (!controller_skip())
+			return barrier_potential_.gradient(collision_set_, collision_mesh_, displaced_surface);
+		return barrier_potential_.gradient(without_fully_clamped(), collision_mesh_, displaced_surface);
+	}
+
+	json BarrierContactForm::clamped_contact_record(const Eigen::VectorXd &x, const Eigen::MatrixXd &V, const bool full) const
+	{
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const double dhat_sq = dhat_ * dhat_;
+		const auto is_fully = [&](const size_t i) { return clamp_class(collision_set_, i) == 2; };
+
+		json r = {{"mode", clamped_contacts_ == ClampedContacts::Keep ? "keep" : (clamped_contacts_ == ClampedContacts::ExcludeStatistics ? "exclude_statistics" : "exclude_collisions")},
+				  {"scope", "Collision classes by their stencil vertices: free (no clamped vertex), partly, fully (every vertex's displacement prescribed by Dirichlet DOFs, obstacles included). The statistics are the controller's, over all collisions (all) and without the fully clamped ones (excluding_fully); gaps / dhat"}};
+		// Counts: all collisions of the set and the active ones (distance <= dhat).
+		std::array<size_t, 3> in_set{{0, 0, 0}}, active{{0, 0, 0}};
+		ForceWeightedGap fw_all, fw_excl;
+		double min_all = std::numeric_limits<double>::infinity(), min_excl = min_all;
+		size_t min_all_i = collision_set_.size();
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const int c = clamp_class(collision_set_, i);
+			++in_set[c];
+			const ipc::VectorMax12d dof = collision_set_[i].dof(V, E, F);
+			const double d2 = collision_set_[i].compute_distance(dof);
+			if (d2 < min_all)
+			{
+				min_all = d2;
+				min_all_i = i;
+			}
+			if (c != 2)
+				min_excl = std::min(min_excl, d2);
+			if (!(d2 <= dhat_sq))
+				continue;
+			++active[c];
+			const double force = barrier_potential_.gradient(collision_set_[i], dof).stableNorm();
+			fw_all.add(std::sqrt(d2) / dhat_, force);
+			if (c != 2)
+				fw_excl.add(std::sqrt(d2) / dhat_, force);
+		}
+		r["clamped_vertex_count"] = std::count(clamped_vertex_.begin(), clamped_vertex_.end(), true);
+		r["collisions"] = {{"free", in_set[0]}, {"partly", in_set[1]}, {"fully", in_set[2]}};
+		r["active"] = {{"free", active[0]}, {"partly", active[1]}, {"fully", active[2]}};
+		r["min_pair_class"] = min_all_i < collision_set_.size() ? json(clamp_class(collision_set_, min_all_i)) : json(nullptr);
+
+		const auto gap_or_null = [&](const double d2) { return std::isfinite(d2) ? json(std::sqrt(d2) / dhat_) : json(nullptr); };
+		const auto stats = [&](const std::function<bool(size_t)> &skip, const double min_d2, const ForceWeightedGap &fw) {
+			const BandStatistic band = band_statistic(collision_set_, collision_mesh_, V, dhat_, skip);
+			const double severity = collapse_severity(band.mean_sq, min_d2);
+			const double fw_mean = fw.mean();
+			return json{{"band_rms", gap_or_null(band.mean_sq)}, {"band_active_count", band.active_count}, {"min_gap", gap_or_null(min_d2)}, {"collapse_proxy_gap", gap_or_null(severity)}, {"collapse", std::isfinite(severity) && severity < trim_lower_ * dhat_sq}, {"force_weighted_mean_gap", std::isfinite(fw_mean) ? json(fw_mean) : json(nullptr)}};
+		};
+		r["all"] = stats(nullptr, min_all, fw_all);
+		r["excluding_fully"] = stats(is_fully, min_excl, fw_excl);
+
+		if (!full)
+			return r;
+
+		// Coefficient batch (valid right after a refresh, when the memo is the
+		// batch): the median rule of refresh_semi_implicit_stiffness with and
+		// without the coefficient keys of fully clamped collisions.
+		std::set<std::array<long, 5>> fully_keys;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+			if (!collision_set_.is_plane_vertex(i) && is_fully(i))
+				for (const auto &[key, w] : coefficient_keys(collision_set_, i))
+					fully_keys.insert(key);
+		const auto batch = [&](const bool skip_fully) {
+			std::vector<double> kappas, continued_kappas;
+			for (const auto &[key, k] : kappa_cache_)
+			{
+				if (!(k > 0 && std::isfinite(k)) || (skip_fully && fully_keys.count(key)))
+					continue;
+				(is_continued(key) ? continued_kappas : kappas).push_back(k);
+			}
+			const size_t fresh = kappas.size(), continued = continued_kappas.size();
+			if (kappas.empty())
+				kappas.swap(continued_kappas);
+			double median = 0;
+			if (!kappas.empty())
+			{
+				std::nth_element(kappas.begin(), kappas.begin() + kappas.size() / 2, kappas.end());
+				median = kappas[kappas.size() / 2];
+			}
+			return json{{"median", median}, {"cap", kappa_spread_ * median}, {"floor", median / kappa_spread_}, {"fresh", fresh}, {"continued", continued}};
+		};
+		size_t fully_keys_in_batch = 0;
+		for (const auto &key : fully_keys)
+			fully_keys_in_batch += kappa_cache_.count(key);
+		r["batch"] = {{"scope", "positive finite memo values; fresh estimates, continued ones only when no fresh value (refresh rule); valid at refresh records"}, {"all", batch(false)}, {"excluding_fully", batch(true)}, {"fully_keys_in_batch", fully_keys_in_batch}, {"in_force_median", kappa_median_}};
+
+		// Gradient balance (calibrate_trim's kappa_gb before its gate): all
+		// collisions, without the fully clamped ones, and restricted to free
+		// DOFs (the reduced solve's balance; partly clamped contacts'
+		// clamped rows and the Dirichlet reactions drop out).
+		if (system_gradient_provider_ && !collision_set_.empty())
+		{
+			Eigen::VectorXd ge;
+			system_gradient_provider_(x, ge);
+			Eigen::VectorXd gb_all = barrier_potential_.gradient(collision_set_, collision_mesh_, V);
+			Eigen::VectorXd gb_excl = barrier_potential_.gradient(without_fully_clamped(), collision_mesh_, V);
+			gb_all = collision_mesh_.to_full_dof(gb_all);
+			gb_excl = collision_mesh_.to_full_dof(gb_excl);
+			const auto balance = [&](const Eigen::VectorXd &gb, const Eigen::VectorXd &g_e) {
+				const double bn = gb.norm(), en = g_e.norm();
+				if (!(bn > 0 && en > 0) || gb.size() != g_e.size())
+					return json{{"kappa_gb", nullptr}, {"barrier_gradient_norm", bn}, {"energy_gradient_norm", en}};
+				const double c = -gb.dot(g_e) / (bn * en);
+				return json{{"kappa_gb", c * en / (weight_ * bn)}, {"cos_opposition", c}, {"gate_passes", std::isfinite(c) && c >= 0.1}, {"barrier_gradient_norm", bn}, {"energy_gradient_norm", en}};
+			};
+			json g = {{"all", balance(gb_all, ge)}, {"excluding_fully", balance(gb_excl, ge)}};
+			if (!dirichlet_dofs_.empty() && gb_all.size() == ge.size())
+			{
+				Eigen::VectorXd gb_free = gb_all, ge_free = ge;
+				for (const int dof : dirichlet_dofs_)
+					if (dof >= 0 && dof < gb_free.size())
+						gb_free[dof] = ge_free[dof] = 0;
+				g["free_dofs"] = balance(gb_free, ge_free);
+			}
+			r["gradient_balance"] = g;
+		}
+		return r;
+	}
+
+	json BarrierContactForm::gap_statistics(const Eigen::MatrixXd &displaced_surface) const
+	{
+		assert(displaced_surface.rows() == collision_mesh_.num_vertices());
+		const Eigen::MatrixXi &edges = collision_mesh_.edges();
+		const Eigen::MatrixXi &faces = collision_mesh_.faces();
+		const double dhat_sq = dhat_ * dhat_;
+		size_t count = 0;
+		double sum = 0, sum_sq = 0, lo = std::numeric_limits<double>::infinity(), hi = 0;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const double d2 = collision_set_[i].compute_distance(collision_set_[i].dof(displaced_surface, edges, faces));
+			if (!(d2 <= dhat_sq)) // inactive or nonfinite: the controller ignores it too
+				continue;
+			const double d = std::sqrt(d2);
+			++count;
+			sum += d;
+			sum_sq += d2;
+			lo = std::min(lo, d);
+			hi = std::max(hi, d);
+		}
+		json result = {{"scope", "Active collisions (distance <= dhat) of the endpoint stencil set; distance per collision, not per node"}, {"count", count}};
+		if (count == 0)
+		{
+			result["mean"] = {{"value", nullptr}, {"unavailable_reason", "No active collision within dhat"}};
+			return result;
+		}
+		const double mean = sum / count, rms = std::sqrt(sum_sq / count);
+		result["mean"] = mean;
+		result["rms"] = rms;
+		result["min"] = lo;
+		result["max"] = hi;
+		result["mean_over_dhat"] = mean / dhat_;
+		result["rms_over_dhat"] = rms / dhat_;
+		result["rms_note"] = "rms = sqrt(mean squared distance), one sample per collision";
+		const BandStatistic band = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_);
+		result["band_rms"] = std::sqrt(band.mean_sq);
+		result["band_rms_over_dhat"] = std::sqrt(band.mean_sq) / dhat_;
+		result["band_total_weight"] = band.total_weight;
+		result["band_weighted"] = band.weighted;
+		result["band_note"] = "band_rms = sqrt(sum(w d^2) / sum(w)) over the active collisions' weights, the statistic the trim controller compares with the band";
+		return result;
+	}
+
+	namespace
+	{
+		// Nearest-rank quantile of an ascending vector (non-empty).
+		double sorted_quantile(const std::vector<double> &sorted, const double p)
+		{
+			const double pos = p * double(sorted.size() - 1);
+			return sorted[std::min(sorted.size() - 1, size_t(pos + 0.5))];
+		}
+
+		json distribution(std::vector<double> values)
+		{
+			if (values.empty())
+				return json{{"count", 0}};
+			std::sort(values.begin(), values.end());
+			double sum = 0;
+			for (const double v : values)
+				sum += v;
+			return json{{"count", values.size()}, {"mean", sum / values.size()}, {"min", values.front()}, {"p10", sorted_quantile(values, 0.1)}, {"p50", sorted_quantile(values, 0.5)}, {"p90", sorted_quantile(values, 0.9)}, {"max", values.back()}};
+		}
+	} // namespace
+
+	void BarrierContactForm::emit_trim_predictors(const Eigen::VectorXd &x, const char *event, const bool full, const int iteration)
+	{
+		if (!trim_predictor_observer_ || !uses_semi_implicit_stiffness())
+			return;
+		// Observational: a failed record is reported and never reaches the solve.
+		try
+		{
+			json record = trim_predictors(x, full);
+			record["event"] = event;
+			record["controller_decision"] = trim_decision_;
+			record["sequence"] = ++trim_predictor_sequence_;
+			record["iteration"] = iteration >= 0 ? json(iteration) : json(nullptr);
+			trim_predictor_observer_(record);
+		}
+		catch (const std::exception &e)
+		{
+			logger().warn("Trim predictor record failed: {}", e.what());
+		}
+	}
+
+	json BarrierContactForm::trim_predictors(const Eigen::VectorXd &x, const bool full) const
+	{
+		const Eigen::MatrixXd V = compute_displaced_surface(x);
+		const Eigen::MatrixXi &E = collision_mesh_.edges();
+		const Eigen::MatrixXi &F = collision_mesh_.faces();
+		const double dhat_sq = dhat_ * dhat_;
+
+		json r = {{"trim", barrier_stiffness_}, {"form_weight", weight_}, {"dhat", dhat_}, {"refresh_id", diagnostic_refresh_id_}, {"collision_count", collision_set_.size()}};
+
+		// Per active collision (distance <= dhat, the controller's filter):
+		// gap / dhat and the norm of its local barrier gradient (collision
+		// weight and per-contact coefficient included; the common factor
+		// weight * trim cancels in the force weighting).
+		std::vector<std::pair<double, double>> gap_force;
+		std::vector<int> multiplicity(collision_mesh_.num_vertices(), 0);
+		double sum_d2 = 0;
+		for (size_t i = 0; i < collision_set_.size(); ++i)
+		{
+			const ipc::VectorMax12d dof = collision_set_[i].dof(V, E, F);
+			const double d2 = collision_set_[i].compute_distance(dof);
+			if (!(d2 <= dhat_sq))
+				continue;
+			sum_d2 += d2;
+			gap_force.emplace_back(std::sqrt(d2) / dhat_, barrier_potential_.gradient(collision_set_[i], dof).norm());
+			const auto vids = collision_set_[i].vertex_ids(E, F);
+			for (int a = 0; a < collision_set_[i].num_vertices(); ++a)
+				if (vids[a] >= 0)
+					++multiplicity[vids[a]];
+		}
+		const size_t n = gap_force.size();
+		r["active_count"] = n;
+		if (n > 0)
+		{
+			std::sort(gap_force.begin(), gap_force.end());
+			std::vector<double> gaps(n);
+			double total_force = 0, weighted_gap = 0, weighted_gap_sq = 0;
+			for (size_t i = 0; i < n; ++i)
+			{
+				gaps[i] = gap_force[i].first;
+				total_force += gap_force[i].second;
+				weighted_gap += gap_force[i].second * gap_force[i].first;
+				weighted_gap_sq += gap_force[i].second * gap_force[i].first * gap_force[i].first;
+			}
+			json gap = distribution(gaps);
+			gap["rms"] = std::sqrt(sum_d2 / n) / dhat_;
+			gap["band_rms"] = std::sqrt(band_statistic(collision_set_, collision_mesh_, V, dhat_).mean_sq) / dhat_;
+			gap["units"] = "distance / dhat; rms is one sample per collision, band_rms the collision-weighted statistic the controller compares with the band";
+			r["gap"] = gap;
+
+			json weighted = {{"total_local_gradient_norm", total_force}, {"scope", "Weights: norm of each active collision's local barrier gradient (proportional to its contact force)"}};
+			if (total_force > 0 && std::isfinite(total_force))
+			{
+				weighted["mean_gap"] = weighted_gap / total_force;
+				weighted["rms_gap"] = std::sqrt(weighted_gap_sq / total_force);
+				// Gap below which the given share of the force is carried,
+				// and the share carried by the smallest-gap tenth of pairs.
+				json at_fraction = json::object();
+				double cumulative = 0;
+				size_t k = 0;
+				for (const double fraction : {0.5, 0.9})
+				{
+					while (k < n && cumulative + gap_force[k].second < fraction * total_force)
+						cumulative += gap_force[k++].second;
+					at_fraction[fraction == 0.5 ? "0.5" : "0.9"] = gap_force[std::min(k, n - 1)].first;
+				}
+				weighted["gap_at_force_fraction"] = at_fraction;
+				double decile = 0;
+				for (size_t i = 0; i < std::max<size_t>(1, n / 10); ++i)
+					decile += gap_force[i].second;
+				weighted["force_share_of_closest_tenth"] = decile / total_force;
+			}
+			r["force_weighted"] = weighted;
+		}
+		{
+			std::vector<double> counts;
+			double sum = 0, sum_sq = 0;
+			for (const int m : multiplicity)
+				if (m > 0)
+				{
+					counts.push_back(m);
+					sum += m;
+					sum_sq += double(m) * m;
+				}
+			json mult = distribution(counts);
+			mult["scope"] = "Active collisions incident to each surface vertex in contact";
+			if (sum > 0)
+				mult["incidence_weighted_mean"] = sum_sq / sum;
+			r["multiplicity"] = mult;
+		}
+
+		// EF-07: which collision sets the minimum gap, whether it was born
+		// since the previous accepted iterate (or refresh) or was already in
+		// the last refresh's set, and how many collisions sit below the
+		// collapse proxy's pair threshold sqrt(trim_lower / slack).
+		{
+			const double collapse_gap = std::sqrt(trim_lower_ / min_gap_slack);
+			const bool birth_known = !previous_iterate_keys_.empty() || !refresh_keys_.empty();
+			size_t best = collision_set_.size();
+			double best_d2 = std::numeric_limits<double>::infinity(), best_persisting_d2 = best_d2;
+			int below = 0, below_born = 0, born = 0, below_2x = 0;
+			for (size_t i = 0; i < collision_set_.size(); ++i)
+			{
+				const double d2 = collision_set_[i].compute_distance(collision_set_[i].dof(V, E, F));
+				if (!(d2 <= dhat_sq))
+					continue;
+				const bool is_born = birth_known && !previous_iterate_keys_.count(stencil_key(collision_set_, i));
+				born += is_born;
+				const double gap = std::sqrt(d2) / dhat_;
+				if (gap < collapse_gap)
+				{
+					++below;
+					below_born += is_born;
+				}
+				if (gap < 2 * collapse_gap)
+					++below_2x;
+				if (d2 < best_d2)
+				{
+					best_d2 = d2;
+					best = i;
+				}
+				if (!is_born && d2 < best_persisting_d2)
+					best_persisting_d2 = d2;
+			}
+			json births = {{"collapse_pair_gap", collapse_gap}, {"birth_known", birth_known}, {"born_since_previous_iterate", born}, {"below_collapse_pair_gap", below}, {"below_collapse_pair_gap_born", below_born}, {"below_twice_collapse_pair_gap", below_2x}};
+			births["min_gap_persisting"] = std::isfinite(best_persisting_d2) ? json(std::sqrt(best_persisting_d2) / dhat_) : json(nullptr);
+			if (best < collision_set_.size())
+			{
+				const auto key = stencil_key(collision_set_, best);
+				const auto vids = collision_set_[best].vertex_ids(E, F);
+				json full_ids = json::array();
+				for (int a = 0; a < collision_set_[best].num_vertices(); ++a)
+					full_ids.push_back(vids[a] >= 0 ? json(collision_mesh_.to_full_vertex_id(vids[a])) : json(nullptr));
+				births["min_pair"] = {{"type", key[0]}, {"type_names", "0 vertex-vertex, 1 edge-vertex, 2 edge-edge, 3 face-vertex"}, {"full_vertex_ids", full_ids}, {"gap", std::sqrt(best_d2) / dhat_}, {"born_since_previous_iterate", birth_known && !previous_iterate_keys_.count(key)}, {"in_last_refresh", refresh_keys_.count(key) > 0}, {"stiffness_scale", collision_set_[best].stiffness_scale}, {"weight", collision_set_[best].weight}};
+			}
+			r["collapse_pairs"] = births;
+			r["loop_guard"] = {{"step_anchor", std::isfinite(loop_guard_.step_anchor) ? json(loop_guard_.step_anchor) : json(nullptr)}, {"up", loop_guard_.up}, {"down", loop_guard_.down}, {"reversals", loop_guard_.reversals}, {"blocked", loop_guard_.blocked}, {"clamped", loop_guard_.clamped}, {"vetoed", loop_guard_.vetoed}, {"collapse_ref", std::isfinite(loop_guard_.collapse_ref) ? json(loop_guard_.collapse_ref) : json(nullptr)}, {"collapse_peak", std::isfinite(loop_guard_.collapse_peak) ? json(loop_guard_.collapse_peak) : json(nullptr)}, {"solve_anchor", trim_solve_anchor_}};
+		}
+
+		if (!clamped_vertex_.empty())
+			r["clamped"] = clamped_contact_record(x, V, full);
+
+		if (!full)
+			return r;
+
+		// Two-sided gradient balance: the value calibrate_trim computes, before
+		// its cosine gate and its upward-only application.
+		json balance = {{"scope", "calibrate_trim's least-squares balance against the non-contact energy gradient (no AL term); reported whether or not the gate passes"}};
+		if (system_gradient_provider_ && !collision_set_.empty())
+		{
+			Eigen::VectorXd grad_energy;
+			system_gradient_provider_(x, grad_energy);
+			Eigen::VectorXd grad_barrier = collision_mesh_.to_full_dof(
+				barrier_potential_.gradient(collision_set_, collision_mesh_, V));
+			if (balance_free_dofs_)
+			{
+				restrict_balance_rows(grad_barrier, grad_energy);
+				balance["dofs"] = "free";
+			}
+			const double gb = grad_barrier.norm(), ge = grad_energy.norm();
+			balance["energy_gradient_norm"] = ge;
+			balance["barrier_gradient_norm_unweighted"] = gb;
+			if (gb > 0 && ge > 0 && grad_barrier.size() == grad_energy.size())
+			{
+				const double c = -grad_barrier.dot(grad_energy) / (gb * ge);
+				balance["cos_opposition"] = c;
+				balance["kappa_gb"] = c * ge / (weight_ * gb);
+				balance["gate_passes"] = std::isfinite(c) && c >= 0.1;
+			}
+		}
+		r["gradient_balance"] = balance;
+
+		// Barrier (current trim, objective units) over elastic+inertia
+		// Hessian diagonals at the refresh snapshot, on DOFs the barrier
+		// touches. kappa_hessian_ is assembled at the last refresh, which is
+		// x for every full record.
+		json ratio = {{"scope", "diag(weight*trim*barrier Hessian, no PSD projection) / diag(system Hessian of the last refresh) on full DOFs with a positive barrier diagonal"}};
+		if (!collision_set_.empty() && kappa_hessian_.rows() > 0)
+		{
+			const StiffnessMatrix hb = collision_mesh_.to_full_dof(
+				barrier_potential_.hessian(collision_set_, collision_mesh_, V, ipc::PSDProjectionMethod::NONE));
+			const Eigen::VectorXd db = hb.diagonal() * (weight_ * barrier_stiffness_);
+			const Eigen::VectorXd de = kappa_hessian_.diagonal();
+			std::vector<double> ratios;
+			double sum_b = 0, sum_e = 0;
+			for (int j = 0; j < std::min<int>(db.size(), de.size()); ++j)
+				if (db[j] > 0 && de[j] > 0 && std::isfinite(db[j]))
+				{
+					ratios.push_back(db[j] / de[j]);
+					sum_b += db[j];
+					sum_e += de[j];
+				}
+			ratio["distribution"] = distribution(ratios);
+			if (!ratios.empty())
+			{
+				std::sort(ratios.begin(), ratios.end());
+				const double median = sorted_quantile(ratios, 0.5);
+				ratio["sum_ratio"] = sum_b / sum_e;
+				ratio["trim_for_unit_median"] = barrier_stiffness_ / median;
+				ratio["trim_for_unit_sum"] = barrier_stiffness_ * sum_e / sum_b;
+			}
+		}
+		r["hessian_diagonal_ratio"] = ratio;
+
+		// The first-contact conditioning cap's formula, unclamped.
+		if (kappa_median_ > 0 && kappa_hessian_max_ > 0)
+			r["conditioning_cap_trim"] = conditioning_cap_ * kappa_hessian_max_ / (weight_ * kappa_median_ * dhat_sq);
+		return r;
 	}
 
 	double BarrierContactForm::value_unweighted(const Eigen::VectorXd &x) const
@@ -135,106 +2892,218 @@ namespace polyfem::solver
 		return barrier_potential_(collision_set_, collision_mesh_, compute_displaced_surface(x));
 	}
 
-	Eigen::VectorXd BarrierContactForm::value_per_element_unweighted(
-		const Eigen::VectorXd &x) const
+	Eigen::VectorXd BarrierContactForm::value_per_element_unweighted(const Eigen::VectorXd &x) const
 	{
 		const Eigen::MatrixXd V = compute_displaced_surface(x);
 		assert(V.rows() == collision_mesh_.num_vertices());
 
 		const size_t num_vertices = collision_mesh_.num_vertices();
+
 		if (collision_set_.empty())
+		{
 			return Eigen::VectorXd::Zero(collision_mesh_.full_num_vertices());
+		}
 
 		const Eigen::MatrixXi &E = collision_mesh_.edges();
 		const Eigen::MatrixXi &F = collision_mesh_.faces();
-		auto storage = utils::create_thread_storage<Eigen::VectorXd>(
-			Eigen::VectorXd::Zero(num_vertices));
 
-		utils::maybe_parallel_for(
-			collision_set_.size(), [&](int start, int end, int thread_id) {
-				Eigen::VectorXd &local_storage =
-					utils::get_local_thread_storage(storage, thread_id);
-				for (size_t i = start; i < end; i++)
+		auto storage = utils::create_thread_storage<Eigen::VectorXd>(Eigen::VectorXd::Zero(num_vertices));
+
+		utils::maybe_parallel_for(collision_set_.size(), [&](int start, int end, int thread_id) {
+			Eigen::VectorXd &local_storage = utils::get_local_thread_storage(storage, thread_id);
+
+			for (size_t i = start; i < end; i++)
+			{
+				// Quadrature weight is premultiplied by compute_potential
+				const double potential = barrier_potential_(collision_set_[i], collision_set_[i].dof(V, E, F));
+
+				const int n_v = collision_set_[i].num_vertices();
+				const auto vis = collision_set_[i].vertex_ids(E, F);
+				for (int j = 0; j < n_v; j++)
 				{
-					const double potential = barrier_potential_(
-						collision_set_[i], collision_set_[i].dof(V, E, F));
-					const int n_v = collision_set_[i].num_vertices();
-					const auto vis = collision_set_[i].vertex_ids(E, F);
-					for (int j = 0; j < n_v; j++)
-					{
-						assert(0 <= vis[j] && vis[j] < num_vertices);
-						local_storage[vis[j]] += potential / n_v;
-					}
+					assert(0 <= vis[j] && vis[j] < num_vertices);
+					local_storage[vis[j]] += potential / n_v;
 				}
-			});
+			}
+		});
 
 		Eigen::VectorXd out = Eigen::VectorXd::Zero(num_vertices);
 		for (const auto &local_potential : storage)
+		{
 			out += local_potential;
+		}
 
-		Eigen::VectorXd out_full =
-			Eigen::VectorXd::Zero(collision_mesh_.full_num_vertices());
+		Eigen::VectorXd out_full = Eigen::VectorXd::Zero(collision_mesh_.full_num_vertices());
 		for (int i = 0; i < out.size(); i++)
 			out_full[collision_mesh_.to_full_vertex_id(i)] = out[i];
 
-		assert(std::abs(value_unweighted(x) - out_full.sum())
-			   < std::max(1e-10 * out_full.sum(), 1e-10));
+		assert(std::abs(value_unweighted(x) - out_full.sum()) < std::max(1e-10 * out_full.sum(), 1e-10));
+
 		return out_full;
 	}
 
-	void BarrierContactForm::first_derivative_unweighted(
-		const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const
+	void BarrierContactForm::first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const
 	{
-		gradv = barrier_potential_.gradient(
-			collision_set_, collision_mesh_, compute_displaced_surface(x));
+		gradv = barrier_potential_.gradient(collision_set_, collision_mesh_, compute_displaced_surface(x));
 		gradv = collision_mesh_.to_full_dof(gradv);
 	}
 
-	void BarrierContactForm::second_derivative_unweighted(
-		const Eigen::VectorXd &x, StiffnessMatrix &hessian) const
+	void BarrierContactForm::second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const
 	{
 		POLYFEM_SCOPED_TIMER("barrier hessian");
 
-		const ipc::PSDProjectionMethod psd_projection_method =
-			project_to_psd_ ? ipc::PSDProjectionMethod::CLAMP
-							: ipc::PSDProjectionMethod::NONE;
-		hessian = barrier_potential_.hessian(
-			collision_set_, collision_mesh_, compute_displaced_surface(x),
-			psd_projection_method);
+		ipc::PSDProjectionMethod psd_projection_method;
+
+		if (project_to_psd_)
+		{
+			psd_projection_method = ipc::PSDProjectionMethod::CLAMP;
+		}
+		else
+		{
+			psd_projection_method = ipc::PSDProjectionMethod::NONE;
+		}
+
+		hessian = barrier_potential_.hessian(collision_set_, collision_mesh_, compute_displaced_surface(x), psd_projection_method);
 		hessian = collision_mesh_.to_full_dof(hessian);
 	}
 
-	void BarrierContactForm::post_step(
-		const polysolve::nonlinear::PostStepData &data)
+	void BarrierContactForm::post_step(const polysolve::nonlinear::PostStepData &data)
 	{
 		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(data.x);
-		const double curr_distance = collision_set_.compute_minimum_distance(
-			collision_mesh_, displaced_surface);
+
+		const double curr_distance = collision_set_.compute_minimum_distance(collision_mesh_, displaced_surface);
 		if (!std::isinf(curr_distance))
 		{
-			const double ratio = std::sqrt(curr_distance) / dhat();
-			const auto log_level =
-				ratio < 1e-6 ? spdlog::level::err
-							 : (ratio < 1e-4 ? spdlog::level::warn : spdlog::level::debug);
-			logger().log(
-				log_level, "Minimum distance during solve: {}, dhat: {}",
-				std::sqrt(curr_distance), dhat());
+			const double ratio = sqrt(curr_distance) / dhat();
+			const auto log_level = (ratio < 1e-6) ? spdlog::level::err : ((ratio < 1e-4) ? spdlog::level::warn : spdlog::level::debug);
+			polyfem::logger().log(log_level, "Minimum distance during solve: {}, dhat: {}", sqrt(curr_distance), dhat());
+		}
+
+		// PolySolve reports its start point and its first accepted iterate
+		// both with iteration 0. An accepted state is a post_step at other
+		// coordinates than the previous one's: a solve that continues from
+		// the last iterate starts at the same coordinates.
+		bool new_coordinates = false;
+		if (uses_semi_implicit_stiffness())
+		{
+			new_coordinates = !(last_post_step_x_.size() == data.x.size() && last_post_step_x_ == data.x);
+			last_post_step_x_ = data.x;
 		}
 
 		if (data.iter_num == 0)
-			return;
-
-		if (use_adaptive_barrier_stiffness_ && is_time_dependent_)
 		{
-			const double previous_stiffness = barrier_stiffness();
-			barrier_stiffness_ = ipc::update_barrier_stiffness(
-				prev_distance_, curr_distance, max_barrier_stiffness_,
-				barrier_stiffness(), ipc::world_bbox_diagonal_length(displaced_surface));
+			// Contact born by the first accepted iterate (or by the Dirichlet
+			// snap of the start point): the first-contact refresh runs here
+			// rather than one iterate later. The next iterate is typically the
+			// first step the CCD line search does not truncate, and estimates
+			// taken there were roundoff-sensitive (nearly parallel edge pairs).
+			if (new_coordinates && !kappa_snapshot_had_contacts_ && controller_has_contacts())
+			{
+				CoefficientEventScope event(*this, data.x, "post_step");
+				refresh_semi_implicit_stiffness(data.x, /*run_trim_controller=*/true, /*published_endpoint=*/false, /*first_contact_refresh=*/true);
+			}
+			return;
+		}
+		CoefficientEventScope event(*this, data.x, "post_step");
+		trim_decision_ = nullptr;
 
-			if (barrier_stiffness() != previous_stiffness)
-				logger().debug(
-					"updated barrier stiffness from {:g} to {:g} (max barrier stiffness: {:g})",
-					previous_stiffness, barrier_stiffness(), max_barrier_stiffness_);
+		if (uses_semi_implicit_stiffness())
+		{
+			// Contact born mid-solve: the snapshot predates any contact, so
+			// the trim was never initialized against these kappas. Refresh
+			// immediately (with the controller, so the conditioning cap
+			// softens the barrier while the contact is still unloaded).
+			if (!kappa_snapshot_had_contacts_ && controller_has_contacts())
+				refresh_semi_implicit_stiffness(data.x, /*run_trim_controller=*/true, /*published_endpoint=*/false, /*first_contact_refresh=*/true);
+
+			// In-solve trim controller (mirrors classic IPC's emergency
+			// doubling, made two-sided): an upward proportional bump when
+			// the gap collapses below the band, and a slower-cadenced
+			// downward step when the gap stays pinned above it (barrier
+			// dominating the elasticity). Only the global trim moves
+			// mid-solve; the per-contact snapshot stays frozen.
+			const double avg_d2 = band_statistic(collision_set_, collision_mesh_, displaced_surface, dhat_, controller_skip()).mean_sq;
+			const double min_d2 = collapse_min_distance(displaced_surface, curr_distance);
+			const double severity = collapse_severity(avg_d2, min_d2);
+			loop_guard_.observe_collapse_gap(std::sqrt(severity) / dhat_);
+			++iters_since_trim_;
+			if (force_weighted_controller_)
+				++force_band_age_;
+			if (std::isfinite(severity))
+			{
+				constexpr int emergency_cooldown = 3;
+				// Cap the total in-solve upward excursion above the last
+				// refresh: climbing further requires a refresh (stall
+				// retune), which re-anchors the budget and lets the
+				// calibration weigh in. Without this, a persistent pinch
+				// rails the trim to trim_max within a few dozen iterations,
+				// destroying the Newton system long before the physics can
+				// respond.
+				constexpr double max_in_solve_climb = 256.0;
+				const double dhat_sq = dhat_ * dhat_;
+				if (severity < trim_lower_ * dhat_sq
+					&& iters_since_trim_ >= emergency_cooldown)
+				{
+					const double allowed =
+						trim_solve_anchor_ * max_in_solve_climb / barrier_stiffness_;
+					if (allowed > 1)
+						collapse_bump(std::min(collapse_bump_factor(severity), allowed), avg_d2, min_d2, severity, "iteration");
+				}
+				else if (initial_trim_estimate_ && trim_seed_pending_ && estimate_initial_trim(data.x, severity))
+				{
+				}
+				else if (force_weighted_controller_)
+				{
+					if (force_band_age_ >= force_trim_.interval)
+						apply_force_band(data.x, avg_d2, min_d2, severity, "iteration");
+				}
+				else if (
+					controller_interval_ > 0
+					&& std::isfinite(avg_d2) && avg_d2 > trim_upper_ * dhat_sq
+					&& iters_since_trim_ >= controller_interval_)
+					bump_trim(1.0 / trim_factor_, TrimLoopGuard::Other, TrimMove::CadenceDown);
+
+				polyfem::logger().debug(
+					"Semi-implicit barrier stiffness: trim={:g}, band rms/dhat={:g}, sqrt(min d2)/dhat={:g}",
+					barrier_stiffness(),
+					std::isfinite(avg_d2) ? sqrt(avg_d2) / dhat_ : -1.0,
+					std::isfinite(curr_distance) ? sqrt(curr_distance) / dhat_ : -1.0);
+			}
+
+			// Optional per-iteration refresh for experimentation (changes
+			// the objective mid-solve; default 0 = disabled).
+			if (refresh_interval_ > 0 && ++iters_since_refresh_ >= refresh_interval_)
+				refresh_semi_implicit_stiffness(data.x);
+
+			emit_trim_predictors(data.x, "iteration", /*full=*/false, data.iter_num);
+			if (track_collision_birth())
+				previous_iterate_keys_ = current_stencil_keys();
+			// History report: the accepted iterate's collision set.
+			observe_continuation();
+		}
+		else if (use_adaptive_barrier_stiffness_)
+		{
+			if (is_time_dependent_)
+			{
+				const double prev_barrier_stiffness = barrier_stiffness();
+
+				barrier_stiffness_ = ipc::update_barrier_stiffness(
+					prev_distance_, curr_distance, max_barrier_stiffness_,
+					barrier_stiffness(), ipc::world_bbox_diagonal_length(displaced_surface));
+
+				if (barrier_stiffness() != prev_barrier_stiffness)
+				{
+					polyfem::logger().debug(
+						"updated barrier stiffness from {:g} to {:g} (max barrier stiffness: )",
+						prev_barrier_stiffness, barrier_stiffness(), max_barrier_stiffness_);
+					note_objective_change("adaptive barrier stiffness");
+				}
+			}
+			else
+			{
+				// TODO: missing feature
+				// update_barrier_stiffness(data.x);
+			}
 		}
 
 		prev_distance_ = curr_distance;

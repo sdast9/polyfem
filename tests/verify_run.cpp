@@ -9,6 +9,7 @@
 #include "spdlog/spdlog.h"
 #include <polyfem/Common.hpp>
 
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <set>
@@ -33,6 +34,17 @@ bool load_json(const std::string &json_file, json &out)
 bool missing_tests_data(const json &j, const std::string &key)
 {
 	return !j.contains(key) || (j.at(key).size() == 1 && j.at(key).contains("time_steps"));
+}
+
+// CI-06: reference regeneration (the `*` manifest prefix) must not silently
+// widen a scene's stored margin back to the global default; a scene that
+// pinned a wider margin (e.g. the GCP cube-on-floor contact) keeps it across
+// a regenerate unless someone edits the JSON by hand.
+double resolve_reference_margin(const json &in_args, const std::string &tests_key)
+{
+	if (in_args.contains(tests_key) && in_args.at(tests_key).contains("margin"))
+		return in_args.at(tests_key).at("margin").get<double>();
+	return 1e-5;
 }
 
 enum AuthenticateResult
@@ -205,11 +217,13 @@ AuthenticateResult authenticate_json(const std::string &json_file, const bool co
 	if (run_result != SUCCESS)
 		return run_result;
 
-	out["margin"] = 1e-5;
+	out["margin"] = resolve_reference_margin(in_args, tests_key);
 	out["time_steps"] = time_steps;
 
 	std::vector<std::string> test_keys =
 		{"err_l2", "err_h1", "err_h1_semi", "err_linf", "err_linf_grad", "err_lp"};
+
+	spdlog::info("Computed tests: {}", out.dump());
 
 	if (!compute_validation)
 	{
@@ -253,10 +267,9 @@ std::string tagsrun = "[run]";
 std::string tagsrun = "[.][run]";
 #endif
 
-void run_data(const std::string &test_file, const std::string &dir)
+void run_manifest(const std::string &manifest_path, const std::string &dir)
 {
-	// Disabled on Windows CI, due to the requirement for Pardiso.
-	std::ifstream file(POLYFEM_TEST_DIR "/" + test_file + ".txt");
+	std::ifstream file(manifest_path);
 	std::vector<std::string> failing_tests;
 	std::string line;
 	while (std::getline(file, line))
@@ -288,6 +301,42 @@ void run_data(const std::string &test_file, const std::string &dir)
 
 		logger().error(ss.str());
 	}
+}
+
+void run_data(const std::string &test_file, const std::string &dir)
+{
+	// Disabled on Windows CI, due to the requirement for Pardiso.
+	run_manifest(POLYFEM_TEST_DIR "/" + test_file + ".txt", dir);
+}
+
+TEST_CASE("CI-06 reference regeneration preserves an existing scene-specific margin", "[verify_run]")
+{
+	const json with_margin = R"({"tests": {"margin": 0.01, "err_l2": 1.0}})"_json;
+	CHECK(resolve_reference_margin(with_margin, "tests") == 0.01);
+
+	const json without_margin = R"({"tests": {"err_l2": 1.0}})"_json;
+	CHECK(resolve_reference_margin(without_margin, "tests") == 1e-5);
+
+	const json without_tests_key = json({});
+	CHECK(resolve_reference_margin(without_tests_key, "tests") == 1e-5);
+}
+
+// CI-03: the same authentication over any manifest and data directory, so an
+// isolated fixture copy (or an A/B overlay of one) outside the source tree runs
+// through exactly this harness. Hidden; select it by name with both variables
+// set: POLYFEM_RUN_MANIFEST (a manifest file in the format of tests/*.txt,
+// paths relative to the data directory, `*` prefix appends references) and
+// POLYFEM_RUN_DATA_DIR (the data directory those paths are relative to).
+TEST_CASE("run_manifest_env", "[.][run_env]")
+{
+	const char *manifest = std::getenv("POLYFEM_RUN_MANIFEST");
+	const char *data_dir = std::getenv("POLYFEM_RUN_DATA_DIR");
+	REQUIRE(manifest != nullptr);
+	REQUIRE(data_dir != nullptr);
+	CAPTURE(manifest, data_dir);
+	REQUIRE(std::filesystem::is_regular_file(manifest));
+	REQUIRE(std::filesystem::is_directory(data_dir));
+	run_manifest(manifest, data_dir);
 }
 
 TEST_CASE("all PolyFEM data JSON files are classified", "[data]")

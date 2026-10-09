@@ -103,12 +103,14 @@ namespace polyfem
 		{
 			append_mesh(vertices, codim_vertices, codim_edges, faces);
 
+			// const json::operator[] past the end of an array is undefined behaviour
+			const json &value = displacement.at("value");
+			if (!value.is_array() || value.size() < dim_)
+				log_and_throw_error("Obstacle displacement value {} needs {} components", value.dump(), dim_);
+
 			displacements_.emplace_back();
 			for (size_t d = 0; d < dim_; ++d)
-			{
-				assert(displacement["value"].is_array());
-				displacements_.back().value[d].init(displacement["value"][d], root_path);
-			}
+				displacements_.back().value[d].init(value[d], root_path);
 
 			if (displacement.contains("interpolation"))
 			{

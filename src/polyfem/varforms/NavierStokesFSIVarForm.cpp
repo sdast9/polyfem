@@ -436,6 +436,7 @@ namespace polyfem::varform
 			solid_args_ = solid_varform_args();
 			solid_varform_ = std::make_shared<NonlinearElasticTransientVarForm>();
 			solid_varform_->init(solid_elastic_formulation_, units, solid_args_, out_path);
+			share_material_input_with(*solid_varform_);
 		}
 	}
 
@@ -554,13 +555,13 @@ namespace polyfem::varform
 		for (const auto &assembler : ale_assemblers_)
 		{
 			assembler->set_size(mesh_->dimension());
-			assembler->set_materials(body_ids, this->args["materials"], units, root_path);
+			assembler->set_materials(body_ids, this->args["materials"], units, root_path, material_file_cache_);
 		}
 		const json mesh_materials = mesh_material_args();
 		mesh_elastic_assembler_->set_size(mesh_->dimension());
-		mesh_elastic_assembler_->set_materials(body_ids, mesh_materials, units, root_path);
+		mesh_elastic_assembler_->set_materials(body_ids, mesh_materials, units, root_path, material_file_cache_);
 		mesh_mass_assembler_->set_size(mesh_->dimension());
-		mesh_mass_assembler_->set_materials(body_ids, mesh_materials, units, root_path);
+		mesh_mass_assembler_->set_materials(body_ids, mesh_materials, units, root_path, material_file_cache_);
 		mesh_pure_mass_assembler_->set_size(mesh_->dimension());
 		mesh_displacement_problem_->init(*mesh_);
 	}
@@ -1006,6 +1007,7 @@ namespace polyfem::varform
 					solid_varform_->update_barrier_stiffness_for_embedding(
 						x.segment(solid_displacement_offset(), solid_displacement_ndof()));
 			});
+		al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 		al_solver.post_subsolve = [&](const double weight) {
 			stats.solver_info.push_back({{"type", weight > 0 ? "al" : "rc"}, {"t", step}, {"info", nonlinear_solver->info()}});
 			if (weight > 0)

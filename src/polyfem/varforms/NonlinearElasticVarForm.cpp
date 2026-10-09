@@ -21,7 +21,6 @@
 
 #include <polyfem/solver/ALSolver.hpp>
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
-#include <polyfem/solver/forms/SemiImplicitBarrierContactForm.hpp>
 #include <polyfem/solver/NLProblem.hpp>
 #include <polyfem/solver/forms/FrictionForm.hpp>
 #include <polyfem/solver/forms/NormalAdhesionForm.hpp>
@@ -41,11 +40,598 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <fstream>
+#include <chrono>
+#include <polyfem/io/DiagnosticSchemas.hpp>
+#include <polyfem/utils/getRSS.h>
+#include <polyfem/solver/forms/InertiaForm.hpp>
+#include <polyfem/solver/forms/BodyForm.hpp>
+#include <polyfem/solver/forms/PressureForm.hpp>
 
 namespace polyfem::varform
 {
 	using namespace solver;
 	using namespace time_integrator;
+
+	void NonlinearElasticVarForm::ensure_diagnostic_run_id()
+	{
+		if (!diagnostic_run_id_.empty())
+			return;
+		// One id for the manifest and the three RB-04 streams of a run.
+		diagnostic_run_id_ = run_manifest_ ? run_manifest_->run_id()
+										   : std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+	}
+
+	json NonlinearElasticVarForm::manifest_model_description() const
+	{
+		if (!solve_data_.contact_form)
+			return {{"contact", "disabled"}};
+		if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+			return barrier->model_description();
+		return {{"form", solve_data_.contact_form->name()}, {"dhat", solve_data_.contact_form->dhat()}, {"coefficient_law", {{"value", nullptr}, {"unavailable_reason", "Only the barrier contact form describes its coefficient law"}}}};
+	}
+
+	void NonlinearElasticVarForm::record_manifest_step(
+		const int step, const std::string &outcome, const std::string &phase,
+		const json &termination, const json &lagging, const int stall_retunes,
+		const double elapsed, const std::string &error, const Eigen::VectorXd &endpoint) const
+	{
+		if (!run_manifest_)
+			return;
+		try
+		{
+			// Compact: the numbers that identify what the attempt did, not the
+			// RB-04 vectors. Every subsolve of this step from stats.solver_info.
+			json subsolves = json::array();
+			for (const auto &info : stats.solver_info)
+			{
+				if (!info.is_object() || info.value("t", -1) != step)
+					continue;
+				json entry = {{"type", info.value("type", std::string())}};
+				if (info.contains("lag_i"))
+					entry["lag_i"] = info["lag_i"];
+				if (info.contains("weight"))
+					entry["al_weight"] = info["weight"];
+				if (info.contains("info") && info["info"].is_object())
+				{
+					const json &detail = info["info"];
+					for (const char *key : {"iterations", "status", "outcome", "termination_reason", "restarts", "unchanged_restarts", "gradNorm", "energy"})
+						if (detail.contains(key))
+							entry[key] = detail[key];
+					// RB-07: what each AL pass left behind -- the BC residual
+					// (length units, sqrt of the summed squared constrained-DOF
+					// residuals), PF-07's relative progress, whether the weight
+					// was at its ceiling and the snap gate after the pass;
+					// RBR-03: how many full-space states the stage retained
+					// for its motion measures after the pass.
+					for (const char *key : {"al_pass", "al_at_ceiling", "al_bc_residual", "al_relative_progress", "al_rolled_back", "al_moved", "al_retained_states"})
+						if (detail.contains(key))
+							entry[key] = detail[key];
+					if (detail.contains("al_gate") && detail["al_gate"].is_object())
+						entry["al_gate"] = {{"blocked_by", detail["al_gate"].value("blocked_by", json(nullptr))}, {"ccd_fraction", detail["al_gate"].value("ccd_fraction", json(nullptr))}};
+				}
+				subsolves.push_back(entry);
+			}
+			json compact_termination = json::object();
+			if (termination.is_object())
+				for (const char *key : {"outcome", "termination_reason", "restarts", "unchanged_restarts", "iterations", "status", "exception", "unavailable_reason"})
+					if (termination.contains(key))
+						compact_termination[key] = termination[key];
+			// RB-07: an AL stage that ended under its budget leaves its reason
+			// and pass history (al_stagnation) in the subsolve state at failure.
+			json al_stagnation = nullptr;
+			if (termination.is_object())
+			{
+				const json *source = &termination;
+				if (termination.contains("subsolve_state_at_failure") && termination["subsolve_state_at_failure"].is_object())
+					source = &termination["subsolve_state_at_failure"];
+				if (source->contains("al_stagnation") && (*source)["al_stagnation"].is_object())
+				{
+					const json &details = (*source)["al_stagnation"];
+					al_stagnation = json::object();
+					for (const char *key : {"reason", "passes", "window", "weight_ceiling", "budget", "progress", "last_pass", "reference_pass", "history"})
+						if (details.contains(key))
+							al_stagnation[key] = details[key];
+				}
+			}
+			json compact_lagging = json::object();
+			if (lagging.is_object())
+				for (const char *key : {"state", "iteration", "updated_lag_residual_norm_objective", "tolerance"})
+					if (lagging.contains(key))
+						compact_lagging[key] = lagging[key];
+			json record = {
+				{"step", step},
+				{"time", args.contains("time") && args["time"].is_object() ? json(args["time"].value("t0", 0.) + step * args["time"].value("dt", 0.)) : json(nullptr)},
+				{"outcome", outcome},
+				{"phase", phase},
+				{"wall_seconds", elapsed},
+				{"termination", compact_termination},
+				{"subsolves", subsolves},
+				{"stall_retunes", stall_retunes},
+				{"lagging", compact_lagging},
+				{"al_stagnation", al_stagnation},
+				{"error", error.empty() ? json(nullptr) : json(error)}};
+			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+			{
+				const json state = barrier->diagnostic_state();
+				json contact = json::object();
+				for (const char *key : {"active_count", "trim_or_global_stiffness", "refresh_id", "batch_median", "batch_floor", "batch_cap", "curvature_fallback_count", "curvature_abs_fallback_count", "curvature_global_fallback_count", "interpolated_condensed_count", "interpolated_direction_count", "continued_count", "fresh_count", "coefficient_zero_count", "coefficient_nonfinite_count", "coefficient_range", "candidate_count"})
+					if (state.contains(key))
+						contact[key] = state[key];
+				// What in this step depended on discrete history (canonical
+				// pair keys record, 2026-10-05); observational.
+				contact["history_sensitivity"] = barrier->history_sensitivity(endpoint);
+				record["contact"] = contact;
+			}
+			else
+				record["contact"] = nullptr;
+			run_manifest_->record_step(record);
+		}
+		catch (const std::exception &e)
+		{
+			logger().warn("Run manifest step record failed: {}", e.what());
+		}
+	}
+
+	void NonlinearElasticVarForm::configure_coefficient_diagnostics(int step, const std::string &phase)
+	{
+		auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form);
+		if (!barrier)
+			return;
+		// EF-01: trim predictor candidates, independent of the (heavy)
+		// physical diagnostics.
+		if (args["output"].value("trim_predictors", false))
+		{
+			ensure_diagnostic_run_id();
+			barrier->set_trim_predictor_observer([this, step, phase](const json &event) {
+				json record = event;
+				record["schema"] = io::schemas::TRIM_PREDICTORS;
+				record["version"] = io::schemas::TRIM_PREDICTORS_VERSION;
+				record["run_id"] = diagnostic_run_id_;
+				record["step"] = step;
+				record["phase"] = phase;
+				std::ofstream file(resolve_output_path("trim-predictors.jsonl"), std::ios::app);
+				file << record.dump() << std::endl;
+				if (!file)
+					throw std::runtime_error("Could not write trim predictor record");
+			});
+		}
+		else
+			barrier->set_trim_predictor_observer(nullptr);
+		if (!args["output"].value("physical_diagnostics", false))
+		{
+			barrier->set_coefficient_observer(nullptr);
+			return;
+		}
+		ensure_diagnostic_run_id();
+		barrier->set_coefficient_observer([this, step, phase](const json &event) {
+			json record = event;
+			record["schema"] = io::schemas::COEFFICIENT_EVENT;
+			record["version"] = io::schemas::COEFFICIENT_EVENT_VERSION;
+			record["run_id"] = diagnostic_run_id_;
+			record["step"] = step;
+			record["phase"] = phase;
+			record["scope"] = "Outer coefficient operations at identical full coordinates; excludes coordinate-only feature switches and time-weight changes";
+			const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+			record["acceleration_scaling"] = std::isfinite(scale) ? json(scale) : json(nullptr);
+			const auto &delta = event.at("objective_change_at_fixed_coordinates");
+			if (scale > 0 && std::isfinite(scale) && delta.is_number())
+			{
+				const double physical = delta.get<double>() / scale;
+				record["energy_change_at_fixed_coordinates"] = std::isfinite(physical) ? json(physical) : json(nullptr);
+			}
+			else
+				record["energy_change_at_fixed_coordinates"] = nullptr;
+			record["free_contact_force_change_norm"] = nullptr;
+			if (scale > 0 && std::isfinite(scale) && solve_data_.nl_problem
+				&& event["before"]["gradient_objective"].is_array() && event["after"]["gradient_objective"].is_array())
+			{
+				const auto before = event["before"]["gradient_objective"].get<std::vector<double>>();
+				const auto after = event["after"]["gradient_objective"].get<std::vector<double>>();
+				if (before.size() == after.size())
+				{
+					Eigen::VectorXd change(before.size());
+					for (size_t i = 0; i < before.size(); ++i)
+						change[i] = (after[i] - before[i]) / scale;
+					const double norm = solve_data_.nl_problem->full_to_reduced_grad(change).norm();
+					if (std::isfinite(norm))
+						record["free_contact_force_change_norm"] = norm;
+				}
+			}
+			std::ofstream file(resolve_output_path("coefficient-events.jsonl"), std::ios::app);
+			file << record.dump() << std::endl;
+			if (!file)
+				throw std::runtime_error("Could not write coefficient event");
+		});
+	}
+
+	void NonlinearElasticVarForm::write_physical_diagnostics(
+		int step, const Eigen::VectorXd &x, const Eigen::VectorXd &start,
+		const std::string &outcome, const std::string &phase, const json &termination,
+		const json &lagging, const json &observations, double elapsed, const std::string &error)
+	{
+		if (!args["output"].value("physical_diagnostics", false))
+			return;
+		const auto missing = [](const std::string &why) { return json{{"value", nullptr}, {"unavailable_reason", why}}; };
+		const auto scalar = [&](double v) { return std::isfinite(v) ? json{{"value", v}} : missing("Nonfinite measurement"); };
+		const auto vector = [&](const Eigen::VectorXd &v) {
+			return v.allFinite() ? json{{"value", std::vector<double>(v.data(), v.data() + v.size())}} : missing("Nonfinite vector");
+		};
+		// Version 2 (RB-04 remainder): attempt summary and last proposal from the
+		// iteration observer, the last internal iterate of a failed attempt,
+		// retained candidate counts, and right-endpoint discrete work increments
+		// under the declared convention. Version 3 (RB-09 decision, 2026-09-13):
+		// physical_balance_pass is populated -- the endpoint force residual in
+		// physical units against the run's peak external force -- and the
+		// contact record carries the active-collision gap statistics. Every
+		// earlier field keeps its meaning.
+		json record = {{"schema", io::schemas::PHYSICAL_DIAGNOSTICS}, {"version", io::schemas::PHYSICAL_DIAGNOSTICS_VERSION}, {"run_id", diagnostic_run_id_}, {"step", step}, {"attempt", 1}, {"outcome", outcome}, {"phase", phase}, {"termination", termination}, {"lagging", lagging}, {"error", error}, {"solve_wall_seconds", scalar(elapsed)}, {"units", {{"displacement", "internal length"}, {"residual", "internal force = objective gradient / acceleration_scaling"}, {"energy", "internal energy"}, {"work", "internal energy; right-endpoint discrete estimates, not path integrals"}, {"ordering", "full FEM/system node-major DOFs, obstacles appended"}}}};
+		record["time"] = args["time"].is_object() ? scalar(args["time"].value("t0", 0.) + step * args["time"].value("dt", 0.)) : missing("Static solve has no physical time");
+		record["accepted_displacement"] = outcome == "accepted" ? vector(x - start) : missing("Attempt did not return an accepted endpoint");
+		record["attempt_summary"] = observations.value("summary", json{{"unavailable_reason", "No attempt observation"}});
+		record["proposed_displacement"] = observations.contains("proposed_displacement")
+											  ? observations["proposed_displacement"]
+											  : missing("No line-search proposal was observed in this attempt");
+		record["barrier_energy_at_solve_start"] = observations.contains("barrier_energy_at_solve_start")
+													  ? observations["barrier_energy_at_solve_start"]
+													  : missing("Not measured at solve start");
+		record["endpoint"] = vector(x);
+		if (outcome == "accepted")
+			record["coordinate_state"] = "Returned nonlinear solve endpoint, before time advancement";
+		else
+		{
+			record["coordinate_state"] = "Retained caller coordinates with current attempt form state; the last internal Newton iterate is in last_internal_iterate";
+			record["last_internal_iterate"] = observations.contains("last_internal_iterate")
+												  ? observations["last_internal_iterate"]
+												  : missing("No accepted Newton iterate was observed before the failure");
+			// RB-06: what happens to that state right after this record; the
+			// solve-start coordinates are the state the rollback restores.
+			record["rollback"] = observations.contains("rollback") ? observations["rollback"] : missing("No rollback announced for this attempt");
+			record["solve_start"] = start.size() == x.size() ? vector(start) : missing("Solve-start coordinates not retained");
+		}
+		record["work_convention"] = "Right-endpoint discrete increments: endpoint force dotted with the accepted displacement of this step, physical units; support force on the system sign; solved-lag friction; parameter-state energy change at the previous physical coordinates (docs/rb-04-work-convention.md). Not path integrals and not a physical balance.";
+		record["physical_balance_pass"] = missing("Not evaluated: no complete endpoint measurement");
+		const size_t rss = getCurrentRSS(), peak = getPeakRSS();
+		record["current_rss_bytes"] = rss ? json{{"value", rss}} : missing("Platform RSS unavailable");
+		record["peak_rss_bytes"] = peak ? json{{"value", peak}} : missing("Platform peak RSS unavailable");
+		try
+		{
+			const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+			record["acceleration_scaling"] = scalar(scale);
+			if (!(scale > 0) || !std::isfinite(scale) || !x.allFinite())
+				throw std::runtime_error("Invalid endpoint or acceleration scaling");
+			Eigen::VectorXd residual = Eigen::VectorXd::Zero(x.size());
+			// Sum of the non-elastic form gradients: the external forces on the
+			// body (contact, friction, inertia, body, pressure) for the balance.
+			Eigen::VectorXd external = Eigen::VectorXd::Zero(x.size());
+			bool complete = true;
+			record["forms"] = json::array();
+			for (const auto &form : forms)
+			{
+				if (!form->enabled())
+					continue;
+				// AL prepares feasibility; its penalty/multiplier forces are not physical forces.
+				if (dynamic_cast<const AugmentedLagrangianForm *>(form.get()))
+					continue;
+				json row = {{"name", form->name()}, {"weight", scalar(form->weight())}};
+				Eigen::VectorXd g;
+				double e;
+				if (const auto *barrier = dynamic_cast<const BarrierContactForm *>(form.get()))
+				{
+					const auto snapshot = barrier->diagnostic_snapshot(x);
+					snapshot.first_derivative(x, g);
+					e = snapshot.value(x);
+					const auto start_snapshot = snapshot.diagnostic_snapshot(start);
+					record["barrier_start_energy_with_endpoint_snapshot"] = scalar(start_snapshot.value(start) / scale);
+					record["barrier_start_energy_scope"] = "Solve-start coordinates evaluated with returned endpoint coefficient snapshot; not a sum of optimization-event work";
+					if (outcome == "accepted" && args["output"].value("physical_diagnostics_contact_path", false))
+					{
+						try
+						{
+							record["contact_path"] = snapshot.diagnostic_path(start, x);
+						}
+						catch (const std::exception &error)
+						{
+							record["contact_path"] = missing(error.what());
+						}
+					}
+					record["contact"] = snapshot.diagnostic_state();
+					const double d2 = snapshot.collision_set().compute_minimum_distance(collision_mesh_, snapshot.compute_displaced_surface(x));
+					record["contact"]["min_gap"] = std::isfinite(d2) ? scalar(std::sqrt(d2)) : missing("No active pair within dhat; global minimum not measured");
+					record["contact"]["gap_scope"] = "Minimum over endpoint active stencils only";
+					record["contact"]["gap_statistics"] = snapshot.gap_statistics(snapshot.compute_displaced_surface(x));
+				}
+				else if (form == solve_data_.elastic_form || form == solve_data_.body_form
+						 || form == solve_data_.inertia_form || form == solve_data_.friction_form
+						 || (form == solve_data_.pressure_form && boundary_.local_pressure_boundary.empty() && boundary_.local_pressure_cavity.empty()))
+				{
+					form->first_derivative(x, g);
+					e = form->value(x);
+				}
+				else
+				{
+					row["measurement"] = missing("Form not covered by the observational endpoint contract");
+					complete = false;
+					record["forms"].push_back(row);
+					continue;
+				}
+				if (g.size() != x.size() || !g.allFinite() || !std::isfinite(e))
+					throw std::runtime_error("Invalid form measurement: " + form->name());
+				if (form == solve_data_.elastic_form)
+					record["elastic_energy"] = scalar(e / scale);
+				if (form == solve_data_.contact_form)
+					record["barrier_energy"] = scalar(e / scale);
+				row["interpretation"] = form == solve_data_.inertia_form    ? "Incremental inertial objective; not kinetic energy"
+										: form == solve_data_.friction_form ? "Frozen-lag friction potential; not integrated dissipation"
+																			: "Potential energy contribution";
+				row["objective"] = scalar(e);
+				row["objective_divided_by_acceleration_scaling"] = scalar(e / scale);
+				row["gradient_force_units"] = vector(g / scale);
+				residual += g / scale;
+				if (form != solve_data_.elastic_form)
+					external += g / scale;
+				record["forms"].push_back(row);
+			}
+			record["residual_complete"] = complete;
+			record["full_residual"] = complete ? vector(residual) : missing("Unsupported active form; component sum is partial");
+			record["free_residual_norm"] = complete ? scalar(solve_data_.nl_problem->full_to_reduced_grad(residual).norm()) : missing("Unsupported active form");
+			record["full_residual_with_pre_update_friction"] = missing("No complete paired final friction-lag observation");
+			record["free_residual_norm_with_pre_update_friction"] = missing("No complete paired final friction-lag observation");
+			if (complete && lagging.contains("friction_before_update") && lagging.contains("friction_after_update")
+				&& lagging["friction_before_update"].contains("gradient_force_units")
+				&& lagging["friction_after_update"].contains("gradient_force_units"))
+			{
+				const auto before = lagging["friction_before_update"]["gradient_force_units"].get<std::vector<double>>();
+				const auto after = lagging["friction_after_update"]["gradient_force_units"].get<std::vector<double>>();
+				if (before.size() == size_t(residual.size()) && after.size() == before.size())
+				{
+					Eigen::VectorXd prior = residual;
+					for (size_t i = 0; i < before.size(); ++i)
+						prior[i] += before[i] - after[i];
+					record["full_residual_with_pre_update_friction"] = vector(prior);
+					record["free_residual_norm_with_pre_update_friction"] = scalar(solve_data_.nl_problem->full_to_reduced_grad(prior).norm());
+				}
+			}
+			record["reactions"] = json::array();
+			for (const auto &constraint : solve_data_.al_form)
+			{
+				if (dynamic_cast<const BCLagrangianForm *>(constraint.get()))
+				{
+					const auto &A = constraint->constraint_matrix();
+					const Eigen::VectorXd bc_error = A * x - constraint->constraint_value();
+					record["bc_error_inf"] = scalar(bc_error.size() ? bc_error.lpNorm<Eigen::Infinity>() : 0);
+					record["reactions"].push_back({{"constraint", constraint->name()},
+												   {"sign", "External support force on system = residual on prescribed DOFs; opposite is force on support"},
+												   {"full_dof_vector", complete ? vector(A.transpose() * (A * residual)) : missing("Unsupported active form")}});
+				}
+			}
+			if (!record.contains("bc_error_inf"))
+				record["bc_error_inf"] = missing("No simple Dirichlet selector constraint");
+			if (!record.contains("contact"))
+				record["contact"] = missing("No supported active barrier contact form");
+
+			// physical_balance_pass (RB-09 decision, 2026-09-13): the endpoint
+			// force residual in physical units, separate from the solver's
+			// scaled stopping criterion. Two conditions on the body's DOFs:
+			// (1) the free residual norm (updated friction lag) and (2) the
+			// global external-force identity -- non-elastic form forces on
+			// the body plus the support force on its prescribed DOFs -- both
+			// at most `tolerance` times the run's peak total absolute external
+			// force. Normalizing by the peak keeps unloaded steps comparable;
+			// with no external force recorded yet the flag is unavailable.
+			record["physical_balance_pass"] = missing("Not evaluated");
+			if (complete && outcome == "accepted")
+			{
+				const int n_body = (space_.n_bases - obstacle.n_vertices()) * mesh_->dimension();
+				const int dim = mesh_->dimension();
+				Eigen::VectorXd support = Eigen::VectorXd::Zero(x.size());
+				for (const auto &constraint : solve_data_.al_form)
+					if (dynamic_cast<const BCLagrangianForm *>(constraint.get()))
+					{
+						const auto &A = constraint->constraint_matrix();
+						support += A.transpose() * (A * residual);
+					}
+				double peak_here = support.head(n_body).lpNorm<1>();
+				for (const auto &form : forms)
+				{
+					if (!form->enabled() || form == solve_data_.elastic_form || dynamic_cast<const AugmentedLagrangianForm *>(form.get()))
+						continue;
+					for (const auto &row : record["forms"])
+						if (row["name"] == form->name() && row.contains("gradient_force_units") && row["gradient_force_units"]["value"].is_array())
+						{
+							const auto g = row["gradient_force_units"]["value"].get<std::vector<double>>();
+							double l1 = 0;
+							for (int i = 0; i < n_body && i < int(g.size()); ++i)
+								l1 += std::abs(g[i]);
+							peak_here = std::max(peak_here, l1);
+						}
+				}
+				diagnostic_peak_external_force_ = std::max(diagnostic_peak_external_force_, peak_here);
+				const double tolerance = args["output"].value("physical_balance_tolerance", 1e-6);
+				const double free_norm = solve_data_.nl_problem->full_to_reduced_grad(residual).norm();
+				Eigen::VectorXd balance = Eigen::VectorXd::Zero(dim);
+				for (int i = 0; i < n_body; ++i)
+					balance[i % dim] += support[i] - external[i]; // support on the system, minus the gradient = force on the body
+				json flag = {{"threshold", tolerance},
+							 {"normalization", "Peak over this run's accepted records of the total absolute external force on the body's DOFs (L1 of the support force and of each non-elastic form force)"},
+							 {"peak_external_force", scalar(diagnostic_peak_external_force_)},
+							 {"free_residual_norm", scalar(free_norm)},
+							 {"external_force_balance", vector(balance)},
+							 {"friction_lag_state", solve_data_.friction_form && solve_data_.friction_form->enabled() ? "Updated lag: the finite-lag mismatch is part of the residual" : "No friction"},
+							 {"criterion", "free_residual_norm <= threshold * peak and |external_force_balance| <= threshold * peak (docs/rb-09-validation.md, decision 2026-09-13)"}};
+				if (diagnostic_peak_external_force_ > 0 && std::isfinite(free_norm) && balance.allFinite())
+				{
+					flag["free_residual_ratio"] = free_norm / diagnostic_peak_external_force_;
+					// With friction the solved-lag residual shows how much of a
+					// failure is the finite-lag mismatch alone.
+					if (record["free_residual_norm_with_pre_update_friction"].contains("value") && record["free_residual_norm_with_pre_update_friction"]["value"].is_number())
+						flag["solved_lag_free_residual_ratio"] = record["free_residual_norm_with_pre_update_friction"]["value"].get<double>() / diagnostic_peak_external_force_;
+					flag["external_force_balance_ratio"] = balance.norm() / diagnostic_peak_external_force_;
+					flag["value"] = free_norm <= tolerance * diagnostic_peak_external_force_ && balance.norm() <= tolerance * diagnostic_peak_external_force_;
+				}
+				else
+				{
+					flag["value"] = nullptr;
+					flag["unavailable_reason"] = diagnostic_peak_external_force_ > 0 ? "Nonfinite residual or balance" : "No external force recorded yet in this run; the normalization is undefined";
+				}
+				record["physical_balance_pass"] = flag;
+			}
+			else if (!complete)
+				record["physical_balance_pass"] = missing("Unsupported active form; the residual is partial");
+			else
+				record["physical_balance_pass"] = missing("Attempt did not return an accepted endpoint");
+
+			// Right-endpoint discrete work increments of this accepted step
+			// (docs/rb-04-work-convention.md). These are the declared
+			// bookkeeping terms of the discrete budget, not path integrals.
+			if (outcome == "accepted")
+			{
+				const Eigen::VectorXd dx = x - start;
+				if (complete)
+				{
+					double support_work = 0;
+					bool has_support = false;
+					for (const auto &constraint : solve_data_.al_form)
+						if (dynamic_cast<const BCLagrangianForm *>(constraint.get()))
+						{
+							const auto &A = constraint->constraint_matrix();
+							support_work += (A.transpose() * (A * residual)).dot(dx);
+							has_support = true;
+						}
+					double body_work = 0;
+					bool has_body = false;
+					for (const auto &row : record["forms"])
+						if (row["name"] == "body" && row.contains("gradient_force_units") && row["gradient_force_units"]["value"].is_array())
+						{
+							const auto g = row["gradient_force_units"]["value"].get<std::vector<double>>();
+							body_work = -Eigen::Map<const Eigen::VectorXd>(g.data(), g.size()).dot(dx);
+							has_body = true;
+						}
+					record["support_work_increment"] = has_support ? scalar(support_work) : missing("No simple Dirichlet selector constraint");
+					record["support_work_increment_convention"] = "Support force on the system (residual on prescribed DOFs) dotted with the accepted displacement; W_D,right of the work convention";
+					record["body_load_work_increment"] = has_body ? scalar(body_work) : json{{"value", 0.}, {"convention", "No body/traction load form; identically zero"}};
+					record["external_work_increment"] = has_support ? scalar(support_work + body_work) : missing("No simple Dirichlet selector constraint");
+				}
+				else
+				{
+					record["support_work_increment"] = missing("Unsupported active form; residual is partial");
+					record["body_load_work_increment"] = missing("Unsupported active form; residual is partial");
+					record["external_work_increment"] = missing("Unsupported active form; residual is partial");
+				}
+
+				if (!solve_data_.friction_form || !solve_data_.friction_form->enabled())
+					record["frictional_dissipation_increment"] = {{"value", 0.}, {"convention", "No friction form; identically zero"}};
+				else if (lagging.contains("friction_before_update") && lagging["friction_before_update"].contains("gradient_force_units"))
+				{
+					const auto g = lagging["friction_before_update"]["gradient_force_units"].get<std::vector<double>>();
+					if (g.size() == size_t(dx.size()))
+						record["frictional_dissipation_increment"] = scalar(Eigen::Map<const Eigen::VectorXd>(g.data(), g.size()).dot(dx));
+					else
+						record["frictional_dissipation_increment"] = missing("Pre-update friction gradient has the wrong size");
+				}
+				else
+					record["frictional_dissipation_increment"] = missing("No pre-update friction observation for this attempt");
+				record["frictional_dissipation_increment_convention"] = "Solved-lag friction gradient (before the final lag update) dotted with the accepted displacement; C_f,right of the work convention, a resistance-work estimate, not integrated continuum dissipation";
+
+				if (!solve_data_.contact_form || !solve_data_.contact_form->enabled() || !record.contains("barrier_start_energy_with_endpoint_snapshot"))
+					record["retuning_energy_change"] = solve_data_.contact_form && solve_data_.contact_form->enabled()
+														   ? missing("No endpoint coefficient snapshot evaluation at the start coordinates")
+														   : json{{"value", 0.}, {"convention", "No barrier contact form; identically zero"}};
+				else if (!trajectory_accounting_.previous_endpoint_barrier_energy_available)
+					record["retuning_energy_change"] = missing("Barrier energy of the previous physical endpoint is unavailable in this process");
+				else if (!record["barrier_start_energy_with_endpoint_snapshot"].contains("value") || record["barrier_start_energy_with_endpoint_snapshot"]["value"].is_null())
+					record["retuning_energy_change"] = missing("Start energy under the endpoint snapshot is unavailable");
+				else
+					record["retuning_energy_change"] = scalar(record["barrier_start_energy_with_endpoint_snapshot"]["value"].get<double>() - trajectory_accounting_.previous_endpoint_barrier_energy);
+				record["retuning_energy_change_convention"] = "B(x_(n-1); theta_n) - B(x_(n-1); theta_(n-1)): barrier energy change from the coefficient state of the previous published endpoint to this endpoint's state, at the previous physical coordinates; P of the work convention. For the first accepted step of this process theta_(n-1) is the state at solve start.";
+				record["previous_endpoint_barrier_energy"] = trajectory_accounting_.previous_endpoint_barrier_energy_available
+																 ? scalar(trajectory_accounting_.previous_endpoint_barrier_energy)
+																 : missing("Unavailable in this process");
+			}
+			else
+			{
+				for (const auto *key : {"support_work_increment", "body_load_work_increment", "external_work_increment", "frictional_dissipation_increment", "retuning_energy_change"})
+					record[key] = missing("Attempt did not return an accepted endpoint");
+			}
+			if (solve_data_.time_integrator && !args.value("/time/quasistatic"_json_pointer, true) && mass_.rows() == x.size())
+			{
+				const Eigen::VectorXd v = solve_data_.time_integrator->compute_velocity(x);
+				record["velocity"] = vector(v);
+				record["kinetic_energy"] = scalar(.5 * v.dot(mass_ * v));
+			}
+			else
+				record["kinetic_energy"] = missing("Quasistatic/static or incompatible mass dimensions");
+			// Fresh assembly values avoid changing the production assembly cache.
+			double min_det = std::numeric_limits<double>::infinity();
+			size_t count = 0;
+			const int dim = mesh_->dimension();
+			const auto &bases = space_.basis_list();
+			const auto &gbases = space_.geometry_basis_list();
+			for (size_t i = 0; i < bases.size(); ++i)
+			{
+				assembler::ElementAssemblyValues vals;
+				vals.compute(i, dim == 3, bases[i], gbases[i]);
+				for (int q = 0; q < vals.quadrature.points.rows(); ++q)
+				{
+					Eigen::MatrixXd F = Eigen::MatrixXd::Identity(dim, dim);
+					for (const auto &b : vals.basis_values)
+						for (const auto &g : b.global)
+							F += g.val * x.segment(g.index * dim, dim) * b.grad_t_m.row(q);
+					const double det = F.determinant();
+					if (!std::isfinite(det))
+						throw std::runtime_error("Nonfinite sampled det(F)");
+					min_det = std::min(min_det, det);
+					++count;
+				}
+			}
+			record["min_det_F"] = scalar(min_det);
+			record["det_F_sampling"] = {{"scope", "Element assembly quadrature points; not a global injectivity certificate"}, {"count", count}};
+		}
+		catch (const std::exception &e)
+		{
+			record["measurement_error"] = e.what();
+			for (const auto *key : {"full_residual", "free_residual_norm", "bc_error_inf", "reactions", "contact", "kinetic_energy", "min_det_F",
+									"support_work_increment", "body_load_work_increment", "external_work_increment", "frictional_dissipation_increment", "retuning_energy_change"})
+				if (!record.contains(key))
+					record[key] = missing(std::string("Measurement failed: ") + e.what());
+		}
+		for (const auto *key : {"elastic_energy", "barrier_energy"})
+			if (!record.contains(key))
+				record[key] = missing("Form absent, disabled or not measured");
+
+		// Cumulative right-endpoint sums over the accepted endpoints of this
+		// process; a single unavailable increment makes the sum unavailable.
+		if (outcome == "accepted")
+		{
+			auto &acc = trajectory_accounting_;
+			const auto accumulate = [&](const char *key, double &sum, bool &available) {
+				const json &increment = record[key];
+				if (available && increment.contains("value") && increment["value"].is_number())
+					sum += increment["value"].get<double>();
+				else
+					available = false;
+			};
+			accumulate("external_work_increment", acc.external_work, acc.external_work_available);
+			accumulate("frictional_dissipation_increment", acc.frictional_dissipation, acc.frictional_dissipation_available);
+			accumulate("retuning_energy_change", acc.retuning_energy_change, acc.retuning_energy_change_available);
+			++acc.accepted_steps;
+			const auto cumulative = [&](double sum, bool available) {
+				return available ? scalar(sum) : missing("An increment of an earlier or this accepted step in this process was unavailable");
+			};
+			record["external_work_cumulative"] = cumulative(acc.external_work, acc.external_work_available);
+			record["frictional_dissipation_cumulative"] = cumulative(acc.frictional_dissipation, acc.frictional_dissipation_available);
+			record["retuning_energy_change_cumulative"] = cumulative(acc.retuning_energy_change, acc.retuning_energy_change_available);
+			record["cumulative_scope"] = fmt::format("Sum over the {} accepted endpoint(s) of this process; a restarted process starts at zero", acc.accepted_steps);
+			// The published endpoint's coefficient state becomes theta_(n-1) of the next step.
+			acc.has_previous_endpoint = true;
+			acc.previous_endpoint_barrier_energy_available = record["barrier_energy"].contains("value") && record["barrier_energy"]["value"].is_number();
+			acc.previous_endpoint_barrier_energy = acc.previous_endpoint_barrier_energy_available ? record["barrier_energy"]["value"].get<double>() : 0;
+		}
+		std::ofstream file(resolve_output_path("physical-diagnostics.jsonl"), std::ios::app);
+		file << record.dump() << std::endl;
+		if (!file)
+			logger().warn("Could not write physical diagnostics for step {}", step);
+	}
 
 	void NonlinearElasticVarForm::init(const std::string &formulation, const Units &units, const json &args, const std::string &out_path)
 	{
@@ -64,6 +650,7 @@ namespace polyfem::varform
 		periodic_collision_mesh_to_basis_.resize(0);
 		obstacle.clear();
 		solve_data_ = solver::SolveData();
+		diagnostic_run_id_.clear();
 		forms.clear();
 		elasticity_pressure_assembler = nullptr;
 		damping_assembler_ = nullptr;
@@ -232,6 +819,16 @@ namespace polyfem::varform
 		const int n_fe_bases = space_.n_bases;
 		space_.n_bases += obstacle.n_vertices();
 
+		// RB-11 (RB-09 unit observation): the nonlinear stopping tolerance is
+		// grad_norm * F0 * L^1.5 with the SI default F0 = 1e4 -- declared
+		// non-SI base units keep that number, so the force tolerance changes
+		// with the unit system unless F0 is set explicitly.
+		if (!(units.length() == "m" && units.mass() == "kg" && units.time() == "s")
+			&& args["solver"]["advanced"]["characteristic_force_density"].get<double>() == 10000.0)
+			logger().warn(
+				"units are {} / {} / {} but solver.advanced.characteristic_force_density is the SI default 1e4: the nonlinear stopping tolerance is scaled by F0 (L2 norm: F0 * L^1.5 in 3D, F0 * L in 2D; Linf: F0; NLProblem::grad_norm_rescaling), so it is not the same force tolerance as in SI units; set characteristic_force_density for this unit system (RB-09: a 3D L2 length rescaling by s needs F0 * s^-1.5)",
+				units.length(), units.mass(), units.time());
+
 		if (is_contact_enabled())
 		{
 			logger().info("Building collision mesh...");
@@ -282,6 +879,29 @@ namespace polyfem::varform
 		}
 
 		args["contact"]["dhat"] = dhat;
+
+		// RB-11 (RB-09 unit observation): the toolkit's Tight-Inclusion CCD
+		// (ipc/ccd/tight_inclusion_ccd.cpp, unchanged upstream code) truncates
+		// a colliding trial step so that the separation stays at least
+		// d_min + min((1 - c) * (d_0 - d_min), 1e-4 length units), with c the
+		// conservative rescaling and d_0 the distance at the start of the
+		// step: the 1e-4 is a cap on the extra clearance of one step, not a
+		// floor on the gap (later steps start closer and can approach further).
+		// Because the cap is an absolute length, the same scene in another
+		// length unit takes a different first-contact iterate; RB-09 measured
+		// the consequence (a x256 emergency trim bump in a millimetre run with
+		// 1e-4/dhat = 1e-4 against x7.6 in metres with 0.1). Reported, not
+		// changed: CCD and the trial-displacement cap stay as they are.
+		{
+			constexpr double ccd_clearance_cap = 1e-4;
+			const double ratio = ccd_clearance_cap / dhat;
+			if (ratio < 1e-2)
+				logger().warn(
+					"Tight-Inclusion CCD caps the per-step clearance at 1e-4 length units = {:.2g} dhat (dhat = {} {}); RB-09 measured a different first-contact iterate and barrier-stiffness history than the same scene in metres (unit systems are not equivalent under this absolute cap). Measured limit, not a prescription.",
+					ratio, dhat, units.length());
+			else
+				logger().info("Tight-Inclusion CCD per-step clearance cap 1e-4 length units = {:.2g} dhat", ratio);
+		}
 	}
 
 	void NonlinearElasticVarForm::build_rhs_assembler()
@@ -331,18 +951,45 @@ namespace polyfem::varform
 		Eigen::MatrixXi collision_edges, collision_triangles;
 		std::vector<Eigen::Triplet<double>> displacement_map_entries;
 
+		// RB-22: which extraction built the FE surface and what it skipped.
+		// A contact-enabled scene must get a complete surface or a named
+		// error; a silently partial or empty one corrupts the Hessian sizes
+		// downstream (empty displacement map + padded vertex rows = an
+		// identity map larger than the DOF vector).
+		io::OutGeometryData::BoundaryExtractionReport extraction_report;
+		std::string extraction_name = "preconstructed collision proxy";
+
 		const auto extract_default_collision_mesh = [&]() {
 			if (args.at("/space/basis_type"_json_pointer) == "Spline")
 			{
+				extraction_name = "max_order lattice sampling (spline basis)";
 				io::OutGeometryData::extract_boundary_mesh_sampled(
 					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
-					collision_vertices, collision_edges, collision_triangles, displacement_map_entries);
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					/*sampling_order=*/0, &extraction_report);
+			}
+			else if (io::OutGeometryData::has_high_order_hex_boundary(mesh, bases, total_local_boundary))
+			{
+				// RB-22 default (user decision 2026-09-12): Q2+/serendipity
+				// hexahedral boundaries get the DOF-resolution proxy -- every
+				// proxy vertex is a node with an exact displacement-map row,
+				// conforming by construction, the same oriented surface as the
+				// max_order lattice on Lagrange Q2 -- instead of the Q1-only
+				// default extraction that skipped their faces. Q1 hexahedra
+				// keep the centroid split; simplicial meshes are untouched.
+				extraction_name = "the DOF-resolution proxy (high-order hexahedra)";
+				io::OutGeometryData::extract_boundary_mesh_nodal(
+					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					&extraction_report);
 			}
 			else
 			{
+				extraction_name = "the default boundary extraction";
 				io::OutGeometryData::extract_boundary_mesh(
 					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
-					collision_vertices, collision_edges, collision_triangles, displacement_map_entries);
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					&extraction_report);
 			}
 		};
 
@@ -366,10 +1013,20 @@ namespace polyfem::varform
 			else if (collision_mesh_args.contains("tessellation_type")
 					 && collision_mesh_args["tessellation_type"] == "max_order")
 			{
+				extraction_name = "max_order lattice sampling";
 				io::OutGeometryData::extract_boundary_mesh_sampled(
 					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
 					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
-					utils::json_value<int>(collision_mesh_args, "sampling_order", 0));
+					utils::json_value<int>(collision_mesh_args, "sampling_order", 0), &extraction_report);
+			}
+			else if (collision_mesh_args.contains("tessellation_type")
+					 && collision_mesh_args["tessellation_type"] == "dof")
+			{
+				extraction_name = "the DOF-resolution proxy";
+				io::OutGeometryData::extract_boundary_mesh_nodal(
+					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					&extraction_report);
 			}
 			else if (collision_mesh_args.contains("max_edge_length"))
 			{
@@ -386,11 +1043,10 @@ namespace polyfem::varform
 				if (collision_triangles.size())
 					igl::edges(collision_triangles, collision_edges);
 				timer.stop();
-				logger().debug(fmt::format(
-					std::locale("en_US.UTF-8"),
-					"Done (took {:g}s, {:L} vertices, {:L} triangles)",
+				logger().debug(
+					"Done (took {:g}s, {} vertices, {} triangles)",
 					timer.getElapsedTime(),
-					collision_vertices.rows(), collision_triangles.rows()));
+					collision_vertices.rows(), collision_triangles.rows());
 			}
 			else
 			{
@@ -409,6 +1065,97 @@ namespace polyfem::varform
 		const int num_fe_collision_vertices = collision_vertices.rows();
 		assert(collision_edges.size() == 0 || collision_edges.maxCoeff() < num_fe_collision_vertices);
 		assert(collision_triangles.size() == 0 || collision_triangles.maxCoeff() < num_fe_collision_vertices);
+
+		// RB-22 contract: refuse an incomplete or empty FE collision surface
+		// instead of building a partial collision mesh.
+		if (!extraction_report.complete())
+		{
+			log_and_throw_error(
+				"Contact is enabled but {} produced an incomplete collision surface: {}. "
+				"Refusing to build a partial collision mesh; choose a boundary tessellation that supports these elements "
+				"(contact/collision_mesh: {{\"enabled\": true, \"tessellation_type\": \"dof\" | \"max_order\"}}), "
+				"lower the element order, use a supported element type, or disable contact.",
+				extraction_name, extraction_report.describe());
+		}
+		const int n_fe_primitives = mesh.is_volume() ? int(collision_triangles.rows()) : int(collision_edges.rows());
+		if (extraction_report.n_boundary_faces > 0 && n_fe_primitives == 0)
+		{
+			log_and_throw_error(
+				"Contact is enabled but {} produced no collision {} from {} boundary {} of the FE mesh; refusing to build an empty collision surface.",
+				extraction_name, mesh.is_volume() ? "faces" : "edges", extraction_report.n_boundary_faces, mesh.is_volume() ? "faces" : "edges");
+		}
+		if (displacement_map_entries.empty() && num_fe_collision_vertices != num_fe_nodes)
+		{
+			log_and_throw_error(
+				"Collision mesh construction: the boundary extraction returned {} vertex rows with an identity displacement map, but the FE space has {} nodes; the collision mesh would not match the DOF vector.",
+				num_fe_collision_vertices, num_fe_nodes);
+		}
+		if (mesh.is_volume())
+		{
+			// A degenerate (zero-area) FE collision face has no normal and
+			// poisons every distance it enters. It means coincident or
+			// collinear boundary node positions (a degenerate input mesh, or
+			// a basis whose stored node positions are not the images of its
+			// reference nodes -- the Q3 hexahedral case RB-22 found and RB-23
+			// repaired) -- refuse instead of failing later with "initial
+			// solution has intersections".
+			int degenerate = 0, first = -1;
+			for (int i = 0; i < collision_triangles.rows(); ++i)
+			{
+				const Eigen::RowVector3d a = collision_vertices.row(collision_triangles(i, 0));
+				const Eigen::RowVector3d ab = collision_vertices.row(collision_triangles(i, 1)) - a;
+				const Eigen::RowVector3d ac = collision_vertices.row(collision_triangles(i, 2)) - a;
+				const double scale = std::max({ab.squaredNorm(), ac.squaredNorm(), (ac - ab).squaredNorm()});
+				if (!(ab.cross(ac).norm() > 1e-12 * scale))
+				{
+					if (first < 0)
+						first = i;
+					++degenerate;
+				}
+			}
+			if (degenerate > 0)
+			{
+				const auto at = [&](const int v) {
+					return fmt::format("[{:g}, {:g}, {:g}]", collision_vertices(v, 0), collision_vertices(v, 1), collision_vertices(v, 2));
+				};
+				log_and_throw_error(
+					"Contact is enabled but {} produced {} degenerate (zero-area) collision faces out of {} (first: face {} on vertices {}, {}, {} at {}, {}, {}); the boundary node positions are coincident or collinear: check the input mesh for degenerate boundary faces (a basis storing node positions that are not the images of its reference nodes would show the same symptom; docs/rb-22-validation.md and docs/rb-23-validation.md).",
+					extraction_name, degenerate, collision_triangles.rows(), first,
+					collision_triangles(first, 0), collision_triangles(first, 1), collision_triangles(first, 2),
+					at(collision_triangles(first, 0)), at(collision_triangles(first, 1)), at(collision_triangles(first, 2)));
+			}
+		}
+		{
+			// RB-22 diagnostic: proxy size and how many FE surface vertices are
+			// exact node selectors (single unit entry) versus interpolated rows.
+			std::vector<int> counts(num_fe_collision_vertices, 0);
+			std::vector<double> single(num_fe_collision_vertices, 0.);
+			for (const auto &t : displacement_map_entries)
+				if (t.row() < num_fe_collision_vertices && t.value() != 0.)
+				{
+					++counts[t.row()];
+					single[t.row()] = t.value();
+				}
+			int selector_rows = 0, interpolated_rows = 0;
+			std::vector<bool> on_surface(num_fe_collision_vertices, false);
+			for (int i = 0; i < collision_triangles.size(); ++i)
+				on_surface[collision_triangles(i)] = true;
+			for (int i = 0; i < collision_edges.size(); ++i)
+				on_surface[collision_edges(i)] = true;
+			for (int i = 0; i < num_fe_collision_vertices; ++i)
+			{
+				if (!on_surface[i])
+					continue;
+				if (displacement_map_entries.empty() || (counts[i] == 1 && single[i] == 1.))
+					++selector_rows;
+				else
+					++interpolated_rows;
+			}
+			logger().debug(
+				"Collision mesh from {}: {} FE surface vertices ({} exact selector rows, {} interpolated rows), {} faces, {} edges",
+				extraction_name, selector_rows + interpolated_rows, selector_rows, interpolated_rows,
+				collision_triangles.rows(), collision_edges.rows());
+		}
 
 		// Append the obstacles to the collision mesh
 		if (obstacle.n_vertices() > 0)
@@ -670,6 +1417,10 @@ namespace polyfem::varform
 		init_solve(sol, 1.0, initial_condition_override);
 
 		solve_tensor_nonlinear(0, sol, true);
+		// RB-06: the solve is accepted; a failure from here on is a
+		// publication failure of an accepted solve, not a failed attempt.
+		if (failure_injection_.matches(solver::FailureInjection::Phase::BeforePublication, 0))
+			failure_injection_.raise("static solve, before the step callback and the state output");
 		if (post_step)
 			post_step(0, sol);
 
@@ -682,7 +1433,37 @@ namespace polyfem::varform
 		logger().info(" took {}s", timings.solving_time);
 	}
 
+	/// RB-06: the per-run writers and counters the staged time loop shares.
+	struct NonlinearElasticTransientVarForm::TransientRun
+	{
+		igl::Timer timer;
+		std::unique_ptr<io::EnergyCSVWriter> energy_csv;
+		std::unique_ptr<io::RuntimeStatsCSVWriter> stats_csv;
+		int save_i = 0;
+		double forward_solve_time = 0;
+	};
+
+	NonlinearElasticTransientVarForm::NonlinearElasticTransientVarForm() = default;
+	NonlinearElasticTransientVarForm::~NonlinearElasticTransientVarForm() = default;
+
 	void NonlinearElasticTransientVarForm::solve_problem(
+		Eigen::MatrixXd &sol,
+		const InitialConditionOverride *initial_condition_override,
+		const ForwardStepCallback &post_step)
+	{
+		begin_transient_run(sol, initial_condition_override, post_step);
+		for (int t = 1; t <= time_steps; ++t)
+		{
+			// A failed attempt restores the last accepted state and rethrows:
+			// nothing of this step is published, the history does not advance
+			// and the run stops with a named failure (RB-08: no retry).
+			solve_transient_step(t, sol, post_step);
+			advance_transient_step(t, sol);
+		}
+		end_transient_run();
+	}
+
+	void NonlinearElasticTransientVarForm::begin_transient_run(
 		Eigen::MatrixXd &sol,
 		const InitialConditionOverride *initial_condition_override,
 		const ForwardStepCallback &post_step)
@@ -690,8 +1471,9 @@ namespace polyfem::varform
 		const bool save_stats = args["output"]["stats"];
 		stats.spectrum.setZero();
 
-		igl::Timer timer;
-		timer.start();
+		transient_run_ = std::make_unique<TransientRun>();
+		TransientRun &run = *transient_run_;
+		run.timer.start();
 		logger().info("Solving {}", primary_assembler_->name());
 
 		{
@@ -712,21 +1494,18 @@ namespace polyfem::varform
 				sol.conservativeResize(Eigen::NoChange, 1);
 		}
 		init_solve(sol, t0 + dt, initial_condition_override);
+		restore_restart_form_state(sol);
+		configure_coefficient_diagnostics(0, "initial_state_after_setup");
 		if (post_step)
 			post_step(0, sol);
 
 		// Write the total energy to a CSV file
-		int save_i = 0;
-
-		std::unique_ptr<io::EnergyCSVWriter> energy_csv = nullptr;
-		std::unique_ptr<io::RuntimeStatsCSVWriter> stats_csv = nullptr;
-
 		if (save_stats)
 		{
 			logger().debug("Saving nl stats to {} and {}", resolve_output_path("energy.csv"), resolve_output_path("stats.csv"));
-			energy_csv = std::make_unique<io::EnergyCSVWriter>(resolve_output_path("energy.csv"), solve_data_);
+			run.energy_csv = std::make_unique<io::EnergyCSVWriter>(resolve_output_path("energy.csv"), solve_data_);
 			const io::OutputSpace space = output_space();
-			stats_csv = std::make_unique<io::RuntimeStatsCSVWriter>(
+			run.stats_csv = std::make_unique<io::RuntimeStatsCSVWriter>(
 				resolve_output_path("stats.csv"),
 				space_.n_bases,
 				space.mesh ? space.mesh->n_elements() : 0,
@@ -734,52 +1513,76 @@ namespace polyfem::varform
 		}
 
 		// Save the initial solution
-		if (energy_csv)
-			energy_csv->write(save_i, sol);
+		if (run.energy_csv)
+			run.energy_csv->write(run.save_i, sol);
 		save_timestep(t0, 0, t0, dt, sol);
 
-		save_i++;
+		run.save_i++;
+	}
 
-		for (int t = 1; t <= time_steps; ++t)
+	void NonlinearElasticTransientVarForm::solve_transient_step(const int t, Eigen::MatrixXd &sol, const ForwardStepCallback &post_step)
+	{
+		assert(transient_run_ && "begin_transient_run must precede the steps");
+		TransientRun &run = *transient_run_;
+		run.forward_solve_time = 0;
 		{
-			double forward_solve_time = 0, remeshing_time = 0, global_relaxation_time = 0;
+			POLYFEM_SCOPED_TIMER(run.forward_solve_time);
+			solve_tensor_nonlinear(t, sol, true);
+		}
+		// RB-06: from here on the solve is accepted (RB-04 recording boundary);
+		// a failure below is a publication failure of an accepted solve. The
+		// step callback fires only for an accepted solve, so no caller ever
+		// hears of a failed attempt as a completed step.
+		if (failure_injection_.matches(solver::FailureInjection::Phase::BeforePublication, t))
+			failure_injection_.raise("transient step, before the step callback and the step's outputs");
+		if (post_step)
+			post_step(t, sol);
 
-			{
-				POLYFEM_SCOPED_TIMER(forward_solve_time);
-				solve_tensor_nonlinear(t, sol, true);
-			}
-			if (post_step)
-				post_step(t, sol);
+		// Always save the solution for consistency
+		if (run.energy_csv)
+			run.energy_csv->write(run.save_i, sol);
+		save_timestep(t0 + dt * t, t, t0, dt, sol);
+		run.save_i++;
+		if (failure_injection_.matches(solver::FailureInjection::Phase::AfterPublication, t))
+			failure_injection_.raise("transient step, after the step's outputs and before the history advances");
+	}
 
-			// Always save the solution for consistency
-			if (energy_csv)
-				energy_csv->write(save_i, sol);
-			save_timestep(t0 + dt * t, t, t0, dt, sol);
-			save_i++;
+	void NonlinearElasticTransientVarForm::advance_transient_step(const int t, Eigen::MatrixXd &sol)
+	{
+		assert(transient_run_ && "begin_transient_run must precede the steps");
+		TransientRun &run = *transient_run_;
+		const double remeshing_time = 0, global_relaxation_time = 0;
+		{
+			POLYFEM_SCOPED_TIMER("Update quantities");
+			configure_coefficient_diagnostics(t, "between_steps_after_endpoint");
 
-			{
-				POLYFEM_SCOPED_TIMER("Update quantities");
+			if (solve_data_.time_integrator)
+				solve_data_.time_integrator->update_quantities(sol);
+			// RBR-01: from here on the accepted solution is the history head.
+			output_time_phase_ = OutputTimePhase::HistoryHead;
 
-				if (solve_data_.time_integrator)
-					solve_data_.time_integrator->update_quantities(sol);
+			solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);
 
-				solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);
-
-				solve_data_.update_dt();
-				solve_data_.update_barrier_stiffness(sol);
-			}
-
-			logger().info("{}/{}  t={}", t, time_steps, t0 + dt * t);
-			notify_time_step(t, time_steps, t0, dt);
-
-			save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
-			if (stats_csv)
-				stats_csv->write(t, forward_solve_time, remeshing_time, global_relaxation_time);
+			solve_data_.update_dt();
+			solve_data_.update_barrier_stiffness(sol);
 		}
 
-		timer.stop();
-		timings.solving_time = timer.getElapsedTime();
+		logger().info("{}/{}  t={}", t, time_steps, t0 + dt * t);
+		notify_time_step(t, time_steps, t0, dt);
+
+		save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
+		if (run.stats_csv)
+			run.stats_csv->write(t, run.forward_solve_time, remeshing_time, global_relaxation_time);
+	}
+
+	void NonlinearElasticTransientVarForm::end_transient_run()
+	{
+		assert(transient_run_ && "begin_transient_run must precede end_transient_run");
+		TransientRun &run = *transient_run_;
+		run.timer.stop();
+		timings.solving_time = run.timer.getElapsedTime();
 		logger().info(" took {}s", timings.solving_time);
+		transient_run_.reset();
 	}
 
 	void NonlinearElasticVarForm::init_forms(const json &args, const int dim, Eigen::MatrixXd &sol, const double t)
@@ -794,6 +1597,23 @@ namespace polyfem::varform
 		set_materials(*damping_prev_assembler_, mesh_->dimension());
 
 		const ElementInversionCheck check_inversion = args["solver"]["advanced"]["check_inversion"];
+
+		// Opt-in (docs/clamped-contacts-20260928.md): semi_implicit
+		// clamped_contacts = exclude_collisions filters candidates whose
+		// primitives are all Dirichlet-clamped out of the collision set (and
+		// CCD) through IPC's vertex filter; any vertex pair with a free vertex
+		// keeps a candidate. Default: every primitive may collide.
+		if (is_contact_enabled() && args["solver"]["contact"]["barrier_stiffness"].is_string()
+			&& args["solver"]["contact"]["barrier_stiffness"].get<std::string>() == "semi_implicit"
+			&& solver::BarrierContactForm::parse_clamped_contacts(args["solver"]["contact"]["semi_implicit"])
+				   == solver::BarrierContactForm::ClampedContacts::ExcludeCollisions)
+		{
+			const std::vector<bool> clamped = solver::BarrierContactForm::clamped_collision_vertices(
+				collision_mesh_, boundary_.boundary_nodes, mesh_->dimension());
+			collision_mesh_.can_collide &= solver::BarrierContactForm::clamped_collision_filter(clamped);
+			logger().info("Clamped contacts excluded from the collision set: {} of {} collision vertices are Dirichlet-clamped",
+						  std::count(clamped.begin(), clamped.end(), true), clamped.size());
+		}
 
 		// NOTE: some stuff are legacy and hardcoded to be off
 		forms = solve_data_.init_forms(
@@ -866,7 +1686,79 @@ namespace polyfem::varform
 			form->set_output_dir(output_path);
 
 		if (solve_data_.contact_form != nullptr)
+		{
 			solve_data_.contact_form->save_ccd_debug_meshes = args["output"]["advanced"]["save_ccd_debug_meshes"];
+			solve_data_.contact_form->apply_resource_limits(solver::resource_limits_from_args(args["solver"]["contact"]["CCD"]));
+		}
+	}
+
+	void NonlinearElasticVarForm::save_restart_form_state(const std::string &state_path) const
+	{
+		// Each step's AL stage starts from the multipliers the previous step
+		// left (they are never reset between steps), so they are history: a
+		// resumed run that starts them at zero begins its first step from a
+		// different objective.
+		io::write_matrix(state_path, "al_scalars", Eigen::MatrixXd(Eigen::MatrixXd::Constant(1, 1, double(solve_data_.al_form.size()))), /*replace=*/false);
+		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+		{
+			const Eigen::VectorXd &mults = solve_data_.al_form[i]->lagrange_multipliers();
+			if (mults.size() > 0)
+				io::write_matrix(state_path, fmt::format("al_multipliers_{}", i), Eigen::MatrixXd(mults), /*replace=*/false);
+		}
+		if (solve_data_.contact_form)
+			solve_data_.contact_form->write_restart_state(state_path);
+		if (solve_data_.friction_form)
+			solve_data_.friction_form->write_restart_state(state_path);
+	}
+
+	void NonlinearElasticVarForm::restore_restart_multipliers(const std::string &state_path)
+	{
+		Eigen::MatrixXd count;
+		if (!io::read_matrix(state_path, "al_scalars", count))
+		{
+			logger().warn(
+				"Restart state {} has no augmented-Lagrangian multipliers (written before they were saved); they start at zero, so the run will not continue the saved one exactly.",
+				state_path);
+			return;
+		}
+		if (count.size() != 1 || size_t(count(0)) != solve_data_.al_form.size())
+			log_and_throw_error(
+				"Restart state {}: {} augmented-Lagrangian forms saved, this run has {}",
+				state_path, count.size() == 1 ? count(0) : -1.0, solve_data_.al_form.size());
+		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+		{
+			auto &form = *solve_data_.al_form[i];
+			if (form.lagrange_multipliers().size() == 0)
+				continue;
+			Eigen::MatrixXd mults;
+			if (!io::read_matrix(state_path, fmt::format("al_multipliers_{}", i), mults) || mults.size() != form.lagrange_multipliers().size())
+				log_and_throw_error(
+					"Restart state {}: al_multipliers_{} is missing or not {} entries",
+					state_path, i, form.lagrange_multipliers().size());
+			form.set_lagrange_multipliers(Eigen::Map<const Eigen::VectorXd>(mults.data(), mults.size()));
+		}
+	}
+
+	void NonlinearElasticVarForm::restore_restart_form_state(const Eigen::MatrixXd &sol)
+	{
+		const std::string state = args["input"]["data"]["state"];
+		if (state.empty())
+			return;
+		const std::string state_path = resolve_input_path(state);
+		restore_restart_multipliers(state_path);
+		if (!solve_data_.contact_form)
+			return;
+		if (!solve_data_.contact_form->read_restart_state(state_path, sol.col(0)))
+		{
+			logger().warn(
+				"Restart state {} has no contact stiffness state (written before it was saved); the contact controller starts fresh, so the run will not continue the saved one exactly.",
+				state_path);
+			return;
+		}
+		// After the contact state: the friction lag was rebuilt by init_solve
+		// at the same coordinates; only its force magnitudes are history.
+		if (solve_data_.friction_form && !solve_data_.friction_form->read_restart_state(state_path, sol.col(0)))
+			logger().warn("Restart state {}: friction lag not restored; the resumed friction may differ from the saved run.", state_path);
 	}
 
 	void NonlinearElasticVarForm::init_solve(
@@ -976,6 +1868,9 @@ namespace polyfem::varform
 		{
 			solve_data_.time_integrator = nullptr;
 		}
+		// RBR-01: the initial output describes the history head (the supplied
+		// initial velocity and acceleration).
+		output_time_phase_ = OutputTimePhase::HistoryHead;
 
 		// --------------------------------------------------------------------
 		// Initialize forms
@@ -984,6 +1879,9 @@ namespace polyfem::varform
 		// Initialize nonlinear problems
 
 		init_forms(args, mesh_->dimension(), sol, t);
+		failure_injection_ = solver::FailureInjection::from_args(args["solver"]["advanced"]);
+		if (run_manifest_)
+			run_manifest_->record_model(manifest_model_description());
 
 		if (pure_mass_.size() == 0)
 			pure_mass_assembler_->assemble(mesh_->is_volume(), space_.n_bases, space_.basis_list(), space_.geometry_basis_list(), pure_mass_ass_vals_cache_, 0, pure_mass_, true);
@@ -1013,6 +1911,7 @@ namespace polyfem::varform
 	{
 		assert(solve_data_.time_integrator);
 		solve_data_.time_integrator->update_quantities(solution);
+		output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the embedding saves after this advance
 		solve_data_.update_dt();
 	}
 
@@ -1040,160 +1939,751 @@ namespace polyfem::varform
 		Eigen::MatrixXd &sol,
 		const bool init_lagging)
 	{
-		assert(solve_data_.nl_problem != nullptr && "Nonlinear forms must initialize the nonlinear problem before solving");
-		solver::NLProblem &nl_problem = *(solve_data_.nl_problem);
+		const auto diagnostic_start_time = std::chrono::steady_clock::now();
+		const bool diagnostics_enabled = args["output"].value("physical_diagnostics", false);
+		configure_coefficient_diagnostics(step, "initialization");
+		if (diagnostics_enabled)
+			ensure_diagnostic_run_id();
+		const Eigen::VectorXd diagnostic_start = diagnostics_enabled ? Eigen::VectorXd(sol) : Eigen::VectorXd();
 
-		assert(sol.size() == rhs_.size());
-
-		if (nl_problem.uses_lagging())
+		// RB-06 step transaction. Everything below may change the solution
+		// vector and the forms' attempt state (contact snapshot, trim and
+		// memo, friction lag, AL multipliers and weights, lagged fields, the
+		// problem's coordinate mode). The rollback point captures all of it
+		// before the first mutation; a failed attempt puts it back before
+		// the failure is rethrown, so the caller's solution and every form
+		// equal the last accepted state (verified by the fingerprint below),
+		// the failed iterate survives only in the diagnostic records, and no
+		// success callback or output of this step ever fires. The time
+		// integrator's history is not touched by an attempt (it advances
+		// between steps) and is checked, not restored. In-memory only: the
+		// files of earlier accepted steps are untouched either way. This is
+		// not a retry (RB-08): the failure still ends the run.
+		struct RollbackPoint
 		{
-			if (init_lagging)
+			Eigen::VectorXd solution;
+			std::unique_ptr<solver::FullNLProblem::SavedState> state;
+			json fingerprint;
+			OutputTimePhase output_time_phase = OutputTimePhase::HistoryHead;
+		} rollback_point;
+		{
+			double capture_seconds = 0;
 			{
-				POLYFEM_SCOPED_TIMER("Initializing lagging");
-				nl_problem.init_lagging(sol);
+				POLYFEM_SCOPED_TIMER(capture_seconds);
+				rollback_point.solution = sol;
+				rollback_point.state = solve_data_.nl_problem->save_state();
+				rollback_point.output_time_phase = output_time_phase_;
+				rollback_point.fingerprint = attempt_state_fingerprint(rollback_point.solution);
 			}
-			logger().info("Lagging iteration 1:");
+			logger().debug("Rollback point of step {} captured in {:g} s", step, capture_seconds);
 		}
-
-		save_subsolve(0, step, sol);
-
-		std::shared_ptr<polysolve::nonlinear::Solver> nl_solver =
-			polysolve::nonlinear::Solver::create(args["solver"]["augmented_lagrangian"]["nonlinear"], args["solver"]["linear"], units.characteristic_length(), logger());
-
-		// Optionally scale the initial AL weight to the system elastic
-		// Hessian so the penalty dominates the problem curvature.
-		double initial_al_weight;
-		if (args["solver"]["augmented_lagrangian"]["initial_weight"].is_string())
-		{
-			assert(args["solver"]["augmented_lagrangian"]["initial_weight"] == "hessian_scaled");
-			const double multiplier = args["solver"]["augmented_lagrangian"]["initial_weight_multiplier"];
-			initial_al_weight = solve_data.hessian_scaled_al_weight(sol, multiplier);
-		}
-		else
-			initial_al_weight = args["solver"]["augmented_lagrangian"]["initial_weight"];
-
-		const solver::InexactALOptions inexact_opts = solver::InexactALOptions::from_json(
-			args["solver"]["augmented_lagrangian"]);
-		if (inexact_opts.strategy == solver::ALStrategy::AdaptiveInexact)
-			solve_data.normalize_al_penalty_metric();
-
-		// Stall detection: restart the nonlinear solve with retuned barrier
-		// stiffness when the line search collapses (semi-implicit mode only).
-		solver::StallRestartOptions stall_opts;
-		std::function<void(const Eigen::VectorXd &)> on_stall = nullptr;
-		std::function<bool(const Eigen::VectorXd &, int)> contact_restart_requested = nullptr;
-		auto semi_implicit_barrier = std::dynamic_pointer_cast<solver::SemiImplicitBarrierContactForm>(solve_data.contact_form);
-		if (semi_implicit_barrier != nullptr)
-		{
-			const json &restart_opts = args["solver"]["contact"]["semi_implicit"]["restart"];
-			stall_opts.enabled = restart_opts["enabled"];
-			stall_opts.alpha_threshold = restart_opts["alpha_threshold"];
-			stall_opts.patience = restart_opts["patience"];
-			stall_opts.min_iterations = restart_opts["min_iterations"];
-			stall_opts.soft_iteration_limit = restart_opts["soft_iteration_limit"];
-			stall_opts.max_restarts = restart_opts["max_restarts"];
-
-			const double stall_trim_factor = restart_opts["stall_trim_factor"];
-			on_stall = [semi_implicit_barrier, stall_trim_factor](const Eigen::VectorXd &x) {
-				semi_implicit_barrier->retune_on_stall(x, stall_trim_factor);
-			};
-			contact_restart_requested = [semi_implicit_barrier](const Eigen::VectorXd &x, const int iteration) {
-				return semi_implicit_barrier->restart_requested(x, iteration);
-			};
-		}
-
-		ALSolver al_solver(
-			solve_data_.al_form,
-			args["solver"]["augmented_lagrangian"]["initial_weight"],
-			args["solver"]["augmented_lagrangian"]["scaling"],
-			args["solver"]["augmented_lagrangian"]["max_weight"],
-			args["solver"]["augmented_lagrangian"]["eta"],
-			[&](const Eigen::VectorXd &x) {
-				this->solve_data_.update_barrier_stiffness(sol);
-			});
-
-		al_solver.post_subsolve = [&](const double al_weight) {
-			stats.solver_info.push_back(
-				{{"type", al_weight > 0 ? "al" : "rc"},
-				 {"t", step},
-				 {"info", nl_solver->info()}});
-			if (al_weight > 0)
-				stats.solver_info.back()["weight"] = al_weight;
-			stats.solver_info.back()["controller"] = al_solver.consume_subsolve_diagnostics();
-			if (semi_implicit_barrier != nullptr)
-				stats.solver_info.back()["contact"] = semi_implicit_barrier->diagnostics(sol);
-			save_subsolve(stats.solver_info.size(), step, sol);
+		// RBR-01: every output of this attempt (subsolve sequences, the step
+		// callback, the step's frame) describes an endpoint of the current
+		// step against the previous step's history; the between-steps advance
+		// moves the phase back to the head, and so does a rollback.
+		output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
+		std::string diagnostic_phase = "initialization";
+		json diagnostic_termination = {{"unavailable_reason", "No completed subsolve"}};
+		json diagnostic_lagging = {{"state", "not reached"}};
+		const auto observe_friction = [&]() -> json {
+			try
+			{
+				const auto &friction = solve_data_.friction_form;
+				if (!friction || !friction->enabled())
+					return {{"unavailable_reason", "No enabled friction form"}};
+				const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+				if (!(scale > 0) || !std::isfinite(scale))
+					return {{"unavailable_reason", "Invalid acceleration scaling"}};
+				Eigen::VectorXd g;
+				friction->first_derivative(sol, g);
+				g /= scale;
+				if (!g.allFinite())
+					return {{"unavailable_reason", "Nonfinite friction gradient"}};
+				return {{"gradient_force_units", std::vector<double>(g.data(), g.data() + g.size())},
+						{"scope", "Frozen friction gradient at the returned full coordinates on the indicated side of the final lag update"}};
+			}
+			catch (const std::exception &e)
+			{
+				return {{"unavailable_reason", e.what()}};
+			}
 		};
 
-		Eigen::MatrixXd prev_sol = sol;
-		al_solver.solve_al(nl_problem, sol,
-						   args["solver"]["augmented_lagrangian"]["nonlinear"], args["solver"]["linear"], units.characteristic_length());
-
-		al_solver.solve_reduced(nl_problem, sol,
-								args["solver"]["nonlinear"], args["solver"]["linear"], units.characteristic_length());
-
-		if (args["space"]["advanced"]["count_flipped_els_continuous"])
+		// RB-04 remainder: passive attempt observation. The iteration observer
+		// sees every trial sweep handed to the contact broad phase, the forms'
+		// step bound, every line-search validity trial and every accepted
+		// iterate, in full coordinates; it writes the opt-in
+		// solver-attempts.jsonl stream and retains what the endpoint record
+		// needs (attempt summary, last proposal, a failed attempt's last
+		// internal iterate). It cannot alter the solve.
+		constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
+		struct AttemptObservation
 		{
-			const auto invalidList = utils::count_invalid(mesh_->dimension(), space_.basis_list(), space_.geometry_basis_list(), sol);
-			logger().debug("Flipped elements (cnt {}) : {}", invalidList.size(), invalidList);
+			std::ofstream stream;
+			int minimize_index = 0, accepted_iterations = 0, rejected_proposals = 0, feasibility_checks = 0;
+			int line_search_truncated = 0, step_bound_limited = 0;
+			int validity_checks = 0, validity_rejections = 0, stall_retunes = 0;
+			int aborted_proposals = 0; ///< RB-05: proposals whose line search an exception abandoned
+			// Pending proposal of the current iteration.
+			bool has_proposal = false;
+			size_t proposal_builds = 0;         ///< completed broad-phase builds when the proposal was observed
+			Eigen::VectorXd proposal_x0, trial; ///< trial = x1 - x0 of the sweep handed to the broad phase
+			double trial_norm = 0, trial_linf = 0, step_bound = std::numeric_limits<double>::quiet_NaN();
+			int iteration_validity_checks = 0, iteration_validity_rejections = 0;
+			// The validity trials of a line search, counted at its end: those
+			// observed after it (the finite-energy stage of the next direction,
+			// when the search failed) belong to the next proposal.
+			bool line_search_ended = false;
+			int ended_validity_checks = 0, ended_validity_rejections = 0;
+			// BFGS audit stage 3: a growing line search lengthens its sweep
+			// inside the same iteration. The pending extension becomes the
+			// trial once its StepBound prices it; one that is never priced
+			// was refused and leaves the priced trial in place.
+			double unextended_trial_norm = 0;
+			int extensions = 0, extension_builds = 0, extensions_refused = 0;
+			bool pending_extension = false;
+			size_t extension_builds_before = 0;
+			Eigen::VectorXd extension_x0, extension_trial;
+			int line_search_extensions = 0; ///< over the attempt: priced extensions
+			// Last accepted iterate.
+			bool has_iterate = false;
+			Eigen::VectorXd iterate;
+			int iterate_iteration = -1, iterate_minimize_index = 0;
+			json last_proposal;
+		} attempts;
+		json diagnostic_observations = json::object();
+		const auto finite_or_null = [](double v) { return std::isfinite(v) ? json(v) : json(nullptr); };
+		const auto info_number = [](const json *info, const char *key) {
+			return info && info->contains(key) && (*info)[key].is_number() ? (*info)[key].get<double>() : std::numeric_limits<double>::quiet_NaN();
+		};
+		// BFGS audit stage 4: PolySolve's opt-in per-iteration diagnostics
+		// (solver/nonlinear/advanced/iteration_diagnostics) ride in the same
+		// solver info as the energy and the gradient norm. Null when that
+		// option is off, which is the default.
+		const auto solver_diagnostics = [](const json *info) -> json {
+			if (info && info->contains("iteration_diagnostics") && (*info)["iteration_diagnostics"].is_object())
+				return (*info)["iteration_diagnostics"];
+			return nullptr;
+		};
+		const auto trial_json = [&]() -> json {
+			return {{"norm", attempts.trial_norm}, {"linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"validity_checks", attempts.iteration_validity_checks}, {"validity_rejections", attempts.iteration_validity_rejections}, {"extensions", attempts.extensions}, {"extension_builds", attempts.extension_builds}, {"extensions_refused", attempts.extensions_refused}, {"unextended_norm", attempts.unextended_trial_norm}, {"scope", "Sweep handed to the contact broad phase after the finite-energy stage, lengthened by each priced extension of a growing line search (unextended_norm is the first sweep); step_bound is the forms' inversion/CCD fraction of it"}};
+		};
+		// Settles an extension at the next observation: whether the broad
+		// phase completed its rebuild, and whether a StepBound priced it.
+		const auto resolve_extension = [&](const bool priced) {
+			if (!attempts.pending_extension)
+				return;
+			attempts.pending_extension = false;
+			if (solve_data_.contact_form && solve_data_.contact_form->candidate_statistics().builds > attempts.extension_builds_before)
+				++attempts.extension_builds;
+			if (!priced)
+			{
+				++attempts.extensions_refused;
+				return;
+			}
+			attempts.proposal_x0 = attempts.extension_x0;
+			attempts.trial = attempts.extension_trial;
+			attempts.trial_norm = attempts.trial.norm();
+			attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
+			++attempts.extensions;
+			++attempts.line_search_extensions;
+		};
+		// PolySolve's solver info at post_step holds the objective and gradient
+		// norm of the iterate the direction was computed from (x0), not of
+		// the accepted point; the start row carries the start energy only.
+		const auto write_attempt = [&](const std::string &kind, int iteration, const json &trial, const json &accepted, double energy, double grad_norm, const json &solver = json(nullptr)) {
+			if (!attempts.stream.is_open())
+				return;
+			const json row = {{"schema", io::schemas::SOLVER_ATTEMPT}, {"version", io::schemas::SOLVER_ATTEMPT_VERSION}, {"run_id", diagnostic_run_id_}, {"step", step}, {"phase", diagnostic_phase}, {"minimize_index", attempts.minimize_index}, {"iteration", iteration}, {"kind", kind}, {"trial", trial}, {"accepted", accepted}, {"energy_objective_at_x0", finite_or_null(energy)}, {"gradient_norm_objective_at_x0", finite_or_null(grad_norm)}, {"solver", solver}, {"units", "internal length; objective units at the iterate the proposal was computed from; Euclidean/Linf norms over full node-major DOFs"}};
+			// Flushed per row: an uncaught solver exception terminates the
+			// process without unwinding, so a buffered stream would lose the
+			// failed attempt's history.
+			attempts.stream << row.dump() << std::endl;
+		};
+		// A pending proposal with a step bound that no accepted iterate
+		// followed was rejected by the line search; one without a step bound
+		// was an ALSolver feasibility check, not a Newton proposal.
+		const auto flush_pending_proposal = [&]() {
+			resolve_extension(false);
+			if (!attempts.has_proposal)
+				return;
+			if (std::isfinite(attempts.step_bound))
+			{
+				const int checks = attempts.line_search_ended ? attempts.ended_validity_checks : attempts.iteration_validity_checks;
+				const int rejections = attempts.line_search_ended ? attempts.ended_validity_rejections : attempts.iteration_validity_rejections;
+				json trial = trial_json();
+				trial["validity_checks"] = checks;
+				trial["validity_rejections"] = rejections;
+				++attempts.rejected_proposals;
+				write_attempt("rejected", attempts.has_iterate ? attempts.iterate_iteration : 0, trial, nullptr, NaN, NaN);
+				// Counted once: what remains is the next proposal's.
+				attempts.iteration_validity_checks -= checks;
+				attempts.iteration_validity_rejections -= rejections;
+			}
+			else
+				++attempts.feasibility_checks;
+			attempts.has_proposal = false;
+			attempts.line_search_ended = false;
+		};
+		if (auto contact = solve_data_.contact_form)
+			contact->reset_candidate_statistics();
+		if (diagnostics_enabled && solve_data_.nl_problem)
+		{
+			attempts.stream.open(resolve_output_path("solver-attempts.jsonl"), std::ios::app);
+			if (!attempts.stream)
+				logger().warn("Could not open solver-attempts.jsonl; attempt stream disabled for step {}", step);
+			solve_data_.nl_problem->set_iteration_observer([&](const solver::IterationObservation &o) {
+				using Kind = solver::IterationObservation::Kind;
+				if (o.kind != Kind::StepBound)
+					resolve_extension(false);
+				switch (o.kind)
+				{
+				case Kind::Validity:
+					// Trials of a feasibility check (proposal without a step bound) are not line-search trials.
+					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
+						break;
+					++attempts.validity_checks;
+					++attempts.iteration_validity_checks;
+					if (!o.valid)
+					{
+						++attempts.validity_rejections;
+						++attempts.iteration_validity_rejections;
+					}
+					break;
+				case Kind::Proposal:
+					flush_pending_proposal();
+					attempts.has_proposal = true;
+					attempts.proposal_builds = solve_data_.contact_form ? solve_data_.contact_form->candidate_statistics().builds : 0;
+					attempts.proposal_x0 = *o.x0;
+					attempts.trial = *o.x1 - *o.x0;
+					attempts.trial_norm = attempts.trial.norm();
+					attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
+					attempts.step_bound = NaN;
+					attempts.unextended_trial_norm = attempts.trial_norm;
+					attempts.extensions = attempts.extension_builds = attempts.extensions_refused = 0;
+					break;
+				case Kind::Extension:
+					// Only a line search in progress (a priced proposal) can
+					// grow; anything else is read as a proposal of its own.
+					if (!attempts.has_proposal || !std::isfinite(attempts.step_bound))
+					{
+						flush_pending_proposal();
+						attempts.has_proposal = true;
+						attempts.proposal_builds = solve_data_.contact_form ? solve_data_.contact_form->candidate_statistics().builds : 0;
+						attempts.proposal_x0 = *o.x0;
+						attempts.trial = *o.x1 - *o.x0;
+						attempts.trial_norm = attempts.trial.norm();
+						attempts.trial_linf = attempts.trial.size() ? attempts.trial.lpNorm<Eigen::Infinity>() : 0;
+						attempts.step_bound = NaN;
+						attempts.unextended_trial_norm = attempts.trial_norm;
+						attempts.extensions = attempts.extension_builds = attempts.extensions_refused = 0;
+						break;
+					}
+					attempts.pending_extension = true;
+					attempts.extension_builds_before = solve_data_.contact_form ? solve_data_.contact_form->candidate_statistics().builds : 0;
+					attempts.extension_x0 = *o.x0;
+					attempts.extension_trial = *o.x1 - *o.x0;
+					break;
+				case Kind::StepBound:
+					// Of the extended sweep when it prices an extension.
+					resolve_extension(true);
+					attempts.step_bound = o.step_bound;
+					break;
+				case Kind::LineSearchEnd:
+					// A real line search ends before its accepted iterate is
+					// reported; only a feasibility check is closed here.
+					if (attempts.has_proposal && !std::isfinite(attempts.step_bound))
+						flush_pending_proposal();
+					else if (attempts.has_proposal)
+					{
+						attempts.line_search_ended = true;
+						attempts.ended_validity_checks = attempts.iteration_validity_checks;
+						attempts.ended_validity_rejections = attempts.iteration_validity_rejections;
+					}
+					break;
+				case Kind::Accepted:
+				{
+					const double energy = info_number(o.solver_info, "energy");
+					const double grad_norm = info_number(o.solver_info, "gradNorm");
+					// PolySolve reports its start point with status NotStarted.
+					// A proposal still pending then was abandoned by a minimize
+					// that failed (a line search that failed on its last
+					// strategy, which a stall restart caught); it is not the
+					// predecessor of this point.
+					const bool minimize_start = o.solver_info && o.solver_info->contains("status")
+												&& (*o.solver_info)["status"] == json(polysolve::nonlinear::Status::NotStarted);
+					if (attempts.has_proposal && (!std::isfinite(attempts.step_bound) || minimize_start))
+						flush_pending_proposal();
+					if (!attempts.has_proposal)
+					{
+						// PolySolve reports the start point before its first
+						// iteration; its gradient is not evaluated yet.
+						++attempts.minimize_index;
+						attempts.iteration_validity_checks = attempts.iteration_validity_rejections = 0;
+						attempts.iterate_iteration = 0;
+						write_attempt("start", 0, nullptr, nullptr, energy, NaN);
+					}
+					else
+					{
+						// o.iteration counts the iterations completed before this update.
+						const int iteration = o.iteration + 1;
+						const Eigen::VectorXd dx = *o.x1 - attempts.proposal_x0;
+						const double fraction = attempts.trial_norm > 0 ? dx.dot(attempts.trial) / (attempts.trial_norm * attempts.trial_norm) : NaN;
+						const json trial = trial_json();
+						const json accepted = {{"fraction_of_trial", finite_or_null(fraction)}, {"norm", dx.norm()}, {"linf", dx.size() ? dx.lpNorm<Eigen::Infinity>() : 0}};
+						// Backtracking beyond the forms' bound is a line-search
+						// truncation; stopping at the bound is the bound's doing.
+						if (std::isfinite(attempts.step_bound) && attempts.step_bound < 1)
+							++attempts.step_bound_limited;
+						if (std::isfinite(fraction) && std::isfinite(attempts.step_bound) && fraction < attempts.step_bound * (1 - 1e-12))
+							++attempts.line_search_truncated;
+						attempts.last_proposal = {{"trial_norm", attempts.trial_norm}, {"trial_linf", attempts.trial_linf}, {"step_bound", finite_or_null(attempts.step_bound)}, {"accepted_fraction_of_trial", finite_or_null(fraction)}, {"accepted_norm", dx.norm()}, {"iteration", iteration}, {"minimize_index", attempts.minimize_index}, {"scope", "Last Newton proposal accepted before this record; the per-iteration stream is solver-attempts.jsonl"}};
+						++attempts.accepted_iterations;
+						write_attempt("accepted", iteration, trial, accepted, energy, grad_norm, solver_diagnostics(o.solver_info));
+						attempts.has_proposal = false;
+						attempts.line_search_ended = false;
+						attempts.iteration_validity_checks = attempts.iteration_validity_rejections = 0;
+						attempts.iterate_iteration = iteration;
+					}
+					attempts.has_iterate = true;
+					attempts.iterate = *o.x1;
+					attempts.iterate_minimize_index = attempts.minimize_index;
+					break;
+				}
+				}
+			});
+			// Barrier energy of the start coordinates under the production
+			// coefficient state at solve start: for the first accepted step of
+			// this process it is B(x_0; theta_0) of the retuning convention.
+			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form); barrier && barrier->enabled())
+			{
+				try
+				{
+					const double scale = solve_data_.time_integrator ? solve_data_.time_integrator->acceleration_scaling() : 1;
+					if (!(scale > 0) || !std::isfinite(scale))
+						throw std::runtime_error("Invalid acceleration scaling");
+					const double energy = barrier->diagnostic_snapshot(diagnostic_start).value(diagnostic_start) / scale;
+					if (!std::isfinite(energy))
+						throw std::runtime_error("Nonfinite barrier energy");
+					diagnostic_observations["barrier_energy_at_solve_start"] = {{"value", energy}, {"scope", "Start coordinates evaluated with the production coefficient state at solve start (private snapshot); physical energy units"}};
+					if (!trajectory_accounting_.has_previous_endpoint)
+					{
+						trajectory_accounting_.previous_endpoint_barrier_energy = energy;
+						trajectory_accounting_.previous_endpoint_barrier_energy_available = true;
+					}
+				}
+				catch (const std::exception &e)
+				{
+					diagnostic_observations["barrier_energy_at_solve_start"] = {{"value", nullptr}, {"unavailable_reason", e.what()}};
+				}
+			}
+		}
+		// Clears the observer before the locals it captures are destroyed
+		// (declared after them, so destroyed first), on every exit path.
+		struct ObserverGuard
+		{
+			std::shared_ptr<solver::NLProblem> problem;
+			~ObserverGuard()
+			{
+				if (problem)
+					problem->set_iteration_observer(nullptr);
+			}
+		} observer_guard{diagnostics_enabled ? solve_data_.nl_problem : nullptr};
+
+		// RB-06 test hook: an injected failure at an accepted Newton iterate
+		// of an AL subsolve or of the reduced solve (solver/advanced/
+		// failure_injection). Cleared on every exit path.
+		struct FaultGuard
+		{
+			std::shared_ptr<solver::NLProblem> problem;
+			~FaultGuard()
+			{
+				if (problem)
+					problem->set_post_step_fault(nullptr);
+			}
+		} fault_guard{failure_injection_.phase == solver::FailureInjection::Phase::ALSubsolve
+							  || failure_injection_.phase == solver::FailureInjection::Phase::Reduced
+						  ? solve_data_.nl_problem
+						  : nullptr};
+		if (fault_guard.problem)
+		{
+			fault_guard.problem->set_post_step_fault([this, step, &diagnostic_phase](const int iteration, const Eigen::VectorXd &) {
+				const auto at = diagnostic_phase == "augmented_lagrangian" ? solver::FailureInjection::Phase::ALSubsolve
+								: diagnostic_phase == "reduced"            ? solver::FailureInjection::Phase::Reduced
+																		   : solver::FailureInjection::Phase::None;
+				if (at != solver::FailureInjection::Phase::None && failure_injection_.matches(at, step, iteration))
+					failure_injection_.raise(fmt::format("accepted Newton iterate {} of the {} solve", iteration, diagnostic_phase));
+			});
 		}
 
-		const double lagging_tol = args["solver"]["contact"].value("friction_convergence_tol", 1e-2) * units.characteristic_length();
-
-		bool lagging_converged = !nl_problem.uses_lagging();
-		for (int lag_i = 1; !lagging_converged; lag_i++)
+		const auto emit_diagnostics = [&](const std::string &outcome, const std::string &error = "") {
+			// RB-12: the manifest's step record, for every outcome, before the
+			// opt-in RB-04 record (which may be disabled).
+			record_manifest_step(step, outcome, diagnostic_phase, diagnostic_termination, diagnostic_lagging,
+								 attempts.stall_retunes,
+								 std::chrono::duration<double>(std::chrono::steady_clock::now() - diagnostic_start_time).count(), error,
+								 outcome == "accepted" ? Eigen::VectorXd(sol) : Eigen::VectorXd());
+			// The next record's history accumulation starts here, written
+			// or not (a failed attempt's rollback restores the solve start's).
+			if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+				barrier->reset_history_sensitivity();
+			try
+			{
+				flush_pending_proposal();
+				json observations = diagnostic_observations;
+				json candidates = nullptr;
+				if (auto contact = solve_data_.contact_form)
+				{
+					const auto &stats = contact->candidate_statistics();
+					candidates = {{"builds", stats.builds}, {"last", stats.last}, {"max", stats.max}};
+					// RB-05: the broad phase's intermediate buffers, when measured.
+					if (stats.intermediates_measured)
+						candidates["intermediates"] = {{"cell_items_last", stats.last_cell_items}, {"cell_items_max", stats.max_cell_items}, {"candidate_emissions_last", stats.last_candidate_emissions}, {"candidate_emissions_max", stats.max_candidate_emissions}, {"scope", "Hash-grid (box, cell) items per build and pre-filter pair emissions per build (emissions counted only while solver.contact.CCD.resource_limits is enabled, otherwise 0)"}};
+					else
+						candidates["intermediates"] = nullptr;
+				}
+				observations["summary"] = {{"minimize_calls", attempts.minimize_index}, {"accepted_iterations", attempts.accepted_iterations}, {"rejected_proposals", attempts.rejected_proposals}, {"aborted_proposals", attempts.aborted_proposals}, {"feasibility_checks", attempts.feasibility_checks}, {"line_search_truncated", attempts.line_search_truncated}, {"step_bound_limited", attempts.step_bound_limited}, {"validity_checks", attempts.validity_checks}, {"validity_rejections", attempts.validity_rejections}, {"stall_retunes", attempts.stall_retunes}, {"line_search_extensions", attempts.line_search_extensions}, {"broad_phase_candidates", candidates}, {"scope", "All PolySolve minimize calls of this attempt (AL, reduced, lagging); restarts and AL weights are in termination and the coefficient-event stream"}};
+				if (attempts.last_proposal.is_object())
+					observations["proposed_displacement"] = attempts.last_proposal;
+				if (outcome != "accepted" && attempts.has_iterate && attempts.iterate.allFinite())
+					observations["last_internal_iterate"] = {{"value", std::vector<double>(attempts.iterate.data(), attempts.iterate.data() + attempts.iterate.size())},
+															 {"iteration", attempts.iterate_iteration},
+															 {"minimize_index", attempts.iterate_minimize_index},
+															 {"scope", "Last accepted Newton iterate observed inside the failed attempt, full coordinates; not the retained caller coordinates and not a restored accepted state. Its objective history is in solver-attempts.jsonl"}};
+				write_physical_diagnostics(step, sol, diagnostic_start, outcome, diagnostic_phase,
+										   diagnostic_termination, diagnostic_lagging, observations,
+										   std::chrono::duration<double>(std::chrono::steady_clock::now() - diagnostic_start_time).count(), error);
+			}
+			catch (const std::exception &e)
+			{
+				logger().warn("Physical diagnostic emission failed: {}", e.what());
+			}
+		};
+		try
 		{
-			Eigen::VectorXd tmp_sol = nl_problem.full_to_reduced(sol);
+			assert(solve_data_.nl_problem != nullptr && "Nonlinear forms must initialize the nonlinear problem before solving");
+			solver::NLProblem &nl_problem = *(solve_data_.nl_problem);
 
-			nl_problem.update_lagging(tmp_sol, lag_i);
+			assert(sol.size() == rhs_.size());
 
-			Eigen::VectorXd grad;
-			nl_problem.gradient(tmp_sol, grad);
-			const double delta_x_norm = (prev_sol - sol).lpNorm<Eigen::Infinity>();
-			logger().debug("Lagging convergence grad_norm={:g} tol={:g} (||Δx||={:g})", grad.norm(), lagging_tol, delta_x_norm);
-			if (grad.norm() <= lagging_tol)
+			if (nl_problem.uses_lagging())
 			{
-				logger().info(
-					"Lagging converged in {:d} iteration(s) (grad_norm={:g} tol={:g})",
-					lag_i, grad.norm(), lagging_tol);
-				lagging_converged = true;
-				break;
+				if (init_lagging)
+				{
+					POLYFEM_SCOPED_TIMER("Initializing lagging");
+					nl_problem.init_lagging(sol);
+				}
+				logger().info("Lagging iteration 1:");
 			}
 
-			if (delta_x_norm <= 1e-12)
+			save_subsolve(0, step, sol);
+
+			std::shared_ptr<polysolve::nonlinear::Solver> nl_solver =
+				polysolve::nonlinear::Solver::create(args["solver"]["augmented_lagrangian"]["nonlinear"], args["solver"]["linear"], units.characteristic_length(), logger());
+
+			// Heuristic initializer from the weighted elastic Hessian only.
+			// This is not a curvature bound relative to the BC metric: inertia,
+			// other forms and coupling are omitted. The numeric floor 1 is
+			// expressed in internal objective/displacement-squared units.
+			double initial_al_weight;
+			if (args["solver"]["augmented_lagrangian"]["initial_weight"].is_string())
 			{
-				logger().warn(
-					"Lagging produced tiny update between iterations {:d} and {:d} (grad_norm={:g} grad_tol={:g} ||Δx||={:g} Δx_tol={:g}); stopping early",
-					lag_i - 1, lag_i, grad.norm(), lagging_tol, delta_x_norm, 1e-6);
-				lagging_converged = false;
-				break;
+				assert(args["solver"]["augmented_lagrangian"]["initial_weight"] == "hessian_scaled");
+				if (solve_data_.elastic_form == nullptr)
+					log_and_throw_error("augmented_lagrangian/initial_weight=\"hessian_scaled\" requires an elastic form!");
+
+				StiffnessMatrix elastic_hessian;
+				solve_data_.elastic_form->second_derivative(sol, elastic_hessian);
+				double max_entry = 0;
+				for (int k = 0; k < elastic_hessian.outerSize(); ++k)
+					for (StiffnessMatrix::InnerIterator it(elastic_hessian, k); it; ++it)
+						max_entry = std::max(max_entry, std::abs(it.value()));
+
+				const double multiplier = args["solver"]["augmented_lagrangian"]["initial_weight_multiplier"];
+				initial_al_weight = std::max(multiplier * max_entry, 1.0);
+				logger().info("Using hessian-scaled initial AL weight: {:g} (max |H| = {:g})", initial_al_weight, max_entry);
+			}
+			else
+				initial_al_weight = args["solver"]["augmented_lagrangian"]["initial_weight"];
+
+			// Stall detection: restart the nonlinear solve with retuned barrier
+			// stiffness when the line search collapses (semi-implicit mode only).
+			solver::StallRestartOptions stall_opts;
+			std::function<bool(const Eigen::VectorXd &)> on_stall = nullptr;
+			if (auto barrier_form = std::dynamic_pointer_cast<solver::BarrierContactForm>(solve_data_.contact_form);
+				barrier_form != nullptr && barrier_form->uses_semi_implicit_stiffness())
+			{
+				const json &restart_opts = args["solver"]["contact"]["semi_implicit"]["restart"];
+				stall_opts = solver::StallRestartOptions::from_json(restart_opts);
+
+				const double stall_trim_factor = restart_opts["stall_trim_factor"];
+				on_stall = [this, barrier_form, stall_trim_factor, step, &attempts](const Eigen::VectorXd &x) {
+					++attempts.stall_retunes;
+					const bool retuned = barrier_form->retune_on_stall(x, stall_trim_factor);
+					// RB-06 test hook: a failure between a coefficient
+					// correction and the equilibrium solve that would use it.
+					if (failure_injection_.matches(solver::FailureInjection::Phase::AfterStallRetune, step))
+						failure_injection_.raise("stall restart hook, after the barrier stiffness retune");
+					return retuned;
+				};
 			}
 
-			if (lag_i >= nl_problem.max_lagging_iterations())
+			// Open item D8 (solver/advanced/stall_restart): stall restarts for
+			// every solve without the semi-implicit retune; the remedy forces
+			// PSD projection for the rest of the step.
+			bool general_stall_restarts = false, stall_force_psd = false;
+			if (on_stall == nullptr && args["solver"]["advanced"]["stall_restart"]["enabled"].get<bool>())
 			{
-				logger().warn(
-					"Lagging failed to converge with {:d} iteration(s) (grad_norm={:g} tol={:g})",
-					lag_i, grad.norm(), lagging_tol);
-				lagging_converged = false;
-				break;
+				const json &general_restart = args["solver"]["advanced"]["stall_restart"];
+				stall_opts = solver::StallRestartOptions::from_json(general_restart);
+				general_stall_restarts = true;
+				stall_force_psd = general_restart["remedy"].get<std::string>() == "force_psd_projection";
 			}
 
-			logger().info("Lagging iteration {:d}:", lag_i + 1);
-			nl_problem.init(sol);
-			solve_data_.update_barrier_stiffness(sol);
-			nl_problem.normalize_forms();
-			nl_solver->minimize(nl_problem, tmp_sol);
-			nl_problem.finish();
-			prev_sol = sol;
-			sol = nl_problem.reduced_to_full(tmp_sol);
+			ALSolver al_solver(
+				solve_data_.al_form,
+				initial_al_weight,
+				args["solver"]["augmented_lagrangian"]["scaling"],
+				args["solver"]["augmented_lagrangian"]["max_weight"],
+				args["solver"]["augmented_lagrangian"]["eta"],
+				[&](const Eigen::VectorXd &x) {
+					this->solve_data_.update_barrier_stiffness(sol);
+				},
+				stall_opts, on_stall);
+			// RB-07: opt-in AL pass budget / stagnation exit (off by default).
+			al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"]));
+			// Line-search failure recovery for every solve without stall
+			// restarts (solver/advanced/line_search_failure_restarts).
+			if (general_stall_restarts)
+				al_solver.enable_general_stall_restarts(stall_force_psd);
+			al_solver.set_line_search_failure_recovery(
+				args["solver"]["advanced"]["line_search_failure_restarts"].get<int>(),
+				solver::SolveData::classic_stiffness_recalibration(solve_data_));
 
-			stats.solver_info.push_back(
-				{{"type", "rc"},
-				 {"t", step},
-				 {"lag_i", lag_i},
-				 {"info", nl_solver->info()}});
-			save_subsolve(stats.solver_info.size(), step, sol);
+			al_solver.post_subsolve = [&](const double al_weight) {
+				diagnostic_termination = al_solver.info();
+				stats.solver_info.push_back(
+					{{"type", al_weight > 0 ? "al" : "rc"},
+					 {"t", step},
+					 {"info", al_solver.info()}});
+				if (al_weight > 0)
+					stats.solver_info.back()["weight"] = al_weight;
+				save_subsolve(stats.solver_info.size(), step, sol);
+			};
+
+			Eigen::MatrixXd prev_sol = sol;
+			diagnostic_phase = "augmented_lagrangian";
+			configure_coefficient_diagnostics(step, diagnostic_phase);
+			try
+			{
+				al_solver.solve_al(nl_problem, sol,
+								   args["solver"]["augmented_lagrangian"]["nonlinear"], args["solver"]["linear"], units.characteristic_length());
+			}
+			catch (const solver::ALBudgetExhausted &e)
+			{
+				// RB-07: the stage's reason and pass history travel with the
+				// subsolve state into the failure record and the manifest.
+				diagnostic_termination = al_solver.info();
+				diagnostic_termination["al_stagnation"] = e.details();
+				throw;
+			}
+			catch (...)
+			{
+				diagnostic_termination = al_solver.info();
+				throw;
+			}
+			// RB-06 test hook: a failure between the feasibility stage and
+			// the reduced solve (the AL multipliers, weights and any stall
+			// retune of that stage are then attempt state to roll back).
+			if (failure_injection_.matches(solver::FailureInjection::Phase::AfterAL, step))
+				failure_injection_.raise("after the augmented-Lagrangian stage, before the reduced solve");
+
+			diagnostic_phase = "reduced";
+			configure_coefficient_diagnostics(step, diagnostic_phase);
+			try
+			{
+				al_solver.solve_reduced(nl_problem, sol,
+										args["solver"]["nonlinear"], args["solver"]["linear"], units.characteristic_length());
+			}
+			catch (...)
+			{
+				diagnostic_termination = al_solver.info();
+				throw;
+			}
+
+			if (args["space"]["advanced"]["count_flipped_els_continuous"])
+			{
+				const auto invalidList = utils::count_invalid(mesh_->dimension(), space_.basis_list(), space_.geometry_basis_list(), sol);
+				logger().debug("Flipped elements (cnt {}) : {}", invalidList.size(), invalidList);
+			}
+
+			const double lagging_tol = args["solver"]["contact"].value("friction_convergence_tol", 1e-2) * units.characteristic_length();
+
+			bool lagging_converged = !nl_problem.uses_lagging();
+			diagnostic_lagging = {{"state", lagging_converged ? "not applicable" : "pending"}};
+			for (int lag_i = 1; !lagging_converged; lag_i++)
+			{
+				Eigen::VectorXd tmp_sol = nl_problem.full_to_reduced(sol);
+
+				diagnostic_phase = "lagging";
+				configure_coefficient_diagnostics(step, diagnostic_phase);
+				const json friction_before = diagnostics_enabled ? observe_friction() : json();
+				nl_problem.update_lagging(tmp_sol, lag_i);
+				// RB-06 test hook: a failure right after the friction lag was
+				// rebuilt at the returned coordinates.
+				if (failure_injection_.matches(solver::FailureInjection::Phase::Lagging, step, lag_i))
+					failure_injection_.raise(fmt::format("lagging iteration {}, after the lag update", lag_i));
+
+				Eigen::VectorXd grad;
+				nl_problem.gradient(tmp_sol, grad);
+				diagnostic_lagging = {{"iteration", lag_i}, {"updated_lag_residual_norm_objective", grad.norm()}, {"tolerance", lagging_tol}, {"state", "not converged"}};
+				if (diagnostics_enabled)
+				{
+					diagnostic_lagging["friction_before_update"] = friction_before;
+					diagnostic_lagging["friction_after_update"] = observe_friction();
+				}
+				const double delta_x_norm = (prev_sol - sol).lpNorm<Eigen::Infinity>();
+				logger().debug("Lagging convergence grad_norm={:g} tol={:g} (||Δx||={:g})", grad.norm(), lagging_tol, delta_x_norm);
+				if (grad.norm() <= lagging_tol)
+				{
+					logger().info(
+						"Lagging converged in {:d} iteration(s) (grad_norm={:g} tol={:g})",
+						lag_i, grad.norm(), lagging_tol);
+					diagnostic_lagging["state"] = "converged";
+					lagging_converged = true;
+					break;
+				}
+
+				if (delta_x_norm <= 1e-12)
+				{
+					logger().warn(
+						"Lagging produced tiny update between iterations {:d} and {:d} (grad_norm={:g} grad_tol={:g} ||Δx||={:g} Δx_tol={:g}); stopping early",
+						lag_i - 1, lag_i, grad.norm(), lagging_tol, delta_x_norm, 1e-6);
+					lagging_converged = false;
+					break;
+				}
+
+				if (lag_i >= nl_problem.max_lagging_iterations())
+				{
+					logger().warn(
+						"Lagging failed to converge with {:d} iteration(s) (grad_norm={:g} tol={:g})",
+						lag_i, grad.norm(), lagging_tol);
+					lagging_converged = false;
+					break;
+				}
+
+				logger().info("Lagging iteration {:d}:", lag_i + 1);
+				nl_problem.init(sol);
+				solve_data_.update_barrier_stiffness(sol);
+				nl_problem.normalize_forms();
+				nl_solver->minimize(nl_problem, tmp_sol);
+				diagnostic_termination = nl_solver->info();
+				diagnostic_termination["termination_reason"] = polysolve::nonlinear::status_message(nl_solver->status());
+				nl_problem.finish();
+				prev_sol = sol;
+				sol = nl_problem.reduced_to_full(tmp_sol);
+
+				stats.solver_info.push_back(
+					{{"type", "rc"},
+					 {"t", step},
+					 {"lag_i", lag_i},
+					 {"info", nl_solver->info()}});
+				save_subsolve(stats.solver_info.size(), step, sol);
+			}
+			diagnostic_phase = "returned_endpoint";
+			emit_diagnostics("accepted");
 		}
+		catch (const std::exception &e)
+		{
+			diagnostic_termination = {{"exception", e.what()}, {"subsolve_state_at_failure", diagnostic_termination}};
+			// RB-05: a proposal still pending when the attempt fails was neither
+			// accepted nor rejected -- an exception abandoned its line search
+			// (a broad-phase resource failure, an allocation failure). Record
+			// it with its trial norms and whether the broad phase completed
+			// its build, instead of letting the flush misfile it.
+			resolve_extension(false);
+			if (attempts.has_proposal)
+			{
+				json trial = trial_json();
+				trial["broad_phase_built"] = solve_data_.contact_form && solve_data_.contact_form->candidate_statistics().builds > attempts.proposal_builds;
+				write_attempt("aborted", attempts.has_iterate ? attempts.iterate_iteration : 0, trial, nullptr, NaN, NaN);
+				++attempts.aborted_proposals;
+				attempts.has_proposal = false;
+			}
+			// RB-06: the failure record keeps the RB-04 contract -- the
+			// retained caller coordinates with the attempt's form state, i.e.
+			// what the failed attempt left behind -- and announces the rollback
+			// that follows it; the manifest's step record then carries the
+			// rollback's verification.
+			diagnostic_observations["rollback"] = {
+				{"performed", "after this record"},
+				{"restores", "the solution vector, every form's attempt state (Form::save_state: contact snapshot, trim and memo, swept candidates, friction lag, AL multipliers and weights, lagged fields, form weights/scales/enabled flags) and the problem's coordinate mode, all captured at solve start"},
+				{"not_restored", "the time-integration history (not touched by an attempt; checked), diagnostic event counters (monotonic), files of earlier accepted steps (untouched either way)"},
+				{"verification", "run-manifest.json steps[].rollback (fingerprint equality after the restore) and the log"}};
+			emit_diagnostics("failed_attempt", e.what());
+			json rollback = {{"performed", false}, {"verified", false}};
+			try
+			{
+				solve_data_.nl_problem->restore_state(*rollback_point.state, rollback_point.solution);
+				sol = rollback_point.solution;
+				output_time_phase_ = rollback_point.output_time_phase;
+				rollback["performed"] = true;
+				const json after = attempt_state_fingerprint(sol);
+				rollback["verified"] = after == rollback_point.fingerprint;
+				if (rollback["verified"].get<bool>())
+					logger().warn(
+						"Step {}: the failed attempt was rolled back; the solution and the forms are at the last accepted state again (verified). The failed iterate is kept only in the diagnostic records. Failure: {}",
+						step, e.what());
+				else
+				{
+					rollback["fingerprint_at_capture"] = rollback_point.fingerprint;
+					rollback["fingerprint_after_restore"] = after;
+					logger().error(
+						"Step {}: the failed attempt was rolled back but the restored state does not match the state captured at solve start (see run-manifest.json steps[].rollback); a member of a form's attempt state is not covered by Form::save_state",
+						step);
+				}
+			}
+			catch (const std::exception &restore_error)
+			{
+				rollback["error"] = restore_error.what();
+				logger().critical("Step {}: rollback of the failed attempt failed: {}", step, restore_error.what());
+			}
+			logger().flush();
+			if (run_manifest_)
+				run_manifest_->amend_last_step({{"rollback", rollback}});
+			throw;
+		}
+	}
+
+	json NonlinearElasticVarForm::attempt_state_fingerprint(const Eigen::VectorXd &sol) const
+	{
+		json fingerprint = {{"solution_size", sol.size()}, {"solution_norm", sol.norm()}, {"solution_linf", sol.size() > 0 ? sol.lpNorm<Eigen::Infinity>() : 0.0}};
+		if (auto barrier = std::dynamic_pointer_cast<BarrierContactForm>(solve_data_.contact_form))
+			fingerprint["contact"] = barrier->diagnostic_state();
+		else if (solve_data_.contact_form)
+			fingerprint["contact"] = {{"stiffness", solve_data_.contact_form->barrier_stiffness()}};
+		if (solve_data_.friction_form)
+		{
+			const auto &lag = solve_data_.friction_form->friction_collision_set();
+			double normal_force_sum = 0;
+			for (size_t i = 0; i < lag.size(); ++i)
+				normal_force_sum += lag[i].weight * lag[i].normal_force_magnitude;
+			fingerprint["friction"] = {{"lag_size", lag.size()}, {"lagged_normal_force_sum", normal_force_sum}, {"trim_scale", solve_data_.friction_form->trim_scale()}};
+		}
+		json al = json::array();
+		for (const auto &form : solve_data_.al_form)
+			al.push_back({{"name", form->name()}, {"weight", form->lagrangian_weight()}, {"multiplier_norm", form->lagrange_multipliers().norm()}, {"multiplier_size", form->lagrange_multipliers().size()}});
+		fingerprint["augmented_lagrangian"] = al;
+		json weights = json::object();
+		for (const auto &form : forms)
+			weights[form->name()] = {{"weight", form->weight()}, {"enabled", form->enabled()}};
+		fingerprint["forms"] = weights;
+		if (solve_data_.time_integrator)
+		{
+			const auto &integrator = *solve_data_.time_integrator;
+			fingerprint["history"] = {{"steps", integrator.steps()}, {"x_prev_norm", integrator.x_prev().norm()}, {"v_prev_norm", integrator.v_prev().norm()}, {"a_prev_norm", integrator.a_prev().norm()}, {"dt", integrator.dt()}};
+			fingerprint["output_time_phase"] = output_time_phase_ == OutputTimePhase::HistoryHead ? "history_head" : "current_step_before_advance"; // RBR-01
+		}
+		return fingerprint;
 	}
 
 } // namespace polyfem::varform

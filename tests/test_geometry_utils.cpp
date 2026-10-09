@@ -9,6 +9,7 @@
 #include <polyfem/mesh/mesh3D/Mesh3D.hpp>
 #include <polyfem/mesh/mesh3D/NCMesh3D.hpp>
 #include <polyfem/utils/GeometryUtils.hpp>
+#include <polyfem/utils/Selection.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -558,4 +559,99 @@ TEST_CASE("geometry reader obstacle geometry arrays and planes", "[geometry][geo
 		{"type", "invalid"}};
 	REQUIRE_THROWS(read_obstacle_geometry(units, json::array({invalid}), {}, {}, "", 2));
 	REQUIRE_THROWS(read_fem_geometry(units, json::array(), ""));
+}
+
+TEST_CASE("selection objects without an id", "[geometry][selection]")
+{
+	// Selection::build used to read selection["id"] through const
+	// json::operator[] before looking for "file"; on {"file": ...} (the form
+	// the Houdini asset exports) that dereferenced end() and occasionally
+	// crashed. With nlohmann's JSON_ASSERT enabled it aborts deterministically.
+	using namespace polyfem;
+	using namespace polyfem::utils;
+
+	const std::filesystem::path file = write_geometry_reader_obj(
+		"sidesets.txt",
+		"5 0 1 2\n"
+		"7 1 2 3\n");
+	const std::string root = file.parent_path().string();
+	const Selection::BBox bbox{{RowVectorNd::Zero(3), RowVectorNd::Ones(3)}};
+
+	SECTION("file only")
+	{
+		const json j = {{"file", file.filename().string()}};
+		const auto selection = Selection::build(j, bbox, root);
+		REQUIRE(std::dynamic_pointer_cast<FileSelection>(selection) != nullptr);
+		CHECK(selection->boundary_only());
+		CHECK(selection->inside(0, {1, 2, 3}, RowVectorNd::Zero(3)));
+		CHECK(selection->id(0, {1, 2, 3}, RowVectorNd::Zero(3)) == 7);
+		CHECK_FALSE(selection->inside(0, {0, 1, 3}, RowVectorNd::Zero(3)));
+	}
+
+	SECTION("file list, as exported by Houdini")
+	{
+		const json j = json::array({{{"file", file.filename().string()}, {"boundary_only", false}}});
+		const auto selections = Selection::build_selections(j, bbox, root);
+		REQUIRE(selections.size() == 1);
+		REQUIRE(std::dynamic_pointer_cast<FileSelection>(selections[0]) != nullptr);
+		CHECK_FALSE(selections[0]->boundary_only());
+		CHECK(selections[0]->id(0, {0, 1, 2}, RowVectorNd::Zero(3)) == 5);
+	}
+
+	SECTION("string id is a file path")
+	{
+		const json j = {{"id", file.filename().string()}, {"id_offset", 10}};
+		const auto selection = Selection::build(j, bbox, root);
+		REQUIRE(std::dynamic_pointer_cast<FileSelection>(selection) != nullptr);
+		CHECK(selection->id(0, {0, 1, 2}, RowVectorNd::Zero(3)) == 15);
+	}
+
+	SECTION("integer id is uniform")
+	{
+		const auto selection = Selection::build(json{{"id", 3}}, bbox, root);
+		REQUIRE(std::dynamic_pointer_cast<UniformSelection>(selection) != nullptr);
+		CHECK(selection->inside(0, {0}, RowVectorNd::Zero(3)));
+		CHECK(selection->id(0, {0}, RowVectorNd::Zero(3)) == 3);
+	}
+
+	SECTION("unrecognized or incomplete selections throw")
+	{
+		CHECK_THROWS(Selection::build(json::object(), bbox, root));
+		CHECK_THROWS(Selection::build(json{{"relative", true}}, bbox, root));
+		// the shape constructors read their required keys with at()
+		CHECK_THROWS(Selection::build(json{{"normal", {0, 0, 1}}}, bbox, root));
+		CHECK_THROWS(Selection::build(json{{"box", {{0, 0, 0}, {1, 1, 1}}}}, bbox, root));
+		CHECK_THROWS(Selection::build(json{{"id", 1}, {"center", {0, 0, 0}}}, bbox, root));
+	}
+}
+
+TEST_CASE("obstacle displacements tolerate file-path Dirichlet entries", "[geometry][geometry_reader][selection]")
+{
+	using namespace polyfem;
+	using namespace polyfem::mesh;
+
+	const Units units;
+	const std::filesystem::path line_path = write_geometry_reader_obj(
+		"selected_line.obj",
+		"v 0 0 0\n"
+		"v 1 0 0\n"
+		"l 1 2\n");
+
+	json obstacle = obstacle_mesh_json(line_path, "edges");
+	obstacle["enabled"] = true;
+	obstacle["is_obstacle"] = true;
+	obstacle["type"] = "mesh";
+	obstacle["surface_selection"] = 3;
+
+	// dirichlet_boundary entries may be file paths; they name no obstacle id
+	const std::vector<json> dirichlets = {json("dirichlet_nodes.txt"), json{{"id", 1}, {"value", {0, 0}}}};
+	const std::vector<json> displacements = {json{{"id", 3}, {"value", {0.5, 0}}}};
+	const Obstacle selected = read_obstacle_geometry(units, json::array({obstacle}), displacements, dirichlets, "", 2);
+	CHECK(selected.n_vertices() == 2);
+
+	// a value with fewer components than the dimension is a named error
+	const std::vector<json> short_value = {json{{"id", 3}, {"value", json::array({0.5})}}};
+	CHECK_THROWS_WITH(
+		read_obstacle_geometry(units, json::array({obstacle}), short_value, {}, "", 2),
+		Catch::Matchers::ContainsSubstring("needs 2 components"));
 }

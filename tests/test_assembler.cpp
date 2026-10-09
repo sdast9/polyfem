@@ -21,11 +21,17 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
+#include <polyfem/legacy/State.hpp>
+#include <polyfem/assembler/HGOFiber.hpp>
 
 using namespace polyfem;
 using namespace polyfem::assembler;
@@ -1474,7 +1480,14 @@ TEST_CASE("assembler material dispatch", "[assembler]")
 	assembler.root_paths.clear();
 	const json materials = json::array({{{"id", json::array({7, 9})}, {"value", 70}},
 										{{"id", 8}, {"value", 80}}});
-	assembler.set_materials({7, 8, 9, 10}, materials, units, "/materials");
+	// RB-11: a body without a material entry is a named error (it used to be
+	// a warning followed by placeholder parameters or an out-of-range read)
+	REQUIRE_THROWS_WITH(assembler.set_materials({7, 8, 9, 10}, materials, units, "/materials"),
+						Catch::Matchers::ContainsSubstring("No material for body id [10]"));
+	assembler.indices.clear();
+	assembler.materials.clear();
+	assembler.root_paths.clear();
+	assembler.set_materials({7, 8, 9}, materials, units, "/materials");
 	REQUIRE(assembler.indices == std::vector<int>{0, 1, 2});
 	REQUIRE(assembler.materials[0]["value"] == 70);
 	REQUIRE(assembler.materials[1]["value"] == 80);
@@ -1497,4 +1510,89 @@ TEST_CASE("per-body material arrays use body-local element indices", "[assembler
 	CHECK(mass.density()(p, p, 0, 1) == 20.0);
 	CHECK(mass.density()(p, p, 0, 2) == 11.0);
 	CHECK(mass.density()(p, p, 0, 3) == 21.0);
+}
+
+TEST_CASE("Simulation initialization owns scalar and fiber snapshots", "[material_cache]")
+{
+	const auto base = std::filesystem::temp_directory_path() / ("polyfem-state-cache-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(base);
+	struct Cleanup
+	{
+		std::filesystem::path p;
+		~Cleanup() { std::filesystem::remove_all(p); }
+	} cleanup{base};
+	const auto scalar = (base / "values.txt").string();
+	const auto fiber = (base / "fiber.vtk").string();
+	auto write = [&](int value) {
+		std::ofstream(scalar) << value << "\n";
+		std::ofstream(fiber) << "# vtk DataFile Version 3.0\nfibers\nASCII\nDATASET UNSTRUCTURED_GRID\nCELL_DATA 1\nVECTORS FIB_DIR1 double\n"
+							 << value << " 1 0\n";
+	};
+	Eigen::MatrixXd V(4, 3);
+	V << 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1;
+	Eigen::MatrixXi F(1, 4);
+	F << 0, 1, 2, 3;
+	json args;
+	args["geometry"][0]["mesh"] = "";
+	args["materials"] = {{"type", "HGOFiber"}, {"k1", scalar}, {"k2", 1}, {"fiber_direction", {{"type", "per_element_file"}, {"path", fiber}}}};
+	const RowVectorNd zero = RowVectorNd::Zero(3);
+	auto check = [&](const Assembler &a, int value) {
+		auto params = a.parameters();
+		CHECK(params.at("k1")(zero, zero, 0, 0) == value);
+		CHECK(params.at("fiber_direction_x")(zero, zero, 0, 0) == Catch::Approx(value / std::sqrt(double(value * value + 1))));
+	};
+	SECTION("VarForm simulation and reinitialization")
+	{
+		write(1);
+		State old;
+		old.init(args, false);
+		old.load_mesh(V, F);
+		auto assembler_of = [](const State &s) { return &test::VarFormTestAccess::material_assembler(*s.variational_formulation); };
+		check(*assembler_of(old), 1);
+		write(9);
+		State fresh;
+		fresh.init(args, false);
+		fresh.load_mesh(V, F);
+		check(*assembler_of(fresh), 9);
+		check(*assembler_of(old), 1);
+		old.load_mesh(V, F); // same input snapshot even when materials are rebuilt
+		check(*assembler_of(old), 1);
+		old.init(args, false);
+		old.load_mesh(V, F);
+		check(*assembler_of(old), 9);
+	}
+	SECTION("Legacy simulation and reinitialization")
+	{
+		write(1);
+		legacy::State old;
+		old.init(args, false);
+		old.load_mesh(V, F);
+		check(*old.assembler, 1);
+		write(9);
+		legacy::State fresh;
+		fresh.init(args, false);
+		fresh.load_mesh(V, F);
+		check(*fresh.assembler, 9);
+		check(*old.assembler, 1);
+		old.load_mesh(V, F);
+		check(*old.assembler, 1);
+		old.init(args, false);
+		old.load_mesh(V, F);
+		check(*old.assembler, 9);
+	}
+	SECTION("Assembler reused with a new explicit snapshot")
+	{
+		write(1);
+		HGOFiber a;
+		a.set_size(3);
+		Units units;
+		auto snapshot = std::make_shared<MaterialFileCache>();
+		a.set_materials({0}, args["materials"], units, "", snapshot);
+		check(a, 1);
+		write(9);
+		a.set_materials({0}, args["materials"], units, "", snapshot);
+		check(a, 1);
+		a.set_materials({0}, args["materials"], units, "", std::make_shared<MaterialFileCache>());
+		check(a, 9);
+	}
 }

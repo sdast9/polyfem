@@ -6,12 +6,18 @@
 #include <Eigen/Core>
 #include <igl/PI.h>
 #include <filesystem>
+#include <string>
+#include <vector>
 
 namespace polyfem
 {
 	namespace utils
 	{
-		void apply_common_params(json &args);
+		/// @brief Expand the `common` chain of an input in place.
+		/// @param[out] chain When given, every common file that was applied:
+		///             the input's own `common` first, then that file's, and so
+		///             on -- the run manifest records them.
+		void apply_common_params(json &args, std::vector<std::string> *chain = nullptr);
 
 		/// @brief Expand string entries in dirichlet_boundary that point to .json files
 		void expand_bc_sidecars(json &args, const json &rules);

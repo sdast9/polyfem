@@ -842,6 +842,30 @@ namespace polyfem
 
 					nodal_dirichlet_[current_id].interpolation = displacements_[i].interpolation;
 				}
+
+				// RB-11: dirichlet_bc() applies the first matching entry, so a
+				// second entry for the same id (or any id after an "all" entry
+				// on the same FE space) can never act -- refuse it instead of
+				// silently dropping one prescription.
+				for (size_t i = offset; i < boundary_ids_.size(); ++i)
+				{
+					if (displacements_[i].size == 0)
+						continue; // a nodal-value file entry, not an id
+					for (size_t j = i + 1; j < boundary_ids_.size(); ++j)
+					{
+						if (displacements_[j].size == 0 || displacements_[i].fe_space_id != displacements_[j].fe_space_id)
+							continue;
+						if (boundary_ids_[i] == boundary_ids_[j])
+							log_and_throw_error(
+								"dirichlet_boundary has two entries for id {}{} (entries {} and {}); only the first would act -- merge them into one entry",
+								boundary_ids_[i] < 0 ? std::string("all") : std::to_string(boundary_ids_[i]),
+								displacements_[i].fe_space_id >= 0 ? fmt::format(" on FE space {}", displacements_[i].fe_space_id) : "", i, j);
+						if (boundary_ids_[i] < 0)
+							log_and_throw_error(
+								"dirichlet_boundary entry {} for id {} follows the entry {} for id \"all\" and would never act; put specific ids before \"all\" or remove one of them",
+								j, boundary_ids_[j], i);
+					}
+				}
 			}
 
 			if (is_param_valid(params, "neumann_boundary"))
@@ -968,7 +992,12 @@ namespace polyfem
 					if (j_boundary[i - offset].contains("time_reference") && j_boundary[i - offset]["time_reference"].size() > 0)
 						pressures_[i].value.set_t(j_boundary[i - offset]["time_reference"]);
 
-					pressures_[i].interpolation = std::make_shared<NoInterpolation>();
+					// The time function multiplies the value, as for the
+					// normal-aligned Neumann condition.
+					if (j_boundary[i - offset].contains("interpolation"))
+						pressures_[i].interpolation = Interpolation::build(j_boundary[i - offset]["interpolation"]);
+					else
+						pressures_[i].interpolation = std::make_shared<NoInterpolation>();
 				}
 			}
 
@@ -993,7 +1022,10 @@ namespace polyfem
 						auto ff = j_boundary[i - offset]["value"];
 						cavity_pressures_[boundary_id].value.init(ff, root_path);
 
-						cavity_pressures_[boundary_id].interpolation = std::make_shared<NoInterpolation>();
+						if (j_boundary[i - offset].contains("interpolation"))
+							cavity_pressures_[boundary_id].interpolation = Interpolation::build(j_boundary[i - offset]["interpolation"]);
+						else
+							cavity_pressures_[boundary_id].interpolation = std::make_shared<NoInterpolation>();
 					}
 				}
 			}

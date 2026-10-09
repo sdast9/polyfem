@@ -1,0 +1,705 @@
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <polyfem/solver/forms/BarrierContactForm.hpp>
+#include <polysolve/nonlinear/PostStepData.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <future>
+#include <tuple>
+#include <vector>
+
+using namespace polyfem;
+using namespace polyfem::solver;
+
+namespace
+{
+	const Eigen::VectorXd zero = Eigen::VectorXd::Zero(6);
+
+	ipc::CollisionMesh make_mesh(bool alternate = false)
+	{
+		Eigen::MatrixXd vertices(3, 2);
+		vertices << -1, 0, 1, 0, 0, .2;
+		Eigen::MatrixXi edges(1, 2);
+		edges << 0, (alternate ? 2 : 1);
+		return ipc::CollisionMesh(vertices, edges);
+	}
+
+	// Only the reference exposes a direct rebuild, bypassing the production
+	// position-cache path entirely. Stiffness/derivatives use the real form.
+	class ReferenceForm : public BarrierContactForm
+	{
+	public:
+		ReferenceForm(const ipc::CollisionMesh &mesh, double support, BarrierStiffnessMode mode, const json &options = json::object())
+			: BarrierContactForm(mesh, support, 1., false, false, false, false, false, false,
+								 ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, mode,
+								 options, Eigen::VectorXd::Ones(3))
+		{
+			set_system_hessian_provider([](const Eigen::VectorXd &, StiffnessMatrix &h) {
+				h.resize(6, 6);
+				h.setIdentity();
+				h *= 100.;
+			});
+		}
+
+		void direct_rebuild(const Eigen::VectorXd &x)
+		{
+			collision_set_.build(collision_mesh_, compute_displaced_surface(x), dhat_, dmin_, broad_phase_.get());
+			assign_collision_stiffness(collision_set_);
+		}
+	};
+
+	struct Sample
+	{
+		std::vector<std::array<long, 5>> stencils;
+		double energy;
+		Eigen::VectorXd gradient;
+		Eigen::MatrixXd hessian;
+	};
+
+	Sample sample(const BarrierContactForm &form, const ipc::CollisionMesh &mesh, const Eigen::VectorXd &x)
+	{
+		Sample result;
+		const auto &collisions = form.collision_set();
+		for (size_t i = 0; i < collisions.size(); ++i)
+		{
+			const auto ids = collisions[i].vertex_ids(mesh.edges(), mesh.faces());
+			const long type = collisions.is_vertex_vertex(i) ? 0 : collisions.is_edge_vertex(i) ? 1
+															   : collisions.is_edge_edge(i)     ? 2
+																								: 3;
+			result.stencils.push_back({{type, long(ids[0]), long(ids[1]), long(ids[2]), long(ids[3])}});
+		}
+		std::sort(result.stencils.begin(), result.stencils.end());
+		result.energy = form.value(x);
+		form.first_derivative(x, result.gradient);
+		StiffnessMatrix h;
+		form.second_derivative(x, h);
+		result.hessian = Eigen::MatrixXd(h);
+		return result;
+	}
+
+	Sample reference(const ipc::CollisionMesh &mesh, double support, BarrierStiffnessMode mode, const Eigen::VectorXd &x = zero)
+	{
+		ReferenceForm form(mesh, support, mode);
+		form.direct_rebuild(zero);
+		form.refresh_semi_implicit_stiffness(zero, false);
+		form.direct_rebuild(x);
+		return sample(form, mesh, x);
+	}
+
+	void check(const Sample &actual, const Sample &expected)
+	{
+		CHECK(actual.stencils == expected.stencils);
+		CHECK(std::isfinite(actual.energy));
+		CHECK(actual.gradient.allFinite());
+		CHECK(actual.hessian.allFinite());
+		// Unit-scale geometry, gap .2, Hessian 100 I, far from singularity.
+		CHECK(std::abs(actual.energy - expected.energy) <= 1e-10 + 1e-10 * std::abs(expected.energy));
+		CHECK((actual.gradient - expected.gradient).norm() <= 1e-10 + 1e-10 * expected.gradient.norm());
+		CHECK((actual.hessian - expected.hessian).norm() <= 1e-10 + 1e-10 * expected.hessian.norm());
+	}
+} // namespace
+
+TEST_CASE("Contact forms own their collision sets independent of evaluation order", "[contact_cache]")
+{
+	const auto mode = GENERATE(BarrierStiffnessMode::Fixed, BarrierStiffnessMode::SemiImplicit);
+	const bool reverse = GENERATE(false, true);
+	const int variant = GENERATE(0, 1, 2); // same geometry; different topology; different support
+	CAPTURE(int(mode), reverse, variant);
+	auto mesh_a = make_mesh();
+	auto mesh_b = make_mesh(variant == 1);
+	const double support_b = variant == 2 ? .1 : 1.;
+	const auto expected_a = reference(mesh_a, 1., mode);
+	const auto expected_b = reference(mesh_b, support_b, mode);
+	REQUIRE(expected_a.stencils.size() == 1);
+	REQUIRE(expected_a.energy > 0);
+	ReferenceForm a(mesh_a, 1., mode), b(mesh_b, support_b, mode);
+	auto evaluate = [&](ReferenceForm &form, const ipc::CollisionMesh &mesh, const Sample &expected) {
+		form.init(zero);
+		form.refresh_semi_implicit_stiffness(zero, false);
+		check(sample(form, mesh, zero), expected);
+	};
+	if (reverse)
+	{
+		evaluate(b, mesh_b, expected_b);
+		evaluate(a, mesh_a, expected_a);
+		evaluate(b, mesh_b, expected_b);
+	}
+	else
+	{
+		evaluate(a, mesh_a, expected_a);
+		evaluate(b, mesh_b, expected_b);
+		evaluate(a, mesh_a, expected_a);
+	}
+	// A new simulation/form must initialize even after an equal-position form.
+	ReferenceForm fresh(mesh_a, 1., mode);
+	fresh.init(zero);
+	fresh.refresh_semi_implicit_stiffness(zero, false);
+	check(sample(fresh, mesh_a, zero), expected_a);
+}
+
+TEST_CASE("Contact rebuilds follow candidate and filter lifecycle at unchanged positions", "[contact_cache]")
+{
+	const auto mode = GENERATE(BarrierStiffnessMode::Fixed, BarrierStiffnessMode::SemiImplicit);
+	auto mesh = make_mesh();
+	const auto expected = reference(mesh, 1., mode);
+	ReferenceForm form(mesh, 1., mode);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	form.solution_changed(zero);
+	check(sample(form, mesh, zero), expected);
+
+	// Collision topology has const accessors; the supported mutable filter
+	// changes candidate eligibility without changing any coordinates.
+	mesh.can_collide = [](size_t, size_t) { return false; };
+	const auto empty = reference(mesh, 1., mode);
+	REQUIRE(empty.stencils.empty());
+	form.line_search_begin(zero, zero);
+	form.solution_changed(zero);
+	check(sample(form, mesh, zero), empty);
+	form.line_search_end();
+	form.solution_changed(zero);
+	check(sample(form, mesh, zero), empty);
+
+	mesh.can_collide = [](size_t, size_t) { return true; };
+	// End of the candidate interval must permit a full rebuild at the same x.
+	form.update_quantities(1., zero);
+	check(sample(form, mesh, zero), expected);
+	form.line_search_begin(zero, zero);
+	form.solution_changed(zero);
+	check(sample(form, mesh, zero), expected);
+	form.line_search_end();
+	form.init(zero);
+	check(sample(form, mesh, zero), expected);
+
+	// A changed filter is also honored outside a cached-candidate interval.
+	mesh.can_collide = [](size_t, size_t) { return false; };
+	form.solution_changed(zero);
+	check(sample(form, mesh, zero), empty);
+}
+
+TEST_CASE("Frozen contact derivatives agree with finite differences after rebuilding", "[contact_cache]")
+{
+	auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	const auto center = sample(form, mesh, zero);
+	REQUIRE(center.energy > 0);
+	Eigen::VectorXd fd_gradient(6);
+	Eigen::MatrixXd fd_hessian(6, 6);
+	const double step = 1e-6;
+	for (int j = 0; j < 6; ++j)
+	{
+		Eigen::VectorXd x = zero;
+		x[j] += step;
+		form.solution_changed(x);
+		const auto plus = sample(form, mesh, x);
+		x[j] -= 2 * step;
+		form.solution_changed(x);
+		const auto minus = sample(form, mesh, x);
+		fd_gradient[j] = (plus.energy - minus.energy) / (2 * step);
+		fd_hessian.col(j) = (plus.gradient - minus.gradient) / (2 * step);
+	}
+	// Central differences at a finite .2 gap: truncation and cancellation
+	// justify a looser 1e-6 absolute + relative norm tolerance than equality.
+	CHECK((fd_gradient - center.gradient).norm() <= 1e-6 + 1e-6 * center.gradient.norm());
+	CHECK((fd_hessian - center.hessian).norm() <= 1e-6 + 1e-6 * center.hessian.norm());
+}
+
+TEST_CASE("Independent contact forms can rebuild concurrently", "[contact_cache][contact_cache_parallel]")
+{
+	// Each worker owns its mesh, broad phase, form, and Hessian callback.
+	// No Catch assertions run on workers and no same-form mutation is shared.
+	std::promise<void> start;
+	const auto ready = start.get_future().share();
+	auto worker = [ready]() {
+		auto mesh = make_mesh();
+		ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+		ready.wait();
+		form.init(zero);
+		form.refresh_semi_implicit_stiffness(zero, false);
+		std::vector<Sample> samples;
+		for (int i = 0; i < 16; ++i)
+		{
+			Eigen::VectorXd x = zero;
+			x[5] = .01 * (i % 3);
+			form.line_search_begin(zero, x);
+			form.solution_changed(x);
+			samples.push_back(sample(form, mesh, x));
+			form.line_search_end();
+		}
+		return samples;
+	};
+	auto a = std::async(std::launch::async, worker);
+	auto b = std::async(std::launch::async, worker);
+	start.set_value();
+	const auto samples_a = a.get(), samples_b = b.get();
+	auto mesh = make_mesh();
+	for (int i = 0; i < 16; ++i)
+	{
+		Eigen::VectorXd x = zero;
+		x[5] = .01 * (i % 3);
+		const auto expected = reference(mesh, 1., BarrierStiffnessMode::SemiImplicit, x);
+		REQUIRE(expected.energy > 0);
+		check(samples_a[i], expected);
+		check(samples_b[i], expected);
+	}
+}
+
+TEST_CASE("Physical diagnostic snapshots preserve contact state and frozen derivatives", "[physical_diagnostics]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	const auto before = sample(form, mesh, zero);
+	const auto state = form.diagnostic_state();
+	Eigen::VectorXd x = zero;
+	x[4] = 1.1; // Different closest stencil; only the snapshot may memoize it.
+	x[5] = .1;
+	const auto snapshot = form.diagnostic_snapshot(x);
+	CHECK(form.diagnostic_state() == state);
+	check(sample(form, mesh, zero), before);
+	check(sample(snapshot, mesh, x), reference(mesh, 1., BarrierStiffnessMode::SemiImplicit, x));
+	Eigen::VectorXd fd(6);
+	for (int j = 0; j < 6; ++j)
+	{
+		Eigen::VectorXd plus = x, minus = x;
+		plus[j] += 1e-6;
+		minus[j] -= 1e-6;
+		fd[j] = (form.diagnostic_snapshot(plus).value(plus) - form.diagnostic_snapshot(minus).value(minus)) / 2e-6;
+	}
+	Eigen::VectorXd g;
+	snapshot.first_derivative(x, g);
+	CHECK((g - fd).norm() / (1 + g.norm()) < 1e-6);
+	CHECK(form.diagnostic_state() == state);
+	const auto path = form.diagnostic_path(zero, x);
+	CHECK(path["samples"].size() == 1025);
+	CHECK(path["quadrature"].size() == 4);
+	CHECK_FALSE(path["transitions"].empty());
+	CHECK(double(path["samples"].front()["energy_objective"]) == Catch::Approx(before.energy));
+	CHECK(double(path["samples"].back()["energy_objective"]) == Catch::Approx(snapshot.value(x)));
+	CHECK(form.diagnostic_state() == state);
+	check(sample(form, mesh, zero), before);
+	// On/off continuation: a subsequent production rebuild has the same result.
+	form.solution_changed(x);
+	check(sample(form, mesh, x), sample(snapshot, mesh, x));
+	Eigen::VectorXd absent = zero;
+	absent[5] = 2;
+	const auto empty = form.diagnostic_snapshot(absent);
+	CHECK(empty.diagnostic_state()["active_count"] == 0);
+	CHECK(empty.diagnostic_state()["coefficient_range"]["value"].is_null());
+	CHECK(empty.diagnostic_state()["candidate_count"]["value"].is_null());
+	CHECK(form.candidate_statistics().builds == 0);
+}
+
+TEST_CASE("Endpoint records report the active-collision gap statistics", "[physical_diagnostics]")
+{
+	// RB-09 decision (2026-09-13): the record carries the mean gap of the
+	// active collisions; the contact-model error of a force quantity is about
+	// mean gap / imposed compression.
+	const auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	const auto at_rest = form.gap_statistics(form.compute_displaced_surface(zero));
+	CHECK(at_rest["count"].get<size_t>() == 1);
+	CHECK(at_rest["mean"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["rms"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["min"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["max"].get<double>() == Catch::Approx(.2));
+	CHECK(at_rest["mean_over_dhat"].get<double>() == Catch::Approx(.2));
+	Eigen::VectorXd lifted = zero;
+	lifted[5] = .1; // gap .3 at the same stencil: a private snapshot measures it
+	const auto snapshot = form.diagnostic_snapshot(lifted);
+	CHECK(snapshot.gap_statistics(snapshot.compute_displaced_surface(lifted))["mean"].get<double>() == Catch::Approx(.3));
+	// The measurement never mutates the production form.
+	CHECK(form.gap_statistics(form.compute_displaced_surface(zero))["mean"].get<double>() == Catch::Approx(.2));
+	Eigen::VectorXd absent = zero;
+	absent[5] = 2; // outside the support: no active collision, no mean
+	const auto empty = form.diagnostic_snapshot(absent);
+	const auto none = empty.gap_statistics(empty.compute_displaced_surface(absent));
+	CHECK(none["count"].get<size_t>() == 0);
+	CHECK(none["mean"]["value"].is_null());
+	CHECK_FALSE(none["mean"]["unavailable_reason"].get<std::string>().empty());
+}
+
+TEST_CASE("Endpoint records retain the candidate counts of this solve's trial sweeps", "[physical_diagnostics][contact_cache]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	form.init(zero);
+	form.refresh_semi_implicit_stiffness(zero, false);
+	REQUIRE(form.diagnostic_state()["candidate_count"]["value"].is_null());
+	Eigen::VectorXd toward = zero;
+	toward[5] = -.15; // Vertex 2 sweeps toward the edge: one edge-vertex candidate.
+	form.line_search_begin(zero, toward);
+	const size_t during = form.diagnostic_state()["candidate_count"]["value"].get<size_t>();
+	CHECK(during >= 1);
+	CHECK(form.diagnostic_state()["candidate_count"]["scope"] == "Active swept candidate cache");
+	form.line_search_end();
+	const auto after = form.diagnostic_state()["candidate_count"];
+	CHECK(after["value"].get<size_t>() == during);
+	CHECK(after["builds"].get<size_t>() == 1);
+	CHECK(after["max"].get<size_t>() == during);
+	Eigen::VectorXd away = zero;
+	away[5] = 5; // Far sweep: the broad phase may build a different count.
+	form.line_search_begin(zero, away);
+	form.line_search_end();
+	const auto &stats = form.candidate_statistics();
+	CHECK(stats.builds == 2);
+	CHECK(stats.max >= stats.last);
+	CHECK(stats.max >= during);
+	// A private snapshot carries the retained counts; a reset clears them.
+	CHECK(form.diagnostic_snapshot(zero).diagnostic_state()["candidate_count"]["builds"].get<size_t>() == 2);
+	form.reset_candidate_statistics();
+	CHECK(form.diagnostic_state()["candidate_count"]["value"].is_null());
+	CHECK(form.candidate_statistics().builds == 0);
+}
+
+TEST_CASE("Coefficient event accounting observes outer mutations without changing them", "[coefficient_events]")
+{
+	const double weight = GENERATE(.25, 1., 4.);
+	const auto mesh = make_mesh();
+	ReferenceForm observed(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	ReferenceForm control(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	double curvature = 100.;
+	int observed_calls = 0, control_calls = 0;
+	auto provider = [&](int &calls) {
+		return [&, count = &calls](const Eigen::VectorXd &, StiffnessMatrix &h) {
+			++*count;
+			h.resize(6, 6);
+			h.setIdentity();
+			h *= curvature;
+		};
+	};
+	observed.set_system_hessian_provider(provider(observed_calls));
+	control.set_system_hessian_provider(provider(control_calls));
+	observed.set_weight(weight);
+	control.set_weight(weight);
+	std::vector<json> events;
+	observed.set_coefficient_observer([&](const json &e) { events.push_back(e); });
+	for (auto *form : {&observed, &control})
+	{
+		form->init(zero);
+		form->refresh_semi_implicit_stiffness(zero, false);
+	}
+	REQUIRE(events.size() == 1);
+	CHECK(events.back()["before"]["objective"].is_null());
+	CHECK(events.back()["objective_change_at_fixed_coordinates"].is_null());
+	CHECK(events.back()["after"]["objective"].get<double>() > 0);
+	const double baseline = control.value(zero);
+	observed.refresh_semi_implicit_stiffness(zero, false);
+	control.refresh_semi_implicit_stiffness(zero, false);
+	REQUIRE(events.size() == 2);
+	CHECK(std::abs(events.back()["objective_change_at_fixed_coordinates"].get<double>()) < 1e-10);
+	curvature = 200.;
+	observed.refresh_semi_implicit_stiffness(zero, false);
+	control.refresh_semi_implicit_stiffness(zero, false);
+	REQUIRE(events.size() == 3);
+	CHECK(std::abs(events.back()["objective_change_at_fixed_coordinates"].get<double>() - baseline) < 1e-10 * (1 + baseline));
+	Eigen::VectorXd reference_gradient;
+	control.first_derivative(zero, reference_gradient);
+	const auto recorded_gradient = events.back()["after"]["gradient_objective"].get<std::vector<double>>();
+	REQUIRE(recorded_gradient.size() == size_t(reference_gradient.size()));
+	CHECK((Eigen::Map<const Eigen::VectorXd>(recorded_gradient.data(), recorded_gradient.size()) - reference_gradient).norm() < 1e-10 * (1 + reference_gradient.norm()));
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	const double before_stall = control.value(zero);
+	observed.retune_on_stall(zero, 2.);
+	control.retune_on_stall(zero, 2.);
+	REQUIRE(events.size() == 4); // Nested refresh and bump are counted once.
+	CHECK(events.back()["operation"] == "stall_retune");
+	CHECK(std::abs(events.back()["objective_change_at_fixed_coordinates"].get<double>() - (control.value(zero) - before_stall)) < 1e-9);
+	CHECK(observed_calls == control_calls);
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	// An observation at a new nearest feature may memoize only in its copy.
+	Eigen::VectorXd x = zero;
+	x[4] = 1.1;
+	for (auto *form : {&observed, &control})
+	{
+		form->solution_changed(x);
+		form->refresh_semi_implicit_stiffness(x, false);
+	}
+	CHECK(observed.diagnostic_state() == control.diagnostic_state());
+	check(sample(observed, mesh, x), sample(control, mesh, x));
+	CHECK(observed_calls == control_calls);
+	for (size_t i = 0; i < events.size(); ++i)
+	{
+		CHECK(events[i]["event_id"] == i + 1);
+		CHECK(events[i]["operation_threw"] == false);
+	}
+
+	observed.set_coefficient_observer([](const json &) { throw std::runtime_error("Injected observer failure"); });
+	CHECK_NOTHROW(observed.refresh_semi_implicit_stiffness(x, false));
+	control.refresh_semi_implicit_stiffness(x, false);
+	check(sample(observed, mesh, x), sample(control, mesh, x));
+	observed.set_coefficient_observer([&](const json &e) { events.push_back(e); });
+	observed.set_system_hessian_provider([](const Eigen::VectorXd &, StiffnessMatrix &) { throw std::runtime_error("Injected provider failure"); });
+	CHECK_THROWS_WITH(observed.refresh_semi_implicit_stiffness(x, false), "Injected provider failure");
+	CHECK(events.back()["operation_threw"] == true);
+}
+
+TEST_CASE("Trim predictor records observe the trim controller without changing it", "[trim_predictors]")
+{
+	// EF-01 (docs/ef-01-trim-survey.md): one vertex-edge contact at gap .2 (d-hat
+	// 1) under a driving force toward the edge.
+	const auto mesh = make_mesh();
+	ReferenceForm observed(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	ReferenceForm control(mesh, 1., BarrierStiffnessMode::SemiImplicit);
+	const auto hessian = [](const Eigen::VectorXd &, StiffnessMatrix &h) {
+		h.resize(6, 6);
+		h.setIdentity();
+		h *= 100.;
+	};
+	const auto gradient = [](const Eigen::VectorXd &, Eigen::VectorXd &g) {
+		g = Eigen::VectorXd::Zero(6);
+		g[5] = 3.;
+	};
+	for (auto *form : {&observed, &control})
+	{
+		form->set_system_hessian_provider(hessian);
+		form->set_system_gradient_provider(gradient);
+		form->set_weight(.5);
+	}
+	std::vector<json> records;
+	observed.set_trim_predictor_observer([&](const json &r) { records.push_back(r); });
+	for (auto *form : {&observed, &control})
+	{
+		form->init(zero);
+		form->refresh_semi_implicit_stiffness(zero);
+	}
+	REQUIRE(records.size() == 1);
+	const json r = records.back();
+	CHECK(r["event"] == "refresh");
+	CHECK(r["sequence"] == 1);
+	CHECK(r["active_count"] == 1);
+	CHECK(r["trim"].get<double>() == observed.barrier_stiffness());
+	CHECK(r["gap"]["rms"].get<double>() == Catch::Approx(.2));
+	CHECK(r["gap"]["rms"].get<double>() == Catch::Approx(observed.gap_statistics(mesh.rest_positions())["rms_over_dhat"].get<double>()));
+	CHECK(r["force_weighted"]["mean_gap"].get<double>() == Catch::Approx(.2));
+	CHECK(r["multiplicity"]["count"] == 3);
+	CHECK(r["multiplicity"]["max"].get<double>() == 1.);
+
+	// The two-sided balance is calibrate_trim's quotient -<gB,gE> / (w |gB|^2).
+	const Eigen::VectorXd gb = mesh.to_full_dof(observed.barrier_potential().gradient(observed.collision_set(), mesh, mesh.rest_positions()));
+	Eigen::VectorXd ge;
+	gradient(zero, ge);
+	CHECK(r["gradient_balance"]["kappa_gb"].get<double>() == Catch::Approx(-gb.dot(ge) / (.5 * gb.squaredNorm())));
+	CHECK(r["gradient_balance"]["cos_opposition"].get<double>() == Catch::Approx(-gb.dot(ge) / (gb.norm() * ge.norm())));
+	CHECK(r["hessian_diagonal_ratio"]["distribution"]["count"].get<int>() > 0);
+	CHECK(r["hessian_diagonal_ratio"]["trim_for_unit_median"].get<double>() > 0);
+
+	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
+	CHECK(observed.diagnostic_state() == control.diagnostic_state());
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	observed.retune_on_stall(zero, 2.);
+	control.retune_on_stall(zero, 2.);
+	REQUIRE(records.size() == 2);
+	CHECK(records.back()["event"] == "stall_retune");
+	CHECK(records.back()["trim"].get<double>() == observed.barrier_stiffness());
+	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+
+	// A failing observer is reported, never propagated into the solve.
+	observed.set_trim_predictor_observer([](const json &) { throw std::runtime_error("Injected observer failure"); });
+	CHECK_NOTHROW(observed.refresh_semi_implicit_stiffness(zero));
+	control.refresh_semi_implicit_stiffness(zero);
+	CHECK(observed.barrier_stiffness() == control.barrier_stiffness());
+	check(sample(observed, mesh, zero), sample(control, mesh, zero));
+}
+
+TEST_CASE("Force weighted trim statistic is scale invariant and rejects invalid forces", "[trim_controller]")
+{
+	ForceWeightedGap unequal;
+	unequal.add(.2, 1.);
+	unequal.add(.8, 3.);
+	CHECK(unequal.mean() == Catch::Approx(.65));
+	ForceWeightedGap gap;
+	CHECK(std::isnan(gap.mean()));
+	gap.add(.2, 1e308);
+	gap.add(.8, 1e308);
+	CHECK(gap.mean() == Catch::Approx(.5));
+	ForceWeightedGap weak;
+	weak.add(.2, 1e-300);
+	weak.add(.8, 1e-300);
+	CHECK(weak.mean() == Catch::Approx(gap.mean()));
+	gap.add(.9, 0);
+	CHECK(gap.mean() == Catch::Approx(.5));
+	gap.add(.1, std::numeric_limits<double>::infinity());
+	CHECK(std::isnan(gap.mean()));
+}
+
+TEST_CASE("Force band is bounded two sided with a dead zone and a guarded seed", "[trim_controller]")
+{
+	ForceWeightedTrim c;
+	CHECK(c.factor(.9) == .25);
+	CHECK(c.factor(.01) == 4.);
+	CHECK(c.factor(.51) == 1.);
+	CHECK(c.factor(.34) == 1.);
+	CHECK(c.factor(.53) < 1.);
+	CHECK(c.factor(.32) > 1.);
+	CHECK(c.factor(0) == 1.);
+	CHECK(c.factor(1) == 1.);
+	CHECK(c.factor(std::numeric_limits<double>::quiet_NaN()) == 1.);
+	CHECK(c.seed_factor(1., 1e-8, .9, false) == 1. / 4096.);
+	CHECK(c.seed_factor(1., 1e8, .9, false) == 4096.);
+	CHECK(c.seed_factor(1., .001, .79, false) == 1.);
+	CHECK(c.seed_factor(1., .001, .9, true) == 1.);
+	CHECK(c.seed_factor(1., 2., .9, true) == 2.);
+	CHECK_FALSE(c.safe_band_step(.365, .79, std::sqrt(.5)));
+	CHECK(c.safe_band_step(.8, .79, std::sqrt(.5)));
+	CHECK(c.safe_band_step(.25, .99, std::sqrt(.5)));
+	CHECK_FALSE(c.safe_band_step(.5, .7, std::sqrt(.5)));
+	CHECK(c.safe_band_step(2., .1, std::sqrt(.5)));
+	CHECK_FALSE(c.safe_band_step(.5, std::numeric_limits<double>::quiet_NaN(), std::sqrt(.5)));
+}
+
+TEST_CASE("Force trim uses real contact force and preserves collapse and rollback", "[trim_controller]")
+{
+	auto mesh = make_mesh();
+	const json opts = {{"band_statistic", "force_weighted"}, {"initial_trim_estimate", true}};
+	ReferenceForm f(mesh, 1., BarrierStiffnessMode::SemiImplicit, opts);
+	Eigen::VectorXd x = zero;
+	x[5] = .7; // actual gap .9
+	f.init(x);
+	f.refresh_semi_implicit_stiffness(x, false);
+	const Eigen::VectorXd gb = mesh.to_full_dof(f.barrier_potential().gradient(f.collision_set(), mesh, mesh.rest_positions() + Eigen::Map<const Eigen::Matrix<double, 3, 2, Eigen::RowMajor>>(x.data())));
+	f.set_system_gradient_provider([gb](const Eigen::VectorXd &, Eigen::VectorXd &ge) { ge = -.001 * gb; });
+	std::vector<json> records;
+	f.set_trim_predictor_observer([&](const json &r) { records.push_back(r); });
+	const auto saved = f.save_state();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() == Catch::Approx(.001));
+	REQUIRE(records.size() >= 2);
+	CHECK(records.front()["controller_decision"]["accepted"] == true);
+	CHECK(records.front()["force_weighted"]["mean_gap"].get<double>() == Catch::Approx(.9));
+	const double seeded = f.barrier_stiffness();
+	f.restore_state(*saved, x);
+	records.clear();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() == seeded);
+	CHECK(records.front()["controller_decision"]["accepted"] == true);
+
+	// One small contact is enough to suppress lowering: same form at gap .02.
+	f.update_quantities(1., zero);
+	x[5] = -.18;
+	f.init(x);
+	const double before = f.barrier_stiffness();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() >= before);
+}
+
+TEST_CASE("Force trim option errors are named and rejected", "[trim_controller]")
+{
+	const auto mesh = make_mesh();
+	for (const json &opts : {json{{"band_statistic", "invalid"}}, json{{"force_band_interval", 0}},
+							 json{{"force_band_lower", .6}}, json{{"force_band_hysteresis", .7}}, json{{"initial_trim_cosine", 0.}}})
+		CHECK_THROWS(ReferenceForm(mesh, 1., BarrierStiffnessMode::SemiImplicit, opts));
+}
+
+TEST_CASE("Force band cadence survives rollback and does not move coefficients", "[trim_controller][rollback]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm f(mesh, 1., BarrierStiffnessMode::SemiImplicit,
+					{{"band_statistic", "force_weighted"}, {"force_band_interval", 10}});
+	Eigen::VectorXd x = zero;
+	x[5] = .7;
+	f.init(x);
+	f.refresh_semi_implicit_stiffness(x, false);
+	const double before = f.barrier_stiffness();
+	const double k = f.collision_set()[0].stiffness_scale;
+	const json info = json::object();
+	for (int i = 1; i < 10; ++i)
+		f.post_step(polysolve::nonlinear::PostStepData(i, info, x, zero));
+	CHECK(f.barrier_stiffness() == before);
+	auto saved = f.save_state();
+	f.post_step(polysolve::nonlinear::PostStepData(10, info, x, zero));
+	CHECK(f.barrier_stiffness() == before / 4);
+	CHECK(f.collision_set()[0].stiffness_scale == k);
+	f.restore_state(*saved, x);
+	f.post_step(polysolve::nonlinear::PostStepData(10, info, x, zero));
+	CHECK(f.barrier_stiffness() == before / 4);
+	CHECK(f.collision_set()[0].stiffness_scale == k);
+}
+
+TEST_CASE("Force band cannot immediately undo collapse protection", "[trim_controller]")
+{
+	const auto mesh = make_mesh();
+	ReferenceForm f(mesh, 1., BarrierStiffnessMode::SemiImplicit,
+					{{"band_statistic", "force_weighted"}});
+	Eigen::VectorXd x = zero;
+	x[5] = .59; // gap .79, above current collapse threshold
+	f.init(x);
+	f.refresh_semi_implicit_stiffness(x, false);
+	std::vector<json> records;
+	f.set_trim_predictor_observer([&](const json &r) { records.push_back(r); });
+	const double before = f.barrier_stiffness();
+	f.refresh_semi_implicit_stiffness(x);
+	CHECK(f.barrier_stiffness() == before);
+	REQUIRE(!records.empty());
+	CHECK(records.front()["controller_decision"]["collapse_guard"] == true);
+	CHECK(records.front()["controller_decision"]["proposed_factor"].get<double>() < 1.);
+}
+
+TEST_CASE("The trim band statistic does not depend on how a distance-type tie is resolved", "[contact_cache][trim_band]")
+{
+	// docs/band-statistic-weighting-20260927.md: a vertex exactly over the
+	// edge shared by two triangles is one merged edge-vertex collision, or a
+	// face-vertex plus an edge-vertex collision when roundoff puts it inside
+	// one triangle. IPC adds the weights of merged candidates, so the energy is
+	// the same either way; the trim controller's statistic must be too. (The
+	// public friction smoke's cube has five vertices on its slab's diagonal.)
+	const double dhat = .01, h = .5 * dhat;
+	const auto build = [&](const double offset) {
+		Eigen::MatrixXd V(7, 3);
+		V << -1, -1, 0, // slab: two triangles sharing the diagonal x = y
+			2, -1, 0,
+			2, 2, 0,
+			-1, 2, 0,
+			.5 + offset, .5, h, // over the diagonal
+			.9, .2, .4 * h,
+			.95, .6, .7 * h;
+		Eigen::MatrixXi F(3, 3);
+		F << 0, 1, 2, 0, 2, 3, 4, 5, 6;
+		Eigen::MatrixXi E(8, 2);
+		E << 0, 1, 1, 2, 2, 0, 2, 3, 3, 0, 4, 5, 5, 6, 6, 4;
+		ipc::CollisionMesh mesh(V, E, F);
+		ipc::NormalCollisions collisions;
+		collisions.set_use_area_weighting(true);
+		collisions.build(mesh, V, dhat);
+		return std::make_tuple(mesh, V, collisions);
+	};
+	const auto [mesh_tie, V_tie, on_edge] = build(0.);
+	const auto [mesh_off, V_off, inside] = build(1e-12);
+
+	// The two resolutions really differ in their collision count...
+	REQUIRE(on_edge.size() != inside.size());
+	const auto tie = BarrierContactForm::band_statistic(on_edge, mesh_tie, V_tie, dhat);
+	const auto off = BarrierContactForm::band_statistic(inside, mesh_off, V_off, dhat);
+	CHECK(tie.active_count == on_edge.size());
+	CHECK(off.active_count == inside.size());
+	CHECK(tie.weighted);
+	CHECK(off.weighted);
+	CHECK(tie.total_weight == Catch::Approx(off.total_weight).epsilon(1e-12));
+	// ...and so does a count-based mean, but not the band statistic.
+	const double count_tie = on_edge.compute_avg_distance(mesh_tie, V_tie, dhat);
+	const double count_off = inside.compute_avg_distance(mesh_off, V_off, dhat);
+	CHECK(std::abs(count_tie - count_off) > 1e-3 * count_tie);
+	CHECK(tie.mean_sq == Catch::Approx(off.mean_sq).epsilon(1e-10));
+	CHECK(std::sqrt(tie.mean_sq) > .4 * h);
+	CHECK(std::sqrt(tie.mean_sq) < h);
+
+	// No active collision: no statistic.
+	Eigen::MatrixXd lifted = V_tie;
+	lifted.col(2).tail(3).array() += 1.;
+	const auto none = BarrierContactForm::band_statistic(on_edge, mesh_tie, lifted, dhat);
+	CHECK(none.active_count == 0);
+	CHECK(std::isinf(none.mean_sq));
+}

@@ -34,8 +34,6 @@ set(SOURCES
 	TangentialAdhesionForm.hpp
 	BarrierContactForm.cpp
 	BarrierContactForm.hpp
-	SemiImplicitBarrierContactForm.cpp
-	SemiImplicitBarrierContactForm.hpp
 	SmoothContactForm.cpp
 	SmoothContactForm.hpp
 	PeriodicContactForm.cpp

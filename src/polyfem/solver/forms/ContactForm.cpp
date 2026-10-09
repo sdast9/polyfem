@@ -8,6 +8,7 @@
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/MaybeParallelFor.hpp>
 
+#include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/io/OBJWriter.hpp>
 
 #include <ipc/barrier/adaptive_stiffness.hpp>
@@ -15,8 +16,45 @@
 
 #include <igl/writePLY.h>
 
+#include <algorithm>
+#include <cmath>
+
 namespace polyfem::solver
 {
+	const std::vector<std::string> &ContactForm::broad_phase_names()
+	{
+		static const std::vector<std::string> names = {
+			"hash_grid", "HG", "brute_force", "BF", "spatial_hash", "SH",
+			"bvh", "BVH", "LBVH", "sweep_and_prune", "SAP",
+			"sweep_and_tiniest_queue", "STQ"};
+		return names;
+	}
+
+	bool ContactForm::is_known_broad_phase_name(const std::string &name)
+	{
+		const auto &names = broad_phase_names();
+		return std::find(names.begin(), names.end(), name) != names.end();
+	}
+
+	ResourceLimits resource_limits_from_args(const json &ccd_args)
+	{
+		ResourceLimits limits;
+		if (!ccd_args.is_object() || !ccd_args.contains("resource_limits") || !ccd_args["resource_limits"].is_object())
+			return limits;
+		const json &written = ccd_args["resource_limits"];
+		const auto read = [&](const char *key, long long &field) {
+			if (!written.contains(key))
+				return;
+			const double value = written[key].is_number() ? written[key].get<double>() : std::numeric_limits<double>::quiet_NaN();
+			if (!std::isfinite(value) || value < -1)
+				log_and_throw_error("solver.contact.CCD.resource_limits.{} must be -1 (automatic), 0 (disabled) or a positive integer (got {})", key, written[key].dump());
+			field = value < 0 ? -1 : static_cast<long long>(value);
+		};
+		read("max_cell_items", limits.max_cell_items);
+		read("max_candidate_emissions", limits.max_candidate_emissions);
+		return limits;
+	}
+
 	ContactForm::ContactForm(const ipc::CollisionMesh &collision_mesh,
 							 const double dhat,
 							 const double avg_mass,
@@ -45,12 +83,151 @@ namespace polyfem::solver
 
 	void ContactForm::init(const Eigen::VectorXd &x)
 	{
-		update_collision_set(compute_displaced_surface(x));
+		// A new solve never continues a line search: a swept cache still
+		// marked active here belongs to a line search that was abandoned by
+		// an exception, and its candidates were never completed for x.
+		discard_swept_candidates();
+		rebuild_collision_set(x, "init");
 	}
 
 	void ContactForm::update_quantities(const double t, const Eigen::VectorXd &x)
 	{
-		update_collision_set(compute_displaced_surface(x));
+		discard_swept_candidates();
+		rebuild_collision_set(x, "update_quantities");
+	}
+
+	void ContactForm::rebuild_collision_set(const Eigen::VectorXd &x, const char *operation)
+	{
+		try
+		{
+			update_collision_set(compute_displaced_surface(x));
+		}
+		catch (const std::exception &e)
+		{
+			// The toolkit throws without logging; name the operation and the
+			// surface here so a resource failure of a static build (init, a
+			// new step, a trial state) leaves a diagnostic before terminate().
+			logger().error(
+				"Contact collision set rebuild failed in {} ({}): {} vertices / {} edges / {} faces, {}, broad phase {}",
+				operation, e.what(), collision_mesh_.num_vertices(), collision_mesh_.num_edges(), collision_mesh_.num_faces(),
+				use_cached_candidates_ ? fmt::format("from the {} cached swept candidates", candidates_.size()) : "static build",
+				broad_phase_->name());
+			logger().flush();
+			throw;
+		}
+	}
+
+	void ContactForm::discard_swept_candidates()
+	{
+		candidates_.clear();
+		use_cached_candidates_ = false;
+	}
+
+	void ContactForm::save_contact_state(State &state) const
+	{
+		save_base_state(state);
+		state.barrier_stiffness = barrier_stiffness_;
+		state.max_barrier_stiffness = max_barrier_stiffness_;
+		state.prev_distance = prev_distance_;
+		state.use_cached_candidates = use_cached_candidates_;
+		state.candidates = candidates_;
+		state.candidate_statistics = candidate_statistics_;
+	}
+
+	void ContactForm::restore_contact_state(const State &state)
+	{
+		restore_base_state(state);
+		barrier_stiffness_ = state.barrier_stiffness;
+		max_barrier_stiffness_ = state.max_barrier_stiffness;
+		prev_distance_ = state.prev_distance;
+		use_cached_candidates_ = state.use_cached_candidates;
+		candidates_ = state.candidates;
+		candidate_statistics_ = state.candidate_statistics;
+	}
+
+	void ContactForm::write_restart_state(const std::string &path) const
+	{
+		Eigen::MatrixXd scalars(1, 3);
+		scalars << barrier_stiffness_, max_barrier_stiffness_, prev_distance_;
+		io::write_matrix(path, "contact_scalars", scalars, /*replace=*/false);
+	}
+
+	bool ContactForm::read_restart_state(const std::string &path, const Eigen::VectorXd &)
+	{
+		Eigen::MatrixXd scalars;
+		if (!io::read_matrix(path, "contact_scalars", scalars))
+			return false;
+		if (scalars.size() != 3)
+			log_and_throw_error("Restart state {}: contact_scalars has {} entries, expected 3", path, scalars.size());
+		barrier_stiffness_ = scalars(0);
+		max_barrier_stiffness_ = scalars(1);
+		prev_distance_ = scalars(2);
+		return true;
+	}
+
+	std::unique_ptr<FormState> ContactForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_contact_state(*state);
+		return state;
+	}
+
+	void ContactForm::restore_state(const FormState &state, const Eigen::VectorXd &)
+	{
+		restore_contact_state(state_as<State>(state, "ContactForm"));
+	}
+
+	void ContactForm::apply_resource_limits(const ResourceLimits &limits)
+	{
+		const bool enforceable = broad_phase_->supports_budget();
+		ipc::BroadPhaseBudget budget;
+		bool automatic = false, explicit_bound = false, dropped = false;
+		const auto resolve = [&](const long long written, const size_t production_default) -> size_t {
+			if (written > 0)
+			{
+				explicit_bound = true;
+				return static_cast<size_t>(written);
+			}
+			if (written == 0)
+				return 0;
+			automatic = true;
+			if (enforceable)
+				return production_default;
+			dropped = true;
+			return 0;
+		};
+		budget.max_cell_items = resolve(limits.max_cell_items, default_max_cell_items);
+		budget.max_candidate_emissions = resolve(limits.max_candidate_emissions, default_max_candidate_emissions);
+		// An explicit bound on a method that cannot enforce it is refused;
+		// an automatic one is dropped with a notice (the method's default
+		// behavior is what the user asked for, not a limit).
+		set_broad_phase_budget(budget);
+		if (dropped && !explicit_bound)
+			logger().info(
+				"Contact broad-phase resource limits: automatic limits are not enforceable by broad phase \"{}\" (only hash_grid and brute_force count their intermediates before allocating); running without them",
+				broad_phase_->name());
+		else if (budget.enabled())
+			logger().info(
+				"Contact broad-phase resource limits ({}): max_cell_items {}, max_candidate_emissions {} ({})",
+				automatic && !explicit_bound ? "automatic" : "explicit", budget.max_cell_items, budget.max_candidate_emissions, broad_phase_->name());
+		else
+			logger().info("Contact broad-phase resource limits disabled ({})", broad_phase_->name());
+	}
+
+	void ContactForm::set_broad_phase_budget(const ipc::BroadPhaseBudget &budget)
+	{
+		broad_phase_->budget = budget;
+		try
+		{
+			broad_phase_->check_budget_supported();
+		}
+		catch (const std::invalid_argument &e)
+		{
+			broad_phase_->budget = ipc::BroadPhaseBudget();
+			log_and_throw_error(
+				"solver.contact.CCD.resource_limits cannot be enforced by broad phase \"{}\" ({}); use hash_grid or brute_force, or leave the limits at 0",
+				broad_phase_->name(), e.what());
+		}
 	}
 
 	Eigen::MatrixXd ContactForm::compute_displaced_surface(const Eigen::VectorXd &x) const
@@ -60,14 +237,42 @@ namespace polyfem::solver
 
 	void ContactForm::solution_changed(const Eigen::VectorXd &new_x)
 	{
-		update_collision_set(compute_displaced_surface(new_x));
+		rebuild_collision_set(new_x, "solution_changed");
 	}
+
+	namespace
+	{
+		// Clamp the interval handed to the contact machinery to `cap_multiple`
+		// barrier supports of maximum vertex displacement; the returned step
+		// fraction is rescaled so callers still reason over the original
+		// [x0, x1]. An infinite cap_multiple disables the clamp entirely.
+		//
+		// NOTE: because the fraction is rescaled, a finite cap bounds the step
+		// even when CCD reports no collision. That is only acceptable where the
+		// trial steps are known to be pathological -- see
+		// ContactForm::trial_displacement_cap.
+		double trial_clamp_factor(
+			const Eigen::MatrixXd &V0, const Eigen::MatrixXd &V1,
+			const double support, const double cap_multiple)
+		{
+			if (!std::isfinite(cap_multiple))
+				return 1.0;
+			const double Linf = (V1 - V0).lpNorm<Eigen::Infinity>();
+			const double cap = cap_multiple * support;
+			return (Linf > cap && cap > 0) ? cap / Linf : 1.0;
+		}
+	} // namespace
 
 	double ContactForm::max_step_size(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const
 	{
 		// Extract surface only
 		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
-		const Eigen::MatrixXd V1 = compute_displaced_surface(x1);
+		Eigen::MatrixXd V1 = compute_displaced_surface(x1);
+
+		const double trial_clamp =
+			trial_clamp_factor(V0, V1, barrier_support_size(), trial_displacement_cap());
+		if (trial_clamp < 1.0)
+			V1 = V0 + trial_clamp * (V1 - V0);
 
 		if (save_ccd_debug_meshes)
 		{
@@ -107,25 +312,121 @@ namespace polyfem::solver
 		}
 #endif
 
+		// Rescale to a fraction of the ORIGINAL (unclamped) interval.
+		max_step *= trial_clamp;
+
+		if (max_step < 1e-3)
+			logger().debug(
+				"CCD-bound step: max_step={:g} over {} candidates (trial Linf={:g}, trial_clamp={:g})",
+				max_step, candidates_.size(),
+				(V1 - V0).lpNorm<Eigen::Infinity>() / trial_clamp, trial_clamp);
+
 		return max_step;
 	}
 
 	void ContactForm::line_search_begin(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1)
 	{
-		candidates_.build(
-			collision_mesh_,
-			compute_displaced_surface(x0),
-			compute_displaced_surface(x1),
-			/*inflation_radius=*/barrier_support_size() / 2,
-			broad_phase_.get());
+		// Any previous interval is over (normally ended by line_search_end;
+		// after an exception nothing ended it): the new sweep replaces it.
+		discard_swept_candidates();
+
+		const Eigen::MatrixXd V0 = compute_displaced_surface(x0);
+		Eigen::MatrixXd V1 = compute_displaced_surface(x1);
+
+		// Same absolute-displacement clamp as max_step_size, so the cached
+		// candidates always cover the (clamped) interval CCD prices.
+		const double trial_linf = (V1 - V0).lpNorm<Eigen::Infinity>();
+		const double trial_clamp =
+			trial_clamp_factor(V0, V1, barrier_support_size(), trial_displacement_cap());
+		if (trial_clamp < 1.0)
+			V1 = V0 + trial_clamp * (V1 - V0);
+
+		// RB-05 pre-build step diagnostics, logged before the broad phase
+		// allocates anything: the swept interval in barrier supports, and how
+		// localized it is (a few far-moving vertices are what blow up the
+		// hash grid; a uniform sweep re-scales its cells).
+		const double swept_linf = trial_linf * trial_clamp;
+		const auto sweep_summary = [&]() {
+			Eigen::VectorXd per_vertex = (V1 - V0).rowwise().norm();
+			double median = std::numeric_limits<double>::quiet_NaN();
+			// (a non-finite sweep -- refused by name by the toolkit -- has no
+			// ordered median; nth_element must not see it)
+			if (per_vertex.size() > 0 && per_vertex.allFinite())
+			{
+				std::nth_element(per_vertex.data(), per_vertex.data() + per_vertex.size() / 2, per_vertex.data() + per_vertex.size());
+				median = per_vertex[per_vertex.size() / 2];
+			}
+			return fmt::format(
+				"trial Linf={:g} ({:g} supports; clamp {:g} -> swept Linf {:g}), median vertex sweep {:g}, {} vertices / {} edges / {} faces, broad phase {}{}",
+				trial_linf, trial_linf / barrier_support_size(), trial_clamp, swept_linf, median,
+				collision_mesh_.num_vertices(), collision_mesh_.num_edges(), collision_mesh_.num_faces(),
+				broad_phase_->name(),
+				broad_phase_->budget.enabled()
+					? fmt::format(" (budget: cell items {}, candidate emissions {})", broad_phase_->budget.max_cell_items, broad_phase_->budget.max_candidate_emissions)
+					: "");
+		};
+		if (logger().should_log(spdlog::level::debug))
+			logger().debug("Broad phase over trial step: {}", sweep_summary());
+
+		try
+		{
+			candidates_.build(
+				collision_mesh_, V0, V1,
+				/*inflation_radius=*/barrier_support_size() / 2,
+				broad_phase_.get());
+		}
+		catch (const std::exception &e)
+		{
+			// The toolkit clears its candidate lists on any exception; this
+			// form leaves the interval too, so nothing downstream can treat
+			// the abandoned sweep as a complete candidate set. The sweep
+			// geometry is the pre-failure diagnostic; flush so it survives a
+			// terminate() without unwinding.
+			discard_swept_candidates();
+			logger().error("Broad phase over trial step failed ({}): {}", e.what(), sweep_summary());
+			logger().flush();
+			throw;
+		}
+		catch (...)
+		{
+			discard_swept_candidates();
+			logger().error("Broad phase over trial step failed with a non-standard exception: {}", sweep_summary());
+			logger().flush();
+			throw;
+		}
+
+		const ipc::BroadPhaseBuildStatistics &built = broad_phase_->build_statistics();
+		if (built.measured)
+			logger().debug(
+				"Broad phase over trial step: {} candidates ({} cell items, {}{} pre-filter pair emissions{}; cell size {:g}, grid {}x{}x{})",
+				candidates_.size(), built.cell_items,
+				built.candidate_emissions_overflowed ? "at least " : "", built.candidate_emissions,
+				broad_phase_->budget.enabled() ? "" : " [emissions counted only under a budget]",
+				built.cell_size, built.grid_size[0], built.grid_size[1], built.grid_size[2]);
+		else
+			logger().debug(
+				"Broad phase over trial step: {} candidates (trial Linf={:g}, trial_clamp={:g})",
+				candidates_.size(), trial_linf, trial_clamp);
+
+		++candidate_statistics_.builds;
+		candidate_statistics_.last = candidates_.size();
+		candidate_statistics_.max = std::max(candidate_statistics_.max, candidates_.size());
+		if (built.measured)
+		{
+			candidate_statistics_.intermediates_measured = true;
+			candidate_statistics_.last_cell_items = built.cell_items;
+			candidate_statistics_.max_cell_items = std::max(candidate_statistics_.max_cell_items, built.cell_items);
+			candidate_statistics_.last_candidate_emissions = built.candidate_emissions;
+			candidate_statistics_.max_candidate_emissions = std::max(candidate_statistics_.max_candidate_emissions, built.candidate_emissions);
+			candidate_statistics_.emissions_saturated = candidate_statistics_.emissions_saturated || built.candidate_emissions_overflowed;
+		}
 
 		use_cached_candidates_ = true;
 	}
 
 	void ContactForm::line_search_end()
 	{
-		candidates_.clear();
-		use_cached_candidates_ = false;
+		discard_swept_candidates();
 	}
 
 	bool ContactForm::is_step_collision_free(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const

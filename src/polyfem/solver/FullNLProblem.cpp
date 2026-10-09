@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "FullNLProblem.hpp"
 #include <polyfem/utils/Logger.hpp>
 
@@ -27,6 +28,22 @@ namespace polyfem::solver
 	{
 		for (auto &f : forms_)
 			f->init(x);
+	}
+
+	std::unique_ptr<FullNLProblem::SavedState> FullNLProblem::save_state() const
+	{
+		auto state = std::make_unique<SavedState>();
+		for (const auto &f : forms_)
+			state->forms.push_back(f->save_state());
+		return state;
+	}
+
+	void FullNLProblem::restore_state(const SavedState &state, const TVector &x)
+	{
+		if (state.forms.size() != forms_.size())
+			throw std::logic_error("Nonlinear problem state was captured with a different number of forms");
+		for (size_t i = 0; i < forms_.size(); ++i)
+			forms_[i]->restore_state(*state.forms[i], x);
 	}
 
 	void FullNLProblem::set_project_to_psd(bool project_to_psd)
@@ -63,21 +80,80 @@ namespace polyfem::solver
 		return false;
 	}
 
+	void FullNLProblem::observe(const IterationObservation &observation)
+	{
+		if (!iteration_observer_ || iteration_observer_failed_)
+			return;
+		try
+		{
+			iteration_observer_(observation);
+		}
+		catch (const std::exception &e)
+		{
+			// Observation must not alter the solve: disable after the first failure.
+			iteration_observer_failed_ = true;
+			logger().warn("Iteration observer failed and is disabled for this solve: {}", e.what());
+		}
+	}
+
 	void FullNLProblem::line_search_begin(const TVector &x0, const TVector &x1)
 	{
+		// Observed BEFORE the forms build their swept candidate sets: the
+		// contact broad phase is the first large allocation of an iteration,
+		// and a failing build must not take the record of its trial with it.
+		IterationObservation observation;
+		observation.kind = extending_line_search_ ? IterationObservation::Kind::Extension : IterationObservation::Kind::Proposal;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observe(observation);
+
 		for (auto &f : forms_)
 			f->line_search_begin(x0, x1);
+	}
+
+	void FullNLProblem::line_search_extend(const TVector &x0, const TVector &x1)
+	{
+		// Through the virtual line_search_begin, so that a derived problem's
+		// coordinate mapping (reduced to full) applies to the longer sweep too.
+		extending_line_search_ = true;
+		try
+		{
+			line_search_begin(x0, x1);
+		}
+		catch (...)
+		{
+			extending_line_search_ = false;
+			throw;
+		}
+		extending_line_search_ = false;
 	}
 
 	void FullNLProblem::line_search_end()
 	{
 		for (auto &f : forms_)
 			f->line_search_end();
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::LineSearchEnd;
+		observe(observation);
 	}
 
 	double FullNLProblem::max_step_size(const TVector &x0, const TVector &x1)
 	{
-		// Clamp SEQUENTIALLY: each form bounds the step over the interval
+		const double step = probe_step_bound(x0, x1);
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::StepBound;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observation.step_bound = step;
+		observe(observation);
+		return step;
+	}
+
+	double FullNLProblem::probe_step_bound(const TVector &x0, const TVector &x1)
+	{
+		// Sequential clamping: each form bounds the step over the interval
 		// already clamped by the forms before it, instead of the full
 		// [x0, x1]. Forms are ordered elastic-first, contact-last, so the
 		// inversion-free bound shrinks the sweep the (expensive) contact
@@ -85,26 +161,58 @@ namespace polyfem::solver
 		// orders larger than any acceptable step, and CCD on such a sweep
 		// is wasted work and, in the broad phase, a memory explosion risk
 		// for thin geometry.
+		//
+		// This is opt-in rather than the default: it telescopes to the same
+		// minimum in exact arithmetic, but the inversion and CCD bounds use
+		// absolute tolerances, so evaluating them on a shortened sweep shifts
+		// the result in the last digits. Applied unconditionally it perturbs
+		// converged solutions in every scene, contact or not.
+		const bool sequential = std::any_of(
+			forms_.begin(), forms_.end(), [](const std::shared_ptr<Form> &f) {
+				return f->enabled() && f->wants_sequential_step_clamping();
+			});
+
 		double step = 1;
 		for (auto &f : forms_)
 		{
 			if (!f->enabled())
 				continue;
+
+			if (!sequential)
+			{
+				step = std::min(step, f->max_step_size(x0, x1));
+				continue;
+			}
+
 			const double s =
 				f->max_step_size(x0, step == 1 ? x1 : TVector(x0 + step * (x1 - x0)));
 			step *= s;
 			if (step <= 0)
-				return 0;
+			{
+				step = 0;
+				break;
+			}
 		}
 		return step;
 	}
 
 	bool FullNLProblem::is_step_valid(const TVector &x0, const TVector &x1)
 	{
+		bool valid = true;
 		for (auto &f : forms_)
 			if (f->enabled() && !f->is_step_valid(x0, x1))
-				return false;
-		return true;
+			{
+				valid = false;
+				break;
+			}
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::Validity;
+		observation.x0 = &x0;
+		observation.x1 = &x1;
+		observation.valid = valid;
+		observe(observation);
+		return valid;
 	}
 
 	bool FullNLProblem::is_step_collision_free(const TVector &x0, const TVector &x1)
@@ -133,6 +241,10 @@ namespace polyfem::solver
 				continue;
 			TVector tmp;
 			f->first_derivative(x, tmp);
+			// a form with a mismatched size would be silently truncated
+			// (Eigen's size assert is compiled out in release builds)
+			if (tmp.size() != grad.size())
+				log_and_throw_error("Form \"{}\" returned a gradient of size {} for a problem with {} DOFs", f->name(), tmp.size(), grad.size());
 			grad += tmp;
 		}
 	}
@@ -146,6 +258,11 @@ namespace polyfem::solver
 				continue;
 			THessian tmp;
 			f->second_derivative(x, tmp);
+			// Eigen's dynamic sparse sum takes the size of the operand that
+			// does not match, so a mismatched form would silently grow the
+			// system Hessian and corrupt the reduced projection (RB-22)
+			if (tmp.rows() != hessian.rows() || tmp.cols() != hessian.cols())
+				log_and_throw_error("Form \"{}\" returned a {}x{} Hessian for a problem with {} DOFs", f->name(), tmp.rows(), tmp.cols(), hessian.rows());
 			hessian += tmp;
 		}
 	}
@@ -156,9 +273,33 @@ namespace polyfem::solver
 			f->solution_changed(x);
 	}
 
+	uint64_t FullNLProblem::objective_generation() const
+	{
+		uint64_t generation = 0;
+		// Disabled forms are included: enabling one is itself a change, and a
+		// form that retunes while disabled would otherwise reappear with a
+		// history from before its own retune.
+		for (const auto &f : forms_)
+			generation += f->objective_generation();
+		return generation;
+	}
+
 	void FullNLProblem::post_step(const polysolve::nonlinear::PostStepData &data)
 	{
 		for (auto &f : forms_)
 			f->post_step(data);
+
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::Accepted;
+		observation.x1 = &data.x;
+		observation.grad = &data.grad;
+		observation.iteration = data.iter_num;
+		observation.solver_info = &data.solver_info;
+		observe(observation);
+
+		// RB-06 test hook, after the observation so the stream keeps the
+		// iterate the injected failure abandons.
+		if (post_step_fault_)
+			post_step_fault_(data.iter_num, data.x);
 	}
 } // namespace polyfem::solver

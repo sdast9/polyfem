@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <map>
 #include <ostream>
+#include <tuple>
 
 #include <igl/Timer.h>
 
@@ -57,6 +58,7 @@ namespace polyfem::varform
 		t0 = 0;
 		time_steps = 0;
 		dt = 0;
+		output_time_phase_ = OutputTimePhase::HistoryHead;
 	}
 
 	void ElasticVarForm::init(const std::string &formulation, const Units &units, const json &args, const std::string &out_path)
@@ -321,7 +323,10 @@ namespace polyfem::varform
 		logger().info("average mass {}", avg_mass_);
 
 		if (args["solver"]["advanced"]["lump_mass_matrix"])
+		{
+			utils::check_lumped_mass(mass_);
 			mass_ = utils::lump_matrix(mass_);
+		}
 
 		timer.stop();
 		timings.assembling_mass_mat_time = timer.getElapsedTime();
@@ -446,6 +451,33 @@ namespace polyfem::varform
 		return indices;
 	}
 
+	std::pair<Eigen::VectorXd, Eigen::VectorXd> saved_solution_kinematics(
+		const time_integrator::ImplicitTimeIntegrator &time_integrator,
+		const Eigen::VectorXd &solution,
+		const OutputTimePhase phase)
+	{
+		if (time_integrator.steps() == 0 || time_integrator.x_prev().size() != solution.size())
+			return {Eigen::VectorXd::Zero(solution.size()), Eigen::VectorXd::Zero(solution.size())};
+
+		switch (phase)
+		{
+		case OutputTimePhase::HistoryHead:
+			// The history was initialized at or advanced to this solution:
+			// the stored values are its kinematics.
+			return {time_integrator.v_prev(), time_integrator.a_prev()};
+		case OutputTimePhase::CurrentStepBeforeAdvance:
+		{
+			// The step's endpoint against the previous step's history, by the
+			// integrator's own rule -- also for a held position, which equals
+			// the head without being it (RBR-01).
+			const Eigen::VectorXd v = time_integrator.compute_velocity(solution);
+			return {v, time_integrator.compute_acceleration(v)};
+		}
+		}
+		assert(false && "unhandled OutputTimePhase");
+		return {Eigen::VectorXd::Zero(solution.size()), Eigen::VectorXd::Zero(solution.size())};
+	}
+
 	std::vector<io::OutputField> ElasticVarForm::elastic_output_fields(
 		const io::OutputSample &sample,
 		const Eigen::MatrixXd &solution,
@@ -454,7 +486,8 @@ namespace polyfem::varform
 		const time_integrator::ImplicitTimeIntegrator *time_integrator,
 		const std::vector<std::pair<std::string, std::shared_ptr<solver::Form>>> &named_forms,
 		const solver::Form *elastic_form,
-		const solver::ContactForm *contact_form) const
+		const solver::ContactForm *contact_form,
+		const double force_scale) const
 	{
 		std::vector<io::OutputField> fields;
 		if (!mesh_ || !problem || solution.size() <= 0)
@@ -499,10 +532,17 @@ namespace polyfem::varform
 			if (!has_obstacle_rows)
 				return sample.points.rows() == 0 || sample.points.rows() == sampled_values.rows();
 
+			// The obstacle's rows of a node-major DOF field hold field_dim
+			// values per obstacle vertex -- obstacle->ndof() (n_vertices x
+			// mesh dimension) is only that count for a vector field. For the
+			// averaged scalar/tensor fields it sliced the wrong number of
+			// rows: an Eigen assertion in a Debug build, a silently wrong
+			// obstacle row in Release (RB-12 CI stage).
+			const int obstacle_rows = obstacle->n_vertices() * int(sampled_values.cols());
 			sampled_values.conservativeResize(sampled_values.rows() + obstacle->n_vertices(), sampled_values.cols());
-			if (dof_values.rows() >= obstacle->ndof())
+			if (dof_values.rows() >= obstacle_rows)
 				sampled_values.bottomRows(obstacle->n_vertices()) =
-					utils::unflatten(dof_values.bottomRows(obstacle->ndof()), sampled_values.cols());
+					utils::unflatten(dof_values.bottomRows(obstacle_rows), sampled_values.cols());
 			else
 				sampled_values.bottomRows(obstacle->n_vertices()).setZero();
 			return true;
@@ -954,21 +994,32 @@ namespace polyfem::varform
 
 		if (problem->is_time_dependent())
 		{
-			if (velocity && options.export_field("velocity"))
-				append_sampled_dof_field(
-					"velocity",
-					time_integrator ? time_integrator->v_prev() : Eigen::VectorXd::Zero(solution.size()),
-					actual_dim);
-			if (acceleration && options.export_field("acceleration"))
-				append_sampled_dof_field(
-					"acceleration",
-					time_integrator ? time_integrator->a_prev() : Eigen::VectorXd::Zero(solution.size()),
-					actual_dim);
+			const bool export_velocity = velocity && options.export_field("velocity");
+			const bool export_acceleration = acceleration && options.export_field("acceleration");
+			if (export_velocity || export_acceleration)
+			{
+				// Kinematics of the saved solution in the owner's stated time
+				// phase (RB-04 output alignment, RBR-01 explicit phase): the
+				// nonlinear loop saves before advancing, the others after.
+				Eigen::VectorXd saved_velocity = Eigen::VectorXd::Zero(solution.size());
+				Eigen::VectorXd saved_acceleration = Eigen::VectorXd::Zero(solution.size());
+				if (time_integrator)
+					std::tie(saved_velocity, saved_acceleration) = saved_solution_kinematics(*time_integrator, solution.col(0), output_time_phase_);
+				if (export_velocity)
+					append_sampled_dof_field("velocity", saved_velocity, actual_dim);
+				if (export_acceleration)
+					append_sampled_dof_field("acceleration", saved_acceleration, actual_dim);
+			}
 		}
 
 		if (forces)
 		{
-			const double s = time_integrator ? time_integrator->acceleration_scaling() : 1;
+			// The forms carry the acceleration scaling of the step they were
+			// solved in; a caller whose integrator history has already advanced
+			// (BDF changes the scaling while its history grows) passes that
+			// step's scale explicitly (RB-11 follow-up), otherwise the
+			// integrator's current scaling is the solved step's.
+			const double s = force_scale > 0 ? force_scale : (time_integrator ? time_integrator->acceleration_scaling() : 1);
 			for (const auto &[name, form] : named_forms)
 			{
 				const std::string field_name = name + "_forces";

@@ -221,6 +221,13 @@ target_link_libraries(polyfem PUBLIC igl::core igl::predicates)
 # IPC Toolkit
 include(ipc_toolkit)
 target_link_libraries(polyfem PUBLIC ipc::toolkit)
+# The run manifest names the Tight-Inclusion version (the toolkit's CCD root
+# finder, RB-24): the one CPM added, because the library's own project()
+# version reads 1.0.4 in both its 1.0.6 and 1.1.0 tags.
+CPMGetPackageVersion(Tight-Inclusion POLYFEM_TIGHT_INCLUSION_VERSION)
+if(POLYFEM_TIGHT_INCLUSION_VERSION)
+    target_compile_definitions(polyfem PRIVATE POLYFEM_TIGHT_INCLUSION_VERSION="${POLYFEM_TIGHT_INCLUSION_VERSION}")
+endif()
 
 # Threading
 if(POLYFEM_THREADING STREQUAL "CPP")
@@ -391,6 +398,11 @@ target_link_libraries(polyfem PUBLIC PolyClipper::PolyClipper)
 include(polyfem_warnings)
 target_link_libraries(polyfem PRIVATE polyfem::warnings)
 
+# Build identity compiled into the library, refreshed before every build
+# (RB-12 run manifest); after every dependency so the effective sources are known.
+include(polyfem_build_info)
+polyfem_add_build_info(polyfem)
+
 ################################################################################
 # Polyfem binary
 ################################################################################
@@ -409,6 +421,10 @@ if(POLYFEM_TOPLEVEL_PROJECT)
     if(NOT (${CMAKE_VERSION} VERSION_LESS "3.6.0"))
         set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME}_bin)
     endif()
+
+    # CI-08: install rules + CPack packaging for the PolyFEM_bin CLI alone
+    # (does not affect the ordinary developer build; see the module).
+    include(polyfem_cli_package)
 
     if(POLYFEM_BUILD_DOCS)
         # check if Doxygen is installed

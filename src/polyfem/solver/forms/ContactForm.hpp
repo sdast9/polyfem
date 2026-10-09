@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include "Form.hpp"
 
 #include <polyfem/Common.hpp>
@@ -25,12 +26,28 @@ namespace ipc
 		 {ipc::BroadPhaseMethod::LBVH, "bvh"},
 		 {ipc::BroadPhaseMethod::LBVH, "BVH"},
 		 {ipc::BroadPhaseMethod::LBVH, "LBVH"},
+		 // RB-11: the input spec offered sweep_and_prune/SAP without an entry
+		 // here, so the name silently became the map's first entry (hash_grid).
+		 {ipc::BroadPhaseMethod::SWEEP_AND_PRUNE, "sweep_and_prune"},
+		 {ipc::BroadPhaseMethod::SWEEP_AND_PRUNE, "SAP"},
 		 {ipc::BroadPhaseMethod::SWEEP_AND_TINIEST_QUEUE, "sweep_and_tiniest_queue"},
 		 {ipc::BroadPhaseMethod::SWEEP_AND_TINIEST_QUEUE, "STQ"}})
 } // namespace ipc
 
 namespace polyfem::solver
 {
+	/// @brief RB-05: the `solver/contact/CCD/resource_limits` options as
+	///        written: per bound, -1 = automatic (the production default when
+	///        the broad phase can enforce it, disabled with a notice
+	///        otherwise), 0 = disabled, N > 0 = explicit (an error when the
+	///        broad phase cannot enforce it). Absent fields are automatic.
+	struct ResourceLimits
+	{
+		long long max_cell_items = -1;
+		long long max_candidate_emissions = -1;
+	};
+	ResourceLimits resource_limits_from_args(const json &ccd_args);
+
 	/// @brief How the barrier stiffness is chosen and updated
 	enum class BarrierStiffnessMode
 	{
@@ -124,12 +141,119 @@ namespace polyfem::solver
 
 		std::shared_ptr<ipc::BroadPhase> get_broad_phase() const { return broad_phase_; }
 
+		/// @brief RB-04: broad-phase candidate counts of the trial sweeps
+		///        handed to CCD by line_search_begin since the last reset.
+		///        The swept cache itself is cleared at line_search_end, so
+		///        an endpoint record can only report these retained counts.
+		///        RB-05 adds the broad phase's own intermediates when the
+		///        method measures them (hash grid cell items; pair emissions
+		///        are counted only while a budget is enabled).
+		struct CandidateStatistics
+		{
+			size_t builds = 0;                   ///< completed line_search_begin builds since the reset
+			size_t last = 0;                     ///< candidates of the most recent build
+			size_t max = 0;                      ///< largest build since the reset
+			bool intermediates_measured = false; ///< the broad phase reported its buffers
+			size_t last_cell_items = 0;          ///< hash-grid (box, cell) items of the last build
+			size_t max_cell_items = 0;           ///< largest item count since the reset
+			size_t last_candidate_emissions = 0; ///< pre-filter pair emissions of the last build (budget enabled only)
+			size_t max_candidate_emissions = 0;  ///< largest emission count since the reset
+			bool emissions_saturated = false;    ///< a build's emission sum saturated at SIZE_MAX, so the counts above are lower bounds (RBR-02)
+		};
+		const CandidateStatistics &candidate_statistics() const { return candidate_statistics_; }
+		void reset_candidate_statistics() { candidate_statistics_ = CandidateStatistics(); }
+
+		/// @brief RB-05: bound on the broad phase's intermediate buffers,
+		///        enforced by the toolkit before the corresponding allocation
+		///        (ipc::BroadPhaseBudget). Zero fields disable the bound
+		///        (bit-identical to the unbudgeted path). A method that cannot
+		///        enforce a budget is refused here, at configuration time,
+		///        with a named error -- never silently ignored.
+		void set_broad_phase_budget(const ipc::BroadPhaseBudget &budget);
+		const ipc::BroadPhaseBudget &broad_phase_budget() const { return broad_phase_->budget; }
+
+		/// @brief Production defaults applied by automatic resource limits:
+		///        hash-grid cell items (16 B each plus 8 B of merge indices:
+		///        about 2.4 GB) and pre-filter pair emissions per detection
+		///        pass (about 35 B each as measured: about 1.75 GB). Every
+		///        public scene needs ~2,400 items per sweep; the runaway cases
+		///        measured in RB-05 (a few vertices sweeping far) needed 6e7
+		///        items and up, uniform sweeps 1e7 emissions and up.
+		static constexpr size_t default_max_cell_items = 100000000;
+		static constexpr size_t default_max_candidate_emissions = 50000000;
+
+		/// @brief RB-11: the broad-phase names the JSON enum map above accepts.
+		///        NLOHMANN_JSON_SERIALIZE_ENUM maps any unknown string to the
+		///        first entry, so callers must validate the name explicitly.
+		static const std::vector<std::string> &broad_phase_names();
+		static bool is_known_broad_phase_name(const std::string &name);
+
+		/// @brief Resolve the written limits (see ResourceLimits) against this
+		///        form's broad phase and apply them: automatic bounds become
+		///        the defaults when the method can enforce them and are
+		///        disabled with a logged notice otherwise; explicit bounds are
+		///        applied as written (an error when not enforceable).
+		void apply_resource_limits(const ResourceLimits &limits);
+
+		/// @brief RB-06: the attempt-mutable state of the base contact form --
+		///        the global stiffness/trim and its adaptive bound, the
+		///        adaptive controller's previous distance, the swept candidate
+		///        interval and the retained candidate statistics.
+		struct State : public FormState
+		{
+			double barrier_stiffness = 0;
+			double max_barrier_stiffness = 0;
+			double prev_distance = 0;
+			bool use_cached_candidates = false;
+			ipc::Candidates candidates;
+			CandidateStatistics candidate_statistics;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
+		/// @brief Restart: append the stiffness state that carries across
+		///        time steps to a step's state file (datasets "contact_*").
+		virtual void write_restart_state(const std::string &path) const;
+		/// @brief Restart: read that state back at the restored coordinates
+		///        x. Returns false (state untouched) when the file has none.
+		virtual bool read_restart_state(const std::string &path, const Eigen::VectorXd &x);
+
 	protected:
+		void save_contact_state(State &state) const;
+		void restore_contact_state(const State &state);
+
 		/// @brief Update the cached candidate set for the current solution
 		/// @param displaced_surface Vertex positions displaced by the current solution
 		virtual void update_collision_set(const Eigen::MatrixXd &displaced_surface) = 0;
 
+		/// @brief Drop the swept candidate cache and leave the cached-candidate
+		///        interval. The cache is valid only inside the line search that
+		///        built it; init and update_quantities start a new solve/step
+		///        and call this first, because PolySolve's line search calls no
+		///        line_search_end while an exception unwinds through it (RB-05).
+		void discard_swept_candidates();
+
+		/// @brief update_collision_set at x, logging (and flushing) a named
+		///        diagnostic before rethrowing any exception -- the toolkit
+		///        throws silently and an escaping exception terminates the
+		///        process without unwinding (RB-05).
+		void rebuild_collision_set(const Eigen::VectorXd &x, const char *operation);
+
 		virtual double barrier_support_size() const { return dhat_; }
+
+		/// @brief Cap on the trial-step surface displacement handed to CCD,
+		///        as a multiple of the barrier support size.
+		/// @return Infinity by default, i.e. no cap: the trial interval is
+		///         priced as given. Only the semi-implicit barrier, whose
+		///         Newton trial steps can be orders larger than any
+		///         acceptable step, opts into a finite cap -- see
+		///         BarrierContactForm. Returning a finite value here caps
+		///         the step even when CCD finds no collision at all, so it
+		///         must not be enabled globally.
+		virtual double trial_displacement_cap() const
+		{
+			return std::numeric_limits<double>::infinity();
+		}
 
 		/// @brief Collision mesh
 		const ipc::CollisionMesh &collision_mesh_;
@@ -169,5 +293,7 @@ namespace polyfem::solver
 		bool use_cached_candidates_ = false;
 		/// @brief Cached candidate set for the current solution
 		ipc::Candidates candidates_;
+		/// @brief Retained candidate counts of this solve's trial sweeps (RB-04)
+		CandidateStatistics candidate_statistics_;
 	};
 } // namespace polyfem::solver

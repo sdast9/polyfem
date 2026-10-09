@@ -110,23 +110,34 @@ std::string polyfem::utils::resolve_path(
 		return path;
 	}
 
+	// The strings resolved here are often expressions rather than file names
+	// (the run manifest probes every string of the input). One longer than
+	// the OS path limit made the throwing filesystem queries stop the run
+	// with "File name too long"; such a string is not an existing file, so a
+	// failed query counts as "does not exist".
+	std::error_code ec;
 	std::filesystem::path resolved_path(path);
 	if (resolved_path.is_absolute())
 	{
 		return resolved_path.string();
 	}
-	else if (std::filesystem::exists(resolved_path))
+	else if (std::filesystem::exists(resolved_path, ec))
 	{
-		return std::filesystem::weakly_canonical(resolved_path).string();
+		const std::filesystem::path canonical = std::filesystem::weakly_canonical(resolved_path, ec);
+		if (!ec)
+			return canonical.string();
 	}
 
 	std::filesystem::path input_dir_path(input_file_path);
-	if (!std::filesystem::is_directory(input_dir_path))
+	if (!std::filesystem::is_directory(input_dir_path, ec))
 		input_dir_path = input_dir_path.parent_path();
 
-	resolved_path = std::filesystem::weakly_canonical(input_dir_path / resolved_path);
+	const std::filesystem::path joined = input_dir_path / resolved_path;
+	resolved_path = std::filesystem::weakly_canonical(joined, ec);
+	if (ec)
+		resolved_path = joined.lexically_normal();
 
-	if (only_if_exists && !std::filesystem::exists(resolved_path))
+	if (only_if_exists && !std::filesystem::exists(resolved_path, ec))
 	{
 		return path; // return path unchanged
 	}

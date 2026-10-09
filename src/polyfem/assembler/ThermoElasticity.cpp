@@ -177,8 +177,7 @@ namespace polyfem::assembler
 			elastic_params["id"] = params["id"];
 		if (params.contains("rho"))
 			elastic_params["rho"] = params["rho"];
-		if (params.contains(MATERIAL_ELEMENT_INDEX))
-			elastic_params[MATERIAL_ELEMENT_INDEX] = params[MATERIAL_ELEMENT_INDEX];
+		copy_material_element_binding(params, elastic_params);
 
 		elastic_.add_multimaterial(index, elastic_params, units, root_path);
 	}

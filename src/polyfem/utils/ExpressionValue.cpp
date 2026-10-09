@@ -1,4 +1,5 @@
 #include "ExpressionValue.hpp"
+#include "MaterialFileCache.hpp"
 
 #include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -231,7 +232,7 @@ namespace polyfem
 		void ExpressionValue::clear()
 		{
 			expr_ = "";
-			mat_.resize(0, 0);
+			mat_.reset();
 			mat_expr_ = {};
 			sfunc_ = nullptr;
 			tfunc_ = nullptr;
@@ -250,7 +251,7 @@ namespace polyfem
 		{
 			clear();
 
-			mat_ = val;
+			mat_ = std::make_shared<Eigen::MatrixXd>(val);
 		}
 
 		void ExpressionValue::init(const std::string &expr, const std::string &root_path)
@@ -266,9 +267,18 @@ namespace polyfem
 
 			try
 			{
+				const auto snapshot = MaterialFileCacheScope::current();
+				mat_ = snapshot->find_matrix(path.string());
+				if (mat_)
+					return;
 				if (std::filesystem::is_regular_file(path))
 				{
-					read_matrix(path.string(), mat_);
+					mat_ = snapshot->matrix(path.string(), [&]() {
+						Eigen::MatrixXd loaded;
+						if (!read_matrix(path.string(), loaded))
+							log_and_throw_error("Cannot read material matrix: {}", path.string());
+						return loaded;
+					});
 					return;
 				}
 			}
@@ -304,6 +314,14 @@ namespace polyfem
 			{
 				logger().error("Unable to parse: {}", expr);
 				logger().error("Error near character {}.", err);
+				// RB-11: a value-file path with a typo lands here; say so
+				// instead of reporting only a failed expression parse.
+				const bool looks_like_path = expr.find('/') != std::string::npos || expr.find('\\') != std::string::npos
+											 || path.has_extension();
+				if (looks_like_path)
+					log_and_throw_error(
+						"'{}' is not an existing value file (resolved to '{}') and is not a valid expression either; check the path.",
+						expr, path.string());
 				log_and_throw_error("Invalid expression '{}'.", expr);
 			}
 			te_free(tmp);
@@ -321,14 +339,15 @@ namespace polyfem
 			{
 				if (vals.empty() || vals[0].is_number())
 				{
-					mat_.resize(vals.size(), 1);
+					auto loaded = std::make_shared<Eigen::MatrixXd>(vals.size(), 1);
 
-					for (int i = 0; i < mat_.size(); ++i)
+					for (int i = 0; i < loaded->size(); ++i)
 					{
 						if (!vals[i].is_number())
 							log_and_throw_error("Expression arrays must contain either only numbers or only expressions.");
-						mat_(i) = vals[i].get<double>();
+						(*loaded)(i) = vals[i].get<double>();
 					}
+					mat_ = std::move(loaded);
 				}
 				else
 				{
@@ -346,7 +365,7 @@ namespace polyfem
 				}
 
 				if (t_index_.size() > 0)
-					if (mat_.size() != t_index_.size() && mat_expr_.size() != t_index_.size())
+					if (mat_size() != t_index_.size() && mat_expr_.size() != t_index_.size())
 						logger().error("Specifying varying dirichlet over time, however 'time_reference' does not match dirichlet boundary conditions.");
 			}
 			else if (vals.is_object())
@@ -431,6 +450,32 @@ namespace polyfem
 			tfunc_coo_ = coo;
 		}
 
+		void ExpressionValue::bind_per_element(const int local_index, const Eigen::Index n_body, const Eigen::Index n_global, const std::string &what)
+		{
+			if (!t_index_.empty())
+				return; // a time series, not a per-element list
+			if (!mat_expr_.empty())
+				log_and_throw_error(
+					"{}: a list of expressions is only supported as a time series (with time_reference); per-element values need a list of numbers or a value file",
+					what);
+			if (mat_size() == 0)
+				return; // constant, expression or function
+
+			if (n_global > 0 && mat_size() == n_global)
+			{
+				index_ = -1; // one row per element of the whole mesh: global element id
+				return;
+			}
+			if (n_body > 0 && mat_size() == n_body)
+			{
+				index_ = local_index; // one row per element of this body: body-local index
+				return;
+			}
+			log_and_throw_error(
+				"{}: the value list/file has {} entries, but per-element material values need one entry per element of the FE mesh ({}) or per element of the body they are given for ({}); the list does not describe this mesh",
+				what, mat_size(), n_global, n_body);
+		}
+
 		void ExpressionValue::set_t(const json &t)
 		{
 			if (t.is_array())
@@ -440,7 +485,7 @@ namespace polyfem
 					t_index_[std::round(t[i].get<double>() * 1000.) / 1000.] = i;
 				}
 
-				if (mat_.size() != t_index_.size() && mat_expr_.size() != t_index_.size())
+				if (mat_size() != t_index_.size() && mat_expr_.size() != t_index_.size())
 					logger().error("Specifying varying dirichlet over time, however 'time_reference' does not match dirichlet boundary conditions.");
 			}
 		}
@@ -455,8 +500,8 @@ namespace polyfem
 					t = std::round(t * 1000.) / 1000.;
 					if (t_index_.count(t) != 0)
 					{
-						if (mat_.size() > 0)
-							return mat_(t_index_.at(t));
+						if (mat_size() > 0)
+							return (*mat_)(t_index_.at(t));
 						else if (mat_expr_.size() > 0)
 							return mat_expr_[t_index_.at(t)](x, y, z, t, index);
 					}
@@ -467,8 +512,22 @@ namespace polyfem
 					}
 				}
 
-				if (mat_.size() > 0)
-					result = mat_(index_ >= 0 ? index_ : index);
+				if (!mat_expr_.empty())
+					log_and_throw_error("A list of expressions is only supported as a time series (with time_reference); it cannot be evaluated as a value");
+
+				if (mat_size() > 0)
+				{
+					// Per-element value files are indexed by the global element id,
+					// or by the body-local index when bind_per_element selected it;
+					// a file with too few rows would otherwise read out of bounds.
+					const Eigen::Index mat_index = index_ >= 0 ? Eigen::Index(index_) : Eigen::Index(index);
+					if (mat_index < 0 || mat_index >= mat_->size())
+						log_and_throw_error(fmt::format(
+							"Value list/file has {} entries but entry {} was requested "
+							"(per-element material files must have one row per global element).",
+							mat_->size(), mat_index));
+					result = (*mat_)(mat_index);
+				}
 				else if (sfunc_)
 					result = sfunc_(x, y, z, t, index);
 				else if (tfunc_)

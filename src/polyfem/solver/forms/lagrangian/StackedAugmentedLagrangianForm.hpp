@@ -49,6 +49,15 @@ namespace polyfem::solver
 		void project_hessian(StiffnessMatrix &hessian) const override;
 		void project_diag(Eigen::VectorXd &diag) const override;
 
+		/// @brief RB-06: this form's own weight/multipliers plus every term's
+		///        state; restoring rebuilds the stacked constraint data.
+		struct State : public AugmentedLagrangianForm::State
+		{
+			std::vector<std::unique_ptr<FormState>> terms;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
 	protected:
 		double value_unweighted(const Eigen::VectorXd &x) const override;
 		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const override;

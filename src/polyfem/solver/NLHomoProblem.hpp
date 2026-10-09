@@ -77,6 +77,10 @@ namespace polyfem::solver
 		void update_quantities(const double t, const TVector &x) override;
 
 		void add_form(const std::shared_ptr<Form> &form) { homo_forms.push_back(form); }
+
+		/// @brief NLProblem's generations plus the homogenization forms', which
+		///        are part of this objective too.
+		uint64_t objective_generation() const override;
 		bool has_symmetry_constraint() const { return only_symmetric; }
 
 	private:

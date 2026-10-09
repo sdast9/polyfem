@@ -418,6 +418,9 @@ namespace polyfem::solver
 			auto &bs = bases_[id];
 			auto &gbs = geom_bases_[id];
 			update_quadrature(id, dim, quadrature_hierarchy_[id], quadrature_order_, bs, gbs, ass_vals_cache_);
+			// The energy is a different quadrature of the same integrand, so
+			// its values and gradients no longer agree with the ones before.
+			note_objective_change("quadrature refinement");
 		}
 	}
 

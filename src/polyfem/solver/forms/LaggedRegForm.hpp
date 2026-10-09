@@ -45,6 +45,26 @@ namespace polyfem::solver
 		/// @return True if the form requires lagging
 		bool uses_lagging() const override { return true; }
 
+		/// @brief RB-06: the lagged coordinates (the enabled flag, which
+		///        update_lagging toggles, is in the base state).
+		struct State : public FormState
+		{
+			Eigen::VectorXd x_lagged;
+		};
+		std::unique_ptr<FormState> save_state() const override
+		{
+			auto state = std::make_unique<State>();
+			save_base_state(*state);
+			state->x_lagged = x_lagged_;
+			return state;
+		}
+		void restore_state(const FormState &state, const Eigen::VectorXd &) override
+		{
+			const State &lagged = state_as<State>(state, "LaggedRegForm");
+			restore_base_state(lagged);
+			x_lagged_ = lagged.x_lagged;
+		}
+
 	private:
 		int n_lagging_iters_;      ///< Number of iterations to lag for
 		Eigen::VectorXd x_lagged_; ///< The full variables from the previous lagging solve.

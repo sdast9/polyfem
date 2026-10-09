@@ -46,7 +46,8 @@ namespace polyfem::varform
 			{"inertia", solve_data_.inertia_form},
 			{"body", solve_data_.body_form}};
 		return elastic_output_fields(
-			sample, solution, options, nullptr, solve_data_.time_integrator.get(), named_forms, solve_data_.elastic_form.get());
+			sample, solution, options, nullptr, solve_data_.time_integrator.get(), named_forms, solve_data_.elastic_form.get(),
+			/*contact_form=*/nullptr, /*force_scale=*/solved_step_scale_);
 	}
 
 	void LinearElasticVarForm::build_stiffness_mat(StiffnessMatrix &stiffness)
@@ -133,7 +134,6 @@ namespace polyfem::varform
 		if (problem->is_time_dependent())
 		{
 			solve_data_.time_integrator = time_integrator::ImplicitTimeIntegrator::construct_time_integrator(args["time"]["integrator"]);
-			solve_data_.inertia_form = std::make_shared<solver::InertiaForm>(mass_, *solve_data_.time_integrator);
 
 			POLYFEM_SCOPED_TIMER("Initialize time integrator");
 
@@ -154,14 +154,39 @@ namespace polyfem::varform
 			}
 
 			solve_data_.time_integrator->init(solution, velocity, acceleration, dt);
+			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
+			// RB-11: InertiaForm reads x_tilde from the integrator in its constructor
+			// (upstream #508), so it must be built after init: before, the history is
+			// empty and x_prev() dereferences an empty deque (a segfault on every
+			// time-dependent linear run). A quasistatic schedule solves the static
+			// problem at every time, so it carries no inertia form at all (the
+			// nonlinear path's SolveData does the same); the force export then
+			// reports a zero inertia force.
+			solve_data_.inertia_form = is_quasistatic()
+										   ? nullptr
+										   : std::make_shared<solver::InertiaForm>(mass_, *solve_data_.time_integrator);
 
-			solve_data_.elastic_form->set_weight(solve_data_.time_integrator->acceleration_scaling());
-			solve_data_.body_form->set_weight(solve_data_.time_integrator->acceleration_scaling());
+			// Every energy form carries the acceleration scaling of the step being
+			// solved, in quasistatics too (the nonlinear convention,
+			// SolveData::update_dt): the force export divides that same scaling
+			// out again, so exported elastic and body forces are physical for any
+			// dt and any integrator. The linear solve below does not go through
+			// the forms. Refreshed per step in solve_transient_linear: BDF's
+			// scaling changes while its history grows.
+			solved_step_scale_ = solve_data_.time_integrator->acceleration_scaling();
+			solve_data_.elastic_form->set_weight(solved_step_scale_);
+			solve_data_.body_form->set_weight(solved_step_scale_);
 		}
 		else
 		{
 			solve_data_.time_integrator = nullptr;
+			solved_step_scale_ = 1.0;
 		}
+	}
+
+	bool LinearElasticVarForm::is_quasistatic() const
+	{
+		return problem->is_time_dependent() && args["time"].value("quasistatic", false);
 	}
 
 	void LinearElasticVarForm::solve_static_linear(Eigen::MatrixXd &sol, const ForwardStepCallback &post_step)
@@ -191,6 +216,8 @@ namespace polyfem::varform
 		auto solver = polysolve::linear::Solver::create(args["solver"]["linear"], logger());
 		logger().info("{}...", solver->name());
 
+		// the initial state is exported with the load of t0, not of the first step
+		solve_data_.body_form->update_quantities(t0, sol);
 		save_timestep(t0, 0, t0, dt, sol);
 		if (post_step)
 			post_step(0, sol);
@@ -211,21 +238,47 @@ namespace polyfem::varform
 				std::vector<mesh::LocalBoundary>(), std::vector<int>(), elastic_boundary_samples(),
 				boundary_.local_neumann_boundary, current_rhs, sol, time);
 
-			current_rhs *= solve_data_.time_integrator->acceleration_scaling();
-			current_rhs += mass_ * solve_data_.time_integrator->x_tilde();
+			// the scale and predictor of THIS step's equation: BDF's acceleration
+			// scaling and x_tilde depend on how much history it holds, so they are
+			// captured here, before the history advances, and the forms' weights
+			// follow them (the export divides the same scale out again)
+			const double step_scale = solve_data_.time_integrator->acceleration_scaling();
+			solved_step_scale_ = step_scale;
+			solve_data_.elastic_form->set_weight(step_scale);
+			solve_data_.body_form->set_weight(step_scale);
+
+			const bool quasistatic = is_quasistatic();
+			if (!quasistatic)
+			{
+				current_rhs *= step_scale;
+				current_rhs += mass_ * solve_data_.time_integrator->x_tilde();
+			}
 
 			rhs_assembler_->set_bc(
 				boundary_.local_boundary, boundary_.boundary_nodes, elastic_boundary_samples(),
 				std::vector<mesh::LocalBoundary>(), current_rhs, sol, time);
 
-			StiffnessMatrix A = stiffness * solve_data_.time_integrator->acceleration_scaling() + mass_;
+			// RB-11: `time/quasistatic` was ignored by the linear formulation (every
+			// time-dependent linear run carried the mass term); it now solves K u = f(t).
+			StiffnessMatrix A = quasistatic ? stiffness : StiffnessMatrix(stiffness * step_scale + mass_);
 			Eigen::VectorXd b = current_rhs;
 
 			solve_linear_system(solver, A, b, args["output"]["advanced"]["spectrum"].get<bool>() && t == 1, sol);
+			output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance; // RBR-01: the callback's output describes the new endpoint
 			if (post_step)
 				post_step(t, sol);
 
+			// RB-11: the exported forces describe the step just solved — the load
+			// at its time and, in dynamics, M (u - x_tilde) with this step's
+			// prediction, taken before the integrator's history advances; the
+			// export normalises by solved_step_scale_, not by the integrator's
+			// post-advance scaling.
+			solve_data_.body_form->update_quantities(time, sol);
+			if (solve_data_.inertia_form)
+				solve_data_.inertia_form->update_quantities(time, sol);
+
 			solve_data_.time_integrator->update_quantities(sol);
+			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: this loop saves after advancing
 			save_timestep(time, t, t0, dt, sol);
 			save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
 

@@ -47,10 +47,15 @@ namespace polyfem::solver
 		virtual bool is_step_valid(const TVector &x0, const TVector &x1) override;
 		virtual bool is_step_collision_free(const TVector &x0, const TVector &x1) override;
 		virtual double max_step_size(const TVector &x0, const TVector &x1) override;
+		double probe_step_bound(const TVector &x0, const TVector &x1) override;
 		void line_search_begin(const TVector &x0, const TVector &x1) override;
 		virtual void post_step(const polysolve::nonlinear::PostStepData &data) override;
 
 		void solution_changed(const TVector &new_x) override;
+
+		/// @brief The forms' generations plus the penalty (AL) forms', which
+		///        are part of the objective this problem minimizes.
+		uint64_t objective_generation() const override;
 
 		void init_lagging(const TVector &x) override;
 		void update_lagging(const TVector &x, const int iter_num) override;
@@ -73,6 +78,16 @@ namespace polyfem::solver
 		void full_hessian_to_reduced_hessian(StiffnessMatrix &hessian) const;
 
 		double normalize_forms() override;
+
+		/// @brief RB-06: the forms' state plus the penalty (AL) forms' state
+		///        and the current (full/reduced) coordinate mode.
+		struct SavedState : public FullNLProblem::SavedState
+		{
+			std::vector<std::unique_ptr<FormState>> penalty_forms;
+			bool reduced = false;
+		};
+		std::unique_ptr<FullNLProblem::SavedState> save_state() const override;
+		void restore_state(const FullNLProblem::SavedState &state, const TVector &x) override;
 
 		virtual double grad_norm_rescaling(const polysolve::nonlinear::NormType norm_type) const override;
 		virtual double step_norm_rescaling(const polysolve::nonlinear::NormType norm_type) const override;

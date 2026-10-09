@@ -1,8 +1,9 @@
 #include "FrictionForm.hpp"
 #include "BarrierContactForm.hpp"
-#include "SemiImplicitBarrierContactForm.hpp"
 #include "SmoothContactForm.hpp"
 
+#include <polyfem/io/MatrixIO.hpp>
+#include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/Timer.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 
@@ -13,6 +14,7 @@
 #include <Eigen/Core>
 
 #include <cassert>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -56,16 +58,50 @@ namespace polyfem::solver
 		return time_integrator_ != nullptr ? time_integrator_->dv_dx() : 1;
 	}
 
+	bool FrictionForm::realized_lag() const
+	{
+		const auto barrier_contact = dynamic_cast<const BarrierContactForm *>(&contact_form_);
+		return barrier_contact != nullptr && barrier_contact->uses_semi_implicit_stiffness() && barrier_contact->friction_lag_realized();
+	}
+
+	void FrictionForm::init_lagging(const Eigen::VectorXd &x)
+	{
+		// Realized mode: the lag built by update_quantities at these same
+		// coordinates (before the between-steps refresh moved the trim) is
+		// the one that carries the force that acted there; keep it.
+		if (realized_lag() && lag_x_.size() == x.size() && lag_x_ == x)
+			return;
+		update_lagging(x, 0);
+	}
+
+	void FrictionForm::update_quantities(const double t, const Eigen::VectorXd &x)
+	{
+		if (realized_lag())
+			update_lagging(x, 0);
+	}
+
+	double FrictionForm::trim_scale() const
+	{
+		const auto barrier_contact = dynamic_cast<const BarrierContactForm *>(&contact_form_);
+		if (barrier_contact == nullptr || !barrier_contact->uses_semi_implicit_stiffness())
+			return 1;
+		if (barrier_contact->friction_lag_realized())
+			return 1;
+		if (!(lagged_trim_ > 0) || !std::isfinite(lagged_trim_))
+			return 1;
+		return contact_form_.barrier_stiffness() / lagged_trim_;
+	}
+
 	double FrictionForm::value_unweighted(const Eigen::VectorXd &x) const
 	{
-		return friction_potential_(friction_collision_set_, collision_mesh_, compute_surface_velocities(x)) / dv_dx();
+		return trim_scale() * friction_potential_(friction_collision_set_, collision_mesh_, compute_surface_velocities(x)) / dv_dx();
 	}
 
 	void FrictionForm::first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const
 	{
 		const Eigen::VectorXd grad_friction = friction_potential_.gradient(
 			friction_collision_set_, collision_mesh_, compute_surface_velocities(x));
-		gradv = collision_mesh_.to_full_dof(grad_friction);
+		gradv = trim_scale() * collision_mesh_.to_full_dof(grad_friction);
 	}
 
 	void FrictionForm::second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const
@@ -83,14 +119,73 @@ namespace polyfem::solver
 			psd_projection_method = ipc::PSDProjectionMethod::NONE;
 		}
 
-		hessian = dv_dx() * friction_potential_.hessian( //
+		hessian = (trim_scale() * dv_dx()) * friction_potential_.hessian( //
 					  friction_collision_set_, collision_mesh_, compute_surface_velocities(x), psd_projection_method);
 
 		hessian = collision_mesh_.to_full_dof(hessian);
 	}
 
+	std::unique_ptr<FormState> FrictionForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_base_state(*state);
+		state->friction_collision_set = friction_collision_set_;
+		state->lagged_trim = lagged_trim_;
+		state->lag_x = lag_x_;
+		return state;
+	}
+
+	void FrictionForm::restore_state(const FormState &state, const Eigen::VectorXd &)
+	{
+		const State &friction_state = state_as<State>(state, "FrictionForm");
+		restore_base_state(friction_state);
+		friction_collision_set_ = friction_state.friction_collision_set;
+		lagged_trim_ = friction_state.lagged_trim;
+		lag_x_ = friction_state.lag_x;
+	}
+
+	void FrictionForm::write_restart_state(const std::string &path) const
+	{
+		Eigen::MatrixXd scalars(1, 2);
+		scalars << lagged_trim_, double(friction_collision_set_.size());
+		io::write_matrix(path, "friction_scalars", scalars, /*replace=*/false);
+		if (friction_collision_set_.size() == 0)
+			return;
+		Eigen::MatrixXd forces(friction_collision_set_.size(), 1);
+		for (size_t i = 0; i < friction_collision_set_.size(); ++i)
+			forces(i) = friction_collision_set_[i].normal_force_magnitude;
+		io::write_matrix(path, "friction_normal_force", forces, /*replace=*/false);
+	}
+
+	bool FrictionForm::read_restart_state(const std::string &path, const Eigen::VectorXd &x)
+	{
+		Eigen::MatrixXd scalars;
+		if (!io::read_matrix(path, "friction_scalars", scalars))
+			return false;
+		if (scalars.size() != 2)
+			log_and_throw_error("Restart state {}: friction_scalars has {} entries, expected 2", path, scalars.size());
+		const size_t count = size_t(scalars(1));
+		if (count != friction_collision_set_.size())
+		{
+			logger().warn(
+				"Restart state {}: {} lagged friction collisions saved, {} rebuilt at the restored coordinates; keeping the rebuilt lag",
+				path, count, friction_collision_set_.size());
+			return false;
+		}
+		Eigen::MatrixXd forces;
+		if (count > 0 && (!io::read_matrix(path, "friction_normal_force", forces) || size_t(forces.size()) != count))
+			log_and_throw_error("Restart state {}: friction_normal_force is missing or not {} entries", path, count);
+		for (size_t i = 0; i < count; ++i)
+			friction_collision_set_[i].normal_force_magnitude = forces(i);
+		lagged_trim_ = scalars(0);
+		lag_x_ = x;
+		note_objective_change("restart state restored");
+		return true;
+	}
+
 	void FrictionForm::update_lagging(const Eigen::VectorXd &x, const int iter_num)
 	{
+		lag_x_ = x;
 		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
 
 		auto broad_phase = ipc::create_broad_phase(broad_phase_method_);
@@ -106,12 +201,12 @@ namespace polyfem::solver
 
 			// Per-contact stiffness scales so the lagged friction normal
 			// forces see trim * kappa_i instead of a single global stiffness.
-			if (const auto semi_implicit =
-					dynamic_cast<const SemiImplicitBarrierContactForm *>(barrier_contact))
-				semi_implicit->assign_collision_stiffness(collision_set);
+			if (barrier_contact->uses_semi_implicit_stiffness())
+				barrier_contact->assign_collision_stiffness(collision_set);
 
 			ipc::BarrierPotential bp = barrier_contact->barrier_potential();
 			bp.set_stiffness(barrier_contact->barrier_stiffness());
+			lagged_trim_ = barrier_contact->barrier_stiffness();
 			friction_collision_set_.build(
 				collision_mesh_, displaced_surface, collision_set,
 				bp, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_);
@@ -133,5 +228,10 @@ namespace polyfem::solver
 		{
 			throw std::runtime_error("Unknown contact form");
 		}
+
+		// The lagged normal forces and sliding bases are what the friction
+		// potential is built from: rebuilding them is a new function. This
+		// happens between minimizations, in the lagging loop.
+		note_objective_change("friction lag update");
 	}
 } // namespace polyfem::solver

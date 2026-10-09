@@ -38,8 +38,7 @@ namespace polyfem::assembler
 		for (size_t i = 0; i < assemblers_.size(); ++i)
 		{
 			json model = models[i];
-			if (params.contains(MATERIAL_ELEMENT_INDEX))
-				model[MATERIAL_ELEMENT_INDEX] = params[MATERIAL_ELEMENT_INDEX];
+			copy_material_element_binding(params, model);
 			assemblers_[i]->add_multimaterial(index, model, units, root_path);
 		}
 	}
@@ -117,13 +116,27 @@ namespace polyfem::assembler
 
 	std::map<std::string, Assembler::ParamFunc> SumModel::parameters() const
 	{
+		// Two children of the SAME type (e.g. the two symmetric fiber families of
+		// a GOH model) are summed correctly, but would overwrite each other here
+		// and only the last one's parameters would reach the output. Disambiguate
+		// repeated types with a 0-based occurrence index in "models" order;
+		// types that appear once keep their bare name for backwards compatibility.
+		std::map<std::string, int> occurrences;
+		for (const auto &a : assemblers_)
+			++occurrences[a->name()];
+
+		std::map<std::string, int> seen;
 		std::map<std::string, Assembler::ParamFunc> params;
 		for (const auto &a : assemblers_)
 		{
+			const std::string &type = a->name();
+			const std::string prefix =
+				occurrences[type] > 1 ? type + "_" + std::to_string(seen[type]++) : type;
+
 			auto p = a->parameters();
 			for (auto &it : p)
 			{
-				params[a->name() + "/" + it.first] = it.second;
+				params[prefix + "/" + it.first] = it.second;
 			}
 		}
 		return params;

@@ -335,7 +335,12 @@ namespace polyfem::legacy
 		/// utility to set the material and the problem dimension to only 1 assembler
 		/// @param[in/out] assembler to set
 		void set_materials(assembler::Assembler &assembler) const;
+		std::shared_ptr<utils::MaterialFileCache> material_file_cache() const { return material_file_cache_; }
 
+	private:
+		std::shared_ptr<utils::MaterialFileCache> material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
+
+	public:
 		//---------------------------------------------------
 		//-----------------solver----------------------------
 		//---------------------------------------------------

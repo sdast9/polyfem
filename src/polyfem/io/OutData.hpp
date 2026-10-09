@@ -70,6 +70,36 @@ namespace polyfem::io
 			bool export_field(const std::string &field) const;
 		};
 
+		/// @brief One boundary face (3D) or edge (2D) that a boundary
+		/// extraction could not tessellate.
+		struct SkippedBoundaryFace
+		{
+			int element_id;   ///< element owning the face
+			int primitive_id; ///< global face/edge id
+			int order;        ///< element basis order
+			int n_nodes;      ///< number of element bases
+			std::string reason;
+		};
+
+		/// @brief Outcome of a boundary extraction. Consumers that need a
+		/// complete surface (contact) must refuse an incomplete one: a
+		/// silently partial or empty collision surface is a contract
+		/// violation (RB-22).
+		struct BoundaryExtractionReport
+		{
+			/// faces/edges listed in total_local_boundary
+			int n_boundary_faces = 0;
+			/// faces that were not tessellated (intentional follower skips on
+			/// non-conforming meshes are not listed)
+			std::vector<SkippedBoundaryFace> skipped;
+			/// nonempty if the whole extraction was skipped, with the reason
+			std::string unsupported_mesh;
+
+			bool complete() const { return skipped.empty() && unsupported_mesh.empty(); }
+			/// one-line description of what was skipped, for messages
+			std::string describe(const int max_listed = 12) const;
+		};
+
 		/// extracts the boundary mesh
 		/// @param[in] mesh mesh
 		/// @param[in] n_bases number of bases
@@ -79,6 +109,7 @@ namespace polyfem::io
 		/// @param[out] boundary_edges edges
 		/// @param[out] boundary_triangles triangles
 		/// @param[out] displacement_map map of collision mesh vertices to nodes, empty if identity
+		/// @param[out] report optional record of skipped faces (see BoundaryExtractionReport)
 		static void extract_boundary_mesh(
 			const mesh::Mesh &mesh,
 			const int n_bases,
@@ -87,7 +118,37 @@ namespace polyfem::io
 			Eigen::MatrixXd &node_positions,
 			Eigen::MatrixXi &boundary_edges,
 			Eigen::MatrixXi &boundary_triangles,
-			std::vector<Eigen::Triplet<double>> &displacement_map_entries);
+			std::vector<Eigen::Triplet<double>> &displacement_map_entries,
+			BoundaryExtractionReport *report = nullptr);
+
+		/// @brief extracts the DOF-resolution collision proxy: every proxy
+		/// vertex is a global DOF (weight-1 displacement map), each face edge
+		/// is subdivided by the DOFs located on it (an edge-intrinsic property,
+		/// so neighboring faces of different orders conform by construction)
+		/// and face interiors by the element's own owned nodes. This is the
+		/// default for conforming hybrid (prism/pyramid) meshes; selected
+		/// explicitly via contact/collision_mesh/tessellation_type = "dof".
+		/// Requires a conforming volume mesh without polytopes, falls back to
+		/// extract_boundary_mesh otherwise. Parameters as in
+		/// extract_boundary_mesh.
+		static void extract_boundary_mesh_nodal(
+			const mesh::Mesh &mesh,
+			const int n_bases,
+			const std::vector<basis::ElementBases> &bases,
+			const std::vector<mesh::LocalBoundary> &total_local_boundary,
+			Eigen::MatrixXd &node_positions,
+			Eigen::MatrixXi &boundary_edges,
+			Eigen::MatrixXi &boundary_triangles,
+			std::vector<Eigen::Triplet<double>> &displacement_map_entries,
+			BoundaryExtractionReport *report = nullptr);
+
+		/// @brief true if any boundary face belongs to a hexahedron whose
+		/// basis is not Q1 (Q2+, serendipity); the default extraction
+		/// tessellates only Q1 quad faces.
+		static bool has_high_order_hex_boundary(
+			const mesh::Mesh &mesh,
+			const std::vector<basis::ElementBases> &bases,
+			const std::vector<mesh::LocalBoundary> &total_local_boundary);
 
 		/// @brief extracts a collision proxy sampling every boundary face on a
 		/// uniform lattice of the globally maximal element order (finer than the
@@ -106,7 +167,8 @@ namespace polyfem::io
 			Eigen::MatrixXi &boundary_edges,
 			Eigen::MatrixXi &boundary_triangles,
 			std::vector<Eigen::Triplet<double>> &displacement_map_entries,
-			const int sampling_order = 0);
+			const int sampling_order = 0,
+			BoundaryExtractionReport *report = nullptr);
 
 		/// @brief unitalize the ref element sampler
 		/// @param[in] mesh mesh

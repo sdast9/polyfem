@@ -44,17 +44,15 @@ namespace polyfem::solver
 
 	void SmoothContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
 	{
-		// Store the previous value used to compute the constraint set to avoid duplicate computation.
-		if (cached_displaced_surface_.size() == displaced_surface.size() && cached_displaced_surface_ == displaced_surface)
-			return;
-
+		// RB-06 (the RB-01 invariant applied to this form): no function-static
+		// position cache shared by every instance in the process; position
+		// equality is not a complete cache key. Rebuild on every notification.
 		if (use_cached_candidates_)
 			collision_set_.build(
 				candidates_, collision_mesh_, displaced_surface, params, use_adaptive_dhat);
 		else
 			collision_set_.build(
 				collision_mesh_, displaced_surface, params, use_adaptive_dhat, broad_phase_.get());
-		cached_displaced_surface_ = displaced_surface;
 	}
 
 	double SmoothContactForm::value_unweighted(const Eigen::VectorXd &x) const
@@ -117,6 +115,7 @@ namespace polyfem::solver
 					polyfem::logger().debug(
 						"updated barrier stiffness from {:g} to {:g}",
 						prev_barrier_stiffness, barrier_stiffness());
+					note_objective_change("adaptive barrier stiffness");
 				}
 			}
 			else

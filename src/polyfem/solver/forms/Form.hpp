@@ -1,12 +1,36 @@
 #pragma once
 
+#include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/Types.hpp>
 #include <polysolve/nonlinear/PostStepData.hpp>
 
 #include <filesystem>
+#include <memory>
+#include <stdexcept>
 
 namespace polyfem::solver
 {
+	/// @brief RB-06: the state of a form that a nonlinear solve attempt can
+	///        change and that a failed attempt must therefore not leave
+	///        behind. A form with attempt-mutable state (contact snapshot and
+	///        trim, friction lag, AL multipliers, lagged fields) derives its
+	///        own state type from this one; the base carries what every form
+	///        owns. Captured by Form::save_state at a transaction boundary
+	///        (the start of a step's solve) and put back by
+	///        Form::restore_state when the attempt fails, so the in-memory
+	///        state after a failure equals the last accepted state. This is
+	///        an in-memory transaction, not a retry policy and not a disk
+	///        checkpoint.
+	class FormState
+	{
+	public:
+		virtual ~FormState() = default;
+		double weight = 1;
+		double scale = 1;
+		bool enabled = true;
+		bool project_to_psd = false;
+	};
+
 	class Form
 	{
 	public:
@@ -67,6 +91,18 @@ namespace polyfem::solver
 		/// @return Maximum allowable step size
 		virtual double max_step_size(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1) const { return 1; }
 
+		/// @brief Whether this form wants FullNLProblem to clamp the trial
+		///        interval sequentially (each form bounding the step over the
+		///        interval already clamped by the forms before it) rather than
+		///        taking the minimum over the full interval.
+		/// @return False by default. The two agree in exact arithmetic, but the
+		///         inversion and CCD bounds are not scale-consistent -- both use
+		///         absolute tolerances and iteration caps -- so a shortened sweep
+		///         yields a slightly different fraction. Enabling this globally
+		///         perturbs converged solutions everywhere, including scenes with
+		///         no contact, so it is opt-in.
+		virtual bool wants_sequential_step_clamping() const { return false; }
+
 		/// @brief Initialize variables used during the line search
 		/// @param x0 Current solution
 		/// @param x1 Next solution
@@ -84,6 +120,20 @@ namespace polyfem::solver
 		/// @brief Update cached fields upon a change in the solution
 		/// @param new_x New solution
 		virtual void solution_changed(const Eigen::VectorXd &new_x) {}
+
+		/// @brief How many times this form has stopped being the same function
+		///
+		/// A form that retunes itself during a solve -- a barrier stiffness or
+		/// trim that moves in post_step, a quadrature that is refined -- is a
+		/// different function afterwards, and a quasi-Newton secant pair that
+		/// spans the change is a secant of neither. The problem sums this over
+		/// its forms so that the nonlinear solver can discard such a pair
+		/// (polysolve::nonlinear::Problem::objective_generation).
+		///
+		/// It counts real changes to the function only. Moving the coordinates
+		/// and rebuilding a cache for the same function -- the active collision
+		/// set, the assembly cache -- do not count.
+		uint64_t objective_generation() const { return objective_generation_; }
 
 		/// @brief Update time-dependent fields
 		/// @param t Current time
@@ -143,10 +193,78 @@ namespace polyfem::solver
 		/// @param scale
 		void virtual set_scale(const double scale) { scale_ = scale; }
 
+		/// @brief RB-06: capture every state member a solve attempt can change
+		///        (see FormState). A form without attempt-mutable state of its
+		///        own returns the base state (weight, scale, enabled, PSD flag).
+		///        Caches that a later init rebuilds from the coordinates are
+		///        included when they are cheap, so a restored form is coherent
+		///        without an extra rebuild; the pure diagnostic counters that
+		///        must stay monotonic across a rollback (event ids) are not.
+		virtual std::unique_ptr<FormState> save_state() const
+		{
+			auto state = std::make_unique<FormState>();
+			save_base_state(*state);
+			return state;
+		}
+
+		/// @brief RB-06: put back a state captured by save_state on this form.
+		/// @param state The captured state (must come from the same form type).
+		/// @param x The full coordinates the state was captured at, for the
+		///          diagnostic event a form may emit about the rollback.
+		virtual void restore_state(const FormState &state, const Eigen::VectorXd &x)
+		{
+			restore_base_state(state);
+		}
+
 	protected:
+		void save_base_state(FormState &state) const
+		{
+			state.weight = weight_;
+			state.scale = scale_;
+			state.enabled = enabled_;
+			state.project_to_psd = project_to_psd_;
+		}
+
+		void restore_base_state(const FormState &state)
+		{
+			// A rolled-back weight or scale is a different function than the
+			// one the abandoned attempt was minimizing (RB-06 restores between
+			// solves, so this is recorded rather than relied upon).
+			if (state.weight != weight_ || state.scale != scale_ || state.enabled != enabled_)
+				note_objective_change("state restored");
+			weight_ = state.weight;
+			scale_ = state.scale;
+			enabled_ = state.enabled;
+			project_to_psd_ = state.project_to_psd;
+		}
+
+		/// @brief Record that this form is no longer the same function
+		/// @param what Short description of what changed, for the debug log
+		void note_objective_change(const std::string &what) const
+		{
+			++objective_generation_;
+			logger().debug("[{}] objective changed ({}); generation {}", name(), what, objective_generation_);
+		}
+
+		/// @brief The captured state as this form's own state type; a state
+		///        captured from another form type is a programming error.
+		template <typename State>
+		static const State &state_as(const FormState &state, const char *form_name)
+		{
+			const State *typed = dynamic_cast<const State *>(&state);
+			if (typed == nullptr)
+				throw std::logic_error(std::string("Form state restored on ") + form_name + " was captured from a different form type");
+			return *typed;
+		}
+
 		bool project_to_psd_ = false; ///< If true, the form's second derivative is projected to be positive semidefinite
 
 		double weight_ = 1; ///< weight of the form (e.g., AL penalty weight or Δt²)
+
+		/// @brief Counts the changes to the function this form evaluates; it
+		///        is a version, not physical state, so it is never saved,
+		///        restored or reset (see objective_generation).
+		mutable uint64_t objective_generation_ = 0;
 
 		bool enabled_ = true; ///< If true, the form is enabled
 

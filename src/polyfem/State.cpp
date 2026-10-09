@@ -2,6 +2,7 @@
 
 #include <polyfem/Units.hpp>
 
+#include <polyfem/io/RunManifest.hpp>
 #include <polyfem/mesh/GeometryReader.hpp>
 #include <polyfem/mesh/mesh2D/Mesh2D.hpp>
 #include <polyfem/mesh/mesh3D/Mesh3D.hpp>
@@ -14,6 +15,8 @@
 
 #include <polyfem/varforms/VarForm.hpp>
 #include <polyfem/varforms/VarFormFactory.hpp>
+#include <polyfem/solver/forms/BarrierContactForm.hpp>
+#include <polyfem/solver/forms/ContactForm.hpp>
 
 #include <jse/jse.h>
 #include <polyfem/embedded_spec/polyfem.hpp>
@@ -102,6 +105,23 @@ namespace polyfem
 			const int num_valid = is_param_valid(args["time"], "tend")
 								  + is_param_valid(args["time"], "dt")
 								  + is_param_valid(args["time"], "time_steps");
+			// RB-11: these used to be asserts, which the RelWithDebInfo build
+			// compiles out -- dt = 0 then hung in an unbounded step loop and
+			// tend < t0 ran the schedule backwards with a negative dt.
+			const auto require_positive_dt = [&](const double value) {
+				if (!std::isfinite(value) || value <= 0)
+					log_and_throw_error("time.dt must be a positive finite time step; got {}", value);
+			};
+			const auto require_positive_steps = [&](const int value) {
+				if (value <= 0)
+					log_and_throw_error("time.time_steps must be a positive number of steps; got {}", value);
+			};
+			const auto require_tend_after_t0 = [&](const double value) {
+				if (!std::isfinite(value) || value <= t0)
+					log_and_throw_error("time.tend must be a finite time after time.t0; got tend = {} with t0 = {}", value, t0);
+			};
+			if (!std::isfinite(t0))
+				log_and_throw_error("time.t0 must be finite; got {}", t0);
 			if (num_valid < 2)
 			{
 				log_and_throw_error("Exactly two of (tend, dt, time_steps) must be specified");
@@ -111,20 +131,20 @@ namespace polyfem
 				if (is_param_valid(args["time"], "tend"))
 				{
 					tend = Units::convert(args["time"]["tend"], units.time());
-					assert(tend > t0);
+					require_tend_after_t0(tend);
 					if (is_param_valid(args["time"], "dt"))
 					{
 						dt = Units::convert(args["time"]["dt"], units.time());
-						assert(dt > 0);
+						require_positive_dt(dt);
 						time_steps = int(std::ceil((tend - t0) / dt));
-						assert(time_steps > 0);
+						require_positive_steps(time_steps);
 					}
 					else if (is_param_valid(args["time"], "time_steps"))
 					{
 						time_steps = args["time"]["time_steps"];
-						assert(time_steps > 0);
+						require_positive_steps(time_steps);
 						dt = (tend - t0) / time_steps;
-						assert(dt > 0);
+						require_positive_dt(dt);
 					}
 					else
 					{
@@ -136,10 +156,10 @@ namespace polyfem
 					assert(is_param_valid(args["time"], "time_steps"));
 
 					dt = Units::convert(args["time"]["dt"], units.time());
-					assert(dt > 0);
+					require_positive_dt(dt);
 
 					time_steps = args["time"]["time_steps"];
-					assert(time_steps > 0);
+					require_positive_steps(time_steps);
 
 					tend = t0 + time_steps * dt;
 				}
@@ -153,6 +173,9 @@ namespace polyfem
 				tend = Units::convert(args["time"]["tend"], units.time());
 				dt = Units::convert(args["time"]["dt"], units.time());
 				time_steps = args["time"]["time_steps"];
+				require_positive_dt(dt);
+				require_positive_steps(time_steps);
+				require_tend_after_t0(tend);
 
 				if (std::abs(t0 + dt * time_steps - tend) > 1e-12)
 					log_and_throw_error("Exactly two of (tend, dt, time_steps) must be specified");
@@ -248,8 +271,14 @@ namespace polyfem
 	{
 		json args_in = p_args_in;
 		const bool contact_dhat_was_explicit = args_in.contains("/contact/dhat"_json_pointer);
+		// RB-12: the input file (root_path before `common` may override it)
+		// and the common chain, for the run manifest.
+		const std::string input_file = args_in.value("root_path", std::string());
+		std::vector<std::string> common_chain;
 
-		apply_common_params(args_in);
+		apply_common_params(args_in, &common_chain);
+		if (!default_manifest.empty() && !args_in.contains("/output/manifest"_json_pointer))
+			args_in["output"]["manifest"] = default_manifest;
 
 		json rules;
 		jse::JSE jse;
@@ -331,6 +360,49 @@ namespace polyfem
 
 		if (contact_enabled(args))
 		{
+			// RB-11: dhat = 0 (accepted by the spec's inclusive minimum) has no
+			// barrier band at all -- the semi-implicit trial cap divides by it
+			// and the solve stalls through every restart instead of stopping.
+			{
+				const double dhat = Units::convert(args["contact"]["dhat"], units.length());
+				if (!std::isfinite(dhat) || dhat <= 0)
+					log_and_throw_error("contact.dhat must be a positive finite distance when contact is enabled; got {}", dhat);
+			}
+			// The broad-phase name is converted through an enum map whose
+			// unknown strings silently become its first entry (hash_grid).
+			{
+				const std::string broad_phase = args["solver"]["contact"]["CCD"]["broad_phase"];
+				if (!solver::ContactForm::is_known_broad_phase_name(broad_phase))
+					log_and_throw_error(
+						"solver.contact.CCD.broad_phase \"{}\" is not a known broad phase; use one of {}",
+						broad_phase, fmt::format("{}", fmt::join(solver::ContactForm::broad_phase_names(), ", ")));
+			}
+
+			// RBR-04: the convergent formulation's improved max operator is
+			// an unsupported combination with the semi-implicit coefficient
+			// law (negative duplicate-removal weights under a positive-parent
+			// mean). The form's constructor refuses it too; refusing here
+			// names every unsupported convergent option at once, before any
+			// mesh is read. The stiffness mode is the string "semi_implicit"
+			// or "adaptive", or a fixed number.
+			{
+				const json &barrier_stiffness = args["solver"]["contact"]["barrier_stiffness"];
+				const bool semi_implicit = barrier_stiffness.is_string() && barrier_stiffness.get<std::string>() == "semi_implicit";
+				if (semi_implicit && args["contact"]["use_convergent_formulation"].get<bool>())
+				{
+					std::vector<std::string> unsupported;
+					if (args["contact"]["use_improved_max_operator"].get<bool>())
+						unsupported.push_back("contact.use_improved_max_operator");
+					if (args["contact"]["use_physical_barrier"].get<bool>())
+						unsupported.push_back("contact.use_physical_barrier");
+					if (!unsupported.empty())
+						log_and_throw_error(
+							"solver.contact.barrier_stiffness = \"semi_implicit\" with contact.use_convergent_formulation = true: {} {} unsupported in this mode. {}",
+							fmt::format("{}", fmt::join(unsupported, " and ")), unsupported.size() == 1 ? "is" : "are",
+							solver::BarrierContactForm::unsupported_improved_max_message());
+				}
+			}
+
 			if (args["solver"]["contact"]["friction_iterations"] == 0)
 			{
 				logger().info("specified friction_iterations is 0; disabling friction");
@@ -367,6 +439,15 @@ namespace polyfem
 		args["contact"]["_dhat_was_explicit"] = contact_dhat_was_explicit;
 		variational_formulation->init(formulation, units, args, output_dir);
 		args["contact"].erase("_dhat_was_explicit");
+
+		// RB-12: the run manifest, once the effective input is final and the
+		// output directory exists. Written here, before the mesh is read, so
+		// that a run which fails later still leaves its identity behind; the
+		// formulation appends the model description and the step history.
+		run_manifest = io::RunManifest::create(
+			args, resolve_output_path(output_dir, args["output"].value("manifest", std::string())),
+			input_file, common_chain);
+		variational_formulation->set_run_manifest(run_manifest);
 	}
 
 	void State::set_max_threads(const int max_threads)

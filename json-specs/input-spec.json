@@ -20,9 +20,67 @@
             "constraints",
             "output",
             "input",
-            "tests"
+            "tests",
+            "provenance"
         ],
         "doc": "Root of the configuration file."
+    },
+    {
+        "pointer": "/provenance",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "producer",
+            "producer_version",
+            "asset",
+            "asset_version",
+            "asset_sha256",
+            "scene",
+            "exported_at"
+        ],
+        "doc": "Who produced this input (RB-12): copied verbatim into the run manifest's `producer` record and otherwise ignored by the solver. The Houdini asset fills it with its definition and hash."
+    },
+    {
+        "pointer": "/provenance/producer",
+        "default": "",
+        "type": "string",
+        "doc": "The program that wrote the input, e.g. houdini."
+    },
+    {
+        "pointer": "/provenance/producer_version",
+        "default": "",
+        "type": "string",
+        "doc": "Its version, e.g. the Houdini release."
+    },
+    {
+        "pointer": "/provenance/asset",
+        "default": "",
+        "type": "string",
+        "doc": "The asset or script that generated the input, e.g. the HDA type name and library file."
+    },
+    {
+        "pointer": "/provenance/asset_version",
+        "default": "",
+        "type": "string",
+        "doc": "Its declared version."
+    },
+    {
+        "pointer": "/provenance/asset_sha256",
+        "default": "",
+        "type": "string",
+        "doc": "SHA-256 of the asset definition file, so the exact exporter can be identified."
+    },
+    {
+        "pointer": "/provenance/scene",
+        "default": "",
+        "type": "string",
+        "doc": "The scene or document the input was exported from."
+    },
+    {
+        "pointer": "/provenance/exported_at",
+        "default": "",
+        "type": "string",
+        "doc": "When the input was written (ISO 8601)."
     },
     {
         "pointer": "/common",
@@ -1216,7 +1274,7 @@
         "pointer": "/contact/use_convergent_formulation",
         "default": false,
         "type": "bool",
-        "doc": "Whether to use the convergent (area weighted) formulation of IPC."
+        "doc": "Whether to use the convergent (area weighted) formulation of IPC. With solver.contact.barrier_stiffness = \"semi_implicit\" only use_area_weighting is supported: use_improved_max_operator and use_physical_barrier are refused by name (RBR-04)."
     },
     {
         "pointer": "/contact/use_area_weighting",
@@ -1228,7 +1286,7 @@
         "pointer": "/contact/use_improved_max_operator",
         "default": true,
         "type": "bool",
-        "doc": "If using the convergent formulation, whether or not to use improved max operator. Currently not implemented."
+        "doc": "If using the convergent formulation, whether or not to use the improved max operator (duplicate removal through negative collision weights, Li et al. 2023). Not supported with solver.contact.barrier_stiffness = \"semi_implicit\": the parent-keyed coefficient law is a sum of parent potentials only for positive contributions, so the combination is refused by name at input validation and at construction (RBR-04)."
     },
     {
         "pointer": "/contact/use_physical_barrier",
@@ -1292,10 +1350,11 @@
         "options": [
             "regular",
             "irregular",
-            "max_order"
+            "max_order",
+            "dof"
         ],
         "default": "regular",
-        "doc": "Type of tessellation to use for building the collision mesh."
+        "doc": "Type of tessellation to use for building the collision mesh. regular/irregular apply to max_edge_length proxies; max_order samples every boundary face on a uniform lattice of the maximal element order (interpolated displacement-map rows on lower-order faces); dof builds the proxy from the boundary DOFs themselves (every proxy vertex is a node with an exact displacement-map row; conforming across per-element order changes). When no collision_mesh block is given, meshes with Q2+/serendipity hexahedral boundary faces get the dof proxy automatically (the default extraction tessellates only Q1 quad faces); a contact-enabled scene whose extraction skipped faces is refused with an error naming the elements and orders."
     },
     {
         "pointer": "/contact/collision_mesh/sampling_order",
@@ -1406,93 +1465,16 @@
         "default": null,
         "type": "object",
         "optional": [
-            "strategy",
             "initial_weight",
             "initial_weight_multiplier",
             "scaling",
             "max_weight",
             "eta",
-            "error",
-            "inexact",
             "lumping",
-            "nonlinear"
+            "nonlinear",
+            "budget"
         ],
         "doc": "Parameters for the AL for imposing Dirichlet BCs. If the bc are not imposable, we add $w\\|u - bc\\|^2$ to the energy ($u$ is the solution at the Dirichlet nodes and $bc$ are the Dirichlet values). After convergence, we try to impose bc again. The algorithm computes E + a/2*AL^2 - lambda AL, where E is the current energy (elastic, inertia, contact, etc.) and AL is the augmented Lagrangian energy. a starts at `initial_weight` and, in case DBC cannot be imposed, we update a as `a *= scaling` until `max_weight`. See IPC additional material"
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/strategy",
-        "default": "legacy",
-        "type": "string",
-        "options": [
-            "legacy",
-            "adaptive_inexact"
-        ],
-        "doc": "AL controller. adaptive_inexact bounds each AL Newton subsolve and updates multipliers/penalty only between frozen subsolves."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact",
-        "default": null,
-        "type": "object",
-        "optional": [
-            "inner_max_iterations",
-            "min_iterations",
-            "energy_window",
-            "min_relative_energy_decrease",
-            "constraint_reduction_target",
-            "max_outer_iterations",
-            "max_consecutive_failures"
-        ],
-        "doc": "Options for the adaptive_inexact AL controller."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/inner_max_iterations",
-        "default": 20,
-        "min": 1,
-        "type": "int",
-        "doc": "Maximum Newton iterations in one AL subsolve."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/min_iterations",
-        "default": 5,
-        "min": 0,
-        "type": "int",
-        "doc": "Minimum iterations before an energy plateau may stop a subsolve."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/energy_window",
-        "default": 5,
-        "min": 2,
-        "type": "int",
-        "doc": "Number of recent iterations used to detect an energy plateau."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/min_relative_energy_decrease",
-        "default": 1e-6,
-        "min": 0,
-        "type": "float",
-        "doc": "Minimum relative energy decrease over the plateau window."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/constraint_reduction_target",
-        "default": 0.5,
-        "min": 0,
-        "max": 1,
-        "type": "float",
-        "doc": "Required ratio of new to previous constraint norm before retaining the penalty weight."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/max_outer_iterations",
-        "default": 50,
-        "min": 1,
-        "type": "int",
-        "doc": "Maximum AL subsolves before reporting failure."
-    },
-    {
-        "pointer": "/solver/augmented_lagrangian/inexact/max_consecutive_failures",
-        "default": 3,
-        "min": 0,
-        "type": "int",
-        "doc": "Maximum consecutive invalid or failed subsolves before reporting failure."
     },
     {
         "pointer": "/solver/augmented_lagrangian/nonlinear",
@@ -1523,7 +1505,7 @@
             "hessian_scaled"
         ],
         "type": "string",
-        "doc": "Scale the initial AL weight to initial_weight_multiplier * max|H| where H is the system elastic Hessian at the solve start."
+        "doc": "Heuristic initializer max(initial_weight_multiplier * max|H_elastic|, 1) using the weighted elastic Hessian at the solve start. It omits inertia and other forms and is not a curvature bound relative to the normalized BC metric. The numeric floor 1 uses internal objective/displacement-squared units."
     },
     {
         "pointer": "/solver/augmented_lagrangian/initial_weight_multiplier",
@@ -1549,7 +1531,7 @@
         "pointer": "/solver/augmented_lagrangian/max_weight",
         "default": 1e8,
         "type": "float",
-        "doc": "Maximum weight"
+        "doc": "Ceiling for continuation increases; an explicitly larger initial weight is preserved."
     },
     {
         "pointer": "/solver/augmented_lagrangian/eta",
@@ -1558,6 +1540,54 @@
         "max": 1,
         "type": "float",
         "doc": "Tolerance for increasing the weight or updating the lagrangian"
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "max_passes",
+            "stagnation_window",
+            "progress_tolerance",
+            "snap_tolerance",
+            "drift_tolerance"
+        ],
+        "doc": "RB-07: opt-in bounds on the augmented-Lagrangian stage that prepares a geometrically safe snap to the prescribed Dirichlet values. Off by default (the loop is unbounded: a prescribed motion that can never be snapped -- a face driven through an obstacle, a body crushed to zero height -- runs forever, the multipliers growing at the weight ceiling until the subsolves degrade). When an exit fires the step ends with a named failure (exit status 1) whose record carries the pass history (weight, subsolve outcome, BC residual, the gate that blocked the snap, the collision-free fraction of the snap, the iterate's motion); the failed attempt is rolled back to the last accepted state (RB-06) and nothing of the step is published. Neither exit is a convergence criterion, an AL stationarity requirement or a gradient test, and neither changes the weights, the ceiling, the multiplier update or the snap checks; interrupted AL passes stay usable continuation iterates (PF-01)."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/max_passes",
+        "default": 0,
+        "min": 0,
+        "type": "int",
+        "doc": "Maximum number of AL passes (subsolves) per nonlinear solve; 0 = unbounded. Exhaustion is reported as 'pass_budget' with the last pass's state, so a residual that was still falling (budget too small for this step) can be told from one flat at the weight ceiling (the motion cannot be snapped from these states). Measured on the public cube-on-slab fixture (RB-07): a compatible 0.3 compression with a 1e4 initial weight and four-iteration interrupted passes needs 105 passes; an infeasible motion never snaps."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/stagnation_window",
+        "default": 0,
+        "min": 0,
+        "type": "int",
+        "doc": "Stagnation exit: end the stage when this many consecutive passes ran at the weight ceiling (no continuation left) and none of the progress signals moved over the window -- the BC residual did not fall by progress_tolerance, no snap gate (finite energy, validity, collision-free) turned from blocked to passing, the collision-free fraction of the snap did not rise by snap_tolerance and the iterate drifted by less than drift_tolerance of the largest constrained residual; 0 = never. The window is judged against the state before it (pass 0 is the state the stage started from). Measured on the public fixture (RB-07): the BC residual alone would have ended the compatible 105-pass continuation at every window of 3-20 passes, the geometric signals (a rising collision-free fraction, the iterate's drift) kept it running and it snapped; a bottom face driven into the slab stopped at pass 10 under a 3-pass window; a crushing motion keeps drifting and only the pass cap ends it. A continuation that converges slowly without moving these signals can still trip the exit, so choose the window from the run's own pass history (every manifest carries it); a false trigger costs the step, not the accepted state."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/progress_tolerance",
+        "default": 0.01,
+        "min": 0,
+        "type": "float",
+        "doc": "Relative decrease of the BC residual norm (sqrt of the summed squared constrained-DOF residuals, length units) over the stagnation window that counts as progress; dimensionless."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/snap_tolerance",
+        "default": 0.01,
+        "min": 0,
+        "type": "float",
+        "doc": "Increase of the collision-free fraction of the snap (the forms' step bound of the straight path from the current iterate to the prescribed values, 0..1) over the stagnation window that counts as progress."
+    },
+    {
+        "pointer": "/solver/augmented_lagrangian/budget/drift_tolerance",
+        "default": 0.01,
+        "min": 0,
+        "type": "float",
+        "doc": "Drift of the full-space iterate over the stagnation window (Linf norm), relative to the largest constrained-DOF residual at the window's ends, that counts as progress -- free coordinates still moving toward a feasible snap are progress the BC residual cannot see; with a zero constrained residual any drift counts. Dimensionless."
     },
     {
         "pointer": "/solver/contact",
@@ -1595,8 +1625,31 @@
             "kappa_spread",
             "conditioning_cap",
             "controller_interval",
+            "band_statistic",
+            "initial_trim_estimate",
+            "force_band_lower",
+            "force_band_upper",
+            "force_band_hysteresis",
+            "force_band_max_factor",
+            "force_band_interval",
+            "initial_trim_max_factor",
+            "initial_trim_cosine",
+            "collapse_guard_basis",
+            "collapse_guard_partial",
+            "collapse_exclude_born",
+            "collapse_responsiveness_veto",
+            "trim_step_excursion",
+            "trim_reversal_limit",
+            "initial_trim_estimate_scope",
+            "clamped_contacts",
+            "gradient_balance_dofs",
             "gap_floor",
             "constraint_floor",
+            "trial_displacement_cap",
+            "force_continuation",
+            "continuation_max_ratio",
+            "coefficient_identity",
+            "friction_lag",
             "restart"
         ],
         "doc": "Options for the semi-implicit per-contact barrier stiffness (barrier_stiffness = \"semi_implicit\")."
@@ -1641,13 +1694,13 @@
         "pointer": "/solver/contact/semi_implicit/kappa_min",
         "default": 0,
         "type": "float",
-        "doc": "Floor for the per-contact stiffness (system units)."
+        "doc": "Absolute floor for the per-contact stiffness (system units), applied after the batch cap/floor. The batch floor median / kappa_spread usually makes this unnecessary."
     },
     {
         "pointer": "/solver/contact/semi_implicit/kappa_spread",
         "default": 1e4,
         "type": "float",
-        "doc": "Cap each per-contact stiffness at kappa_spread times the median of its refresh batch (guards against exploded Hessians of crushed elements)."
+        "doc": "Cap each per-contact stiffness at kappa_spread times the median of the POSITIVE per-contact stiffnesses of its refresh batch (guards against exploded Hessians of crushed elements), and floor it at median / kappa_spread (a nonpositive local curvature cannot delete a contact's barrier). 0 disables both."
     },
     {
         "pointer": "/solver/contact/semi_implicit/gap_floor",
@@ -1657,15 +1710,163 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/constraint_floor",
-        "default": 1e-4,
+        "default": 0,
         "type": "float",
-        "doc": "Pairs with gap below this fraction of dhat are treated as active constraints: their closing component is projected out of every Newton direction (sliding and separation stay free). No normal-force law can hold a kinematically driven pair at the numerical floor -- singular barriers poison the search direction, saturated ones let it collapse; the projection lets the rest of the mesh proceed. 0 disables."
+        "doc": "RETIRED compatibility key. Accepted only to read existing inputs; all values are ignored. Nonzero values issue a warning in semi-implicit mode. Barrier deletion and floor projection have been removed. Remove this key from new inputs. CCD and trial_displacement_cap remain active."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/trial_displacement_cap",
+        "default": 50.0,
+        "type": "float",
+        "doc": "Cap on trial-step surface displacement handed to CCD, in barrier supports. Semi-implicit Newton trial steps in distorted states can move vertices by hundreds of supports; pricing that sweep is wasted CCD work and, in the broad phase, a candidate/memory explosion on thin geometry. The returned step fraction is rescaled to the original interval, so the cap also bounds the step when CCD reports no collision -- which is why it applies only in semi-implicit mode. Infinity disables the clamp."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_continuation",
+        "default": true,
+        "type": "bool",
+        "doc": "RB-20: at the between-steps refresh of a published endpoint, every active contact keeps the per-contact coefficient that acted there (the realized force at the realized gap is continued); a contact born during a solve is priced by that solve's frozen snapshot and continued from its publication on. Mid-solve refreshes keep the published values and re-estimate everything else. Removes the post-publication force drift of re-estimation; the global trim still acts. Pair with coefficient_identity=parent (default): with the stencil identity a closest-feature switch mixes continued and fresh values and slows Newton."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/continuation_max_ratio",
+        "default": 0,
+        "type": "float",
+        "min": 0,
+        "doc": "RB-20: 0 = pure continuation. r > 1 lets the fresh Hessian estimate move a continued coefficient within [kappa/r, kappa*r] at each published-endpoint refresh."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/coefficient_identity",
+        "default": "parent",
+        "type": "string",
+        "options": ["parent", "stencil"],
+        "doc": "RB-21: what a per-contact coefficient is keyed on. \"parent\" (default): the candidate primitive pair that built the collision (point/edge in 2D, point/triangle or edge/edge in 3D), estimated on the parent's stencil with the closest point on the whole primitive; a built collision's scale is the contribution-weighted mean of its parents, so a coefficient survives closest-feature switches (EV<->VV, FV<->EV) and force continuation carries across them. \"stencil\": the historical key on the built subfeature stencil."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/friction_lag",
+        "default": "realized_force",
+        "type": "string",
+        "options": [
+            "realized_force",
+            "follow_stiffness"
+        ],
+        "doc": "RB-10: which normal force the lagged friction carries. \"realized_force\" (default since 2026-09-13): the lag is built at the accepted endpoint before the between-steps refresh and is not scaled by later trim actions, so friction carries the normal force that actually acted there (the equilibrium contact pressure); a trim change is absorbed by the gap, as it is for the barrier itself. \"follow_stiffness\" (the RB-18 F6 behaviour, default until RB-10): the lag is built with the current trim at the lag gap and follows every in-solve trim action by the trim ratio, so friction stays consistent with the barrier at fixed coordinates -- after a collapse bump at constant load that doubles the friction capacity for the rest of the step. See docs/rb-10-validation.md."
     },
     {
         "pointer": "/solver/contact/semi_implicit/conditioning_cap",
         "default": 1e3,
         "type": "float",
-        "doc": "When a refresh finds the contact unloaded (no gradient-balance signal), cap the effective barrier stiffness at conditioning_cap times the max absolute entry of the system Hessian. Bounds the Newton system's dynamic range until the load provides a force-balance calibration."
+        "doc": "When a refresh finds the contact unloaded (no gradient-balance signal), cap the barrier's effective interface stiffness at gaps ~dhat (trim * kappa * weight * dhat^2, force/length) at conditioning_cap times the max absolute entry of the system Hessian. Dimensionless and length-unit independent. Bounds the Newton system's dynamic range until the load provides a force-balance calibration."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/band_statistic",
+        "default": "rms",
+        "type": "string",
+        "doc": "Opt-in EF-03 statistic: rms (production) or force_weighted."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_estimate",
+        "default": false,
+        "type": "bool",
+        "doc": "Opt-in EF-02 bounded two-sided cosine-gated initialization; collapse blocks lowering."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_lower",
+        "default": 0.35,
+        "type": "float",
+        "doc": "Lower target in distance/dhat."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_upper",
+        "default": 0.5,
+        "type": "float",
+        "doc": "Upper target in distance/dhat."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_hysteresis",
+        "default": 0.025,
+        "type": "float",
+        "doc": "Absolute expanded-band dead zone in distance/dhat."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_max_factor",
+        "default": 4.0,
+        "type": "float",
+        "doc": "Maximum multiplicative change per force-band update."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/force_band_interval",
+        "default": 10,
+        "type": "int",
+        "doc": "Accepted-iteration cadence for the force-weighted band."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_max_factor",
+        "default": 4096.0,
+        "type": "float",
+        "doc": "Maximum multiplicative change of the step seed."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_cosine",
+        "default": 0.8,
+        "type": "float",
+        "doc": "Minimum gradient opposition cosine for the step seed."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_guard_basis",
+        "default": "pair",
+        "type": "string",
+        "options": ["pair", "proxy"],
+        "doc": "Only with band_statistic force_weighted (experimental): gap the force band's downward guard is evaluated on. pair (default since 2026-09-28, docs/ef-07-trim-loop.md) = each collapse term on its own gap and threshold (the average against sqrt(trim_lower), the minimum pair against sqrt(trim_lower / 100)); proxy = the EF-02/03 guard on the collapse proxy sqrt(severity), kept to reproduce the EF-02/03 records; it loops on contact-dense scenes and is warned about."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/clamped_contacts",
+        "default": "exclude_statistics",
+        "type": "string",
+        "options": ["exclude_statistics", "keep", "exclude_collisions"],
+        "doc": "Contacts whose every vertex is Dirichlet-clamped (obstacles included; docs/clamped-contacts-20260928.md). exclude_statistics (default since 2026-09-29) = still built and evaluated, but ignored by the trim controller (band statistic, collapse minimum, force-weighted gap, coefficient batch median/floor/cap, gradient balance, first-contact detection), so a clamped pair cannot drive the trim; keep = also seen by the trim controller (the behaviour before 2026-09-29, to reproduce earlier runs); exclude_collisions (experiment, not recommended) = candidates whose primitives are all clamped are filtered out of the collision set and CCD (IPC can_collide), which changes the barrier energy by a per-step constant in reduced solves but removes their barrier where clamped DOFs move (augmented-Lagrangian passes)."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/gradient_balance_dofs",
+        "default": "all",
+        "type": "string",
+        "options": ["all", "free"],
+        "doc": "DOFs the trim controller's gradient balance is taken over (calibrate_trim and the initial trim estimate; docs/gradient-balance-free-dofs-20260929.md). all (default) = every full DOF, including Dirichlet rows (obstacle nodes, prescribed faces): their reactions and the clamped half of contacts with a clamped body enter the balance; free (experiment) = the reduced solve's free DOFs only (Dirichlet rows of both gradients zeroed), the balance the reduced problem itself satisfies."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_guard_partial",
+        "default": false,
+        "type": "bool",
+        "doc": "EF-07 experiment (opt-in): a band softening the downward guard vetoes is clamped to the smallest factor the scalar force law predicts keeps every collapse term above its threshold, instead of being cancelled."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_exclude_born",
+        "default": false,
+        "type": "bool",
+        "doc": "EF-07 experiment (opt-in): the in-solve collapse proxy's minimum-gap term ignores collisions that were not active at the previous accepted iterate or refresh."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/collapse_responsiveness_veto",
+        "default": false,
+        "type": "bool",
+        "doc": "EF-07 experiment (opt-in): within a time step, a collapse bump is skipped when the previous one did not lift the collapse gap by 10% and the gap has not fallen below half of its value at that bump."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/trim_step_excursion",
+        "default": 0,
+        "type": "float",
+        "doc": "EF-07 experiment (opt-in): 0 = off; B > 1 keeps the trim within [trim at the step start / B, trim at the step start * B] for the whole time step, across stall restarts."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/trim_reversal_limit",
+        "default": 0,
+        "type": "int",
+        "doc": "EF-07 experiment (opt-in): 0 = off; K > 0 = after K direction reversals of the trim within a time step, band and estimate moves may not reverse direction again (collapse bumps are exempt)."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/initial_trim_estimate_scope",
+        "default": "step",
+        "type": "string",
+        "options": ["step", "run"],
+        "doc": "EF-07 experiment (opt-in): with initial_trim_estimate, step (EF-02/03) re-arms the estimate at every time step; run accepts it at most once per run (not carried by restart state)."
     },
     {
         "pointer": "/solver/contact/semi_implicit/controller_interval",
@@ -1684,7 +1885,9 @@
             "min_iterations",
             "soft_iteration_limit",
             "max_restarts",
-            "stall_trim_factor"
+            "stall_trim_factor",
+            "alpha_basis",
+            "feasible_ratio_threshold"
         ],
         "doc": "Stall detection and restart options for the semi-implicit barrier stiffness mode."
     },
@@ -1720,9 +1923,9 @@
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/max_restarts",
-        "default": 20,
+        "default": 200,
         "type": "int",
-        "doc": "Maximum number of stall restarts per nonlinear solve. Each restart retunes the barrier stiffness and re-freezes the per-contact snapshot; hard loading ramps can legitimately need 15+ retunes within one solve."
+        "doc": "Maximum number of stall restarts per nonlinear solve. Each restart retunes the barrier stiffness and re-freezes the per-contact snapshot; hard loading ramps can legitimately need 15+ retunes within one solve, and a snap-through past a structural limit point (R3 inflation, step 39) needed about 131. Raised from 20 to 200 on 2026-09-29 (user decision)."
     },
     {
         "pointer": "/solver/contact/semi_implicit/restart/stall_trim_factor",
@@ -1731,13 +1934,32 @@
         "doc": "Factor applied to the global trim when a stall restart is triggered."
     },
     {
+        "pointer": "/solver/contact/semi_implicit/restart/alpha_basis",
+        "default": "absolute",
+        "type": "string",
+        "options": [
+            "absolute",
+            "feasible_bound"
+        ],
+        "doc": "What a small line-search step is judged against (EF-04, docs/ef-04-stall-trigger.md). \"absolute\" (the historical trigger): every accepted step size below alpha_threshold counts towards the patience. \"feasible_bound\" (opt-in): a small step counts only when the line search backtracked below the bound the problem set -- finite energy, CCD and the trial-displacement cap -- i.e. accepted/feasible step < feasible_ratio_threshold; a step accepted at that bound resets the count, because a restart cannot lengthen a step that geometry truncated. The soft iteration limit and hard line-search failures are unaffected."
+    },
+    {
+        "pointer": "/solver/contact/semi_implicit/restart/feasible_ratio_threshold",
+        "default": 0.999,
+        "type": "float",
+        "min": 0,
+        "max": 1,
+        "doc": "With alpha_basis \"feasible_bound\": a small step whose accepted/feasible step-size ratio is at or above this value counts as bounded, not stalled. 0.999 exempts only steps accepted at the bound (a single backtracking halving gives 0.5); lower values also exempt steps that backtracked a little below it."
+    },
+    {
         "pointer": "/solver/contact/CCD",
         "default": null,
         "type": "object",
         "optional": [
             "broad_phase",
             "tolerance",
-            "max_iterations"
+            "max_iterations",
+            "resource_limits"
         ],
         "doc": "CCD options"
     },
@@ -1774,10 +1996,32 @@
         "doc": "Maximum number of iterations for continuous collision detection"
     },
     {
-        "pointer": "/solver/contact/friction_iterations",
-        "default": 1,
+        "pointer": "/solver/contact/CCD/resource_limits",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "max_cell_items",
+            "max_candidate_emissions"
+        ],
+        "doc": "Bounds on the intermediate buffers the contact broad phase allocates for one trial sweep, enforced by the IPC toolkit before the corresponding allocation (RB-05). Each bound is -1 (automatic, the default), 0 (disabled) or a positive count. Automatic applies the production defaults (100000000 cell items, about 2.4 GB of scratch; 50000000 candidate emissions per pass, about 1.75 GB) when the broad phase can enforce them (hash_grid, brute_force) and disables the bound with a logged notice otherwise (bvh, spatial_hash, sweep_and_prune cannot count before allocating; bvh and sweep_and_prune do not suffer the localized-sweep blow-up). An explicit positive bound with a broad phase that cannot enforce it is an error at startup. On a violation the attempt fails with a named resource error and the process exits with status 3: no partial candidate set is used, the accepted state is kept and nothing is retried. The bounds do not cover the collision set, CCD time or the memory of other forms."
+    },
+    {
+        "pointer": "/solver/contact/CCD/resource_limits/max_cell_items",
+        "default": -1,
         "type": "int",
-        "doc": "Maximum number of update iterations for lagged friction formulation (see IPC paper)."
+        "doc": "hash_grid only: maximum number of (element box, grid cell) items of one broad-phase build over the swept vertex, edge and face boxes (16 bytes each, plus 8 bytes per item during candidate detection), counted exactly from the boxes before any item is inserted. -1 = automatic (100000000 when enforceable), 0 = disabled. A few vertices sweeping far cover about (sweep / cell)^3 cells each; a uniform sweep re-scales the cell size and stays small."
+    },
+    {
+        "pointer": "/solver/contact/CCD/resource_limits/max_candidate_emissions",
+        "default": -1,
+        "type": "int",
+        "doc": "Maximum number of candidate pair emissions of one detection pass (edge-edge or face-vertex in 3D, edge-vertex in 2D) before the collision filter, the box overlap test and deduplication: hash_grid counts the item pairs sharing a cell from its sorted items, brute_force the box pairs it compares. Every candidate buffer of that pass holds at most this many entries. -1 = automatic (50000000 when enforceable), 0 = disabled."
+    },
+    {
+        "pointer": "/solver/contact/friction_iterations",
+        "default": 2,
+        "type": "int",
+        "doc": "Maximum number of lagged-friction iterations per step (IPC lagging): the first solve carries the friction lag from the previous endpoint; every further iteration rebuilds the lag at the returned coordinates and re-solves until the updated-lag residual meets friction_convergence_tol. RB-10 (2026-09-13): the default is 2 (one correction) because the single-solve lag underestimated the frictional dissipation by 2-3 % on steady sliding and by about 50 % on the compression smoke, at +22-32 % Newton iterations; 1 restores the classic IPC policy, -1 iterates to the tolerance, 0 disables friction."
     },
     {
         "pointer": "/solver/contact/tangential_adhesion_iterations",
@@ -1799,7 +2043,7 @@
             "semi_implicit"
         ],
         "type": "string",
-        "doc": "How coefficient of clamped log-barrier function for contact is updated. \"adaptive\" is the classic IPC heuristic; \"semi_implicit\" uses per-contact elasticity-inclusive stiffness [Ando 2024] with a gap-band trim controller."
+        "doc": "How coefficient of clamped log-barrier function for contact is updated. \"adaptive\" is the classic IPC heuristic; \"semi_implicit\" uses per-contact elasticity-inclusive stiffness [Ando 2024] with a gap-band trim controller. \"semi_implicit\" is validated with contact.use_convergent_formulation = false; with the convergent formulation it supports area weighting only and refuses use_improved_max_operator and use_physical_barrier by name (RBR-04)."
     },
     {
         "pointer": "/solver/contact/barrier_stiffness",
@@ -1899,9 +2143,150 @@
             "jacobian_threshold",
             "conservative_max_iter",
             "characteristic_length",
-            "characteristic_force_density"
+            "characteristic_force_density",
+            "failure_injection",
+            "line_search_failure_restarts",
+            "stall_restart"
         ],
         "doc": "Advanced settings for the solver"
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "enabled",
+            "alpha_threshold",
+            "patience",
+            "min_iterations",
+            "soft_iteration_limit",
+            "max_restarts",
+            "alpha_basis",
+            "feasible_ratio_threshold",
+            "remedy"
+        ],
+        "doc": "Stall restarts for every nonlinear solve that has no semi-implicit stall restart (classic or fixed barrier stiffness, smooth GCP contact, no contact; open item D8, docs/stall-recovery-generalization-20261001.md). After patience consecutive steps whose line search backtracked below the feasible (CCD) bound with alpha below alpha_threshold, the subsolve restarts with a fresh solver; the first stall of a step also applies the remedy. A line search that fails on every strategy is handled as a stall too while restarts remain (it then supersedes solver/advanced/line_search_failure_restarts). Measured: rescues the emulated-AMD gcp-contact/parallel-edge crawl with one restart and never fires on the 50 contact_3d scenes."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/enabled",
+        "default": true,
+        "type": "bool",
+        "doc": "Enable the stall restarts (on by default since 2026-10-01, user decision)."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/alpha_threshold",
+        "default": 0.01,
+        "type": "float",
+        "doc": "Accepted line-search step sizes below this count towards a stall."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/patience",
+        "default": 5,
+        "type": "int",
+        "doc": "Consecutive small steps that make a stall."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/min_iterations",
+        "default": 5,
+        "type": "int",
+        "doc": "Iterations of a solve before stalls are judged."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/soft_iteration_limit",
+        "default": -1,
+        "type": "int",
+        "doc": "Also restart after this many iterations of one attempt; -1 (default) disables it, so only small steps trigger a restart."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/max_restarts",
+        "default": 20,
+        "type": "int",
+        "doc": "Maximum number of restarts per subsolve."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/alpha_basis",
+        "default": "feasible_bound",
+        "type": "string",
+        "options": [
+            "feasible_bound",
+            "absolute"
+        ],
+        "doc": "feasible_bound (default): a small step counts only when the line search backtracked below the bound CCD and the step validity set, so CCD-limited steps near contact never count (EF-04); absolute: every small accepted step counts."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/feasible_ratio_threshold",
+        "default": 0.999,
+        "type": "float",
+        "min": 0,
+        "max": 1,
+        "doc": "feasible_bound basis: an accepted step at least this fraction of the feasible bound is not a backtrack."
+    },
+    {
+        "pointer": "/solver/advanced/stall_restart/remedy",
+        "default": "force_psd_projection",
+        "type": "string",
+        "options": [
+            "force_psd_projection",
+            "none"
+        ],
+        "doc": "force_psd_projection (default): from the first stall of a step to its end, Newton projects the Hessian to PSD (Newton/force_psd_projection), which frees a crawl along a barrier wall; none: restart with a fresh solver only."
+    },
+    {
+        "pointer": "/solver/advanced/line_search_failure_restarts",
+        "default": 1,
+        "min": 0,
+        "type": "int",
+        "doc": "Recovery from a line search that failed on every strategy, for every nonlinear solve that has no stall restarts (stall restarts handle the failure themselves: semi-implicit with solver/contact/semi_implicit/restart/enabled, and every other configuration while solver/advanced/stall_restart/enabled, the default): the subsolve restarts from the iterate it reached with a fresh nonlinear solver (no descent-strategy or regularization history), at most this many times per subsolve; with the classic adaptive barrier stiffness, its initialization first runs again at that iterate, as at every solve start. A failure after the last restart ends the step exactly as before (named failure, rollback to the last accepted state). Solves whose line search never fails on every strategy are unchanged. 0 restores the historical behaviour (the first such failure ends the step)."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection",
+        "default": null,
+        "type": "object",
+        "optional": [
+            "phase",
+            "step",
+            "iteration",
+            "kind"
+        ],
+        "doc": "RB-06 test hook, off by default: throw a deterministic failure at a chosen point of one step's nonlinear solve so the failed-attempt rollback (the in-memory transaction that returns the solution and every form's state to the last accepted state before the failure is reported) and the publication path can be exercised end to end. The failure is a named exception the solver never retries (kind \"named\", exit status 1) or a std::runtime_error (kind \"runtime_error\") that the existing in-step handlers may absorb (the AL scaled-weight retry, the stall restart). Never a production setting: an injected failure stops the run like any other named failure."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/phase",
+        "default": "none",
+        "type": "string",
+        "options": [
+            "none",
+            "after_al",
+            "after_stall_retune",
+            "al_subsolve",
+            "reduced",
+            "lagging",
+            "before_publication",
+            "after_publication"
+        ],
+        "doc": "Where the failure is thrown in the selected step: \"after_al\" after the augmented-Lagrangian feasibility stage returns and before the reduced solve; \"after_stall_retune\" inside the stall restart hook, right after the barrier stiffness was retuned (needs a stall, e.g. solver/contact/semi_implicit/restart with a soft_iteration_limit); \"al_subsolve\" / \"reduced\" at the accepted Newton iterate whose count equals `iteration` of an AL subsolve / the reduced solve; \"lagging\" right after the friction lag was updated at lagging iteration `iteration` (1 = the first update after the reduced solve); \"before_publication\" after the step's solve returned, before the step callback and any output of the step; \"after_publication\" after the step's outputs were written and before the time-integration history advances. \"none\" disables the hook."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/step",
+        "default": 1,
+        "type": "int",
+        "doc": "The step (solve_tensor_nonlinear call: 1 = the first time step, 0 = a static solve) at which the failure is thrown."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/iteration",
+        "default": 0,
+        "type": "int",
+        "doc": "For phases al_subsolve / reduced: the accepted Newton iteration count (PolySolve's post_step count, 0 = the start point) at which the failure is thrown; for lagging: the lagging iteration."
+    },
+    {
+        "pointer": "/solver/advanced/failure_injection/kind",
+        "default": "named",
+        "type": "string",
+        "options": [
+            "named",
+            "runtime_error"
+        ],
+        "doc": "\"named\": a std::exception that no in-step handler absorbs (like a resource failure); \"runtime_error\": a std::runtime_error, which the AL scaled-weight retry absorbs inside an AL subsolve and which propagates everywhere else."
     },
     {
         "pointer": "/solver/advanced/characteristic_length",
@@ -2234,7 +2619,8 @@
             "value"
         ],
         "optional": [
-            "time_reference"
+            "time_reference",
+            "interpolation"
         ],
         "doc": "pressure BC entry"
     },
@@ -2274,6 +2660,12 @@
         "doc": "Values of pressure boundary condition for timestep"
     },
     {
+        "pointer": "/boundary_conditions/pressure_boundary/*/interpolation",
+        "type": "include",
+        "spec_file": "interpolation.json",
+        "doc": "Time function multiplying the pressure value, as for the other boundary conditions"
+    },
+    {
         "pointer": "/boundary_conditions/pressure_cavity",
         "default": [],
         "type": "list",
@@ -2286,6 +2678,9 @@
         "required": [
             "id",
             "value"
+        ],
+        "optional": [
+            "interpolation"
         ],
         "doc": "pressure BC entry"
     },
@@ -2301,6 +2696,12 @@
         "type": "include",
         "spec_file": "value-no.json",
         "doc": "Values of pressure boundary condition as a function of $x,y,z,t$"
+    },
+    {
+        "pointer": "/boundary_conditions/pressure_cavity/*/interpolation",
+        "type": "include",
+        "spec_file": "interpolation.json",
+        "doc": "Time function multiplying the cavity pressure, as for the other boundary conditions"
     },
     {
         "pointer": "/boundary_conditions/obstacle_displacements",
@@ -2603,15 +3004,50 @@
             "data",
             "advanced",
             "reference",
-            "stats"
+            "stats",
+            "physical_diagnostics",
+            "physical_diagnostics_contact_path",
+            "physical_balance_tolerance",
+            "trim_predictors",
+            "manifest"
         ],
         "doc": "output settings"
+    },
+    {
+        "pointer": "/output/manifest",
+        "default": "",
+        "type": "string",
+        "doc": "File name (in the output directory) of the RB-12 run manifest: the build identity (effective PolyFEM/IPC/PolySolve sources, compiler, configuration), the executable hash, platform and thread settings, the effective input with its hash and every referenced file's hash, the contact model description, the per-step attempt history and the completion status. Empty disables it; PolyFEM_bin defaults it to run-manifest.json."
     },
     {
         "pointer": "/output/directory",
         "default": "",
         "type": "string",
         "doc": "Directory for output files."
+    },
+    {
+        "pointer": "/output/physical_diagnostics",
+        "type": "bool",
+        "default": false,
+        "doc": "Opt-in RB-04 version 1 endpoint records in physical-diagnostics.jsonl; observational, not an acceptance criterion."
+    },
+    {
+        "pointer": "/output/physical_diagnostics_contact_path",
+        "type": "bool",
+        "default": false,
+        "doc": "With physical_diagnostics, sample frozen contact paths at 1025 points and refine detected feature transitions. Expensive observational research output only."
+    },
+    {
+        "pointer": "/output/physical_balance_tolerance",
+        "type": "float",
+        "default": 1e-6,
+        "doc": "With physical_diagnostics, the relative tolerance of the record's physical_balance_pass: the endpoint free-residual norm (updated friction lag) and the global external-force balance on the body, both against the run's peak total absolute external force (RB-09 decision 2026-09-13). Observational; it does not stop or change the solve."
+    },
+    {
+        "pointer": "/output/trim_predictors",
+        "type": "bool",
+        "default": false,
+        "doc": "Opt-in EF-01 research stream trim-predictors.jsonl: at every semi-implicit refresh, stall retune and post-step, the active-gap distribution, force-weighted gap, contact multiplicity and (at refreshes) the two-sided gradient-balance trim and barrier/elastic Hessian diagonal ratio. Observational; it does not change the solve."
     },
     {
         "pointer": "/output/stats",

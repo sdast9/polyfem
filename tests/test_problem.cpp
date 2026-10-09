@@ -12,6 +12,7 @@
 #include <polyfem/Common.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -353,6 +354,52 @@ TEST_CASE("generic tensor problem evaluates reference boundary initial and updat
 	Laplacian assembler;
 	problem.rhs(assembler, pts, 0, values);
 	CHECK(values.isZero(1e-12));
+}
+
+TEST_CASE("generic tensor problem applies time functions to pressures", "[problem][interpolation]")
+{
+	auto mesh = tagged_triangle_mesh();
+
+	GenericTensorProblemAccess problem("GenericTensor");
+	json params;
+	params["is_time_dependent"] = true;
+	params["pressure_boundary"] = json::array({
+		{{"id", 2},
+		 {"value", "x + 1"},
+		 {"interpolation", {{"type", "piecewise_linear"}, {"points", {0, 1, 2}}, {"values", {0, 1, 0.5}}, {"extend", "constant"}}}},
+		{{"id", 3}, {"value", 6}},
+	});
+	params["pressure_cavity"] = json::array({
+		{{"id", 9}, {"value", 4}, {"interpolation", {{"type", "linear_ramp"}, {"from", 1}, {"to", 3}}}},
+		{{"id", 7}, {"value", 5}},
+	});
+	problem.set_parameters(params, "");
+
+	Eigen::MatrixXd pts(2, 2);
+	pts << 0.75, 0.125,
+		0.25, 0.5;
+	Eigen::MatrixXd normals(2, 2);
+	normals << 0, 1,
+		0.6, 0.8;
+	Eigen::MatrixXi boundary_ids(2, 1);
+	boundary_ids << 1, 2; // boundary ids 2 and 3
+
+	// The time function multiplies the value; the entry without one is
+	// unchanged.
+	Eigen::MatrixXd values;
+	for (const auto &[t, factor] : std::vector<std::pair<double, double>>{{0, 0}, {0.5, 0.5}, {1.5, 0.75}, {2, 0.5}, {5, 0.5}})
+	{
+		problem.pressure_bc(*mesh, boundary_ids, Eigen::MatrixXd(), pts, normals, t, values);
+		REQUIRE(values.rows() == 2);
+		CHECK(values(0, 0) == Catch::Approx(1.75 * factor));
+		CHECK(values(1, 0) == 6.0);
+	}
+
+	// linear_ramp is t - from, clamped to [0, to - from].
+	CHECK(problem.pressure_cavity_bc(9, 0.5) == 0.0);
+	CHECK(problem.pressure_cavity_bc(9, 2.0) == Catch::Approx(4.0));
+	CHECK(problem.pressure_cavity_bc(9, 10.0) == Catch::Approx(8.0));
+	CHECK(problem.pressure_cavity_bc(7, 10.0) == 5.0);
 }
 
 TEST_CASE("generic tensor problem updates nodal dirichlet matrix data", "[problem]")

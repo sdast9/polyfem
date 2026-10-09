@@ -4,16 +4,25 @@
 
 #include <polyfem/assembler/PressureAssembler.hpp>
 #include <polyfem/assembler/ViscousDamping.hpp>
+#include <polyfem/solver/FailureInjection.hpp>
 #include <polyfem/solver/SolveData.hpp>
 
 #include <ipc/collision_mesh.hpp>
 
 #include <functional>
 
+namespace polyfem::io
+{
+	class EnergyCSVWriter;
+	class RuntimeStatsCSVWriter;
+} // namespace polyfem::io
+
 namespace polyfem::varform
 {
 	class NonlinearElasticVarForm : public ElasticVarForm
 	{
+		friend class polyfem::test::VarFormTestAccess;
+
 	public:
 		void init(const std::string &formulation, const Units &units, const json &args, const std::string &out_path) override;
 
@@ -59,6 +68,14 @@ namespace polyfem::varform
 			ipc::CollisionMesh &collision_mesh);
 
 	protected:
+		void save_restart_form_state(const std::string &state_path) const override;
+		/// @brief Restart: restore the augmented-Lagrangian multipliers and
+		///        the contact stiffness state saved with the input state file,
+		///        at the restored solution sol.
+		void restore_restart_form_state(const Eigen::MatrixXd &sol);
+		/// @brief Restart: the augmented-Lagrangian multipliers (warns when
+		///        the file predates them).
+		void restore_restart_multipliers(const std::string &state_path);
 		void reset() override;
 		void load_mesh(const mesh::Mesh &mesh, const json &args) override;
 		void build_basis(mesh::Mesh &mesh, const bool iso_parametric, const json &args) override;
@@ -74,6 +91,27 @@ namespace polyfem::varform
 			const InitialConditionOverride *initial_condition_override = nullptr);
 		virtual void init_forms(const json &args, int dim, Eigen::MatrixXd &sol, double t);
 		virtual void solve_tensor_nonlinear(int step, Eigen::MatrixXd &sol, bool init_lagging = true);
+
+		/// @brief RB-04 endpoint record (version 2). `observations` carries the
+		///        attempt summary, last proposal and, for a failed attempt, the
+		///        last internal iterate from the iteration observer, plus the
+		///        barrier energy measured at solve start.
+		void write_physical_diagnostics(int step, const Eigen::VectorXd &x,
+										const Eigen::VectorXd &start, const std::string &outcome,
+										const std::string &phase, const json &termination, const json &lagging,
+										const json &observations, double elapsed, const std::string &error = "");
+
+		/// @brief RB-04 right-endpoint trajectory accounting carried across the
+		///        accepted endpoints of this process (docs/rb-04-work-convention.md).
+		struct TrajectoryAccounting
+		{
+			bool has_previous_endpoint = false;
+			double previous_endpoint_barrier_energy = 0; ///< B(x_(n-1); theta_(n-1)) in physical energy units
+			bool previous_endpoint_barrier_energy_available = false;
+			double external_work = 0, frictional_dissipation = 0, retuning_energy_change = 0;
+			bool external_work_available = true, frictional_dissipation_available = true, retuning_energy_change_available = true;
+			int accepted_steps = 0;
+		};
 
 		std::shared_ptr<assembler::PressureAssembler> build_pressure_assembler() const;
 		void build_collision_mesh(const mesh::Mesh &mesh, const json &args);
@@ -91,21 +129,81 @@ namespace polyfem::varform
 
 		solver::SolveData solve_data_;
 		std::vector<std::shared_ptr<solver::Form>> forms;
+		std::string diagnostic_run_id_;
+		/// The RB-04 streams share the run manifest's run id when there is one.
+		void ensure_diagnostic_run_id();
+		/// RB-12: the contact/coefficient model description for the manifest.
+		json manifest_model_description() const;
+		/// RB-12: one step's attempt record for the manifest, from the
+		/// termination/lagging state at the recording boundary. endpoint is
+		/// the accepted solution (empty for a failed attempt); the contact
+		/// block's history-sensitivity gap shifts are evaluated there.
+		void record_manifest_step(int step, const std::string &outcome, const std::string &phase,
+								  const json &termination, const json &lagging, int stall_retunes,
+								  double elapsed, const std::string &error, const Eigen::VectorXd &endpoint) const;
+		/// Running maximum over this run's accepted records of the total absolute
+		/// external force (support, contact, friction, inertia, body, pressure);
+		/// the normalization of physical_balance_pass (RB-09 decision, 2026-09-13).
+		double diagnostic_peak_external_force_ = 0;
+		void configure_coefficient_diagnostics(int step, const std::string &phase);
+		TrajectoryAccounting trajectory_accounting_;
 		bool contact_dhat_was_explicit_ = false;
+
+		/// @brief RB-06: the failure-injection test hook of this run
+		///        (solver/advanced/failure_injection; off by default).
+		solver::FailureInjection failure_injection_;
+
+		/// @brief RB-06: a fingerprint of the authoritative state a step's
+		///        attempt can change -- the solution, the contact form's
+		///        diagnostic state, the friction lag, the AL multipliers and
+		///        weights, the time-integration history -- exact enough to
+		///        verify a rollback (json equality) and cheap enough to take
+		///        at every solve start.
+		json attempt_state_fingerprint(const Eigen::VectorXd &sol) const;
 
 		int n_obstacle_vertices() const override { return obstacle.n_vertices(); }
 	};
 
 	class NonlinearElasticTransientVarForm : public NonlinearElasticVarForm
 	{
+		friend class polyfem::test::VarFormTestAccess;
+
 	public:
 		std::string name() const override { return "NonlinearElasticTransient"; }
+		NonlinearElasticTransientVarForm();
+		~NonlinearElasticTransientVarForm() override;
+
+	protected:
+		/// @brief RB-06: the time loop as three explicit stages, so the step
+		///        transaction's boundaries are visible and a test can drive
+		///        the loop step by step (re-solving a rolled-back step is a
+		///        test action, never a production retry -- RB-08 decision).
+		/// Everything before the first step: initial solution, forms, the
+		/// initial frame and CSV rows.
+		void begin_transient_run(
+			Eigen::MatrixXd &sol,
+			const InitialConditionOverride *initial_condition_override,
+			const ForwardStepCallback &post_step);
+		/// One step's solve (the transaction: a failed attempt restores the
+		/// last accepted state and rethrows) followed by its publication --
+		/// the step callback, the energy row, the frame and the PVD entry.
+		void solve_transient_step(int t, Eigen::MatrixXd &sol, const ForwardStepCallback &post_step);
+		/// The between-steps advance of an accepted, published step: the
+		/// time-integration history, the forms' time-dependent quantities,
+		/// the weights, the between-steps stiffness refresh, the progress
+		/// notification, the step state files and the stats row.
+		void advance_transient_step(int t, Eigen::MatrixXd &sol);
+		/// After the last step: timings.
+		void end_transient_run();
 
 	private:
 		void solve_problem(
 			Eigen::MatrixXd &sol,
 			const InitialConditionOverride *initial_condition_override,
 			const ForwardStepCallback &post_step) override;
+
+		struct TransientRun;
+		std::unique_ptr<TransientRun> transient_run_;
 	};
 
 	class NonlinearElasticStaticVarForm : public NonlinearElasticVarForm

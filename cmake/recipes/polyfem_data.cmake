@@ -1,4 +1,18 @@
-# data (https://github.com/polyfem/polyfem-data)
+# data (https://github.com/sdast9/polyfem-data, branch fable-fixtures: the
+# upstream https://github.com/polyfem/polyfem-data set plus this fork's fixture
+# changes -- CI-03 (2026-09-21): three historical friction fixtures state the
+# lag budget their references were generated under and get current-defaults
+# twins; see docs/ci-03-validation.md -- CI-05 (2026-09-28/29): the
+# microstructure fixture gains an explicit max_candidate_emissions budget (the
+# automatic global broad-phase default is unchanged) and, like the CI-03
+# fixtures, states the historical friction_iterations: 1 lag budget its
+# reference was generated under, with a microstructure-friction-defaults twin
+# at the solver's current default -- CI-06 (2026-09-29): gcp-contact/
+# cube-on-floor/run.json's reference regenerated at the deterministic value
+# produced with the canonical-order ipc-toolkit (f8dafef39e8); its margin is
+# 5e-3 since aed03ab (the fork's AL mass normalization makes the scene
+# roundoff-sensitive, one-ulp spread up to 3e-3); see
+# docs/ci-portability-plan.md and docs/ci-06-validation.md)
 # License: MIT
 
 if(TARGET polyfem::data)
@@ -27,8 +41,8 @@ else()
         polyfem_data_download
         PREFIX ${FETCHCONTENT_BASE_DIR}/polyfem-test-data
         SOURCE_DIR ${POLYFEM_DATA_DIR}
-        GIT_REPOSITORY https://github.com/polyfem/polyfem-data
-        GIT_TAG e0efb6ba291e3acfc8a5e12e66486a7246849b30
+        GIT_REPOSITORY https://github.com/sdast9/polyfem-data
+        GIT_TAG aed03ab9abf9eb54ca21dcbc3df3682dc8176e7f
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ""
         INSTALL_COMMAND ""

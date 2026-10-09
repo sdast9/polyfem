@@ -28,6 +28,8 @@
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/StringUtils.hpp>
 
+#include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <spdlog/fmt/fmt.h>
@@ -276,6 +278,7 @@ namespace polyfem::varform
 	void VarForm::init(const std::string &formulation, const Units &units, const json &args, const std::string &out_path)
 	{
 		reset();
+		material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 
 		this->units = units;
 		this->args = args;
@@ -878,7 +881,15 @@ namespace polyfem::varform
 		for (int i = 0; i < mesh_->n_elements(); ++i)
 			body_ids[i] = mesh_->get_body_id(i);
 
-		assembler.set_materials(body_ids, args["materials"], units, root_path);
+		assembler.set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
+
+		// RB-11: refuse nonfinite or out-of-range parameters here, with the
+		// element and body named, instead of a nan energy or a failed line
+		// search deep in the first solve (after the initial output was written).
+		const bool has_time = utils::is_param_valid(args, "time");
+		const double t0 = has_time && args["time"].contains("t0") ? Units::convert(args["time"]["t0"], units.time()) : 0.0;
+		const bool time_dependent = has_time && !args["time"].value("quasistatic", false);
+		assembler::validate_material_parameters(assembler, *mesh_, t0, time_dependent, assembler.name() + " materials");
 	}
 
 	void VarForm::ensure_output_sampler() const
@@ -933,7 +944,12 @@ namespace polyfem::varform
 		const int global_t = output_file_index(t);
 		const std::string state_path = resolve_output_path(fmt::format(args["output"]["data"]["state"], global_t));
 		if (!state_path.empty() && time_integrator)
+		{
 			time_integrator->save_state(state_path);
+			save_restart_form_state(state_path);
+		}
+		else if (time_integrator && t == 1 && !args["output"]["restart_json"].get<std::string>().empty())
+			logger().warn("Restart JSON is written without output/data/state: a restart from it would begin at the rest configuration with zero velocity.");
 
 		save_restart_json(t0, dt, t, rest_mesh_written);
 	}
@@ -948,10 +964,17 @@ namespace polyfem::varform
 		const std::string step_name = args["output"]["advanced"]["timestep_prefix"];
 		vtm.save(resolve_output_path(fmt::format(step_name + "{:d}.vtm", global_t)));
 
+		// The PVD lists every frame from index 0; after a restart t0 is the
+		// restart time, so count back to the time of frame 0.
+		const int offset = args["output"]["data"]["file_index_offset"].get<int>();
+		double frame0_time = t0 - offset * dt;
+		// A run started at 0 comes back as roundoff (e.g. -5.6e-17).
+		if (std::abs(frame0_time) <= 64 * std::numeric_limits<double>::epsilon() * std::abs(t0))
+			frame0_time = 0;
 		output_geometry_.save_pvd(
 			resolve_output_path(args["output"]["paraview"]["file_name"]),
 			[step_name](int i) { return fmt::format(step_name + "{:d}.vtm", i); },
-			global_t, t0, dt, args["output"]["paraview"]["skip_frame"].get<int>());
+			global_t, frame0_time, dt, args["output"]["paraview"]["skip_frame"].get<int>());
 	}
 
 	bool VarForm::save_timestep_to_vtm(
@@ -1010,10 +1033,20 @@ namespace polyfem::varform
 
 		const int global_t = output_file_index(t);
 
+		// Absolute, so the restart does not depend on the launch directory.
+		const std::string abs_root_path = root_path.empty() ? root_path : std::filesystem::absolute(root_path).lexically_normal().string();
+
 		json restart_json;
-		restart_json["root_path"] = root_path;
-		restart_json["common"] = root_path;
-		restart_json["time"] = {{"t0", t0 + dt * t}};
+		restart_json["root_path"] = abs_root_path;
+		restart_json["common"] = abs_root_path;
+		// Continue with the same dt and the remaining steps; tend = null
+		// removes the common params' tend on merge, which would otherwise
+		// re-derive dt as (tend - t0) / time_steps from the restart time.
+		restart_json["time"] = {
+			{"t0", t0 + dt * t},
+			{"dt", dt},
+			{"time_steps", args["time"]["time_steps"].get<int>() - t},
+			{"tend", nullptr}};
 		restart_json["output"] = {{"data", {{"file_index_offset", global_t}}}};
 
 		restart_json["space"] = R"({

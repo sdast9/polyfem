@@ -38,6 +38,25 @@ namespace polyfem::solver
 		/// @param x Current solution
 		void post_step(const polysolve::nonlinear::PostStepData &data) override;
 
+		/// @brief RB-06: ContactForm::State plus the current collision set.
+		struct State : public ContactForm::State
+		{
+			ipc::SmoothCollisions collision_set;
+		};
+		std::unique_ptr<FormState> save_state() const override
+		{
+			auto state = std::make_unique<State>();
+			save_contact_state(*state);
+			state->collision_set = collision_set_;
+			return state;
+		}
+		void restore_state(const FormState &state, const Eigen::VectorXd &) override
+		{
+			const State &smooth = state_as<State>(state, "SmoothContactForm");
+			restore_contact_state(smooth);
+			collision_set_ = smooth.collision_set;
+		}
+
 		bool using_adaptive_dhat() const { return use_adaptive_dhat; }
 		const ipc::SmoothContactParameters &get_params() const { return params; }
 
@@ -74,7 +93,6 @@ namespace polyfem::solver
 
 		/// @brief Cached constraint set for the current solution
 		ipc::SmoothCollisions collision_set_;
-		Eigen::MatrixXd cached_displaced_surface_;
 
 		/// @brief Contact potential
 		ipc::SmoothContactPotential barrier_potential_;

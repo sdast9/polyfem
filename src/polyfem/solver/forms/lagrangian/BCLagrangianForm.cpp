@@ -46,7 +46,7 @@ namespace polyfem::solver
 
 		b_ = target_x;
 		b_proj_ = b_;
-		igl::slice(b_, constraints_, 1, b_);
+		b_ = igl::slice(b_, constraints_, 1);
 	}
 
 	void BCLagrangianForm::init_masked_lumped_mass(
@@ -99,45 +99,67 @@ namespace polyfem::solver
 				masked_lumped_mass_ = polyfem::utils::lump_matrix_hrz(mass);
 			}
 		}
-		// last resort: only reject NONPOSITIVE metrics (a large diagonal spread
-		// is physical grading, not damage), and keep mass units by scaling the
-		// identity with the average nodal mass
+
+		// Last resort: only reject NONPOSITIVE metrics (a large diagonal spread
+		// is physical grading, not damage). A plain identity is the right
+		// fallback because the metric is normalized just below; upstream scales
+		// it by the average nodal mass, which that normalization would undo.
 		if (mass.size() != 0)
 		{
 			double min_diag = std::numeric_limits<double>::max();
-			double diag_sum = 0;
 			for (int k = 0; k < masked_lumped_mass_.outerSize(); ++k)
 				for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_, k); it; ++it)
 					if (it.col() == it.row())
-					{
 						min_diag = std::min(min_diag, it.value());
-						diag_sum += it.value();
-					}
 			if (min_diag <= 0)
 			{
-				const double avg_mass = diag_sum > 0 ? diag_sum / n_dofs_ : 1.0;
-				logger().warn("Lumped mass matrix has nonpositive entries; using identity scaled by the average nodal mass ({}).", avg_mass);
-				masked_lumped_mass_ = avg_mass * polyfem::utils::sparse_identity(n_dofs_, n_dofs_);
+				logger().warn("Lumped mass matrix has nonpositive entries; using identity for the BC penalty metric.");
+				masked_lumped_mass_ = polyfem::utils::sparse_identity(n_dofs_, n_dofs_);
 			}
 		}
 
 		assert(n_dofs_ == masked_lumped_mass_.rows() && n_dofs_ == masked_lumped_mass_.cols());
-		// Give the collision obstacles a entry in the lumped mass matrix
+		assert(obstacle_ndof <= n_dofs_);
+		const int n_fe_dof = n_dofs_ - obstacle_ndof;
+
+		// Normalize using FEM DOFs only: obstacle placeholders must not change
+		// the reference mass. Preserve relative lumped weights and move the
+		// absolute mass scale into the AL penalty and multipliers. This metric
+		// is initialized once and stays fixed throughout the AL sequence.
+		if (mass.size() != 0 && n_fe_dof > 0)
+		{
+			const double mean_diag = masked_lumped_mass_.diagonal().head(n_fe_dof).mean();
+			if (mean_diag > 0 && std::isfinite(mean_diag))
+				masked_lumped_mass_ /= mean_diag;
+		}
+
+		// Obstacle weights use the normalized FEM mean (one for valid metrics).
+		// With no FEM DOFs there is no mass reference; use unit weights.
 		if (obstacle_ndof != 0)
 		{
-			const int n_fe_dof = n_dofs_ - obstacle_ndof;
-			const double avg_mass = masked_lumped_mass_.diagonal().head(n_fe_dof).mean();
+			const double avg_mass = n_fe_dof > 0 ? masked_lumped_mass_.diagonal().head(n_fe_dof).mean() : 1.0;
 			for (int i = n_fe_dof; i < n_dofs_; ++i)
-			{
 				masked_lumped_mass_.coeffRef(i, i) = avg_mass;
-			}
 		}
 
 		igl::slice(masked_lumped_mass_, constraints_, 1, masked_lumped_mass_);
 		igl::slice(masked_lumped_mass_, constraints_, 2, masked_lumped_mass_);
 		assert(boundary_nodes_.size() == masked_lumped_mass_.rows() && boundary_nodes_.size() == masked_lumped_mass_.cols());
 
-		update_masked_lumped_mass_sqrt();
+		masked_lumped_mass_sqrt_.resize(masked_lumped_mass_.rows(), masked_lumped_mass_.cols());
+		std::vector<Eigen::Triplet<double>> tmp_triplets;
+		tmp_triplets.reserve(masked_lumped_mass_.nonZeros());
+		for (int k = 0; k < masked_lumped_mass_.outerSize(); ++k)
+		{
+			for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_, k); it; ++it)
+			{
+				assert(it.col() == k);
+				tmp_triplets.emplace_back(it.row(), it.col(), sqrt(it.value()));
+			}
+		}
+
+		masked_lumped_mass_sqrt_.setFromTriplets(tmp_triplets.begin(), tmp_triplets.end());
+		masked_lumped_mass_sqrt_.makeCompressed();
 
 		std::vector<bool> is_contraints(n_dofs_, false);
 		for (int i = 0; i < boundary_nodes_.size(); ++i)
@@ -163,34 +185,6 @@ namespace polyfem::solver
 
 		lagr_mults_.resize(boundary_nodes_.size());
 		lagr_mults_.setZero();
-	}
-
-	void BCLagrangianForm::update_masked_lumped_mass_sqrt()
-	{
-		masked_lumped_mass_sqrt_.resize(masked_lumped_mass_.rows(), masked_lumped_mass_.cols());
-		std::vector<Eigen::Triplet<double>> tmp_triplets;
-		tmp_triplets.reserve(masked_lumped_mass_.nonZeros());
-		for (int k = 0; k < masked_lumped_mass_.outerSize(); ++k)
-		{
-			for (StiffnessMatrix::InnerIterator it(masked_lumped_mass_, k); it; ++it)
-			{
-				assert(it.col() == k);
-				tmp_triplets.emplace_back(it.row(), it.col(), sqrt(it.value()));
-			}
-		}
-
-		masked_lumped_mass_sqrt_.setFromTriplets(tmp_triplets.begin(), tmp_triplets.end());
-		masked_lumped_mass_sqrt_.makeCompressed();
-	}
-
-	void BCLagrangianForm::normalize_penalty_metric()
-	{
-		const double mean_diag = masked_lumped_mass_.diagonal().mean();
-		if (mean_diag > 0 && std::isfinite(mean_diag))
-		{
-			masked_lumped_mass_ /= mean_diag;
-			update_masked_lumped_mass_sqrt();
-		}
 	}
 
 	bool BCLagrangianForm::can_project() const { return true; }
@@ -273,7 +267,8 @@ namespace polyfem::solver
 
 	void BCLagrangianForm::first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const
 	{
-		gradv = L_weight() * A_.transpose() * (-(masked_lumped_mass_sqrt_ * lagr_mults_) + A_weight() * (masked_lumped_mass_ * (A_ * x - b_)));
+		// Each objective term already carries its own inverse form scale.
+		gradv = A_.transpose() * (-L_weight() * (masked_lumped_mass_sqrt_ * lagr_mults_) + A_weight() * (masked_lumped_mass_ * (A_ * x - b_)));
 	}
 
 	void BCLagrangianForm::second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const

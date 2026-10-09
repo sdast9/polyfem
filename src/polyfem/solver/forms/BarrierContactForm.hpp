@@ -1,4 +1,5 @@
 #pragma once
+#include "TrimController.hpp"
 
 #include "ContactForm.hpp"
 
@@ -7,6 +8,16 @@
 
 #include <ipc/collisions/normal/normal_collisions.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
+
+#include <array>
+#include <cstdint>
+#include <cmath>
+#include <limits>
+#include <functional>
+#include <map>
+#include <set>
+#include <utility>
+#include <vector>
 
 namespace polyfem::solver
 {
@@ -26,50 +37,696 @@ namespace polyfem::solver
 						   const bool enable_shape_derivatives,
 						   const ipc::BroadPhaseMethod broad_phase_method,
 						   const double ccd_tolerance,
-						   const int ccd_max_iterations);
+						   const int ccd_max_iterations,
+						   const BarrierStiffnessMode stiffness_mode = BarrierStiffnessMode::Adaptive,
+						   const json &semi_implicit_opts = json(nullptr),
+						   const Eigen::VectorXd &lumped_vertex_masses = Eigen::VectorXd());
 
-		std::string name() const override { return "barrier-contact"; }
+		virtual std::string name() const override { return "barrier-contact"; }
 
-		void update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy) override;
+		/// @brief RBR-04: the named configuration error for the improved max
+		///        operator under semi-implicit stiffness (raised by the
+		///        constructor and, before any mesh is read, by State::init).
+		static std::string unsupported_improved_max_message();
 
-		/// @brief Update fields after a step in the optimization
+		virtual void update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy) override;
+
+		/// @brief Update fields after a step in the optimization. In
+		///        semi-implicit mode a contact born after a contact-free
+		///        snapshot gets its first-contact refresh at the first
+		///        post_step that reports new coordinates. PolySolve reports its
+		///        start point and its first accepted iterate both with
+		///        iteration 0, so an iteration-0 call refreshes only at
+		///        coordinates that differ from the previous call's: the first
+		///        accepted iterate, or a start point the Dirichlet snap moved.
+		/// @param data Iteration number, solver info and current solution
 		void post_step(const polysolve::nonlinear::PostStepData &data) override;
+		void update_quantities(double t, const Eigen::VectorXd &x) override;
 
 		bool use_convergent_formulation() const override { return use_area_weighting() && use_improved_max_operator() && use_physical_barrier(); }
 
+		/// @brief Get use_area_weighting
 		bool use_area_weighting() const { return collision_set().use_area_weighting(); }
+
+		/// @brief Get use_improved_max_operator
 		bool use_improved_max_operator() const { return collision_set().use_improved_max_approximator(); }
+
+		/// @brief Get use_physical_barrier
 		bool use_physical_barrier() const { return barrier_potential_.use_physical_barrier(); }
 
 		const ipc::NormalCollisions &collision_set() const { return collision_set_; }
+		/// Independent endpoint reconstruction; never refreshes or mutates this form.
+		BarrierContactForm diagnostic_snapshot(const Eigen::VectorXd &x) const;
+		/// Bounded observational path quadrature; never refreshes production coefficients.
+		json diagnostic_path(const Eigen::VectorXd &start, const Eigen::VectorXd &end) const;
+		json diagnostic_state() const;
+		/// @brief RB-12: the model this form implements, for the run manifest --
+		///        stiffness mode, the coefficient law and its lineage, the
+		///        coefficient identity, continuation and friction-lag policies,
+		///        the gap convention and which fallbacks the run can take (their
+		///        counts are in diagnostic_state()). Constants of the build, so
+		///        the manifest names the law the binary actually carries.
+		json model_description() const;
+		/// Distances of the active collisions (within dhat, the controller's
+		/// filter) at the given displaced surface: count, mean, rms, min, max
+		/// and the ratios to dhat, one sample per collision; plus band_rms, the
+		/// collision-weighted statistic the trim controller compares with the
+		/// band (see band_statistic). RB-09: the contact-model error of a force
+		/// quantity is about the mean gap divided by the imposed compression,
+		/// so the mean gap is reported.
+		json gap_statistics(const Eigen::MatrixXd &displaced_surface) const;
+
+		/// The trim band's gap statistic (2026-09-27): the mean squared
+		/// distance of the active collisions (distance <= dhat) weighted by
+		/// each collision's weight, sum(w d^2) / sum(w). IPC merges the
+		/// candidates that resolve to the same vertex-vertex, edge-vertex or
+		/// edge-edge pair into one collision whose weight is the sum of theirs,
+		/// so the energy does not depend on how a tie between distance types
+		/// is resolved; neither does this mean, while a count-based mean does
+		/// (a vertex exactly over a shared edge is one merged edge-vertex
+		/// collision or two face-vertex/edge-vertex collisions depending on
+		/// roundoff, docs/band-statistic-weighting-20260927.md). Collisions with a
+		/// nonpositive or nonfinite weight carry no barrier energy and are
+		/// left out; when every active collision has such a weight the
+		/// unweighted mean is used. Summed in collision order (deterministic).
+		struct BandStatistic
+		{
+			double mean_sq = std::numeric_limits<double>::infinity(); ///< infinity when no collision is active
+			size_t active_count = 0;
+			double total_weight = 0;
+			bool weighted = false; ///< false only for the unweighted fallback
+		};
+		static BandStatistic band_statistic(
+			const ipc::NormalCollisions &collisions,
+			const ipc::CollisionMesh &mesh,
+			const Eigen::MatrixXd &displaced_surface,
+			const double dhat,
+			const std::function<bool(size_t)> &skip = nullptr);
+
+		/// @brief Contacts between Dirichlet-clamped primitives
+		///        (docs/clamped-contacts-20260928.md). A collision is fully
+		///        clamped when every vertex of its stencil is clamped: it
+		///        exerts no force on a free degree of freedom of the reduced
+		///        solve, and the trim cannot move it.
+		///        exclude_statistics (default since 2026-09-29, user
+		///        decision): still built and evaluated, but ignored by the
+		///        trim controller (band statistic, collapse minimum,
+		///        force-weighted gap, coefficient batch median/floor/cap,
+		///        gradient balance, first-contact detection);
+		///        keep: part of the collision set and of every controller
+		///        statistic (the behaviour before 2026-09-29);
+		///        exclude_collisions: candidates whose primitives are all
+		///        clamped are filtered by the collision mesh's can_collide
+		///        (set by the var form), so they are neither built nor
+		///        checked by CCD.
+		enum class ClampedContacts
+		{
+			Keep,
+			ExcludeStatistics,
+			ExcludeCollisions
+		};
+		static ClampedContacts parse_clamped_contacts(const json &semi_implicit_opts);
+		/// @brief Collision-mesh vertices whose displacement is fully
+		///        prescribed: every node of the vertex's displacement-map row
+		///        has all dim DOFs in the Dirichlet list (obstacle nodes are in
+		///        it); a row without entries cannot move either.
+		static std::vector<bool> clamped_collision_vertices(
+			const ipc::CollisionMesh &mesh, const std::vector<int> &dirichlet_dofs, const int dim);
+		/// @brief IPC vertex filter of exclude_collisions: a candidate is
+		///        kept when any vertex pair drawn from its two primitives has a
+		///        free vertex, i.e. dropped only when every vertex is clamped.
+		static ipc::CollisionFilter clamped_collision_filter(std::vector<bool> clamped);
+		/// @brief Install the Dirichlet DOF list (semi-implicit mode; SolveData)
+		///        and derive the clamped collision vertices from it.
+		///        Observational unless clamped_contacts excludes them.
+		void set_dirichlet_dofs(const std::vector<int> &dirichlet_dofs, const int dim);
+		/// @brief 0 free, 1 partly clamped, 2 fully clamped (every stencil
+		///        vertex clamped; analytic planes count as clamped); 0 while
+		///        no clamped vertices are installed.
+		int clamp_class(const ipc::NormalCollisions &collisions, const size_t i) const;
+		ClampedContacts clamped_contacts() const { return clamped_contacts_; }
+		/// @brief DOFs the gradient balance (calibrate_trim, the initial trim
+		///        estimate) is taken over: all DOFs (default) or the reduced
+		///        solve's free DOFs (Dirichlet rows of both gradients zeroed;
+		///        docs/gradient-balance-free-dofs-20260929.md).
+		static bool parse_balance_free_dofs(const json &semi_implicit_opts);
+		bool balance_free_dofs() const { return balance_free_dofs_; }
+		/// Observer for outer refresh/calibration/stall/post-step operations.
+		/// Callback failures cannot change solver behavior. Direct initialization
+		/// setters and coordinate-only feature transitions are outside this stream.
+		void set_coefficient_observer(std::function<void(const json &)> observer) { coefficient_observer_ = std::move(observer); }
+		/// EF-01 (contact-efficiency plan, 2026-09-23): opt-in observer of trim
+		/// predictor candidates, called after every semi-implicit refresh, stall
+		/// retune and post-step controller update. Observational only: the
+		/// record is computed from const state and the injected providers, and
+		/// nothing is evaluated while no observer is set.
+		void set_trim_predictor_observer(std::function<void(const json &)> observer) { trim_predictor_observer_ = std::move(observer); }
+		/// The EF-01 record at x: gap distribution and the force-weighted gap of
+		/// the active collisions, contact multiplicity per surface vertex, and
+		/// (full) the two-sided gradient-balance trim, the barrier-to-elastic
+		/// Hessian diagonal ratio on contact DOFs and the conditioning-cap trim.
+		json trim_predictors(const Eigen::VectorXd &x, bool full) const;
+
 		const ipc::BarrierPotential &barrier_potential() const { return barrier_potential_; }
 
-	protected:
-		/// Constructor for specialized barrier-contact forms with a custom potential.
-		BarrierContactForm(const ipc::CollisionMesh &collision_mesh,
-						   const double dhat,
-						   const double avg_mass,
-						   const bool use_area_weighting,
-						   const bool use_improved_max_operator,
-						   const bool use_adaptive_barrier_stiffness,
-						   const bool is_time_dependent,
-						   const bool enable_shape_derivatives,
-						   const ipc::BroadPhaseMethod broad_phase_method,
-						   const double ccd_tolerance,
-						   const int ccd_max_iterations,
-						   const ipc::BarrierPotential &barrier_potential);
+		// -- Semi-implicit per-contact barrier stiffness [Ando 2024] ----------
 
-		double value_unweighted(const Eigen::VectorXd &x) const override;
+		/// @brief Is the semi-implicit per-contact stiffness mode active?
+		bool uses_semi_implicit_stiffness() const { return stiffness_mode_ == BarrierStiffnessMode::SemiImplicit; }
+
+		/// @brief RB-10 `semi_implicit/friction_lag`: "realized_force" (default)
+		///        lags the friction on the normal force that acted at the lag
+		///        coordinates (built before the between-steps refresh, no
+		///        in-solve trim following); "follow_stiffness" is the RB-18 F6
+		///        behaviour: the current trim at the lag gap.
+		bool friction_lag_realized() const { return friction_lag_realized_; }
+
+		/// @brief Opt into sequential clamping only in semi-implicit mode, where
+		///        the trial steps that make it worthwhile actually occur.
+		bool wants_sequential_step_clamping() const override
+		{
+			return uses_semi_implicit_stiffness();
+		}
+
+		/// @brief Cap trial-step surface displacement only in semi-implicit
+		///        mode, where Newton trial steps in distorted states can move
+		///        vertices by hundreds of barrier supports -- pricing that
+		///        sweep is wasted CCD work and a broad-phase memory risk on
+		///        thin geometry. Every other mode keeps the base class's
+		///        uncapped behaviour, since the cap also bounds the step when
+		///        CCD finds no collision.
+		double trial_displacement_cap() const override
+		{
+			return uses_semi_implicit_stiffness()
+					   ? trial_displacement_cap_
+					   : std::numeric_limits<double>::infinity();
+		}
+
+		/// @brief Set the callback used to assemble the (weighted) system
+		///        Hessian of the elastic energy at a given solution.
+		void set_system_hessian_provider(const std::function<void(const Eigen::VectorXd &, StiffnessMatrix &)> &provider) { system_hessian_provider_ = provider; }
+
+		/// @brief Set the callback used to assemble the (weighted) gradient of
+		///        all non-contact energies at a given solution; used to
+		///        calibrate the global trim by gradient balance.
+		void set_system_gradient_provider(const std::function<void(const Eigen::VectorXd &, Eigen::VectorXd &)> &provider) { system_gradient_provider_ = provider; }
+
+		/// @brief One-shot trim calibration by gradient balance (classic IPC's
+		///        initialization applied to the per-contact-scaled barrier):
+		///        trim = -<grad B, grad E> / (weight * ||grad B||^2). Requires
+		///        the gradient provider and a *loaded* contact (the balance is
+		///        degenerate when the barrier force is negligible or opposes
+		///        nothing). @return true if the trim was calibrated.
+		bool calibrate_trim(const Eigen::VectorXd &x);
+
+		/// @brief Refresh the frozen snapshot (displaced surface + system
+		///        Hessian) used to compute per-contact stiffnesses, and
+		///        assign stiffness scales to the current collision set.
+		///        Optionally runs one step of the gap-band trim controller.
+		/// @param x Current solution (full size)
+		/// @param published_endpoint True only for the between-steps refresh
+		///        at a published endpoint: RB-20 force continuation captures
+		///        the coefficients that acted there. Mid-solve refreshes
+		///        (birth, stall retune, interval) keep the captured values and
+		///        re-estimate everything else from the fresh Hessian.
+		/// @param first_contact_refresh True only for the first-contact
+		///        refresh in post_step. Newborn contacts sit where the step
+		///        that made them stopped (usually truncated by CCD), which is
+		///        not a collapse: it never bumps the trim for a collapse, and
+		///        the conditioning cap applies.
+		void refresh_semi_implicit_stiffness(const Eigen::VectorXd &x, const bool run_trim_controller = true, const bool published_endpoint = false, const bool first_contact_refresh = false);
+
+		/// @brief Assign per-collision stiffness scales computed from the
+		///        frozen snapshot to the given collision set. Deterministic
+		///        between refreshes (memoized per stencil).
+		void assign_collision_stiffness(ipc::NormalCollisions &collision_set) const;
+		/// @brief Map a memoized per-stencil value (possibly a 0 / +inf
+		///        sentinel for invalid curvature) onto the frozen batch floor,
+		///        cap and user minimum (RB-18 F1/F2/F4). A continued value
+		///        (RB-20) skips the batch floor/cap: it already acted at the
+		///        endpoint, and clamping it to a fresh batch would be drift.
+		double resolve_stiffness(const double kappa, const bool continued = false) const;
+		/// @brief Whether a stencil's coefficient was carried over from the
+		///        state that acted at the last refresh point (RB-20).
+		bool is_continued(const std::array<long, 5> &key) const { return continued_keys_.count(key) > 0; }
+		/// @brief Memoization key of a collision stencil: (type tag, vertex
+		///        ids), canonical (see canonical_key).
+		std::array<long, 5> stencil_key(const ipc::NormalCollisions &collision_set, const size_t i) const;
+		/// @brief The coefficient keys of collision i with their positive
+		///        contribution weights: its parent candidates (RB-21,
+		///        tag 10 + candidate type, ids) when coefficient_identity is
+		///        "parent" and the builder recorded them, else the stencil key
+		///        with weight 1. Every key is canonical (see canonical_key).
+		std::vector<std::pair<std::array<long, 5>, double>> coefficient_keys(const ipc::NormalCollisions &collision_set, const size_t i) const;
+		/// @brief One key per physical pair (docs/canonical-pair-keys-20261005.md):
+		///        a key whose two primitives have the same type -- an edge-edge
+		///        or vertex-vertex parent (tags 12, 10) or stencil (tags 2, 0)
+		///        -- names them in sorted order (an edge-edge stencil by its
+		///        edges' vertex pairs), so the order in which a broad phase
+		///        emitted the pair cannot change its identity. Typed keys
+		///        (edge-vertex, face-vertex) are returned unchanged.
+		static std::array<long, 5> canonical_key(std::array<long, 5> key);
+		/// @brief The same pair with its two primitives swapped (the other
+		///        emission order of a broad phase) for a key whose primitives
+		///        have the same type -- an edge-edge or vertex-vertex parent
+		///        (tags 12, 10) or stencil (tags 2, 0); equal to the key for
+		///        typed keys (edge-vertex, face-vertex).
+		static std::array<long, 5> reversed_pair_key(std::array<long, 5> key);
+		/// @brief Fresh Hessian estimate of a key's coefficient on the given
+		///        stencil at the frozen snapshot, after the RB-18 F2/F4/F7
+		///        resolution (may return a 0 / +inf sentinel).
+		double estimate_stiffness(const ipc::CollisionStencil &stencil, const std::array<long, 5> &key) const;
+		/// @brief Frozen curvature along the contact direction of a stencil
+		///        with interpolated, scaled, empty or duplicate map rows
+		///        (RB-03 interpolated stiffness, 2026-09-11): the parent
+		///        block condensed onto the stencil's surface vertices, or
+		///        the gap-normalized force direction when the block is not
+		///        SPD or the kept rows are dependent. Rows without a movable
+		///        parent contribute zero. Same units as the exact-selector
+		///        w^T H w; 0 when nothing in the stencil is movable.
+		double interpolated_stiffness(const ipc::CollisionStencil &stencil, const ipc::VectorMax12d &positions,
+									  const std::array<long, 4> &vids, const int n_verts) const;
+		/// @brief Memo lookup (or fresh estimate + insert) of a key's
+		///        coefficient, resolved against the frozen batch statistics.
+		double memoized_stiffness(const ipc::NormalCollisions &collision_set, const size_t i, const std::array<long, 5> &key) const;
+
+		/// @brief What moved the trim, for the history-sensitivity report.
+		///        Other is a direct call from outside the controller (tests,
+		///        library users).
+		enum class TrimMove
+		{
+			Collapse,
+			Calibration,
+			ConditioningCap,
+			CadenceDown,
+			RefreshDown,
+			StallSoften,
+			ForceBand,
+			InitialEstimate,
+			Other
+		};
+		static constexpr int trim_move_sources = 9;
+		static const char *trim_move_name(TrimMove move);
+
+		/// @brief Multiply the global trim factor (barrier_stiffness_) by the
+		///        given factor, clamped to [trim_min, trim_max].
+		void bump_trim(const double factor, TrimLoopGuard::Source source = TrimLoopGuard::Other, TrimMove move = TrimMove::Other);
+
+		/// @brief The step record's history-sensitivity block
+		///        (docs/canonical-pair-keys-20261005.md, run manifest
+		///        steps[].contact.history_sensitivity): what in the solve since
+		///        the previous record depended on discrete history --
+		///        coefficients that lost their RB-20 continuation (by cause,
+		///        with the largest |ln(fresh/continued)|), pairs memoized under
+		///        both of their orders, trim moves by source,
+		///        how close the controller_interval cadence is to firing, and
+		///        first-order estimates of the equilibrium gap shift both imply
+		///        at x, sum over contacts of (dhat - d)/2 * |delta ln kappa|.
+		///        Observational: reads the form and the current collision set,
+		///        never refreshes or mutates anything; never throws.
+		json history_sensitivity(const Eigen::VectorXd &x) const;
+		/// @brief Start the next record's accumulation (after a step record).
+		void reset_history_sensitivity();
+
+		/// @brief EF-07: squared minimum distance of the collisions that were
+		///        already active at the previous accepted iterate (or refresh);
+		///        infinity when there is none.
+		double min_distance_excluding_born(const Eigen::MatrixXd &displaced_surface) const;
+		/// @brief EF-07: the squared minimum distance the collapse proxy uses
+		///        (all collisions, or the persisting ones with exclude_born).
+		double collapse_min_distance(const Eigen::MatrixXd &displaced_surface, double all_min_d2) const;
+		/// @brief EF-07: the collapse branch (proportional upward bump) with
+		///        the responsiveness veto and decision record; returns whether
+		///        the trim moved.
+		bool collapse_bump(double factor, double avg_d2, double min_d2, double severity, const char *context);
+		/// @brief EF-07 diagnostics: stencil keys of the current collision set.
+		std::set<std::array<long, 5>> current_stencil_keys() const;
+
+		/// @brief Trim factor proportional to how far the average gap has
+		///        collapsed below the band (capped at 256 per bump).
+		double collapse_bump_factor(const double avg_d2) const;
+
+		/// @brief Collapse measure combining the average active gap and the
+		///        (slack-relaxed) minimum gap, both squared distances.
+		double collapse_severity(const double avg_d2, const double min_d2) const;
+
+		/// @brief Retune the trim after a line-search stall: increase it when
+		///        the average active gap is below the band (barrier too soft),
+		///        decrease it otherwise (barrier too stiff), then refresh the
+		///        per-contact stiffnesses at x.
+		///        Returns whether anything changed (per-contact coefficients
+		///        were re-evaluated for a non-empty collision set, or the trim
+		///        moved); false means a restart would repeat an identical solve.
+		bool retune_on_stall(const Eigen::VectorXd &x, const double factor);
+
+		/// @brief What continuation carried at the published captures of one
+		///        step (history report; attempt state, part of State).
+		struct HistoryWindow
+		{
+			/// Latest carried value per key.
+			std::map<std::array<long, 5>, double> carried;
+			/// Keys active at a capture whose resolved coefficient was not
+			/// positive and finite, so continuation could not carry it.
+			std::set<std::array<long, 5>> dropped;
+			bool empty() const { return carried.empty() && dropped.empty(); }
+		};
+
+		/// @brief Accumulators of the history-sensitivity report since the
+		///        last step record (attempt state, part of State).
+		struct HistoryLog
+		{
+			/// Loss causes: the pair was carried under its other order
+			/// (orientation), the key itself was carried at a capture of this
+			/// step or the previous one and dropped by a later capture, i.e.
+			/// it left the active set and came back (reentry), the key was
+			/// active at a capture but its value could not be carried (other).
+			enum Cause
+			{
+				Orientation,
+				Reentry,
+				Other
+			};
+			struct Loss
+			{
+				int cause;
+				double carried;       ///< the value continuation carried; NaN for Other
+				double abs_log_ratio; ///< |ln(fresh / carried)| at detection; NaN when unavailable
+			};
+			/// Keys assigned a fresh estimate while their pair held a carried
+			/// value, each counted once per record.
+			std::map<std::array<long, 5>, Loss> losses;
+			/// Same-type pairs whose coefficient was memoized under both of
+			/// their orders at an accepted iterate or refresh (one contact
+			/// with two identities; the key in sorted order).
+			std::set<std::array<long, 5>> split_pairs;
+			std::array<int, trim_move_sources> move_count{};
+			std::array<double, trim_move_sources> move_log2{};
+			int stall_retune_moves = 0;
+			/// Trim when the accumulation began (the previous record, or the
+			/// run's first controller event); NaN until then.
+			double trim_start = std::numeric_limits<double>::quiet_NaN();
+			/// The accumulation began at a state restored from a restart file.
+			bool restored = false;
+		};
+
+		/// @brief RB-06: the attempt-mutable state of the barrier form on top
+		///        of ContactForm::State -- the current collision set and, in
+		///        semi-implicit mode, the frozen snapshot (surface, system
+		///        Hessian, its max entry), the memoized coefficients of this
+		///        and the previous snapshot, the continuation seeds and keys,
+		///        the batch statistics, the controller counters and anchor,
+		///        the first-contact flag and the refresh identity. Every
+		///        member a refresh, retune, bump, post_step or collision
+		///        rebuild writes is here; the coefficient event counter is not
+		///        (event ids stay monotonic so the event stream keeps the
+		///        failed attempt's rows distinguishable from the rollback).
+		struct State : public ContactForm::State
+		{
+			ipc::NormalCollisions collision_set;
+			Eigen::MatrixXd kappa_surface;
+			StiffnessMatrix kappa_hessian;
+			std::map<std::array<long, 5>, double> kappa_cache, prev_kappa_cache, endpoint_kappa;
+			std::set<std::array<long, 5>> continued_keys;
+			int kappa_continued_count = 0, kappa_fresh_count = 0;
+			int iters_since_refresh = 0, iters_since_trim = 0;
+			uint64_t diagnostic_refresh_id = 0;
+			double kappa_cap = 0, kappa_floor = 0, kappa_median = 0;
+			int kappa_fallback_count = 0, kappa_abs_fallback_count = 0, kappa_global_fallback_count = 0;
+			int kappa_interpolated_count = 0, kappa_direction_fallback_count = 0;
+			bool kappa_snapshot_had_contacts = false;
+			Eigen::VectorXd last_post_step_x;
+			bool trim_seed_pending = true;
+			int force_band_age = 0;
+			json trim_decision;
+			double trim_solve_anchor = 1, kappa_hessian_max = 0;
+			TrimLoopGuard loop_guard;
+			bool trim_seed_used = false;
+			std::set<std::array<long, 5>> previous_iterate_keys, refresh_keys;
+			std::array<HistoryWindow, 2> history_windows;
+			HistoryLog history;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		/// @brief Restart: also writes the semi-implicit trim controller and
+		///        coefficient history (caches, continuation keys, counters).
+		///        The snapshot surface, frozen Hessian and collision set are
+		///        functions of x and are rebuilt on read.
+		void write_restart_state(const std::string &path) const override;
+		bool read_restart_state(const std::string &path, const Eigen::VectorXd &x) override;
+		/// @brief Restores the captured state and, in semi-implicit mode,
+		///        reports a "rollback" coefficient event (before = the failed
+		///        attempt's state at x, after = the restored state).
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
+
+	protected:
+		void save_barrier_state(State &state) const;
+		void restore_barrier_state(const State &state);
+
+		class CoefficientEventScope;
+		std::function<void(const json &)> coefficient_observer_;
+		std::function<void(const json &)> trim_predictor_observer_;
+		uint64_t trim_predictor_sequence_ = 0;
+		void emit_trim_predictors(const Eigen::VectorXd &x, const char *event, bool full, int iteration = -1);
+		int coefficient_event_depth_ = 0;
+		uint64_t coefficient_event_id_ = 0;
+		/// @brief Compute the contact barrier potential value
+		/// @param x Current solution
+		/// @return Value of the contact barrier potential
+		virtual double value_unweighted(const Eigen::VectorXd &x) const override;
+
+		/// @brief Compute the value of the form multiplied per element
+		/// @param x Current solution
+		/// @return Computed value
 		Eigen::VectorXd value_per_element_unweighted(const Eigen::VectorXd &x) const override;
-		void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const override;
-		void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const override;
+
+		/// @brief Compute the first derivative of the value wrt x
+		/// @param[in] x Current solution
+		/// @param[out] gradv Output gradient of the value wrt x
+		virtual void first_derivative_unweighted(const Eigen::VectorXd &x, Eigen::VectorXd &gradv) const override;
+
+		/// @brief Compute the second derivative of the value wrt x
+		/// @param x Current solution
+		/// @param hessian Output Hessian of the value wrt x
+		virtual void second_derivative_unweighted(const Eigen::VectorXd &x, StiffnessMatrix &hessian) const override;
 
 		void update_collision_set(const Eigen::MatrixXd &displaced_surface) override;
 
+		/// @brief Cached constraint set for the current solution
 		ipc::NormalCollisions collision_set_;
+
+		/// @brief Contact potential
 		const ipc::BarrierPotential barrier_potential_;
 
-		/// Per-form cache; this used to be shared by all instances through a static local.
-		Eigen::MatrixXd cached_displaced_surface_;
+		// -- Semi-implicit per-contact barrier stiffness state -----------------
+
+		/// @brief How the barrier stiffness is chosen and updated
+		const BarrierStiffnessMode stiffness_mode_;
+
+		/// @brief Assembles the (weighted) system Hessian of the elastic
+		///        energy at a given solution; injected by SolveData.
+		std::function<void(const Eigen::VectorXd &, StiffnessMatrix &)> system_hessian_provider_;
+
+		/// @brief Callback assembling the (weighted) gradient of all
+		///        non-contact energies at a given solution; injected by
+		///        SolveData, used for gradient-balance trim calibration.
+		std::function<void(const Eigen::VectorXd &, Eigen::VectorXd &)> system_gradient_provider_;
+
+		/// @brief Lumped mass per full-mesh vertex (zeros when quasistatic)
+		Eigen::VectorXd lumped_vertex_masses_;
+
+		/// @brief Collision vertex to system node for exact unit selector rows;
+		///        -1 marks an interpolated, scaled or empty row, whose parents
+		///        are listed in interpolation_parents_ (RB-03).
+		///        CollisionMesh's displacement map is immutable during form use.
+		Eigen::VectorXi stiffness_node_ids_;
+		/// @brief (system node, weight) parents of each collision vertex whose
+		///        map row is not an exact unit selector; empty for selectors
+		std::vector<std::vector<std::pair<int, double>>> interpolation_parents_;
+
+		/// @brief Displaced surface frozen at the last stiffness refresh
+		Eigen::MatrixXd kappa_surface_;
+		/// @brief System Hessian (full DOF) frozen at the last refresh
+		StiffnessMatrix kappa_hessian_;
+		/// @brief Memoized per-stencil stiffness for the frozen snapshot;
+		///        key = (stencil type tag, vertex ids)
+		mutable std::map<std::array<long, 5>, double> kappa_cache_;
+		/// @brief Memoized stiffness of the PREVIOUS snapshot (RB-18 F2):
+		///        a stencil whose fresh curvature is nonpositive or overflows
+		///        keeps the value it had rather than losing its barrier
+		mutable std::map<std::array<long, 5>, double> prev_kappa_cache_;
+		/// @brief Stencils whose coefficient in kappa_cache_ was carried over
+		///        from the value that acted at the refresh point instead of
+		///        re-estimated from the Hessian (RB-20 force continuation).
+		///        Continued values are the resolved effective coefficient and
+		///        bypass the batch floor/cap of the new snapshot.
+		std::set<std::array<long, 5>> continued_keys_;
+		/// @brief The resolved coefficients active at the last published
+		///        endpoint (RB-20); re-seeded into kappa_cache_ at every
+		///        refresh until the next endpoint replaces them.
+		mutable std::map<std::array<long, 5>, double> endpoint_kappa_;
+		/// @brief Continued / freshly estimated stencils in the last refresh
+		///        batch (diagnostic)
+		int kappa_continued_count_ = 0;
+		mutable int kappa_fresh_count_ = 0;
+		/// @brief Newton iterations since the last stiffness refresh
+		int iters_since_refresh_ = 0;
+		uint64_t diagnostic_refresh_id_ = 0; ///< Monotonic per-form completed snapshot identity.
+		/// @brief Newton iterations since the trim factor last changed
+		int iters_since_trim_ = 0;
+		/// @brief Frozen per-contact stiffness cap (kappa_spread * median of
+		///        the refresh batch); part of the snapshot for determinism
+		double kappa_cap_ = std::numeric_limits<double>::infinity();
+		/// @brief Frozen relative floor (median / kappa_spread) of the refresh
+		///        batch (RB-18 F1); 0 = no floor available
+		double kappa_floor_ = 0.0;
+		/// @brief Median of the POSITIVE finite per-contact stiffnesses of the
+		///        last refresh batch (RB-18 F1); 0 when none is positive
+		double kappa_median_ = 0.0;
+		/// @brief Stencils in the last refresh batch whose curvature was
+		///        invalid, had no previous value, and could only be resolved by
+		///        the batch floor/cap (diagnostic)
+		mutable int kappa_fallback_count_ = 0;
+		/// @brief ... resolved with |w^T H w| (RB-18 F7 choice B)
+		mutable int kappa_abs_fallback_count_ = 0;
+		/// @brief ... resolved with max|H| / dhat^2 (RB-18 F7 fallback E)
+		mutable int kappa_global_fallback_count_ = 0;
+		/// @brief Stencils with interpolated map rows in the last refresh
+		///        batch resolved by local condensation / by the
+		///        gap-normalized direction fallback (RB-03, diagnostic)
+		mutable int kappa_interpolated_count_ = 0;
+		mutable int kappa_direction_fallback_count_ = 0;
+		/// @brief True only during the uncapped first assignment pass of a
+		///        refresh, when the batch cap/floor are not yet known and
+		///        invalid-curvature sentinels must pass through unresolved
+		mutable bool batch_first_pass_ = false;
+		/// @brief True during the first pass of a published-endpoint refresh
+		///        with continuation_max_ratio > 1 (RB-20 D3)
+		mutable bool pull_toward_fresh_ = false;
+		/// @brief Whether the collision set was non-empty at the last refresh
+		///        (detects contact born mid-solve in post_step)
+		bool kappa_snapshot_had_contacts_ = false;
+		/// @brief Coordinates of the last post_step (semi-implicit mode): an
+		///        iteration-0 post_step at other coordinates reports an
+		///        accepted state, not the solver's start point. Not written to
+		///        restart files: a resumed run's first post_step follows the
+		///        solve-start refresh and has no previous point to compare.
+		Eigen::VectorXd last_post_step_x_;
+		/// @brief Trim value at the end of the last refresh; the in-solve
+		///        emergency bumps may climb at most a fixed factor above it
+		///        (unbounded in-solve climbing rails the trim to trim_max
+		///        before the physics can respond)
+		double trim_solve_anchor_ = 1.0;
+		/// @brief Max absolute entry of the frozen system Hessian
+		double kappa_hessian_max_ = 0.0;
+		// Parsed semi-implicit options (see input-spec.json defaults)
+		/// @brief 0 = refresh only at solve starts and stall restarts (frozen
+		///        objective within a solve); N > 0 = also every N iterations
+		int refresh_interval_ = 0;
+		double trim_lower_ = 0.5;
+		double trim_upper_ = 0.9;
+		double trim_factor_ = 2.0;
+		double trim_min_ = std::pow(2.0, -32);
+		double trim_max_ = std::pow(2.0, 32);
+		double kappa_min_ = 0.0;
+		double kappa_spread_ = 1e4;
+		/// @brief Cap on effective stiffness relative to max|system Hessian|
+		///        applied when the gradient balance is degenerate (unloaded
+		///        contact): past ~8 orders of dynamic range the linear solver
+		///        loses the elastic block, and an unloaded barrier has no
+		///        force-balance signal to justify more stiffness.
+		double conditioning_cap_ = 1e3;
+		/// @brief Newton-iteration cadence of the in-solve downward trim step
+		///        (gap pinned above the band); 0 disables it.
+		int controller_interval_ = 30;
+		bool force_weighted_controller_ = false, initial_trim_estimate_ = false;
+		bool trim_seed_pending_ = true;
+		int force_band_age_ = 0;
+		ForceWeightedTrim force_trim_;
+		json trim_decision_;
+		double force_weighted_gap(const Eigen::MatrixXd &surface) const;
+		bool estimate_initial_trim(const Eigen::VectorXd &x, double severity);
+		void apply_force_band(const Eigen::VectorXd &x, double avg_d2, double min_d2, double severity, const char *source);
+		/// @brief EF-07 opt-in loop guards and their per-step memory.
+		TrimLoopGuard loop_guard_;
+		/// @brief EF-07 estimate_once: an estimate was accepted in this run.
+		bool trim_seed_used_ = false;
+		/// @brief EF-07: stencil keys active at the previous accepted iterate
+		///        (or refresh) and at the last refresh; maintained only for the
+		///        exclude-born option and the trim-predictor stream.
+		std::set<std::array<long, 5>> previous_iterate_keys_, refresh_keys_;
+		bool track_collision_birth() const { return loop_guard_.exclude_born || bool(trim_predictor_observer_); }
+
+		// -- History-sensitivity report (docs/canonical-pair-keys-20261005.md) --
+		/// @brief What continuation carried at the published captures: [0]
+		///        since the last step boundary (update_quantities), [1] in the
+		///        step before. A fresh estimate is compared with them.
+		///        Observational; never read by the model.
+		std::array<HistoryWindow, 2> history_windows_;
+		HistoryLog history_;
+		/// @brief > 0 while retune_on_stall runs (its trim moves are counted
+		///        in moves_in_stall_retunes too).
+		int stall_retune_depth_ = 0;
+		/// @brief Record continuation losses of the current collision set
+		///        (accepted iterates and mid-solve refreshes).
+		void observe_continuation();
+		/// @brief Count a trim move for the report.
+		void note_trim_move(TrimMove move, double before, double after);
+
+		/// @brief Trial-step displacement cap, in barrier supports. Only
+		///        applied while the semi-implicit stiffness mode is active.
+		double trial_displacement_cap_ = 50.0;
+		/// @brief RB-20: a stencil active at a refresh point keeps the
+		///        coefficient that acted there; the Hessian estimate is used
+		///        only for stencils without one. Removes the post-publication
+		///        force drift RB-04 measured. The global trim still acts.
+		///        Default on since RB-21's parent identity: with the
+		///        historical stencil identity a closest-feature switch mixes
+		///        a continued and a fresh value and slows Newton badly.
+		bool force_continuation_ = true;
+		/// @brief RB-20 D3: 0 = pure continuation; r > 1 lets the fresh
+		///        Hessian estimate move a continued coefficient within
+		///        [kappa/r, kappa*r] per refresh.
+		double continuation_max_ratio_ = 0.0;
+		/// @brief RB-21: key coefficients on the builder's parent candidates
+		///        (true, default) or on the built stencil (false, historical).
+		bool parent_keyed_ = true;
+		/// RB-10: whether the lagged friction carries the normal force that
+		/// acted at the lag coordinates (no trim following; default since
+		/// 2026-09-13) instead of the current trim at the lag gap (RB-18 F6,
+		/// `friction_lag: "follow_stiffness"`).
+		bool friction_lag_realized_ = true;
+
+		// -- Clamped contacts (docs/clamped-contacts-20260928.md) -----------
+		ClampedContacts clamped_contacts_ = ClampedContacts::ExcludeStatistics;
+		/// @brief Per collision-mesh vertex; empty = unknown (nothing clamped)
+		std::vector<bool> clamped_vertex_;
+		/// @brief Dirichlet DOFs (full DOF indices) of the reduced solve
+		std::vector<int> dirichlet_dofs_;
+		/// @brief gradient_balance_dofs = free: zero the Dirichlet rows of
+		///        both gradients before the balance (opt-in; default all)
+		bool balance_free_dofs_ = false;
+		/// @brief Zero the Dirichlet rows of the full-DOF barrier and energy
+		///        gradients when balance_free_dofs_ (no-op otherwise, and
+		///        when no Dirichlet list is installed)
+		void restrict_balance_rows(Eigen::VectorXd &grad_barrier, Eigen::VectorXd &grad_energy) const;
+		/// @brief Does the controller ignore collision i of collision_set_?
+		bool controller_skips(const size_t i) const
+		{
+			return clamped_contacts_ == ClampedContacts::ExcludeStatistics && clamp_class(collision_set_, i) == 2;
+		}
+		/// @brief The skip predicate for band_statistic (null when nothing is skipped)
+		std::function<bool(size_t)> controller_skip() const;
+		/// @brief Whether the controller sees any collision of the current set
+		bool controller_has_contacts() const;
+		/// @brief Squared minimum distance over the collisions the controller
+		///        sees; all_min_d2 (the whole set's) when nothing is skipped
+		double controller_min_distance(const Eigen::MatrixXd &displaced_surface, double all_min_d2) const;
+		/// @brief Copy of the collision set without its fully clamped collisions
+		ipc::NormalCollisions without_fully_clamped() const;
+		/// @brief Barrier gradient (surface DOF) of the collisions the
+		///        controller sees; the whole set's when nothing is skipped
+		Eigen::VectorXd controller_barrier_gradient(const Eigen::MatrixXd &displaced_surface) const;
+		/// @brief The observational trim-predictor block comparing the
+		///        controller statistics with and without fully clamped contacts
+		json clamped_contact_record(const Eigen::VectorXd &x, const Eigen::MatrixXd &V, bool full) const;
 	};
 } // namespace polyfem::solver

@@ -6,6 +6,8 @@
 #include <mshio/mshio.h>
 
 #include <fstream>
+#include <limits>
+#include <set>
 #include <string>
 #include <iostream>
 #include <vector>
@@ -74,6 +76,10 @@ namespace polyfem::io
 			return false;
 		}
 
+		// A malformed file stops the run with mshio's reason (the line, the
+		// section, the offending token and the value it should have been: the
+		// checked ASCII reader of cmake/recipes/patches/mshio-checked-ascii-read.patch).
+		// The unchecked reader looped forever on a value it could not convert.
 		mshio::MshSpec spec;
 		try
 		{
@@ -81,27 +87,43 @@ namespace polyfem::io
 		}
 		catch (const std::exception &err)
 		{
-			logger().error("{}", err.what());
-			return false;
+			log_and_throw_error("MSH file {}: {}", path, err.what());
 		}
 		catch (...)
 		{
-			logger().error("Unknown error while reading MSH file: {}", path);
-			return false;
+			log_and_throw_error("MSH file {}: unknown error while reading it", path);
 		}
 
 		const auto &nodes = spec.nodes;
 		const auto &els = spec.elements;
-		const int n_vertices = nodes.num_nodes;
-		const int max_tag = nodes.max_node_tag;
-		int dim = -1;
 
-		assert(els.entity_blocks.size() > 0);
+		// These were asserts, compiled out of release builds: a file without
+		// surface or volume elements reached Eigen as a negative column count
+		// and stopped as "memory allocation failed".
+		int dim = -1;
 		for (const auto &e : els.entity_blocks)
 		{
 			dim = std::max(dim, e.entity_dim);
 		}
-		assert(dim == 2 || dim == 3);
+		if (dim != 2 && dim != 3)
+			log_and_throw_error(
+				"MSH file {}: the file has no surface or volume elements{}", path,
+				dim < 0 ? std::string() : fmt::format(" (its elements have dimension {} at most)", dim));
+
+		// Node tags index tag_to_index. A tag of 0, a tag above the largest
+		// tag the file declares (a binary file's header is not cross-checked)
+		// or one beyond int was written out of bounds; a tag used twice left a
+		// vertex row unset.
+		if (nodes.max_node_tag >= static_cast<size_t>(std::numeric_limits<int>::max()))
+			log_and_throw_error("MSH file {}: node tag {} is too large (PolyFEM numbers nodes with int)", path, nodes.max_node_tag);
+		size_t n_tagged = 0;
+		for (const auto &n : nodes.entity_blocks)
+			n_tagged += n.tags.size();
+		if (n_tagged != nodes.num_nodes)
+			log_and_throw_error("MSH file {}: $Nodes declares {} nodes, but its blocks hold {}", path, nodes.num_nodes, n_tagged);
+
+		const int n_vertices = nodes.num_nodes;
+		const int max_tag = nodes.max_node_tag;
 
 		vertices.resize(n_vertices, dim);
 		std::vector<int> tag_to_index = std::vector<int>(max_tag + 1, -1);
@@ -109,21 +131,52 @@ namespace polyfem::io
 			logger().warn("MSH file contains more node tags than nodes, condensing nodes which will break input node ordering.");
 
 		int index = 0;
-		for (const auto &n : nodes.entity_blocks)
+		for (size_t b = 0; b < nodes.entity_blocks.size(); ++b)
 		{
-			for (int i = 0; i < n.num_nodes_in_block * 3; i += 3)
-			{
-				const int node_id = n_vertices != max_tag ? (index++) : (n.tags[i / 3] - 1);
+			const auto &n = nodes.entity_blocks[b];
+			// A node stores x y z. A parametric block (MSH 4.1 written with
+			// Gmsh's Mesh.SaveParametric) follows them with the node's
+			// coordinates on the block's entity: u on a curve, u v on a
+			// surface, u v w in a volume. Only x y z are positions; a fixed
+			// stride of 3 read the parametric values as the positions of the
+			// block's later nodes, and the file loaded with them silently or
+			// stopped as a flipped element. mshio range-checks the entity
+			// dimension of ASCII files only.
+			if (n.parametric == 1 && (n.entity_dim < 0 || n.entity_dim > 3))
+				log_and_throw_error("MSH file {}: parametric node block {} has entity dimension {} (0 to 3 expected)", path, b + 1, n.entity_dim);
+			const size_t stride = 3 + static_cast<size_t>(n.parametric == 1 ? n.entity_dim : 0);
+			if (n.data.size() != n.num_nodes_in_block * stride)
+				log_and_throw_error("MSH file {}: node block {} holds {} values for {} nodes, not {} per node", path, b + 1, n.data.size(), n.num_nodes_in_block, stride);
 
+			for (size_t j = 0; j < n.num_nodes_in_block; ++j)
+			{
+				const size_t tag = n.tags[j];
+				if (tag < 1 || tag > static_cast<size_t>(max_tag))
+					log_and_throw_error("MSH file {}: node tag {} lies outside the tag range 1 to {} of the file", path, tag, max_tag);
+				if (tag_to_index[tag] >= 0)
+					log_and_throw_error("MSH file {}: node tag {} is used by two nodes", path, tag);
+
+				const int node_id = n_vertices != max_tag ? (index++) : (tag - 1);
+
+				const size_t i = j * stride; // x of node j
 				if (dim == 2)
 					vertices.row(node_id) << n.data[i], n.data[i + 1];
 				if (dim == 3)
 					vertices.row(node_id) << n.data[i], n.data[i + 1], n.data[i + 2];
 
-				assert(n.tags[i / 3] < tag_to_index.size());
-				tag_to_index[n.tags[i / 3]] = node_id;
+				tag_to_index[tag] = node_id;
 			}
 		}
+
+		// RB-11: a node tag that no node carries (or tag 0, which Gmsh never
+		// assigns) used to pass an assert compiled out of release builds and
+		// reach the mesh builder as index -1 or garbage.
+		const auto node_index_of = [&](const long long tag, int &index) {
+			if (tag < 0 || tag >= static_cast<long long>(tag_to_index.size()))
+				return false;
+			index = tag_to_index[tag];
+			return index >= 0 && index < n_vertices;
+		};
 
 		int cells_cols = -1;
 		int num_els = 0;
@@ -164,7 +217,17 @@ namespace polyfem::io
 				num_els += e.num_elements_in_block;
 			}
 		}
-		assert(cells_cols > 0);
+		if (cells_cols < 0)
+		{
+			std::set<int> types;
+			for (const auto &e : els.entity_blocks)
+				if (e.entity_dim == dim)
+					types.insert(e.element_type);
+			std::string type_list;
+			for (const int type : types)
+				type_list += (type_list.empty() ? "" : ", ") + std::to_string(type);
+			log_and_throw_error("MSH file {}: none of its {}D elements has a type PolyFEM reads (Gmsh element types {})", path, dim, type_list);
+		}
 
 		std::unordered_map<int, int> entity_tag_to_physical_tag;
 		std::unordered_map<int, int> boundary_entity_tag_to_physical_tag;
@@ -204,9 +267,10 @@ namespace polyfem::io
 				for (int j = 0; j < n_corners; ++j)
 				{
 					const int node_tag = e.data[i + j + 1];
-					assert(node_tag >= 0 && node_tag < tag_to_index.size());
-					corners[j] = tag_to_index[node_tag];
-					assert(corners[j] >= 0 && corners[j] < n_vertices);
+					if (!node_index_of(node_tag, corners[j]))
+					{
+						log_and_throw_error("MSH file {}: tagged side element {} references node tag {}, which is not a node of the file", path, e.data[i], node_tag);
+					}
 				}
 				boundary_elements.emplace_back(std::move(corners));
 				boundary_ids.push_back(physical_tag->second);
@@ -247,15 +311,21 @@ namespace polyfem::io
 					int index = 0;
 					for (int j = i + 1; j <= i + local_cells_cols; ++j)
 					{
-						const int v_index = tag_to_index[e.data[j]];
-						assert(v_index < n_vertices);
+						int v_index = -1;
+						if (!node_index_of(e.data[j], v_index))
+						{
+							log_and_throw_error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
+						}
 						cells(cell_index, index++) = v_index;
 					}
 
 					for (int j = i + 1; j < i + 1 + n_nodes; ++j)
 					{
-						const int v_index = tag_to_index[e.data[j]];
-						assert(v_index < n_vertices);
+						int v_index = -1;
+						if (!node_index_of(e.data[j], v_index))
+						{
+							log_and_throw_error("MSH file {}: element {} references node tag {}, which is not a node of the file", path, e.data[i], e.data[j]);
+						}
 						elements[cell_index].push_back(v_index);
 					}
 

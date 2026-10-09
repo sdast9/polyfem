@@ -14,6 +14,7 @@
 
 #include <Eigen/Core>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -166,13 +167,14 @@ namespace polyfem::solver
 		/// @param x current solution
 		void update_barrier_stiffness(const Eigen::VectorXd &x);
 
-		/// Scale an AL penalty from elastic-plus-inertia curvature. Contact and
-		/// AL curvature are intentionally excluded.
-		double hessian_scaled_al_weight(const Eigen::VectorXd &x, const double multiplier) const;
-
-		/// Normalize each AL penalty metric to unit mean diagonal. Used only by
-		/// the opt-in adaptive_inexact strategy.
-		void normalize_al_penalty_metric();
+		/// @brief The recalibration a line-search failure recovery runs
+		///        before restarting (ALSolver::set_line_search_failure_recovery):
+		///        for the classic adaptive barrier stiffness, its own
+		///        initialization at the reached iterate (what every solve start
+		///        does), returning whether the stiffness changed; null for every
+		///        other configuration (fixed, semi-implicit, smooth or no contact),
+		///        which restart with a fresh solver only.
+		static std::function<bool(const Eigen::VectorXd &)> classic_stiffness_recalibration(SolveData &solve_data);
 
 		/// @brief updates the dt inside the different forms
 		void update_dt();

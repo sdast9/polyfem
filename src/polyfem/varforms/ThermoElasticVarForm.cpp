@@ -296,17 +296,17 @@ namespace polyfem::varform
 		const json elastic_materials = elastic_material_args();
 
 		primary_assembler_->set_size(mesh.dimension());
-		primary_assembler_->set_materials(body_ids, elastic_materials, units, root_path);
+		primary_assembler_->set_materials(body_ids, elastic_materials, units, root_path, material_file_cache_);
 		thermoelastic_assembler_->set_size(mesh.dimension());
-		thermoelastic_assembler_->set_materials(body_ids, args["materials"], units, root_path);
+		thermoelastic_assembler_->set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 		mass_assembler_->set_size(mesh.dimension());
-		mass_assembler_->set_materials(body_ids, elastic_materials, units, root_path);
+		mass_assembler_->set_materials(body_ids, elastic_materials, units, root_path, material_file_cache_);
 		pure_mass_assembler_->set_size(mass_assembler_->size());
 
 		temperature_assembler_->set_size(1);
-		temperature_assembler_->set_materials(body_ids, args["materials"], units, root_path);
+		temperature_assembler_->set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 		temperature_mass_assembler_->set_size(1);
-		temperature_mass_assembler_->set_materials(body_ids, args["materials"], units, root_path);
+		temperature_mass_assembler_->set_materials(body_ids, args["materials"], units, root_path, material_file_cache_);
 		temperature_pure_mass_assembler_->set_size(1);
 
 		problem->init(mesh);
@@ -719,6 +719,7 @@ namespace polyfem::varform
 		{
 			solve_data_.time_integrator = nullptr;
 		}
+		output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
 
 		init_forms(args, mesh_->dimension(), displacement, t);
 		for (const auto &form : forms)
@@ -891,6 +892,7 @@ namespace polyfem::varform
 				args["solver"]["augmented_lagrangian"]["max_weight"],
 				args["solver"]["augmented_lagrangian"]["eta"],
 				update_displacement_barrier_stiffness);
+			al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 
 			al_solver.post_subsolve = [&](const double al_weight) {
 				stats.solver_info.push_back(
@@ -999,6 +1001,10 @@ namespace polyfem::varform
 			for (int t = 1; t <= time_steps; ++t)
 			{
 				const double time = t0 + dt * t;
+				// RBR-01: this loop saves the step before advancing (the
+				// nonlinear order), through its own solve rather than
+				// solve_tensor_nonlinear, so it states the phase itself.
+				output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
 				solve_nonlinear_step(t, sol);
 
 				save_timestep(time, t, t0, dt, sol);
@@ -1007,6 +1013,7 @@ namespace polyfem::varform
 				split_solution(sol, displacement, temperature);
 				solve_data_.time_integrator->update_quantities(displacement);
 				temperature_time_integrator_->update_quantities(temperature);
+				output_time_phase_ = OutputTimePhase::HistoryHead;
 				update_transient_form_weights();
 				solve_data_.update_barrier_stiffness(displacement);
 				solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, sol);

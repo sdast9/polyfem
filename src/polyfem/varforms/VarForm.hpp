@@ -1,4 +1,5 @@
 #pragma once
+#include <polyfem/utils/MaterialFileCache.hpp>
 
 #include <polyfem/assembler/Assembler.hpp>
 #include <polyfem/assembler/Problem.hpp>
@@ -10,6 +11,7 @@
 #include <polyfem/io/OutputData.hpp>
 #include <polyfem/io/OutData.hpp>
 #include <polyfem/io/OutStatsData.hpp>
+#include <polyfem/io/RunManifest.hpp>
 #include <polyfem/utils/Types.hpp>
 #include <polyfem/varforms/FESpace.hpp>
 
@@ -89,6 +91,11 @@ namespace polyfem
 				const ForwardStepCallback &post_step = {});
 
 			void set_time_callback(const std::function<void(int, int, double, double)> &callback) { time_callback = callback; }
+
+			/// @brief RB-12: the run manifest this formulation appends its model
+			///        description and step history to (nullptr: no manifest).
+			void set_run_manifest(std::shared_ptr<io::RunManifest> manifest) { run_manifest_ = std::move(manifest); }
+			const std::shared_ptr<io::RunManifest> &run_manifest() const { return run_manifest_; }
 
 			/// @brief Get the problem dimension of the variational formulation, for output purposes
 			/// @return Problem dimension
@@ -196,6 +203,10 @@ namespace polyfem
 				const time_integrator::ImplicitTimeIntegrator *time_integrator,
 				const bool rest_mesh_written = false) const;
 
+			/// @brief Restart: append form state that carries across steps to
+			///        the step's state file, after the integrator history.
+			virtual void save_restart_form_state(const std::string &state_path) const {}
+
 			void ensure_output_sampler() const;
 			void save_restart_json(const double t0, const double dt, const int t, const bool rest_mesh_written) const;
 			void save_timestep(const double time, const int t, const double t0, const double dt, const Eigen::MatrixXd &solution) const;
@@ -220,12 +231,17 @@ namespace polyfem
 			/// runtime statistics
 			io::OutRuntimeData timings;
 
+			// Call after child init and before child material loading.
+			void share_material_input_with(VarForm &child) const { child.material_file_cache_ = material_file_cache_; }
+			std::shared_ptr<utils::MaterialFileCache> material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 			std::string root_path;
 			std::string output_path;
 
 			std::unique_ptr<mesh::Mesh> mesh_;
 
 			std::function<void(int, int, double, double)> time_callback;
+
+			std::shared_ptr<io::RunManifest> run_manifest_;
 
 			mutable io::OutGeometryData output_geometry_;
 			mutable bool output_sampler_initialized_ = false;

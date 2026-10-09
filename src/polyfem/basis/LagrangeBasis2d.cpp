@@ -9,6 +9,7 @@
 #include <polyfem/assembler/AssemblerUtils.hpp>
 
 #include <polyfem/utils/MaybeParallelFor.hpp>
+#include <polyfem/utils/Logger.hpp>
 
 #include <cassert>
 #include <array>
@@ -713,6 +714,24 @@ int LagrangeBasis2d::build_bases(
 {
 	assert(!mesh.is_volume());
 	assert(discr_orders.size() == mesh.n_faces());
+
+	// Same guard as the hexahedral builder (RB-23): the tensor-product tables
+	// exist for Q0-Q3 and serendipity Q2 only; Q4+ quads segfaulted on an
+	// empty node table, serendipity at another order ran a mismatched basis.
+	for (int f = 0; f < mesh.n_faces(); ++f)
+	{
+		if (!mesh.is_cube(f))
+			continue;
+		const int q = discr_orders(f);
+		if (serendipity && q != 2)
+			log_and_throw_error(
+				"Serendipity quadrilateral bases exist for discr_order 2 only (8-node element); quad {} asks for order {}. Use discr_order 2 or the Lagrange basis_type.",
+				f, q);
+		if (!serendipity && (q < 0 || q > autogen::MAX_Q_BASES))
+			log_and_throw_error(
+				"Q{} quadrilateral bases are not available: tensor-product Lagrange tables exist up to Q{} (quad {}). Lower discr_order, or use triangles (P1-P{}).",
+				q, autogen::MAX_Q_BASES, f, autogen::MAX_P_BASES);
+	}
 
 	const int max_p = discr_orders.maxCoeff();
 	const int nn = max_p > 1 ? (max_p - 1) : 0;

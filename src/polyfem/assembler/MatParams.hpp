@@ -3,10 +3,38 @@
 #include <polyfem/Common.hpp>
 #include <polyfem/utils/Types.hpp>
 #include <polyfem/utils/ExpressionValue.hpp>
+#include <polyfem/utils/MaterialFileCache.hpp>
+
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace polyfem::assembler
 {
 	inline constexpr const char *MATERIAL_ELEMENT_INDEX = "__polyfem_material_element_index";
+	/// @brief RB-11: `[elements of the body, elements of the whole mesh]`,
+	///        attached by Assembler::set_materials so per-element value
+	///        lists/files can be bound (global rows or body-local rows) and
+	///        their length validated at load time.
+	inline constexpr const char *MATERIAL_ELEMENT_COUNTS = "__polyfem_material_element_counts";
+
+	/// @brief Copy the per-element binding keys from one material json to another
+	///        (composite materials hand them to their children).
+	void copy_material_element_binding(const json &from, json &to);
+	/// @brief Bind a material value to the mesh from the binding keys in params
+	///        (see ExpressionValue::bind_per_element); a no-op without them.
+	void bind_material_value(utils::ExpressionValue &value, const json &params, const std::string &what);
+
+	/// @brief RB-11: whether any material entry (or composite child) reads a
+	///        per-element value file (a string naming an existing file) or a
+	///        per-element fibre file. Remeshing re-binds materials on local
+	///        patches by patch-local element ids, so such inputs cannot be
+	///        transferred there; callers refuse the combination with a named
+	///        error instead of misindexing.
+	/// @param[in]  materials  the `materials` json (object or array)
+	/// @param[in]  root_path  path root for resolving file names
+	/// @param[out] where      the first offending parameter, for the message
+	bool materials_use_per_element_files(const json &materials, const std::string &root_path, std::string &where);
 
 	class GenericMatParam
 	{
@@ -172,7 +200,10 @@ namespace polyfem::assembler
 
 		void resize(const int size);
 
-		void add_multimaterial(const int index, const json &params, const std::string &unit, const std::string &root_path);
+		/// @param binding the material json carrying MATERIAL_ELEMENT_INDEX /
+		///        MATERIAL_ELEMENT_COUNTS (RB-11), used to bind a per-element
+		///        fibre file to global or body-local rows and validate its length
+		void add_multimaterial(const int index, const json &params, const std::string &unit, const std::string &root_path, const json &binding = json::object());
 
 		Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 3, 3> operator()(double px, double py, double pz, double x, double y, double z, double t, int el_id) const;
 
@@ -200,15 +231,26 @@ namespace polyfem::assembler
 
 	private:
 		std::vector<Eigen::Matrix<utils::ExpressionValue, Eigen::Dynamic, Eigen::Dynamic, 1, 3, 3>> dir_;
-		int size_;
-		bool has_rotation_;
+		int size_ = -1; // set by resize(); -1 = unknown, the dimension checks are skipped
+		bool has_rotation_ = false;
 
 		// Per-element fiber file branch: global el_id -> unit a0.
 		// Populated only when "fiber_direction" uses the per_element_file object
-		// form; operator() then short-circuits to per_el_fibers_[el_id] and dir_
+		// form; operator() then short-circuits to (*per_el_fibers_)[el_id] and dir_
 		// is left empty. See FiberDirection::add_multimaterial in MatParams.cpp.
-		std::vector<Eigen::Vector3d> per_el_fibers_;
+		// Shared within the input snapshot because add_multimaterial runs once per
+		// element: re-reading and re-storing the file per element is O(n^2) in
+		// both time and memory.
+		std::shared_ptr<const std::vector<Eigen::Vector3d>> per_el_fibers_;
 		bool use_per_element_file_ = false;
+		// Identity of the loaded file, so a second, different file reaching the
+		// same instance is an error rather than a silent last-writer-wins.
+		std::string per_el_key_;
+		std::weak_ptr<utils::MaterialFileCache> per_el_snapshot_;
+		// RB-11: rows of the file are global element ids (true) or body-local
+		// indices (false, then local_index_[el_id] gives the row).
+		bool per_el_rows_global_ = true;
+		std::vector<int> per_el_local_index_;
 	};
 
 } // namespace polyfem::assembler

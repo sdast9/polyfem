@@ -56,9 +56,50 @@ namespace polyfem::test
 	class VarFormTestAccess
 	{
 	public:
+		static const assembler::Assembler &material_assembler(const varform::VarForm &form)
+		{
+			return *dynamic_cast<const varform::ElasticVarForm &>(form).primary_assembler_;
+		}
+
 		static void prepare(varform::VarForm &form)
 		{
 			form.prepare();
+		}
+
+		// RB-06: drive the staged transient loop step by step (a rolled-back
+		// step re-solved by a test is a test action, not a retry policy).
+		static void begin_transient_run(varform::NonlinearElasticTransientVarForm &form, Eigen::MatrixXd &sol, const varform::ForwardStepCallback &post_step)
+		{
+			form.begin_transient_run(sol, nullptr, post_step);
+		}
+		static void solve_transient_step(varform::NonlinearElasticTransientVarForm &form, const int t, Eigen::MatrixXd &sol, const varform::ForwardStepCallback &post_step)
+		{
+			form.solve_transient_step(t, sol, post_step);
+		}
+		static void advance_transient_step(varform::NonlinearElasticTransientVarForm &form, const int t, Eigen::MatrixXd &sol)
+		{
+			form.advance_transient_step(t, sol);
+		}
+		static void end_transient_run(varform::NonlinearElasticTransientVarForm &form)
+		{
+			form.end_transient_run();
+		}
+		static json attempt_state_fingerprint(const varform::NonlinearElasticVarForm &form, const Eigen::VectorXd &sol)
+		{
+			return form.attempt_state_fingerprint(sol);
+		}
+		static void set_failure_injection(varform::NonlinearElasticVarForm &form, const solver::FailureInjection &injection)
+		{
+			form.failure_injection_ = injection;
+		}
+		static const solver::SolveData &solve_data(const varform::NonlinearElasticVarForm &form)
+		{
+			return form.solve_data_;
+		}
+		// The per-step subsolve records (stats.solver_info) of a solved form.
+		static const io::OutStatsData &stats(const varform::VarForm &form)
+		{
+			return form.stats;
 		}
 
 		static VarFormDebugData debug_data(const varform::VarForm &form)

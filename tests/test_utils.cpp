@@ -20,6 +20,10 @@
 #include <catch2/catch_approx.hpp>
 #include <filesystem>
 #include <fstream>
+#include <chrono>
+#include <future>
+#include <polyfem/utils/MaterialFileCache.hpp>
+#include <polyfem/assembler/MatParams.hpp>
 ////////////////////////////////////////////////////////////////////////////////
 
 using namespace polyfem;
@@ -666,4 +670,128 @@ TEST_CASE("expand_bc_sidecars", "[utils]")
 	}
 
 	std::filesystem::remove(sidecar_path);
+}
+
+TEST_CASE("Material files reload for independent consumers", "[material_cache]")
+{
+	const auto base = std::filesystem::temp_directory_path() / ("polyfem-pf04-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(base);
+	struct Cleanup
+	{
+		std::filesystem::path p;
+		~Cleanup() { std::filesystem::remove_all(p); }
+	} cleanup{base};
+	const auto scalar = (base / "values.txt").string();
+	const auto fiber = (base / "fiber.vtk").string();
+	auto write = [&](int value) {
+		std::ofstream(scalar) << value << "\n";
+		std::ofstream(fiber) << "# vtk DataFile Version 3.0\nfibers\nASCII\nDATASET UNSTRUCTURED_GRID\nCELL_DATA 1\nVECTORS FIB_DIR1 double\n"
+							 << value << " 1 0\n";
+	};
+	const json dir = {{"type", "per_element_file"}, {"path", fiber}};
+	write(1);
+	ExpressionValue old_value;
+	old_value.init(scalar, "");
+	assembler::FiberDirection old_fiber;
+	old_fiber.resize(3);
+	old_fiber.add_multimaterial(0, dir, "", "");
+	write(9);
+	ExpressionValue fresh_value;
+	fresh_value.init(scalar, "");
+	assembler::FiberDirection fresh_fiber;
+	fresh_fiber.resize(3);
+	fresh_fiber.add_multimaterial(0, dir, "", "");
+	CHECK(old_value.get_mat()(0, 0) == 1);
+	CHECK(fresh_value.get_mat()(0, 0) == 9);
+	CHECK(old_fiber(0, 0, 0, 0, 0, 0, 0, 0)(0, 0) == Catch::Approx(1 / std::sqrt(2.0)));
+	CHECK(fresh_fiber(0, 0, 0, 0, 0, 0, 0, 0)(0, 0) == Catch::Approx(9 / std::sqrt(82.0)));
+}
+
+TEST_CASE("Material snapshots isolate concurrent readers and detach writes", "[material_cache]")
+{
+	const auto base = std::filesystem::temp_directory_path() / ("polyfem-snapshot-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(base);
+	struct Cleanup
+	{
+		std::filesystem::path p;
+		~Cleanup() { std::filesystem::remove_all(p); }
+	} cleanup{base};
+	const auto scalar = (base / "values.txt").string();
+	const auto fiber = (base / "fiber.vtk").string();
+	auto write = [&](int value) {
+		std::ofstream(scalar) << value << "\n";
+		std::ofstream(fiber) << "# vtk DataFile Version 3.0\nfibers\nASCII\nDATASET UNSTRUCTURED_GRID\nCELL_DATA 1\nVECTORS FIB_DIR1 double\n"
+							 << value << " 1 0\nVECTORS FIB_DIR2 double\n0 0 1\n";
+	};
+	const json dir = {{"type", "per_element_file"}, {"path", fiber}};
+	using Consumer = std::pair<ExpressionValue, assembler::FiberDirection>;
+	auto read = [&](const std::shared_ptr<MaterialFileCache> &cache) {
+		MaterialFileCacheScope scope(cache);
+		Consumer c;
+		c.first.init(scalar, "");
+		c.second.resize(3);
+		c.second.add_multimaterial(0, dir, "", "");
+		return c;
+	};
+	auto old = std::make_shared<MaterialFileCache>();
+	write(1);
+	auto first = read(old);
+	const auto original_time = std::filesystem::last_write_time(scalar);
+	write(9);
+	std::filesystem::last_write_time(scalar, original_time);
+	auto fresh = std::make_shared<MaterialFileCache>();
+	std::vector<std::future<Consumer>> jobs;
+	// Same-snapshot parallel first loads and concurrent old/new simulations.
+	for (int i = 0; i < 16; ++i)
+		jobs.emplace_back(std::async(std::launch::async, read, i % 2 ? fresh : old));
+	std::vector<Consumer> values;
+	for (auto &job : jobs)
+		values.emplace_back(job.get());
+	for (int i = 0; i < 16; ++i)
+	{
+		const int value = i % 2 ? 9 : 1;
+		CHECK(values[i].first.get_mat()(0, 0) == value);
+		CHECK(values[i].first.get_mat().data() == values[i % 2].first.get_mat().data());
+		CHECK(values[i].second(0, 0, 0, 0, 0, 0, 0, 0)(0, 0) == Catch::Approx(value / std::sqrt(double(value * value + 1))));
+	}
+	CHECK(first.first.get_mat().data() != values[1].first.get_mat().data());
+	auto old_fibers = old->fibers(fiber, "FIB_DIR1", []() -> MaterialFileCache::Fibers { throw std::runtime_error("Unexpected reload"); });
+	CHECK(old_fibers.use_count() == 11); // cache, first, eight workers, this handle
+	auto copy = first.first;
+	copy.set_mat(Eigen::MatrixXd::Constant(1, 1, 5));
+	CHECK(copy.get_mat()(0, 0) == 5);
+	CHECK(first.first.get_mat()(0, 0) == 1);
+	CHECK(read(old).first.get_mat()(0, 0) == 1);
+	{
+		MaterialFileCacheScope scope(old);
+		try
+		{
+			MaterialFileCacheScope nested(fresh);
+			throw std::runtime_error("test");
+		}
+		catch (const std::runtime_error &)
+		{
+		}
+		ExpressionValue restored;
+		restored.init(scalar, "");
+		CHECK(restored.get_mat()(0, 0) == 1);
+		assembler::FiberDirection other_field;
+		other_field.resize(3);
+		auto dir2 = dir;
+		dir2["field"] = "FIB_DIR2";
+		other_field.add_multimaterial(0, dir2, "", "");
+		CHECK(other_field(0, 0, 0, 0, 0, 0, 0, 0)(2, 0) == 1);
+	}
+	std::filesystem::remove(scalar);
+	CHECK(read(old).first.get_mat()(0, 0) == 1);
+	write(9);
+	// Failures are not cached and destroying a snapshot doesn't invalidate data.
+	auto failed = std::make_shared<MaterialFileCache>();
+	CHECK_THROWS(failed->matrix(scalar, []() -> Eigen::MatrixXd { throw std::runtime_error("test"); }));
+	CHECK(read(failed).first.get_mat()(0, 0) == 9);
+	std::weak_ptr<MaterialFileCache> lifetime = old;
+	old.reset();
+	CHECK(lifetime.expired());
+	CHECK(first.first.get_mat()(0, 0) == 1);
+	CHECK(first.second(0, 0, 0, 0, 0, 0, 0, 0)(0, 0) == Catch::Approx(1 / std::sqrt(2.0)));
 }

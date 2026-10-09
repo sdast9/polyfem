@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <cstdlib>
 #include <algorithm>
 #include <random>
@@ -211,9 +212,12 @@ namespace
 		double rand_min,
 		double rand_max,
 		uint64_t seed,
-		int repeat)
+		int repeat,
+		const std::function<void(TestContext &)> &tailor = nullptr)
 	{
 		TestContext ctx{json_name};
+		if (tailor)
+			tailor(ctx);
 
 		Eigen::VectorXd x;
 		ctx.opt.initial_guess(x);
@@ -472,7 +476,19 @@ TEST_CASE("shape-transient-friction", "[opt_gradient]")
 	constexpr uint64_t SEED = BASE_SEED + 15;
 	constexpr int REPEAT = 3;
 	constexpr double TOL = 1.1e-5;
-	run_test1("shape-transient-friction-opt.json", 1e-6, TOL, 0.0, 1.0, SEED, REPEAT);
+	// The central difference at this step needs forward solves more accurate
+	// than the scene's grad_norm_tol 2.5e-10 gives: below h ~ 1e-6 their noise
+	// scatters the difference by up to 4e-5 relative on the first direction,
+	// whose derivative is the smallest, and IPC's MeshFEMSparse summation
+	// order moved it past TOL (docs/band-statistic-weighting-20260927.md).
+	// At 2.5e-11 the three directions agree to 3.4e-6, 5e-9 and 2e-8.
+	run_test1("shape-transient-friction-opt.json", 1e-6, TOL, 0.0, 1.0, SEED, REPEAT, [](TestContext &ctx) {
+		for (auto &varform : ctx.opt.varforms)
+		{
+			varform->get_args()["solver"]["nonlinear"]["grad_norm_tol"] = 2.5e-11;
+			varform->get_args()["solver"]["nonlinear"]["first_grad_norm_tol"] = 2.5e-13;
+		}
+	});
 }
 
 TEST_CASE("shape-transient-friction-sdf", "[opt_gradient]")

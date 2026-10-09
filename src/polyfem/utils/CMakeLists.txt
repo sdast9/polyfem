@@ -30,6 +30,7 @@ set(SOURCES
 	JSONUtils.hpp
 	Logger.cpp
 	Logger.hpp
+	MaterialFileCache.hpp
 	MatrixCache.cpp
 	MatrixCache.hpp
 	MatrixUtils.cpp
@@ -49,6 +50,8 @@ set(SOURCES
 	CubicHermiteSplineParametrization.hpp
 	Selection.cpp
 	Selection.hpp
+	Sha256.cpp
+	Sha256.hpp
 	StringUtils.cpp
 	StringUtils.hpp
 	Timer.hpp

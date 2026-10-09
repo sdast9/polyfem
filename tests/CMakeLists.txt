@@ -3,6 +3,27 @@
 # ###############################################################################
 
 set(test_sources
+  test_al_solver.cpp
+  test_direction_filter.cpp
+  test_contact_cache.cpp
+  test_trim_loop_guard.cpp
+  test_clamped_contacts.cpp
+  test_gradient_balance_dofs.cpp
+  test_contact_stiffness_mapping.cpp
+  test_hex_collision_surface.cpp
+  test_hex_basis_layout.cpp
+  test_semi_implicit_coefficients.cpp
+  test_kappa_continuity.cpp
+  test_objective_generation.cpp
+  test_friction_lag.cpp
+  test_resource_containment.cpp
+  test_step_rollback.cpp
+  test_input_validation.cpp
+  test_material_envelope.cpp
+  test_linear_elastic_time.cpp
+  test_output_kinematics.cpp
+  test_fully_prescribed.cpp
+  test_run_manifest.cpp
   test_assembler.cpp
   test_bases.cpp
   test_clipping.cpp
@@ -88,3 +109,17 @@ include(Catch)
 # Register tests
 set(PARSE_CATCH_TESTS_ADD_TO_CONFIGURE_DEPENDS ON)
 catch_discover_tests(unit_tests ADD_TAGS_AS_LABELS EXTRA_ARGS --rng-seed 1)
+
+# RB-12: the executable's contract end to end (build identity, a public
+# smoke with its run manifest, the exit statuses of a resource failure and of
+# a refused input), through the real PolyFEM_bin. Standard-library Python.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND AND TARGET PolyFEM_bin)
+  add_test(NAME cli_contract
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/rb12/cli_check.py"
+            --binary "$<TARGET_FILE:PolyFEM_bin>"
+            --output "${CMAKE_CURRENT_BINARY_DIR}/cli_contract" --keep)
+  set_tests_properties(cli_contract PROPERTIES LABELS "rb12;cli" TIMEOUT 1200)
+else()
+  message(STATUS "cli_contract test not registered (Python3 interpreter or PolyFEM_bin missing)")
+endif()

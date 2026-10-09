@@ -10,11 +10,20 @@
 #include <polyfem/optimization/OptState.hpp>
 #endif
 
+#include <polyfem/io/BuildInfo.hpp>
+#include <polyfem/io/RunManifest.hpp>
+#include <polyfem/utils/ExitStatus.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/varforms/VarForm.hpp>
 #include <polyfem/io/YamlToJson.hpp>
 #include <polyfem/varforms/VarFormFactory.hpp>
+
+#include <ipc/broad_phase/broad_phase.hpp>
+#include <ipc/utils/logger.hpp>
+
+#include <iostream>
+#include <new>
 
 using namespace polyfem;
 using namespace solver;
@@ -82,6 +91,9 @@ int forward_simulation_with_varform_state(const std::vector<std::string> &names,
 										  const bool is_strict)
 {
 	State state;
+	// RB-12: every PolyFEM_bin run leaves a manifest unless the input says
+	// output/manifest = "" (a library user opts in instead).
+	state.default_manifest = "run-manifest.json";
 	state.init(in_args, is_strict);
 	state.load_mesh(/*non_conforming=*/false, names, cells, vertices);
 
@@ -96,6 +108,8 @@ int forward_simulation_with_varform_state(const std::vector<std::string> &names,
 	state.variational_formulation->save_json(sol);
 	state.variational_formulation->export_data(sol);
 
+	if (state.run_manifest)
+		state.run_manifest->finalize("completed", ExitStatus::Success, "");
 	return EXIT_SUCCESS;
 }
 
@@ -140,11 +154,14 @@ int forward_simulation_with_legacy_state(const std::vector<std::string> &names,
 	return EXIT_SUCCESS;
 }
 
-int main(int argc, char **argv)
+// The former main: argument parsing and the simulation. Any named failure
+// it throws is reported by main below.
+static int run(int argc, char **argv)
 {
 	using namespace polyfem;
 
 	CLI::App command_line{"polyfem"};
+	io::RunManifest::set_command_line(argc, argv);
 
 	command_line.ignore_case();
 	command_line.ignore_underscore();
@@ -152,6 +169,11 @@ int main(int argc, char **argv)
 	// Eigen::setNbThreads(1);
 	unsigned max_threads = std::numeric_limits<unsigned>::max();
 	command_line.add_option("--max_threads", max_threads, "Maximum number of threads");
+
+	// RB-12: the build identity compiled into this executable (sources,
+	// pins, compiler, configuration), as JSON on stdout; nothing is run.
+	bool print_build_info = false;
+	command_line.add_flag("--build_info", print_build_info, "Print the build identity (polyfem.build-info JSON) and exit");
 
 	auto input = command_line.add_option_group("input");
 
@@ -164,7 +186,7 @@ int main(int argc, char **argv)
 	std::string hdf5_file = "";
 	input->add_option("--hdf5", hdf5_file, "Simulation HDF5 file")->check(CLI::ExistingFile);
 
-	input->require_option(1);
+	input->require_option(0, 1);
 
 	std::string output_dir = "";
 	command_line.add_option("-o,--output_dir", output_dir, "Directory for output files")->check(CLI::ExistingDirectory | CLI::NonexistentPath);
@@ -189,6 +211,12 @@ int main(int argc, char **argv)
 		->transform(CLI::CheckedTransformer(SPDLOG_LEVEL_NAMES_TO_LEVELS, CLI::ignore_case));
 
 	CLI11_PARSE(command_line, argc, argv);
+
+	if (print_build_info)
+	{
+		std::cout << io::build_info().dump(2) << std::endl;
+		return EXIT_SUCCESS;
+	}
 
 	json in_args = json({});
 
@@ -293,3 +321,59 @@ int optimization_simulation(const CLI::App &command_line,
 	return opt_state.run(opt_args, is_strict);
 }
 #endif
+
+namespace
+{
+	// RB-05 / RB-12: every named failure ends here instead of in
+	// std::terminate, so the last lines of the log say what happened in
+	// plain terms, the sinks are flushed, and the exit status tells a
+	// refusal from a crash (ExitStatus.hpp).
+	int report_failure(const ExitStatus status, const std::string &what, const std::string &advice)
+	{
+		// The run manifest, if the run got far enough to have one, records
+		// the failure before the log does (RB-12).
+		io::RunManifest::finalize_active(status == ExitStatus::ResourceLimit ? "resource_failure" : "failed", status, what);
+		logger().critical("PolyFEM stopped: {}", what);
+		if (!advice.empty())
+			logger().critical("{}", advice);
+		logger().critical(
+			"Exit status {} ({}).", int(status),
+			status == ExitStatus::ResourceLimit ? "resource limit; not a crash, the accepted steps on disk are intact" : "named failure; not a crash");
+		logger().flush();
+		ipc::logger().flush();
+		return status;
+	}
+} // namespace
+
+int main(int argc, char **argv)
+{
+	try
+	{
+		return run(argc, argv);
+	}
+	catch (const ipc::BroadPhaseBudgetExceeded &e)
+	{
+		return report_failure(
+			ExitStatus::ResourceLimit, e.what(),
+			"A contact broad-phase resource limit was reached before the memory was allocated: the solver's trial step would have swept the surfaces so far that finding their candidate pairs needed more scratch memory than solver.contact.CCD.resource_limits allows (a safety stop, not a crash). Usually a few nodes moved very far in one Newton trial. Reduce the time step or the load increment, use a BVH broad phase, or raise the limits (0 disables them).");
+	}
+	catch (const ipc::BroadPhaseUnrepresentable &e)
+	{
+		// RBR-02: the same containment family as the budget, raised with or
+		// without resource limits -- the grid this sweep needs cannot be
+		// indexed, so the build is refused before any conversion.
+		return report_failure(
+			ExitStatus::ResourceLimit, e.what(),
+			"The contact broad phase cannot index the hash grid this trial step would need: the solver's trial step swept the surfaces so far, relative to the grid's cell size, that the grid would have more cells than can be addressed (a safety stop, not a crash; it does not depend on solver.contact.CCD.resource_limits). Usually a few nodes moved very far in one Newton trial. Reduce the time step or the load increment, or use a BVH broad phase.");
+	}
+	catch (const std::bad_alloc &e)
+	{
+		return report_failure(
+			ExitStatus::ResourceLimit, std::string("memory allocation failed (") + e.what() + ")",
+			"The system refused a memory allocation. Reduce the mesh or the time step, close other programs, or run on a machine with more memory.");
+	}
+	catch (const std::exception &e)
+	{
+		return report_failure(ExitStatus::Failure, e.what(), "");
+	}
+}

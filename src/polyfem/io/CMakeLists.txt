@@ -1,4 +1,6 @@
 set(SOURCES
+	BuildInfo.hpp
+	DiagnosticSchemas.hpp
 	Evaluator.cpp
 	Evaluator.hpp
 	MatrixIO.cpp
@@ -15,6 +17,8 @@ set(SOURCES
 	OutData.hpp
 	OutputData.hpp
 	OutStatsData.hpp
+	RunManifest.cpp
+	RunManifest.hpp
 	SolverCSVWriter.cpp
 	SolverCSVWriter.hpp
 	YamlToJson.cpp

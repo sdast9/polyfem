@@ -88,6 +88,25 @@ namespace polyfem::solver
 		const ipc::TangentialCollisions &tangential_collision_set() const { return tangential_collision_set_; }
 		const ipc::TangentialAdhesionPotential &tangential_adhesion_potential() const { return tangential_adhesion_potential_; }
 
+		/// @brief RB-06: the lagged tangential collision set.
+		struct State : public FormState
+		{
+			ipc::TangentialCollisions tangential_collision_set;
+		};
+		std::unique_ptr<FormState> save_state() const override
+		{
+			auto state = std::make_unique<State>();
+			save_base_state(*state);
+			state->tangential_collision_set = tangential_collision_set_;
+			return state;
+		}
+		void restore_state(const FormState &state, const Eigen::VectorXd &) override
+		{
+			const State &adhesion = state_as<State>(state, "TangentialAdhesionForm");
+			restore_base_state(adhesion);
+			tangential_collision_set_ = adhesion.tangential_collision_set;
+		}
+
 	private:
 		/// Reference to the collision mesh
 		const ipc::CollisionMesh &collision_mesh_;

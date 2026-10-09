@@ -232,6 +232,7 @@ namespace polyfem::varform
 			args["contact"]["use_convergent_formulation"] ? bool(args["contact"]["use_physical_barrier"]) : false,
 			args["solver"]["contact"]["barrier_stiffness"],
 			args["solver"]["contact"]["initial_barrier_stiffness"],
+			args["solver"]["contact"]["semi_implicit"],
 			args["solver"]["contact"]["CCD"]["broad_phase"],
 			args["solver"]["contact"]["CCD"]["tolerance"],
 			args["solver"]["contact"]["CCD"]["max_iterations"],
@@ -283,6 +284,19 @@ namespace polyfem::varform
 		solver::NLProblem &nl_problem = *solve_data_.nl_problem;
 		assert(solution.size() == rhs_.size());
 
+		// RBR-01 (review of 2026-09-21): this dispatch does not pass through
+		// the base solve, which states the phase for the ordinary loop, so it
+		// states it here. Every output of this step's solve -- the subsolve
+		// sequence below, the step callback and the frame the transient loop
+		// saves before advancing -- describes an endpoint of the current step
+		// against the previous step's history; the loop's update_quantities
+		// moves the phase back to the head. This dispatch carries no RB-06
+		// transaction (documented): a failed solve leaves the failed iterate
+		// against the previous step's history, and this phase still describes
+		// that state; nothing exports it before the optimizer's retry (a new
+		// solve, whose init resets the phase) or the process ends.
+		output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance;
+
 		if (nl_problem.uses_lagging())
 		{
 			if (init_lagging)
@@ -309,12 +323,13 @@ namespace polyfem::varform
 			[&](const Eigen::VectorXd &) {
 				solve_data_.update_barrier_stiffness(solution);
 			});
+		al_solver.set_budget(solver::ALBudgetOptions::from_json(args["solver"]["augmented_lagrangian"])); // RB-07 (opt-in)
 
 		al_solver.post_subsolve = [&](const double al_weight) {
 			stats.solver_info.push_back(
 				{{"type", al_weight > 0 ? "al" : "rc"},
 				 {"t", step},
-				 {"info", nl_solver->info()}});
+				 {"info", al_solver.info()}});
 			if (al_weight > 0)
 				stats.solver_info.back()["weight"] = al_weight;
 			save_subsolve(stats.solver_info.size(), step, solution);
@@ -613,6 +628,7 @@ namespace polyfem::varform
 				POLYFEM_SCOPED_TIMER("Update quantities");
 				if (solve_data_.time_integrator)
 					solve_data_.time_integrator->update_quantities(solution);
+				output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01
 				solve_data_.nl_problem->update_quantities(t0 + (t + 1) * dt, solution);
 				solve_data_.update_dt();
 				solve_data_.update_barrier_stiffness(solution);

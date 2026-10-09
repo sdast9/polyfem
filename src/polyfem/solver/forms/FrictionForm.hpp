@@ -61,7 +61,14 @@ namespace polyfem::solver
 	public:
 		/// @brief Initialize lagged fields
 		/// @param x Current solution
-		void init_lagging(const Eigen::VectorXd &x) override { update_lagging(x, 0); }
+		void init_lagging(const Eigen::VectorXd &x) override;
+
+		/// @brief RB-10 realized-force lag (default): between steps the
+		///        accepted endpoint is reached before the barrier's
+		///        between-steps refresh, so the lag built here carries the
+		///        normal force that acted at that endpoint. No-op with
+		///        `friction_lag: "follow_stiffness"`.
+		void update_quantities(const double t, const Eigen::VectorXd &x) override;
 
 		/// @brief Update lagged fields
 		/// @param x Current solution
@@ -70,6 +77,15 @@ namespace polyfem::solver
 		/// @brief Update lagged fields
 		/// @param x Current solution
 		void update_lagging(const Eigen::VectorXd &x) { update_lagging(x, -1); };
+
+		/// @brief Restart: append the lagged normal force magnitudes and the
+		///        lagged trim (history: in realized-force mode they are the
+		///        forces that acted during the saved step) to a state file.
+		void write_restart_state(const std::string &path) const;
+		/// @brief Restart: put them back onto the lag rebuilt at the restored
+		///        coordinates x. Returns false when the file has none or the
+		///        rebuilt lag has a different number of collisions.
+		bool read_restart_state(const std::string &path, const Eigen::VectorXd &x);
 
 		/// @brief Get the maximum number of lagging iteration allowable.
 		int max_lagging_iterations() const override { return n_lagging_iters_; }
@@ -88,7 +104,31 @@ namespace polyfem::solver
 		double mu() const { return mu_; }
 		double epsv() const { return epsv_; }
 		const ipc::TangentialCollisions &friction_collision_set() const { return friction_collision_set_; }
+		/// @brief RB-18 F6 (`friction_lag: "follow_stiffness"` only): the
+		///        lagged normal-force magnitudes were built with the contact
+		///        trim at lag time; when the in-solve controller moves the
+		///        trim, value/gradient/Hessian are rescaled by the trim ratio
+		///        to stay consistent with the barrier at fixed coordinates.
+		///        1 in the default realized-force mode and every other mode
+		///        (RB-10: the equilibrium normal force does not follow the
+		///        trim, the gap does).
+		double trim_scale() const;
+		/// @brief RB-10: does this form lag the realized normal force (no trim
+		///        following, lag built before the between-steps refresh)?
+		bool realized_lag() const;
 		const ipc::FrictionPotential &friction_potential() const { return friction_potential_; }
+
+		/// @brief RB-06: the lag -- the tangential collision set with its
+		///        lagged normal forces, the trim baked into them and the
+		///        coordinates it was built at.
+		struct State : public FormState
+		{
+			ipc::TangentialCollisions friction_collision_set;
+			double lagged_trim = 1;
+			Eigen::VectorXd lag_x;
+		};
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
 
 	private:
 		/// Reference to the collision mesh
@@ -103,6 +143,8 @@ namespace polyfem::solver
 		const int n_lagging_iters_;                      ///< Number of lagging iterations
 
 		ipc::TangentialCollisions friction_collision_set_; ///< Lagged friction constraint set
+		double lagged_trim_ = 1;                           ///< Contact trim baked into the lagged normal forces
+		Eigen::VectorXd lag_x_;                            ///< Coordinates the current lag was built at (realized mode)
 
 		const ContactForm &contact_form_; ///< necessary to have the barrier stiffnes, maybe clean me
 

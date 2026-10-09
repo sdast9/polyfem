@@ -268,16 +268,25 @@ namespace polyfem::solver
 			Q2t_ = Q2_.transpose();
 
 			reduced_size_ = Q2_.cols();
-			if (reduced_size_ == 0)
-				return;
 			num_penalty_constraints_ = full_size_ - reduced_size_;
 
-			timer.start();
-			StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
-			solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
-			solver_->factorize(Q2tQ2);
-			timer.stop();
-			logger().debug("Factorization and computation of Q2tQ2 took: {}", timer.getElapsedTime());
+			// An empty reduced space (every DOF prescribed) still needs the
+			// penalty problem of the full-size AL passes and the affine offset
+			// Q1R1iTb_ = b that reduced_to_full returns; only the 0x0
+			// factorization of Q2'Q2 is skipped (full_to_reduced has nothing
+			// to solve for). Upstream's early return here left both unset,
+			// and the first energy evaluation read a size-0 vector.
+			if (reduced_size_ > 0)
+			{
+				timer.start();
+				StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
+				solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
+				solver_->factorize(Q2tQ2);
+				timer.stop();
+				logger().debug("Factorization and computation of Q2tQ2 took: {}", timer.getElapsedTime());
+			}
+			else
+				logger().debug("No free degrees of freedom: every one of the {} DOFs is prescribed; the reduced problem is empty", full_size_);
 
 			std::vector<std::shared_ptr<Form>> tmp;
 			tmp.insert(tmp.end(), penalty_forms_.begin(), penalty_forms_.end());
@@ -431,20 +440,27 @@ namespace polyfem::solver
 		timer.stop();
 		logger().debug("Getting Q1 Q2, R1 took: {}", timer.getElapsedTime());
 
-		timer.start();
+		// Same as the projection path: nothing to factorize when the
+		// constraints span the whole space.
+		if (reduced_size_ > 0)
+		{
+			timer.start();
 
-		// arma::sp_mat q2a = fill_arma(Q2_);
-		// arma::sp_mat q2tq2 = q2a.t() * q2a;
-		// const StiffnessMatrix Q2tQ2 = fill_eigen(q2tq2);
-		StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
-		timer.stop();
-		logger().debug("Getting Q2'*Q2, took: {}", timer.getElapsedTime());
+			// arma::sp_mat q2a = fill_arma(Q2_);
+			// arma::sp_mat q2tq2 = q2a.t() * q2a;
+			// const StiffnessMatrix Q2tQ2 = fill_eigen(q2tq2);
+			StiffnessMatrix Q2tQ2 = Q2t_ * Q2_;
+			timer.stop();
+			logger().debug("Getting Q2'*Q2, took: {}", timer.getElapsedTime());
 
-		timer.start();
-		solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
-		solver_->factorize(Q2tQ2);
-		timer.stop();
-		logger().debug("Factorization of Q2'*Q2 took: {}", timer.getElapsedTime());
+			timer.start();
+			solver_->analyze_pattern(Q2tQ2, Q2tQ2.rows());
+			solver_->factorize(Q2tQ2);
+			timer.stop();
+			logger().debug("Factorization of Q2'*Q2 took: {}", timer.getElapsedTime());
+		}
+		else
+			logger().debug("No free degrees of freedom: every one of the {} DOFs is constrained; the reduced problem is empty", full_size_);
 
 #ifndef NDEBUG
 		StiffnessMatrix test = R.bottomRows(reduced_size_);
@@ -561,6 +577,32 @@ namespace polyfem::solver
 			penalty_problem_->update_lagging(x, iter_num);
 	}
 
+	std::unique_ptr<FullNLProblem::SavedState> NLProblem::save_state() const
+	{
+		auto state = std::make_unique<SavedState>();
+		for (const auto &f : forms_)
+			state->forms.push_back(f->save_state());
+		for (const auto &f : penalty_forms_)
+			state->penalty_forms.push_back(f->save_state());
+		state->reduced = current_size_ == CurrentSize::REDUCED_SIZE;
+		return state;
+	}
+
+	void NLProblem::restore_state(const FullNLProblem::SavedState &state, const TVector &x)
+	{
+		const SavedState *typed = dynamic_cast<const SavedState *>(&state);
+		if (typed == nullptr)
+			throw std::logic_error("NLProblem state was captured from a different problem type");
+		if (typed->penalty_forms.size() != penalty_forms_.size())
+			throw std::logic_error("Nonlinear problem state was captured with a different number of penalty forms");
+		// x is in full coordinates; the forms' states were captured at it.
+		assert(x.size() == full_size_);
+		FullNLProblem::restore_state(state, x);
+		for (size_t i = 0; i < penalty_forms_.size(); ++i)
+			penalty_forms_[i]->restore_state(*typed->penalty_forms[i], x);
+		current_size_ = typed->reduced ? CurrentSize::REDUCED_SIZE : CurrentSize::FULL_SIZE;
+	}
+
 	void NLProblem::update_quantities(const double t, const TVector &x)
 	{
 		t_ = t;
@@ -590,6 +632,16 @@ namespace polyfem::solver
 
 		if (penalty_problem_ && full_size() == current_size())
 			max_step = std::min(max_step, penalty_problem_->max_step_size(x0, x1));
+
+		return max_step;
+	}
+
+	double NLProblem::probe_step_bound(const TVector &x0, const TVector &x1)
+	{
+		double max_step = FullNLProblem::probe_step_bound(reduced_to_full(x0), reduced_to_full(x1));
+
+		if (penalty_problem_ && full_size() == current_size())
+			max_step = std::min(max_step, penalty_problem_->probe_step_bound(x0, x1));
 
 		return max_step;
 	}
@@ -669,6 +721,16 @@ namespace polyfem::solver
 		}
 	}
 
+	uint64_t NLProblem::objective_generation() const
+	{
+		uint64_t generation = FullNLProblem::objective_generation();
+		// The penalty forms are the same objects penalty_problem_ holds, and
+		// they are part of this objective whichever coordinates it is in.
+		for (const auto &f : penalty_forms_)
+			generation += f->objective_generation();
+		return generation;
+	}
+
 	void NLProblem::solution_changed(const TVector &newX)
 	{
 		FullNLProblem::solution_changed(reduced_to_full(newX));
@@ -705,6 +767,10 @@ namespace polyfem::solver
 		{
 			return full;
 		}
+
+		// Empty reduced space: there is no free coordinate to solve for.
+		if (reduced_size() == 0)
+			return TVector(0);
 
 		TVector reduced(reduced_size());
 		const TVector k = full - Q1R1iTb_;
@@ -759,6 +825,10 @@ namespace polyfem::solver
 		}
 
 		// x =  Q1 * R1^(-T) * P^T b  +  Q2 * y
+		// (an empty reduced space gives the affine offset alone: every DOF is
+		// at its prescribed value)
+		assert(reduced.size() == reduced_size());
+		assert(Q1R1iTb_.size() == full_size());
 
 		const TVector full = Q1R1iTb_ + Q2_ * reduced;
 

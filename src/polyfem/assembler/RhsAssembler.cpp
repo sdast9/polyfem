@@ -7,6 +7,8 @@
 #include <ipc/utils/eigen_ext.hpp>
 #include <polysolve/linear/Solver.hpp>
 
+#include <limits>
+
 namespace polyfem
 {
 	using namespace polysolve;
@@ -454,6 +456,15 @@ namespace polyfem
 			assert(skipped_count <= 1);
 #endif
 
+			// RB-11: a node shared by two Dirichlet primitives with different
+			// tags is written once per primitive; the last write used to win
+			// silently, in element order. Two different prescriptions for the
+			// same DOF are a conflicting input, not a resolution rule.
+			std::vector<int> assigned_tag(rhs.size(), std::numeric_limits<int>::min());
+			RowVectorNd bb_min, bb_max;
+			mesh_.bounding_box(bb_min, bb_max);
+			const double length_scale = (bb_max - bb_min).norm();
+
 			for (const auto &lb : local_boundary)
 			{
 				const int e = lb.element_id();
@@ -483,7 +494,21 @@ namespace polyfem
 								if (problem_.all_dimensions_dirichlet(fe_space_id_) || problem_.is_dimension_dirichet(tag, d, fe_space_id_))
 								{
 									assert(problem_.all_dimensions_dirichlet(fe_space_id_) || std::find(bounday_nodes.begin(), bounday_nodes.end(), glob[ii].index * size_ + d) != bounday_nodes.end());
-									rhs(glob[ii].index * size_ + d) = rhs_fun(0, d);
+									const long dof = glob[ii].index * size_ + d;
+									const double value = rhs_fun(0, d);
+									const int previous_tag = assigned_tag[dof];
+									if (previous_tag != std::numeric_limits<int>::min() && previous_tag != tag)
+									{
+										const double previous = rhs(dof);
+										const double tol = 1e-9 * std::max(std::abs(previous), std::abs(value)) + 1e-12 * length_scale;
+										if (std::abs(previous - value) > tol)
+											log_and_throw_error(
+												"Conflicting Dirichlet values on node {} (at [{}]), component {}: boundary id {} prescribes {} and boundary id {} prescribes {}. Two boundaries sharing a node must prescribe the same value for the components they both fix (use \"dimension\" to fix different components).",
+												glob[ii].index, fmt::format("{}", fmt::join(glob[ii].node.data(), glob[ii].node.data() + glob[ii].node.size(), ", ")), d,
+												previous_tag, previous, tag, value);
+									}
+									assigned_tag[dof] = tag;
+									rhs(dof) = value;
 								}
 							}
 						}

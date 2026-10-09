@@ -51,6 +51,26 @@ namespace polyfem::solver
 		rebuild_constraint_data();
 	}
 
+	std::unique_ptr<FormState> StackedAugmentedLagrangianForm::save_state() const
+	{
+		auto state = std::make_unique<State>();
+		save_al_state(*state);
+		for (const Term &term : terms_)
+			state->terms.push_back(term.form->save_state());
+		return state;
+	}
+
+	void StackedAugmentedLagrangianForm::restore_state(const FormState &state, const Eigen::VectorXd &x)
+	{
+		const State &stacked = state_as<State>(state, "StackedAugmentedLagrangianForm");
+		if (stacked.terms.size() != terms_.size())
+			throw std::logic_error("StackedAugmentedLagrangianForm state has a different number of terms");
+		restore_al_state(stacked);
+		for (size_t i = 0; i < terms_.size(); ++i)
+			terms_[i].form->restore_state(*stacked.terms[i], x.size() == size_ ? gather(x, terms_[i]) : Eigen::VectorXd());
+		rebuild_constraint_data();
+	}
+
 	void StackedAugmentedLagrangianForm::update_lagrangian(const Eigen::VectorXd &x, const double k_al)
 	{
 		assert(x.size() == size_);
