@@ -21,6 +21,8 @@ restart state is converted on read; see the
 below is unaffected (its fixtures have typed point/edge parents); the RB-02
 probe passes 270/270 on the change.
 
+**Signed parent law, 2026-10-18 (branch `improved-max-signed`, unpushed):** the "signed parent construction" that RBR-04 left as a separate model decision is implemented: the toolkit keeps positive and negative contributions in separate collisions (`set_separate_signed_contributions`), every parent including the improved max operator's corrections carries its own coefficient, and the semi-implicit form accepts the improved max operator under parent identity (the stencil identity stays refused). The RBR-04 fixture's 62.24 seam is 0; see the [record](improved-max-signed-parents-20261018.md).
+
 **RBR-04, 2026-09-21 (implemented):** the improved-max seam of the analysis below was reachable through the public options and is now a checked restriction — measured on the real form (a finite `|κ₁−κ₂|/2·b(d)` jump, 62.24 on the fixture) and refused by name at input validation and at construction; see the [RBR-04 section](#rbr-04--the-improved-max-operator-is-a-checked-restriction-2026-09-21).
 
 Date: 2026-09-11

@@ -1017,38 +1017,48 @@ TEST_CASE("time schedule and contact settings are validated at init", "[input_va
 	}));
 }
 
-TEST_CASE("the convergent formulation's improved max operator is refused with semi-implicit stiffness at init", "[input_validation][settings][rbr04]")
+TEST_CASE("the convergent formulation's improved max operator needs parent identity with semi-implicit stiffness at init", "[input_validation][settings][rbr04]")
 {
-	// RBR-04: the semi-implicit coefficient law is a sum of parent potentials
-	// only for positive contributions; the improved max operator's
-	// duplicate-removal corrections are negative. Refused by name before any
-	// mesh is read (the form's constructor refuses it too), naming every
-	// unsupported convergent option at once; the non-convergent default, area
-	// weighting alone, and the other stiffness modes are accepted.
-	const auto init = [](const json &contact, const json &barrier_stiffness) {
+	// RBR-04 / WP3C-1A-03: the improved max operator's duplicate-removal
+	// corrections are negative contributions. Under semi-implicit stiffness
+	// the signed parent law gives each its own coefficient, which needs parent
+	// coefficient identity (the default); the stencil identity is refused by
+	// name before any mesh is read (the form's constructor refuses it too).
+	// The physical barrier stays refused; area weighting alone, the
+	// non-convergent default and the other stiffness modes are accepted.
+	const auto init = [](const json &contact, const json &barrier_stiffness, const json &semi_implicit = json(nullptr)) {
 		json args = minimal_args("does-not-need-to-exist.msh");
 		args["contact"] = contact;
 		args["contact"]["enabled"] = true;
 		args["contact"]["dhat"] = 1e-3;
 		args["/solver/contact/barrier_stiffness"_json_pointer] = barrier_stiffness;
+		if (!semi_implicit.is_null())
+			args["/solver/contact/semi_implicit"_json_pointer] = semi_implicit;
 		State state;
 		state.init(args, true);
 	};
 	const json fragment = {{"use_convergent_formulation", true}, {"use_area_weighting", false}, {"use_improved_max_operator", true}, {"use_physical_barrier", false}};
+	const json stencil = {{"coefficient_identity", "stencil"}};
 
-	// the plan's public fragment, with and without area weighting
-	CHECK_THROWS_WITH(init(fragment, "semi_implicit"), ContainsSubstring("contact.use_improved_max_operator is unsupported in this mode"));
-	CHECK_THROWS_WITH(init(fragment, "semi_implicit"), ContainsSubstring("does not support the improved max operator"));
-	CHECK_THROWS_WITH(init(fragment, "semi_implicit"), ContainsSubstring("use_convergent_formulation = false"));
+	// the plan's public fragment, with and without area weighting: accepted
+	// under the default parent identity, refused under the stencil identity
+	CHECK_NOTHROW(init(fragment, "semi_implicit"));
+	CHECK_NOTHROW(init(fragment, "semi_implicit", {{"coefficient_identity", "parent"}}));
+	CHECK_THROWS_WITH(init(fragment, "semi_implicit", stencil), ContainsSubstring("contact.use_improved_max_operator (with coefficient_identity = \"stencil\") is unsupported in this mode"));
+	CHECK_THROWS_WITH(init(fragment, "semi_implicit", stencil), ContainsSubstring("only with solver.contact.semi_implicit.coefficient_identity = \"parent\""));
 	{
 		json area = fragment;
 		area["use_area_weighting"] = true;
-		CHECK_THROWS_WITH(init(area, "semi_implicit"), ContainsSubstring("contact.use_improved_max_operator is unsupported in this mode"));
+		CHECK_NOTHROW(init(area, "semi_implicit"));
+		CHECK_THROWS_WITH(init(area, "semi_implicit", stencil), ContainsSubstring("is unsupported in this mode"));
 	}
-	// the convergent defaults (improved max and physical barrier both on): one message names both
+	// the convergent defaults (improved max and physical barrier both on): the
+	// physical barrier is named; under the stencil identity both are
 	CHECK_THROWS_WITH(init({{"use_convergent_formulation", true}}, "semi_implicit"),
-					  ContainsSubstring("contact.use_improved_max_operator and contact.use_physical_barrier are unsupported in this mode"));
-	// the physical barrier alone is still refused (the constructor's existing rule, now stated at init)
+					  ContainsSubstring("contact.use_physical_barrier is unsupported in this mode"));
+	CHECK_THROWS_WITH(init({{"use_convergent_formulation", true}}, "semi_implicit", stencil),
+					  ContainsSubstring("contact.use_improved_max_operator (with coefficient_identity = \"stencil\") and contact.use_physical_barrier are unsupported in this mode"));
+	// the physical barrier alone is still refused
 	{
 		json physical = fragment;
 		physical["use_improved_max_operator"] = false;
@@ -1061,6 +1071,7 @@ TEST_CASE("the convergent formulation's improved max operator is refused with se
 		area_only["use_area_weighting"] = true;
 		area_only["use_improved_max_operator"] = false;
 		CHECK_NOTHROW(init(area_only, "semi_implicit"));
+		CHECK_NOTHROW(init(area_only, "semi_implicit", stencil));
 	}
 	// the non-convergent default is the validated configuration
 	CHECK_NOTHROW(init({{"use_convergent_formulation", false}}, "semi_implicit"));

@@ -188,17 +188,17 @@ namespace polyfem::solver
 
 	std::string BarrierContactForm::unsupported_improved_max_message()
 	{
-		return "Semi-implicit barrier stiffness does not support the improved max operator "
-			   "(contact.use_convergent_formulation with contact.use_improved_max_operator): "
-			   "its duplicate-removal corrections are negative collision weights, and the "
-			   "parent-keyed coefficient law is a sum of the parents' potentials only for "
-			   "positive contributions (the energy jumps by |k1 - k2| / 2 * b(d) where two "
-			   "edges with unequal coefficients meet; docs/rb-21-parent-keyed-kappa.md, RBR-04). "
-			   "Supported alternatives: contact.use_convergent_formulation = false (the "
-			   "validated semi-implicit configuration), the convergent formulation with "
-			   "use_improved_max_operator = false and use_physical_barrier = false (area "
-			   "weighting alone keeps every contribution positive), or the improved max "
-			   "operator with solver.contact.barrier_stiffness = \"adaptive\" or a fixed value.";
+		return "Semi-implicit barrier stiffness supports the improved max operator "
+			   "(contact.use_convergent_formulation with contact.use_improved_max_operator) "
+			   "only with solver.contact.semi_implicit.coefficient_identity = \"parent\": "
+			   "its duplicate-removal corrections are negative contributions, and only the "
+			   "signed parent law gives each of them its own coefficient (otherwise the "
+			   "energy jumps by |k1 - k2| / 2 * b(d) where two edges with unequal "
+			   "coefficients meet; docs/rb-21-parent-keyed-kappa.md, RBR-04). "
+			   "Supported alternatives: coefficient_identity = \"parent\" (the default), "
+			   "contact.use_convergent_formulation = false (the validated semi-implicit "
+			   "configuration), or the improved max operator with "
+			   "solver.contact.barrier_stiffness = \"adaptive\" or a fixed value.";
 	}
 
 	BarrierContactForm::BarrierContactForm(const ipc::CollisionMesh &collision_mesh,
@@ -257,18 +257,6 @@ namespace polyfem::solver
 				log_and_throw_error("Semi-implicit barrier stiffness does not support shape derivatives!");
 			if (use_physical_barrier)
 				log_and_throw_error("Semi-implicit barrier stiffness does not support the physical barrier; set use_physical_barrier=false!");
-			// RBR-04: the improved max operator removes duplicate counting with
-			// negative contributions (a vertex beyond a corner: two edge
-			// parents +1 each and a -1 vertex-vertex correction). The
-			// coefficient law scales a built collision by the positive-parent
-			// mean, which is the sum of the parents' potentials only when
-			// every contribution is positive; with the correction and unequal
-			// parent coefficients the energy jumps by |k1 - k2| / 2 * b(d) at
-			// the corner (measured, docs/rb-21-parent-keyed-kappa.md). A signed
-			// parent law is a separate model decision, so the combination is
-			// refused here rather than silently disabled or averaged away.
-			if (use_improved_max_operator)
-				log_and_throw_error(unsupported_improved_max_message());
 
 			if (semi_implicit_opts.is_object())
 			{
@@ -348,6 +336,26 @@ namespace polyfem::solver
 			}
 			if (continuation_max_ratio_ != 0.0 && !(continuation_max_ratio_ > 1.0))
 				log_and_throw_error("Semi-implicit barrier stiffness: continuation_max_ratio must be 0 (pure continuation) or > 1!");
+
+			// RBR-04 / WP3C-1A-03: the improved max operator removes duplicate
+			// counting with negative contributions (a vertex beyond a corner:
+			// two edge parents +1 each and a -1 vertex-vertex correction).
+			// Merged into one collision, the positive-parent mean times the
+			// net weight is not the sum of the parents' potentials (the energy
+			// jumps by |k1 - k2| / 2 * b(d) at the corner), and a collision
+			// whose contributions cancel is dropped with its signed remainder.
+			// The signed parent law keeps every contribution: the toolkit
+			// builds positive and negative contributions as separate
+			// collisions, and each parent, the corrections included, carries
+			// its own coefficient, so weight * scale * b(d) summed over the
+			// set is sum_p w_p k_p b(d_p) exactly. Stencil identity has no
+			// parent coefficients and stays refused.
+			if (use_improved_max_operator)
+			{
+				if (!parent_keyed_)
+					log_and_throw_error(unsupported_improved_max_message());
+				collision_set_.set_separate_signed_contributions(true);
+			}
 
 			refresh_interval_ = std::max(refresh_interval_, 0);
 			kappa_min_ = std::max(kappa_min_, 0.0);
@@ -916,17 +924,19 @@ namespace polyfem::solver
 		if (parent_keyed_)
 		{
 			// RB-21: one coefficient per candidate primitive pair that built
-			// this collision, weighted by its (positive) contribution. The
-			// key space is disjoint from stencil keys (tag offset 10).
-			// Duplicate-removal corrections carry negative weights and no
-			// coefficient of their own; they only adjust the total weight.
+			// this collision, weighted by its contribution. The key space is
+			// disjoint from stencil keys (tag offset 10). Duplicate-removal
+			// corrections of the improved max operator are negative
+			// contributions with a coefficient of their own (the signed parent
+			// law); the collision set then keeps them in collisions of their
+			// own sign, which assign_collision_stiffness checks.
 			// An edge-edge or vertex-vertex candidate is keyed on its sorted
 			// pair: the broad phases emit it in traversal order (the LBVH as
 			// query/target leaf, the cached swept build differently from the
 			// static one), and the same pair must find its continued value
 			// whichever order a build produced (2026-10-05).
 			for (const auto &parent : collision_set[i].parents)
-				if (parent.weight > 0)
+				if (parent.weight != 0)
 					keys.push_back({canonical_key({{10 + long(parent.type), long(parent.id0), long(parent.id1), -1, -1}}), parent.weight});
 		}
 		if (keys.empty())
@@ -1524,12 +1534,30 @@ namespace polyfem::solver
 			// each parent's own potential. With every coefficient equal to
 			// one this is exactly the unkeyed potential.
 			const auto keys = coefficient_keys(collision_set, i);
-			double numerator = 0.0, denominator = 0.0;
-			double max_weight = 0.0, max_kappa = 0.0;
+			// Signed parent law: every contribution of one collision has one
+			// sign (the toolkit separates signed contributions under the
+			// improved max operator; without it every contribution is
+			// positive), so the scale is the |w|-weighted mean of the parents'
+			// coefficients and weight * scale is their signed sum. A mixed
+			// collision has no such scale: its net weight can vanish while the
+			// signed sum does not.
+			bool any_positive = false, any_negative = false;
 			for (const auto &[key, w] : keys)
 			{
-				if (!(w > 0) || !std::isfinite(w))
+				if (w == 0 || !std::isfinite(w))
 					log_and_throw_error("Semi-implicit barrier stiffness: invalid parent contribution weight");
+				(w > 0 ? any_positive : any_negative) = true;
+			}
+			if (any_positive && any_negative)
+				log_and_throw_error(
+					"Semi-implicit barrier stiffness: collision {} mixes positive and negative parent contributions; "
+					"the collision set must be built with separate_signed_contributions (signed parent law)",
+					i);
+			double numerator = 0.0, denominator = 0.0;
+			double max_weight = 0.0, max_kappa = 0.0;
+			for (const auto &[key, signed_w] : keys)
+			{
+				const double w = std::abs(signed_w);
 				const double k = memoized_stiffness(collision_set, i, key);
 				numerator += w * k;
 				denominator += w;
@@ -1548,7 +1576,7 @@ namespace polyfem::solver
 				for (const auto &[key, w] : keys)
 				{
 					const double k = resolve_stiffness(kappa_cache_.at(key), is_continued(key));
-					const double scaled_weight = w / max_weight;
+					const double scaled_weight = std::abs(w) / max_weight;
 					scaled_numerator += max_kappa > 0 ? scaled_weight * (k / max_kappa) : 0.0;
 					scaled_denominator += scaled_weight;
 				}

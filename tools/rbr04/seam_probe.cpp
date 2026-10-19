@@ -11,7 +11,11 @@
 // --expect-guard the unsupported configurations must construct and reproduce
 // the finite jump (the failing control on the unrepaired source); with
 // --expect-guard they must be refused by name at construction and every
-// control must behave exactly as before.
+// control must behave exactly as before. With --expect-signed (the signed
+// parent law, docs/improved-max-signed-parents-20261018.md) the parent-
+// identity improved-max configurations must construct and be continuous at
+// both seams, heterogeneous coefficients included; the stencil identity with
+// improved max must be refused by name; every control as before.
 #include <polyfem/solver/forms/BarrierContactForm.hpp>
 #include <polyfem/utils/Logger.hpp>
 
@@ -339,10 +343,19 @@ namespace
 
 int main(int argc, char **argv)
 {
-	bool expect_guard = false;
+	bool expect_guard = false, expect_signed = false;
 	for (int i = 1; i < argc; ++i)
+	{
 		if (std::strcmp(argv[i], "--expect-guard") == 0)
 			expect_guard = true;
+		if (std::strcmp(argv[i], "--expect-signed") == 0)
+			expect_signed = true;
+	}
+	if (expect_guard && expect_signed)
+	{
+		std::cerr << "--expect-guard and --expect-signed are exclusive" << std::endl;
+		return 2;
+	}
 	logger().set_level(spdlog::level::off);
 	// The toolkit warns on stdout that improved max without area weighting
 	// "may lead to incorrect results"; recorded in the record, silenced here
@@ -372,11 +385,24 @@ int main(int argc, char **argv)
 	};
 	json out;
 	out["expect_guard"] = expect_guard;
+	out["expect_signed"] = expect_signed;
 	out["configurations"] = json::array();
 	try
 	{
-		for (const auto &c : configs)
-			out["configurations"].push_back(run_config(c, expect_guard));
+		for (Config c : configs)
+		{
+			if (expect_signed && c.mode == SI && c.improved_max)
+			{
+				// Signed parent law: parent identity is supported and
+				// continuous; the stencil identity is refused by name.
+				c.unsupported = c.identity == "stencil";
+				if (!c.unsupported)
+					c.expectation = "continuous";
+			}
+			else if (expect_signed)
+				c.unsupported = false;
+			out["configurations"].push_back(run_config(c, expect_guard || expect_signed));
+		}
 		out["checks"] = checks;
 		out["passed"] = true;
 	}

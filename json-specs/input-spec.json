@@ -1274,7 +1274,7 @@
         "pointer": "/contact/use_convergent_formulation",
         "default": false,
         "type": "bool",
-        "doc": "Whether to use the convergent (area weighted) formulation of IPC. With solver.contact.barrier_stiffness = \"semi_implicit\" only use_area_weighting is supported: use_improved_max_operator and use_physical_barrier are refused by name (RBR-04)."
+        "doc": "Whether to use the convergent (area weighted) formulation of IPC. With solver.contact.barrier_stiffness = \"semi_implicit\" use_physical_barrier is refused by name; use_improved_max_operator needs coefficient_identity = \"parent\" (RBR-04, WP3C-1A-03)."
     },
     {
         "pointer": "/contact/use_area_weighting",
@@ -1286,7 +1286,7 @@
         "pointer": "/contact/use_improved_max_operator",
         "default": true,
         "type": "bool",
-        "doc": "If using the convergent formulation, whether or not to use the improved max operator (duplicate removal through negative collision weights, Li et al. 2023). Not supported with solver.contact.barrier_stiffness = \"semi_implicit\": the parent-keyed coefficient law is a sum of parent potentials only for positive contributions, so the combination is refused by name at input validation and at construction (RBR-04)."
+        "doc": "If using the convergent formulation, whether or not to use the improved max operator (duplicate removal through negative collision weights, Li et al. 2023). With solver.contact.barrier_stiffness = \"semi_implicit\" it uses the signed parent law (each positive and negative contribution its own coefficient, built as separate collisions; WP3C-1A-03) and requires coefficient_identity = \"parent\" (the default); with the stencil identity it is refused by name (RBR-04)."
     },
     {
         "pointer": "/contact/use_physical_barrier",

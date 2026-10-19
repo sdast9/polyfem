@@ -32,6 +32,13 @@ flag the probe is the failing control that was run on the unrepaired source
 `b6d0c9a45` (`outputs/rbr-04/20260921T091854Z/baseline/seam-probe/`): the
 target configurations construct and show the finite `|κ₁−κ₂|/2·b(d)` jump.
 
+With `--expect-signed` (the signed parent law,
+[record](../../docs/improved-max-signed-parents-20261018.md)) the
+parent-identity improved-max configurations must construct and be continuous
+at both seams, heterogeneous coefficients included; the stencil identity with
+the improved max operator must be refused by name; every control as with
+`--expect-guard`.
+
 Not registered in the Catch suite; the permanent regressions are
 `unit_tests "[rbr04]"` (`tests/test_kappa_continuity.cpp`,
 `tests/test_input_validation.cpp`). No scenes run. Assertions characterize

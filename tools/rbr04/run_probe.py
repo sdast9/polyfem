@@ -1,6 +1,6 @@
 """Build/run the RBR-04 seam characterization against an existing Makefiles build.
 
-Usage: python3 tools/rbr04/run_probe.py --build build --output /absolute/evidence [--expect-guard]
+Usage: python3 tools/rbr04/run_probe.py --build build --output /absolute/evidence [--expect-guard | --expect-signed]
 Requires unit_tests to have already been built (its compile/link recipe is
 reused). No scenes run. Without --expect-guard the probe is the failing
 control: the improved-max/semi-implicit configurations must construct and
@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--expect-guard', action='store_true')
+parser.add_argument('--expect-signed', action='store_true')
 args = parser.parse_args()
 build = args.build.resolve() / 'tests'
 out = args.output.resolve()
@@ -46,9 +47,10 @@ provenance = {
     'polyfem_dirty': subprocess.check_output(['git', 'status', '--porcelain'], cwd=polyfem, text=True).splitlines(),
     'build_directory': str(build.parent),
     'expect_guard': args.expect_guard,
+    'expect_signed': args.expect_signed,
 }
 (out / 'provenance.json').write_text(json.dumps(provenance, indent=2) + '\n')
-command = [str(binary)] + (['--expect-guard'] if args.expect_guard else [])
+command = [str(binary)] + (['--expect-guard'] if args.expect_guard else []) + (['--expect-signed'] if args.expect_signed else [])
 run = subprocess.run(command, cwd=out, text=True, capture_output=True)
 (out / 'probe-results.json').write_text(run.stdout)
 (out / 'probe.stderr').write_text(run.stderr)

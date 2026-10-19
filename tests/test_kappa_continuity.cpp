@@ -10,12 +10,16 @@
 //         collision's scale is the contribution-weighted mean, so the energy
 //         is continuous across closest-feature switches and continuation
 //         survives them.
-//   RBR-04 (docs/rb-review-repair-plan-20260920.md): the improved max
-//         operator's duplicate-removal corrections are negative contributions,
-//         under which the positive-parent mean is no longer a sum of parent
-//         potentials (a finite |k1 - k2| / 2 * b(d) jump at a corner); the
-//         semi-implicit form refuses that operator by name, the other
-//         stiffness modes keep it unchanged.
+//   RBR-04 (docs/rb-review-repair-plan-20260920.md) and the signed parent
+//         law (docs/improved-max-signed-parents-20261018.md): the improved max
+//         operator's duplicate-removal corrections are negative contributions;
+//         merged into one collision the positive-parent mean is no longer a
+//         sum of parent potentials (a finite |k1 - k2| / 2 * b(d) jump at a
+//         corner). Under parent identity the semi-implicit form builds signed
+//         contributions as separate collisions and prices every parent, the
+//         corrections included, so the energy is their signed sum and
+//         continuous; the stencil identity is refused by name, and the other
+//         stiffness modes keep the merged set unchanged.
 //   First-contact refresh (docs/first-contact-refresh-20261006.md): a
 //         contact born by the first accepted iterate is refreshed there, and
 //         no first-contact refresh bumps the trim for a collapse.
@@ -102,8 +106,8 @@ namespace
 	public:
 		Eigen::MatrixXd driving;
 
-		Probe(const ipc::CollisionMesh &m, json opts = json::object(), double support = 1)
-			: BarrierContactForm(m, support, 1, false, false, false, false, false, false,
+		Probe(const ipc::CollisionMesh &m, json opts = json::object(), double support = 1, bool improved_max = false)
+			: BarrierContactForm(m, support, 1, false, improved_max, false, false, false, false,
 								 ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000,
 								 BarrierStiffnessMode::SemiImplicit, opts, Eigen::VectorXd::Ones(m.num_vertices()))
 		{
@@ -544,7 +548,7 @@ TEST_CASE("RB-21 parent coefficient assignment checks weighted arithmetic", "[ka
 						Catch::Matchers::ContainsSubstring("overflowing weighted collision coefficient"));
 }
 
-TEST_CASE("RBR-04 the improved max operator is refused under semi-implicit stiffness", "[kappa_continuity][parent][rbr04]")
+TEST_CASE("RBR-04 the improved max operator under semi-implicit stiffness: signed parent law", "[kappa_continuity][parent][rbr04]")
 {
 	using Catch::Matchers::ContainsSubstring;
 	constexpr double gap = .2, eps = 1e-9;
@@ -553,12 +557,12 @@ TEST_CASE("RBR-04 the improved max operator is refused under semi-implicit stiff
 	// vertex-vertex correction).
 	auto mesh = make_corner(true, .1, gap);
 	const Eigen::VectorXd zero = Eigen::VectorXd::Zero(8);
-	auto construct = [&](bool improved_max, bool area_weighting, BarrierStiffnessMode mode) {
+	auto construct = [&](bool improved_max, bool area_weighting, BarrierStiffnessMode mode, const std::string &identity = "parent") {
 		return std::make_unique<BarrierContactForm>(
 			mesh, 1, 1, area_weighting, improved_max, /*use_physical_barrier=*/false,
 			/*use_adaptive_barrier_stiffness=*/mode != BarrierStiffnessMode::Fixed, false, false,
 			ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, mode,
-			mode == BarrierStiffnessMode::SemiImplicit ? json::object() : json(nullptr), Eigen::VectorXd::Ones(4));
+			mode == BarrierStiffnessMode::SemiImplicit ? json{{"coefficient_identity", identity}} : json(nullptr), Eigen::VectorXd::Ones(4));
 	};
 	// Free vertex at (x, y) as a displacement of the mesh built at x = .1.
 	auto at = [&](double x, double y) {
@@ -568,30 +572,122 @@ TEST_CASE("RBR-04 the improved max operator is refused under semi-implicit stiff
 		return u;
 	};
 
-	SECTION("the direct constructor refuses the combination by name and states the alternatives")
+	SECTION("the stencil identity is refused by name; parent identity constructs and separates signed contributions")
 	{
 		for (const bool area_weighting : {false, true})
 		{
 			CAPTURE(area_weighting);
-			REQUIRE_THROWS_WITH(construct(true, area_weighting, BarrierStiffnessMode::SemiImplicit),
-								ContainsSubstring("does not support the improved max operator"));
+			REQUIRE_THROWS_WITH(construct(true, area_weighting, BarrierStiffnessMode::SemiImplicit, "stencil"),
+								ContainsSubstring("only with solver.contact.semi_implicit.coefficient_identity = \"parent\""));
+			auto f = construct(true, area_weighting, BarrierStiffnessMode::SemiImplicit);
+			CHECK(f->collision_set().separate_signed_contributions());
+			CHECK(f->use_improved_max_operator());
 		}
-		REQUIRE_THROWS_WITH(construct(true, false, BarrierStiffnessMode::SemiImplicit),
+		REQUIRE_THROWS_WITH(construct(true, false, BarrierStiffnessMode::SemiImplicit, "stencil"),
 							ContainsSubstring("use_convergent_formulation = false"));
-		REQUIRE_THROWS_WITH(construct(true, false, BarrierStiffnessMode::SemiImplicit),
-							ContainsSubstring("use_improved_max_operator = false and use_physical_barrier = false"));
-		REQUIRE_THROWS_WITH(construct(true, false, BarrierStiffnessMode::SemiImplicit),
+		REQUIRE_THROWS_WITH(construct(true, false, BarrierStiffnessMode::SemiImplicit, "stencil"),
 							ContainsSubstring("\"adaptive\" or a fixed value"));
 	}
 
-	SECTION("the non-convergent default, area weighting alone and the other stiffness modes still construct")
+	SECTION("the non-convergent default, area weighting alone and the other stiffness modes still construct, merged")
 	{
 		REQUIRE_NOTHROW(construct(false, false, BarrierStiffnessMode::SemiImplicit));
 		REQUIRE_NOTHROW(construct(false, true, BarrierStiffnessMode::SemiImplicit));
-		REQUIRE_NOTHROW(construct(true, false, BarrierStiffnessMode::Fixed));
-		REQUIRE_NOTHROW(construct(true, true, BarrierStiffnessMode::Fixed));
-		REQUIRE_NOTHROW(construct(true, false, BarrierStiffnessMode::Adaptive));
-		REQUIRE_NOTHROW(construct(true, true, BarrierStiffnessMode::Adaptive));
+		REQUIRE_NOTHROW(construct(false, false, BarrierStiffnessMode::SemiImplicit, "stencil"));
+		CHECK_FALSE(construct(false, false, BarrierStiffnessMode::SemiImplicit)->collision_set().separate_signed_contributions());
+		for (const auto mode : {BarrierStiffnessMode::Fixed, BarrierStiffnessMode::Adaptive})
+			for (const bool area_weighting : {false, true})
+			{
+				std::unique_ptr<BarrierContactForm> f;
+				REQUIRE_NOTHROW(f = construct(true, area_weighting, mode));
+				CHECK_FALSE(f->collision_set().separate_signed_contributions());
+			}
+	}
+
+	SECTION("signed parent law on the real form: separated collisions, every parent priced, continuous at both seams")
+	{
+		// The RBR-04 fixture: snapshot frozen with the point interior to e0
+		// (x = -.3) under a heterogeneous Hessian, then the point crosses
+		// seam A (into the corner region) and seam B (into e1's interior)
+		// without a refresh.
+		auto corner = make_corner(true, -.3, gap);
+		auto signed_form = [&]() {
+			auto f = std::make_unique<Probe>(corner, json::object(), 1, true);
+			const double d[4] = {30., 300., 3000., 100.};
+			for (int v = 0; v < 4; ++v)
+				f->driving.block(2 * v, 2 * v, 2, 2) = d[v] * Eigen::MatrixXd::Identity(2, 2);
+			f->start(zero);
+			f->refresh_mid_solve(zero);
+			return f;
+		};
+		// Free vertex at (x, y) as a displacement of the mesh built at x = -.3.
+		auto here = [&](double x, double y) {
+			Eigen::VectorXd u = zero;
+			u[6] = x + .3;
+			u[7] = y - gap;
+			return u;
+		};
+		auto f = signed_form();
+		// Interior to e0: EV(e0) +1, VV(v3, v1) +1 from e1's parent and the
+		// -1 correction as its own collision (merged, the last two cancel and
+		// the set drops them).
+		const auto &c = f->collisions();
+		REQUIRE(c.size() == 3);
+		int positive = 0, negative = 0;
+		for (size_t i = 0; i < c.size(); ++i)
+		{
+			REQUIRE(!c[i].parents.empty());
+			for (const auto &p : c[i].parents)
+				CHECK((p.weight > 0) == (c[i].weight > 0)); // one sign per collision
+			(c[i].weight > 0 ? positive : negative)++;
+			CHECK(c[i].stiffness_scale > 0);
+		}
+		CHECK(positive == 2);
+		CHECK(negative == 1);
+		// Every parent, the correction included, has a memoized coefficient
+		CHECK(f->memo().size() == 3);
+
+		for (const auto &[left, right] : {std::make_pair(here(-eps, gap), here(eps, gap)), std::make_pair(here(gap, eps), here(gap, -eps))})
+		{
+			f->solution_changed(left);
+			const double el = f->value(left);
+			f->solution_changed(right);
+			const double er = f->value(right);
+			REQUIRE(el > 0);
+			CHECK(std::abs(er - el) <= 1e-6 * el);
+		}
+		// Homogeneous coefficients: the signed set is the improved-max
+		// potential times the common coefficient (the separated collisions sum
+		// to the merged set).
+		for (const double x : {-.1, eps, .1})
+		{
+			auto homogeneous = std::make_unique<Probe>(corner, json::object(), 1, true);
+			homogeneous->start(zero);
+			const Eigen::VectorXd u = here(x, gap);
+			homogeneous->solution_changed(u);
+			auto fixed = construct(true, false, BarrierStiffnessMode::Fixed);
+			fixed->set_weight(1);
+			fixed->set_barrier_stiffness(1);
+			const Eigen::VectorXd moved = at(x, gap); // the same positions on the x = .1 mesh
+			fixed->init(moved);
+			const double kappa = homogeneous->scales().front();
+			for (const double k : homogeneous->scales())
+				CHECK(k == Approx(kappa));
+			CHECK(homogeneous->value(u) == Approx(kappa * fixed->value(moved)).epsilon(1e-12));
+		}
+	}
+
+	SECTION("a merged set with mixed signs is refused by the coefficient assignment")
+	{
+		auto f = std::make_unique<Probe>(mesh, json::object(), 1, true);
+		f->start(zero);
+		ipc::NormalCollisions merged;
+		merged.set_collision_set_type(ipc::NormalCollisions::CollisionSetType::IMPROVED_MAX_APPROX);
+		ipc::HashGrid broad_phase;
+		merged.build(mesh, mesh.rest_positions(), /*dhat=*/1, 0, &broad_phase);
+		REQUIRE(merged.size() == 1); // the corner VV: +1 +1 -1
+		REQUIRE_THROWS_WITH(f->assign_collision_stiffness(merged),
+							ContainsSubstring("mixes positive and negative parent contributions"));
 	}
 
 	SECTION("fixed and classic adaptive improved-max potentials are unchanged: signed parents, scale one, continuous at the corner")
@@ -636,7 +732,7 @@ TEST_CASE("RBR-04 the improved max operator is refused under semi-implicit stiff
 		}
 	}
 
-	SECTION("the seam the refusal prevents: the positive-parent mean under improved max is not a sum of parent potentials")
+	SECTION("why the law is signed: the positive-parent mean on the merged set jumps, the signed sum on the separated set does not")
 	{
 		// The coefficient rule of assign_collision_stiffness applied by hand to
 		// the toolkit's improved-max collision set with the plan's example
@@ -694,6 +790,35 @@ TEST_CASE("RBR-04 the improved max operator is refused under semi-implicit stiff
 		// sum of the parents' potentials: 70 b + 40 b on both sides.
 		CHECK(energy(false, at(-eps, gap), heterogeneous) == Approx(110 * b).epsilon(1e-6));
 		CHECK(energy(false, at(eps, gap), heterogeneous) == Approx(110 * b).epsilon(1e-6));
+
+		// The signed sum on the separated set, the correction priced at 55:
+		// 70 b(d0) + (40 - 55) b(d_vv) interior to e0, (70 + 40 - 55) b at the
+		// corner, 40 b(d1) + (70 - 55) b(d_vv) interior to e1 -- continuous at
+		// both seams whatever the correction's coefficient.
+		auto signed_energy = [&](const Eigen::VectorXd &u) {
+			ipc::NormalCollisions collisions;
+			collisions.set_collision_set_type(ipc::NormalCollisions::CollisionSetType::IMPROVED_MAX_APPROX);
+			collisions.set_separate_signed_contributions(true);
+			ipc::HashGrid broad_phase;
+			const Eigen::MatrixXd vertices = mesh.displace_vertices(Eigen::Map<const Eigen::MatrixXd>(u.data(), 2, 4).transpose());
+			collisions.build(mesh, vertices, /*dhat=*/1, 0, &broad_phase);
+			for (size_t i = 0; i < collisions.size(); ++i)
+			{
+				double numerator = 0, denominator = 0;
+				for (const auto &p : collisions[i].parents)
+				{
+					REQUIRE((p.weight > 0) == (collisions[i].weight > 0));
+					const double k = p.type == ipc::ParentContribution::Type::VertexVertex ? 55. : heterogeneous(p);
+					numerator += std::abs(p.weight) * k;
+					denominator += std::abs(p.weight);
+				}
+				collisions[i].stiffness_scale = numerator / denominator;
+			}
+			return ipc::BarrierPotential(1, 1, false)(collisions, mesh, vertices);
+		};
+		CHECK(signed_energy(at(eps, gap)) == Approx(signed_energy(at(-eps, gap))).epsilon(1e-6));
+		CHECK(signed_energy(at(gap, -eps)) == Approx(signed_energy(at(gap, eps))).epsilon(1e-6));
+		CHECK(signed_energy(at(.1, gap)) == Approx(55 * ipc::BarrierPotential(1, 1, false).barrier()(.1 * .1 + gap * gap, 1.0)).epsilon(1e-12));
 	}
 }
 

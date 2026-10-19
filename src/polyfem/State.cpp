@@ -391,8 +391,13 @@ namespace polyfem
 				if (semi_implicit && args["contact"]["use_convergent_formulation"].get<bool>())
 				{
 					std::vector<std::string> unsupported;
-					if (args["contact"]["use_improved_max_operator"].get<bool>())
-						unsupported.push_back("contact.use_improved_max_operator");
+					// The improved max operator needs the signed parent law,
+					// i.e. parent coefficient identity (RBR-04, WP3C-1A-03).
+					const json &semi_implicit_opts = args["solver"]["contact"]["semi_implicit"];
+					const bool stencil_identity = semi_implicit_opts.is_object()
+												  && semi_implicit_opts.value("coefficient_identity", std::string("parent")) == "stencil";
+					if (args["contact"]["use_improved_max_operator"].get<bool>() && stencil_identity)
+						unsupported.push_back("contact.use_improved_max_operator (with coefficient_identity = \"stencil\")");
 					if (args["contact"]["use_physical_barrier"].get<bool>())
 						unsupported.push_back("contact.use_physical_barrier");
 					if (!unsupported.empty())

@@ -194,6 +194,7 @@ namespace polyfem::solver
 			ipc::NormalCollisions collision_set;
 			collision_set.set_use_area_weighting(barrier_contact->use_area_weighting());
 			collision_set.set_use_improved_max_approximator(barrier_contact->use_improved_max_operator());
+			collision_set.set_separate_signed_contributions(barrier_contact->collision_set().separate_signed_contributions());
 
 			collision_set.set_enable_shape_derivatives(barrier_contact->enable_shape_derivatives());
 			collision_set.build(
