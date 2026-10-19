@@ -112,6 +112,14 @@ MshIO's own test data had such a block.
 [ci-portability-plan.md](ci-portability-plan.md). CI-01, CI-02, CI-03, CI-05
 and CI-06 are complete. Open:
 
+- **Linux/Windows red since `448fa8830` (2026-10-05) — repaired 2026-10-18.**
+  `History report: continuation losses by cause` asserted two coefficients
+  with exact `==` (100, 400: Rayleigh quotients of a normalized direction).
+  x86-64 Linux and Windows compute them a few ulp low (99.99999999999997,
+  399.9999999999999), arm64 macOS exactly. The four failing lanes of runs
+  37535848563 and 37503675717 failed on that one assertion only. Now
+  `Approx(...).epsilon(1e-12)`; no library change.
+
 - **Native acceptance — diagnosed and green (2026-09-30).** [Build run
   36755168744](https://github.com/sdast9/polyfem/actions/runs/36755168744) at
   `3495bb41e` passed **all six lanes** (Linux, macOS and Windows; Debug and

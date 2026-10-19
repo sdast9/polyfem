@@ -840,7 +840,13 @@ TEST_CASE("History report: continuation losses by cause", "[kappa_continuity][hi
 		f.publish(apart); // pair 1 out of support: not carried any more
 		f.driving *= 4;
 		f.refresh_mid_solve(together); // pair 1 back, re-estimated at 400
-		REQUIRE(f.scales() == std::vector<double>{100., 400.});
+		// Rayleigh quotients of a normalized direction on 100 I and 400 I:
+		// exact in real arithmetic, a few ulp low on x86-64 Linux and Windows
+		// (99.99999999999997, 399.9999999999999 in CI), exact on arm64 macOS.
+		const auto scales = f.scales();
+		REQUIRE(scales.size() == 2);
+		REQUIRE(scales[0] == Approx(100.).epsilon(1e-12));
+		REQUIRE(scales[1] == Approx(400.).epsilon(1e-12));
 		const json h = f.history_sensitivity(together);
 		CHECK(h["continuation"]["force_continuation"] == true);
 		CHECK(h["continuation"]["losses"]["reentry"] == 1);
