@@ -1,11 +1,12 @@
 # Improved max operator under semi-implicit stiffness: the signed parent law — 2026-10-18
 
-**Status:** implemented and verified on the local branches `improved-max-signed`, in PolyFEM
-(base `9bd8bb223` = `origin/main`) and in the IPC Toolkit fork (base `1f1b5dbf` = the pin).
-**Not pushed. The pin is not moved.** No default changed: the convergent formulation stays off by
-default, and nothing changes unless a scene asks for `use_improved_max_operator` under
-`semi_implicit` stiffness. Isolated build, evidence and scene runs: parent workspace
-`improved-max-work/` and `wp3c-1a-03-work/`.
+**Status:** published 2026-10-18 at the user's decision:
+- Toolkit `7b8fcac7` on `sdast9/ipc-toolkit:semi-implicit-stiffness` (fast-forward from `1f1b5dbf`).
+- PolyFEM `4942b18e1` (law, tests, probe, records) and `326c44705` (pin) on `main`.
+
+No default changed: the convergent formulation stays off by default, and nothing changes unless a
+scene asks for `use_improved_max_operator` under `semi_implicit` stiffness. Isolated build, evidence
+and scene runs: parent workspace `improved-max-work/` and `wp3c-1a-03-work/`.
 
 ## Why
 
@@ -155,12 +156,20 @@ late at level 2. That fails the study's 1e-5 limit and is the separate discretiz
   under semi-implicit stiffness: area weighting with semi-implicit stiffness remains outside the
   documented validation, as in RBR-04.
 
-## Publication (pending the user's decision)
+## Publication
 
-1. Push the toolkit branch to `sdast9/ipc-toolkit:semi-implicit-stiffness`.
-2. Move the pin in `cmake/recipes/ipc_toolkit.cmake`.
-3. Rebuild against the pin and rerun the checks above.
-4. Push PolyFEM to `main`.
+The user approved publication on 2026-10-18.
+1. The toolkit branch was pushed and the pin moved (`326c44705`).
+2. A fresh build with no CPM source overrides (`build-info`: PolyFEM `326c44705` clean, toolkit
+   `7b8fcac7` from the CPM cache) was checked again:
+   - `[rbr04]`: 149 assertions pass.
+   - Affected selection: 124 cases / 10,044 assertions pass.
+   - Seam probe `--expect-signed`: 492 checks pass.
+   - Five smokes: all 55 result files byte-identical to the `db2a8bb12` binary.
+   - K6 at level 2: 961 of 961 frames identical to the pre-pin run.
 
 The Houdini asset emits `use_convergent_formulation` only, with the physical barrier on by default,
-so it still gets the physical-barrier refusal. No asset change is implied.
+so it still gets the physical-barrier refusal. No asset change.
+
+Making the operator a semi-implicit default is a separate decision and is not taken here; see
+*Limits*.
