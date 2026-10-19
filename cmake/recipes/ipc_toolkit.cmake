@@ -25,6 +25,10 @@
 # (nearly parallel edges, cond(A) ~ 1e7), which restores the residual the
 # pivoted LDLT solve met and that the Debug assertion enforces; systems at
 # rounding level keep their bits.
+# 7b8fcac7 (signed parent law, docs/improved-max-signed-parents-20261018.md):
+# NormalCollisions::set_separate_signed_contributions keeps positive and
+# negative contributions to one stencil in separate collisions; off by
+# default (every other configuration builds the merged set as before).
 # License: MIT
 
 if(TARGET ipc::toolkit)
@@ -34,4 +38,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#1f1b5dbf46f4f69a558effac74c71c1a5a5d4ca4")
+CPMAddPackage("gh:sdast9/ipc-toolkit#7b8fcac7abd6801769e57166dc9fffb9bbcff5cc")

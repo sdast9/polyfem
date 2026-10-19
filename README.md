@@ -157,7 +157,7 @@ repository's own claims current. **Open decisions, work and verification gaps:
   ([schema](scenes/semi-implicit/README.md#run-manifest-rb-12)) and
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
-- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@1f1b5dbf`
+- **Dependencies:** the recipes pin `sdast9/ipc-toolkit@7b8fcac7`
   (branch `semi-implicit-stiffness`), `sdast9/polysolve@43ca2e66` (branch
   `iteration-callback`) and the test data `sdast9/polyfem-data@aed03ab`
   (branch `fable-fixtures`; `main` mirrors upstream `polyfem/polyfem-data`);
