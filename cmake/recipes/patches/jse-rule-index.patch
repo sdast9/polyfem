@@ -1,0 +1,103 @@
+diff --git a/src/jse/jse.cpp b/src/jse/jse.cpp
+index e7f63d2..563efbd 100644
+--- a/src/jse/jse.cpp
++++ b/src/jse/jse.cpp
+@@ -15,6 +15,7 @@ namespace jse
+     bool JSE::verify_json(const json &input, const json &rules)
+     {
+         log.clear();
++        indexed_rules_ = nullptr;
+         json input_copy = input;
+         return verify_json("/", input_copy, rules);
+     };
+@@ -22,6 +23,7 @@ namespace jse
+     json JSE::inject_defaults(const json &input, const json &rules)
+     {
+         log.clear();
++        indexed_rules_ = nullptr;
+         json input_copy = input;
+         bool b = verify_json("/", input_copy, rules);
+         assert(b); // Make sure the original file is valid
+@@ -164,7 +166,7 @@ namespace jse
+ 
+         // Test all rules, one and only one must pass, otherwise throw exception
+         std::vector<json> verified_matching_rules;
+-        for (auto r : matching_rules)
++        for (const auto &r : matching_rules)
+         {
+             if (verify_rule(input, r))
+             {
+@@ -495,14 +497,11 @@ namespace jse
+ 
+     json JSE::collect_default_rules(const string &pointer, const json &rules)
+     {
+-        // Find all rules that apply for the input node
+-        // TODO: accelerate this
+-
+         std::vector<json> matching_rules;
+-        for (auto i : rules)
++        for (const json *i : rules_at(pointer, rules))
+         {
+-            if (i.at("pointer") == pointer && i.contains("default"))
+-                matching_rules.push_back(i);
++            if (i->contains("default"))
++                matching_rules.push_back(*i);
+         }
+ 
+         return matching_rules;
+@@ -513,14 +512,25 @@ namespace jse
+         return std::find(list.begin(), list.end(), item) != list.end();
+     }
+ 
+-    std::vector<json> JSE::collect_pointer(const string &pointer, const json &rules)
++    const std::vector<const json *> &JSE::rules_at(const string &pointer, const json &rules)
+     {
+-        std::vector<json> matching_rules;
+-        for (auto i : rules)
++        if (indexed_rules_ != &rules)
+         {
+-            if (i.at("pointer") == pointer)
+-                matching_rules.push_back(i);
++            index_.clear();
++            for (const auto &i : rules)
++                index_[i.at("pointer").get<string>()].push_back(&i);
++            indexed_rules_ = &rules;
+         }
++        static const std::vector<const json *> none;
++        const auto it = index_.find(pointer);
++        return it == index_.end() ? none : it->second;
++    }
++
++    std::vector<json> JSE::collect_pointer(const string &pointer, const json &rules)
++    {
++        std::vector<json> matching_rules;
++        for (const json *i : rules_at(pointer, rules))
++            matching_rules.push_back(*i);
+         return matching_rules;
+     }
+ 
+diff --git a/src/jse/jse.h b/src/jse/jse.h
+index 81752e1..02e26d1 100644
+--- a/src/jse/jse.h
++++ b/src/jse/jse.h
+@@ -3,6 +3,8 @@
+ #include <nlohmann/json.hpp>
+ #include <string>
+ #include <memory>
++#include <unordered_map>
++#include <vector>
+ 
+ namespace jse
+ {
+@@ -74,6 +76,11 @@ namespace jse
+         // Collect all rules having a given pointer
+         std::vector<json> collect_pointer(const string &pointer, const json &rules);
+ 
++        // Rules grouped by pointer, in spec order (rebuilt by every public call)
++        const std::vector<const json *> &rules_at(const string &pointer, const json &rules);
++        const json *indexed_rules_ = nullptr;
++        std::unordered_map<string, std::vector<const json *>> index_;
++
+         // Find the first rule matching a pointer
+         json find_valid_rule(const string &pointer, const json &input, const json &rules);
+ 
