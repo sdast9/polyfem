@@ -282,7 +282,7 @@ namespace polyfem::assembler
 		LawKind law_kind(const std::string &type)
 		{
 			static const std::set<std::string> lame = {
-				"NeoHookean", "NeoHookeanAutodiff", "LinearElasticity", "HookeLinearElasticity", "SaintVenant",
+				"GrowthNeoHookean", "NeoHookean", "NeoHookeanAutodiff", "LinearElasticity", "HookeLinearElasticity", "SaintVenant",
 				"FixedCorotational", "InversionBarrier", "AMIPS", "AMIPSAutodiff"};
 			if (lame.count(type))
 				return LawKind::LameCompressible;

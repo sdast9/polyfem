@@ -20,7 +20,8 @@
             "FixedCorotational",
             "VolumePenalty",
             "AMIPS",
-            "InversionBarrier"
+            "InversionBarrier",
+            "GrowthNeoHookean"
         ],
         "doc": "Elastic material type"
     },
@@ -720,5 +721,62 @@
         "type": "float",
         "default": 1.0,
         "doc": "Scale factor for the AMIPS energy."
+    },
+    {
+        "pointer": "/",
+        "type": "object",
+        "type_name": "GrowthNeoHookean",
+        "required": [
+            "type",
+            "E",
+            "nu"
+        ],
+        "optional": [
+            "id",
+            "rho",
+            "g11",
+            "g22",
+            "g33",
+            "g12",
+            "g13",
+            "g23"
+        ],
+        "doc": "3D Neo-Hookean energy det(G) W(F G^-1), for a frozen SPD natural configuration G in material coordinates; identity by default. E may include externally evolved damage."
+    },
+    {
+        "pointer": "/g11",
+        "type": "include",
+        "spec_file": "value1.json",
+        "doc": "Dimensionless symmetric natural configuration component; scalar, expression or per-element file/list. G must be positive definite."
+    },
+    {
+        "pointer": "/g22",
+        "type": "include",
+        "spec_file": "value1.json",
+        "doc": "Dimensionless symmetric natural configuration component; scalar, expression or per-element file/list. G must be positive definite."
+    },
+    {
+        "pointer": "/g33",
+        "type": "include",
+        "spec_file": "value1.json",
+        "doc": "Dimensionless symmetric natural configuration component; scalar, expression or per-element file/list. G must be positive definite."
+    },
+    {
+        "pointer": "/g12",
+        "type": "include",
+        "spec_file": "value0.json",
+        "doc": "Dimensionless symmetric natural configuration component; scalar, expression or per-element file/list. G must be positive definite."
+    },
+    {
+        "pointer": "/g13",
+        "type": "include",
+        "spec_file": "value0.json",
+        "doc": "Dimensionless symmetric natural configuration component; scalar, expression or per-element file/list. G must be positive definite."
+    },
+    {
+        "pointer": "/g23",
+        "type": "include",
+        "spec_file": "value0.json",
+        "doc": "Dimensionless symmetric natural configuration component; scalar, expression or per-element file/list. G must be positive definite."
     }
 ]

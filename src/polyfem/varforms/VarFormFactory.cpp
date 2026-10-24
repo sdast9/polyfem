@@ -35,6 +35,7 @@ namespace polyfem::varform
 		{
 			return formulation == "SaintVenant"
 				   || formulation == "NeoHookean"
+				   || formulation == "GrowthNeoHookean"
 				   || formulation == "IsochoricNeoHookean"
 				   || formulation == "MooneyRivlin"
 				   || formulation == "MooneyRivlin3Param"

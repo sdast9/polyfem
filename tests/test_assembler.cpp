@@ -6,6 +6,7 @@
 #include <polyfem/assembler/AssemblyValsCache.hpp>
 #include <polyfem/assembler/MatParams.hpp>
 #include <polyfem/assembler/NeoHookeanElasticity.hpp>
+#include <polyfem/assembler/GrowthNeoHookean.hpp>
 #include <polyfem/assembler/NeoHookeanElasticityAutodiff.hpp>
 #include <polyfem/assembler/NavierStokes.hpp>
 #include <polyfem/assembler/NavierStokesFSI.hpp>
@@ -1594,5 +1595,96 @@ TEST_CASE("Simulation initialization owns scalar and fiber snapshots", "[materia
 		check(a, 1);
 		a.set_materials({0}, args["materials"], units, "", std::make_shared<MaterialFileCache>());
 		check(a, 9);
+	}
+}
+
+TEST_CASE("growth natural configuration energy and objectivity", "[assembler][growth]")
+{
+	Units units;
+	GrowthNeoHookean growth;
+	NeoHookeanAutodiff ordinary;
+	growth.set_size(3);
+	ordinary.set_size(3);
+	json mat = {{"E", 1.3}, {"nu", 0.31}};
+	growth.add_multimaterial(0, mat, units, "");
+	ordinary.add_multimaterial(0, mat, units, "");
+	RowVectorNd p = RowVectorNd::Zero(3);
+	DefGradMatrix<double> F = Eigen::Matrix3d::Identity();
+	F(0, 0) = 1.25;
+	F(1, 1) = 0.93;
+	F(0, 2) = 0.12;
+	CHECK(growth.elastic_energy(p, 0, 0, F) == Catch::Approx(ordinary.elastic_energy(p, 0, 0, F)).margin(1e-13));
+
+	mat["g11"] = 1.1;
+	mat["g22"] = 0.9;
+	mat["g33"] = 0.7;
+	mat["g12"] = 0.08;
+	growth.add_multimaterial(0, mat, units, "");
+	const DefGradMatrix<double> G = growth.natural_configuration(p, 0, 0);
+	CHECK(std::abs(growth.elastic_energy(p, 0, 0, G)) < 1e-13);
+	CHECK(growth.elastic_energy(p, 0, 0, DefGradMatrix<double>(Eigen::Matrix3d::Identity())) > 0.01);
+	DefGradMatrix<double> R(3, 3);
+	R << 0, -1, 0, 1, 0, 0, 0, 0, 1;
+	CHECK(growth.elastic_energy(p, 0, 0, DefGradMatrix<double>(R * F)) == Catch::Approx(growth.elastic_energy(p, 0, 0, F)).margin(1e-13));
+	CHECK(growth.elastic_energy(p, 0, 0, F) == Catch::Approx(G.determinant() * ordinary.elastic_energy(p, 0, 0, DefGradMatrix<double>(F * G.inverse()))).margin(1e-13));
+	mat["g33"] = -1;
+	growth.add_multimaterial(0, mat, units, "");
+	CHECK_THROWS(growth.elastic_energy(p, 0, 0, F));
+	growth.set_size(2);
+	CHECK_THROWS(growth.add_multimaterial(0, mat, units, ""));
+}
+
+TEST_CASE("growth natural configuration assembled derivatives", "[assembler][growth]")
+{
+	Units units;
+	GrowthNeoHookean growth;
+	growth.set_size(3);
+	growth.add_multimaterial(0, {{"E", 1.3}, {"nu", 0.31}, {"g11", 1.1}, {"g22", 0.9}, {"g33", 0.75}, {"g13", 0.04}}, units, "");
+	auto fixture = make_synthetic_nonlinear_element(3, 4);
+	const NonLinearAssemblerData data(fixture.vals, 0, 0, fixture.x, fixture.x_prev, fixture.da);
+	const auto grad = growth.assemble_gradient(data);
+	const auto hess = growth.assemble_hessian(data);
+	const double eps = 1e-6;
+	for (int i = 0; i < fixture.x.size(); ++i)
+	{
+		auto xp = fixture.x, xm = fixture.x;
+		xp(i) += eps;
+		xm(i) -= eps;
+		const NonLinearAssemblerData dp(fixture.vals, 0, 0, xp, fixture.x_prev, fixture.da);
+		const NonLinearAssemblerData dm(fixture.vals, 0, 0, xm, fixture.x_prev, fixture.da);
+		CHECK(grad(i) == Catch::Approx((growth.compute_energy(dp) - growth.compute_energy(dm)) / (2 * eps)).margin(1e-8));
+		const Eigen::VectorXd numerical = (growth.assemble_gradient(dp) - growth.assemble_gradient(dm)) / (2 * eps);
+		CHECK((hess.col(i) - numerical).norm() < 1e-8);
+	}
+}
+
+TEST_CASE("growth natural configuration per element binding", "[assembler][growth][json-input]")
+{
+	Units units;
+	auto growth = AssemblerUtils::make_assembler("GrowthNeoHookean");
+	growth->set_size(3);
+	const json mat = {{"type", "GrowthNeoHookean"}, {"E", 1.0}, {"nu", 0.3}, {"g33", json::array({0.7, 0.9})}};
+	growth->set_materials({0, 0}, mat, units, "");
+	auto *law = dynamic_cast<GrowthNeoHookean *>(growth.get());
+	REQUIRE(law != nullptr);
+	RowVectorNd p = RowVectorNd::Zero(3);
+	CHECK(law->natural_configuration(p, 0, 0)(2, 2) == Catch::Approx(0.7));
+	CHECK(law->natural_configuration(p, 0, 1)(2, 2) == Catch::Approx(0.9));
+	CHECK_THROWS(growth->set_materials({0, 0, 0}, mat, units, ""));
+}
+
+TEST_CASE("growth JSON defaults and composite child validation", "[growth][json-input]")
+{
+	const json material = {{"type", "GrowthNeoHookean"}, {"E", 1.0}, {"nu", 0.3}};
+	for (const bool composite : {false, true})
+	{
+		State state;
+		state.init_logger("", spdlog::level::err, spdlog::level::off, false);
+		json args = {{"materials", composite ? json{{"type", "MaterialSum"}, {"models", json::array({material})}} : material}};
+		args["geometry"] = {{"mesh", std::string(POLYFEM_DATA_DIR) + "/plane_hole.obj"}};
+		REQUIRE_NOTHROW(state.init(args, true));
+		const auto &m = composite ? state.args["materials"]["models"][0] : state.args["materials"];
+		CHECK(m["g33"] == 1.0);
+		CHECK(m["g12"] == 0.0);
 	}
 }

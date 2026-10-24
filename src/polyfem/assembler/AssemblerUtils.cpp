@@ -17,6 +17,7 @@
 #include <polyfem/assembler/MultiModel.hpp>
 #include <polyfem/assembler/NavierStokes.hpp>
 #include <polyfem/assembler/NeoHookeanElasticity.hpp>
+#include <polyfem/assembler/GrowthNeoHookean.hpp>
 #include <polyfem/assembler/InversionBarrier.hpp>
 #include <polyfem/assembler/IsochoricNeoHookean.hpp>
 #include <polyfem/assembler/HGOFiber.hpp>
@@ -80,6 +81,8 @@ namespace polyfem
 
 			else if (formulation == "SaintVenant")
 				return std::make_shared<SaintVenantElasticity>();
+			else if (formulation == "GrowthNeoHookean")
+				return std::make_shared<GrowthNeoHookean>();
 			else if (formulation == "NeoHookean")
 				return std::make_shared<NeoHookeanElasticity>();
 			else if (formulation == "IsochoricNeoHookean")
@@ -267,6 +270,7 @@ namespace polyfem
 				"LinearElasticity",
 				"HookeLinearElasticity",
 				"SaintVenant",
+				"GrowthNeoHookean",
 				"NeoHookean",
 				"MooneyRivlin",
 				"MooneyRivlin3Param",

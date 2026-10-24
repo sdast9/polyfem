@@ -1,4 +1,5 @@
 #include "GenericElastic.hpp"
+#include "GrowthNeoHookean.hpp"
 
 #include <polyfem/assembler/MooneyRivlinElasticity.hpp>
 #include <polyfem/assembler/MooneyRivlin3ParamElasticity.hpp>
@@ -623,6 +624,7 @@ namespace polyfem::assembler
 	template class GenericElastic<UnconstrainedOgdenElasticity>;
 	template class GenericElastic<IncompressibleOgdenElasticity>;
 	template class GenericElastic<NeoHookeanAutodiff>;
+	template class GenericElastic<GrowthNeoHookean>;
 	template class GenericElastic<IsochoricNeoHookean>;
 	template class GenericElastic<VolumePenalty>;
 	template class GenericElastic<AMIPSEnergy>;

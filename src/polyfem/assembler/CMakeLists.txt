@@ -54,6 +54,8 @@ set(SOURCES
 	NavierStokes.hpp
 	NavierStokesFSI.cpp
 	NavierStokesFSI.hpp
+	GrowthNeoHookean.cpp
+	GrowthNeoHookean.hpp
 	NeoHookeanElasticity.cpp
 	NeoHookeanElasticity.hpp
 	NeoHookeanElasticityAutodiff.cpp
