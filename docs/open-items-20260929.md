@@ -4,7 +4,8 @@ A reconciliation of the project records, written 2026-09-29 and brought up to
 date on 2026-09-30 (end of day) at PolyFEM `main` `0a367634a` (IPC Toolkit pin
 `1f1b5dbf`, PolySolve pin `43ca2e66`, data pin `sdast9/polyfem-data@aed03ab`);
 the canonical-pair-keys and mechanisms B/C entries were added on 2026-10-05, the
-first-contact refresh entries on 2026-10-06. It adds no evidence: every line points at the
+first-contact refresh entries on 2026-10-06, D10 (upstream's October work) on
+2026-10-25. It adds no evidence: every line points at the
 record that owns the claim. When a record and this page disagree, the record
 governs; fix this page.
 
@@ -21,6 +22,7 @@ governs; fix this page.
 | D7 | Whether to report the upstream defects found 2026-09-30 (Debug friction-Hessian segfault, the nearly-parallel-edge 2x2 solve, `parallel-edge` fragility) to the upstream projects | Nothing local | [upstream-vs-fork-20260930.md](upstream-vs-fork-20260930.md) |
 | D8 | ~~Whether small-step stall restarts apply in every mode~~ **Decided 2026-10-01: on by default** (`solver/advanced/stall_restart`: `feasible_bound` trigger, soft limit off, forced-PSD remedy, at most 20 restarts, kept for now by the user and revisited if real-world scenes hit it; semi-implicit stays at 200) | — | [stall-recovery-generalization-20261001.md](stall-recovery-generalization-20261001.md) |
 | D9 | ~~Whether to publish the signed parent law~~ **Published 2026-10-18** (toolkit `7b8fcac7`, PolyFEM `4942b18e1` + pin `326c44705`): semi-implicit stiffness accepts the improved max operator under parent identity, opt-in. **Still open:** whether it becomes the semi-implicit default (needs 3D seams, friction and the production scene matrix first) | A default flip | [improved-max-signed-parents-20261018.md](improved-max-signed-parents-20261018.md) |
+| D10 | How to take upstream's October work (measured 2026-10-25): whether the fork moves to upstream's HDF5 checkpoint (PolyFEM #541, which replaces `restart_json`) and ports its restart extensions, which governs the #541/#487/#542 merge; whether to accept #547's refinement result change. ESP contact (#542) is **not recommended now** (no adaptive stiffness; aborts or pins the tip on the deformable `spike-in-crack`). Separable: the PolySolve option, the data references, the IPC Toolkit merge, and offering the jse rule-index patch upstream | Any upstream merge after `591b08bd5` | [esp-assessment-20261025.md](esp-assessment-20261025.md) |
 
 Decided and closed (do not reopen without new evidence): production trim
 controller stays `rms` with no estimate; force-weighted is experimental and

@@ -16,6 +16,24 @@ state lives in the parent workspace's README; this section keeps the
 repository's own claims current. **Open decisions, work and verification gaps:
 [docs/open-items-20260929.md](docs/open-items-20260929.md).**
 
+- **Upstream's October work and ESP contact measured (October 25, 2026;
+  record and tools only):**
+  - **What upstream added.** Upstream PolyFEM has added ESP contact, an HDF5
+    checkpoint that replaces `restart_json`, an AMIPS fix and a tet-refinement
+    fix. IPC Toolkit and PolySolve moved with it.
+  - **ESP against the alternatives.** On upstream's own ESP scenes and the
+    fork's semi-implicit scenes, ESP matches upstream IPC and the fork's
+    semi-implicit stiffness wherever all three finish. On the deformable
+    `spike-in-crack` it aborts at the scene's stiffness or pins the spike's tip
+    on a corner. It also has no adaptive stiffness, so it is not recommended
+    now.
+  - **Upstream's per-step cost.** Upstream re-validates PolySolve's parameters
+    at every step, costing 130–150 ms per step. The fork's jse rule-index
+    patch removes that cost (14–24× faster on those scenes, byte-identical
+    output).
+  - **Decision.** The merge decision is D10
+    ([record](docs/esp-assessment-20261025.md)).
+
 - **RB-09 spring probe repaired (October 6, 2026; tools and records only):** the
   standalone spring probe failed its T11 check at `k` = 100, `d̂` = .01 after
   the guarded first-contact refresh below moved the trim path. The failure was
