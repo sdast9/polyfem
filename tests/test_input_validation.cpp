@@ -983,6 +983,25 @@ TEST_CASE("time schedule and contact settings are validated at init", "[input_va
 	CHECK_THROWS_WITH(init([](json &a) { a["time"] = {{"dt", 0.0}, {"tend", 0.5}}; }), ContainsSubstring("time.dt must be a positive"));
 	CHECK_THROWS_WITH(init([](json &a) { a["time"] = {{"t0", 1.0}, {"tend", 0.5}, {"time_steps", 2}}; }), ContainsSubstring("time.tend must be a finite time after time.t0"));
 	CHECK_THROWS_WITH(init([](json &a) { a["time"] = {{"dt", 0.25}, {"time_steps", 0}}; }), ContainsSubstring("time.time_steps must be a positive"));
+	{
+		// tend / dt a whole number up to roundoff: that many steps, not one
+		// more past tend ((0.14 - 0) / 0.02 = 7.000000000000001 ran 8 steps)
+		const auto steps = [](const double t0, const double tend, const double dt) {
+			json args = minimal_args("does-not-need-to-exist.msh");
+			args["time"] = {{"t0", t0}, {"tend", tend}, {"dt", dt}};
+			State state;
+			state.init(args, true);
+			return state.args["time"]["time_steps"].get<int>();
+		};
+		CHECK(steps(0, 0.14, 0.02) == 7);
+		CHECK(steps(0, 4.35, 0.05) == 87);
+		CHECK(steps(0, 3.3, 1.1) == 3);
+		CHECK(steps(0.1, 0.3, 0.1) == 2);
+		CHECK(steps(0, 1.0, 0.1) == 10);
+		// a real remainder still takes the extra (shorter-reaching) step
+		CHECK(steps(0, 1.05, 0.1) == 11);
+		CHECK(steps(0, 0.1 + 1e-9, 0.1) == 2);
+	}
 	CHECK_THROWS_WITH(init([](json &a) { a["contact"] = {{"enabled", true}, {"dhat", 0.0}}; }), ContainsSubstring("contact.dhat must be a positive"));
 	// the spec rejects a misspelling (strict or not); the enum map must
 	// know every name the spec offers, or the name silently aliases to the

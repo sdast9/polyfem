@@ -94,6 +94,17 @@ namespace polyfem
 
 		void init_time(json &args, Units &units)
 		{
+			// The number of steps of size dt that reach tend: ceil((tend - t0)
+			// / dt), except when that ratio is a whole number up to roundoff.
+			// (0.14 - 0) / 0.02 is 7.000000000000001 in floating point, and
+			// ceil made it 8 steps, running past tend to 0.16.
+			const auto steps_to_reach = [](const double t0, const double tend, const double dt) {
+				const double ratio = (tend - t0) / dt;
+				const double nearest = std::round(ratio);
+				if (std::abs(ratio - nearest) <= 1e-12 * std::max(1.0, nearest))
+					return int(nearest);
+				return int(std::ceil(ratio));
+			};
 			if (!is_param_valid(args, "time"))
 				return;
 
@@ -136,7 +147,7 @@ namespace polyfem
 					{
 						dt = Units::convert(args["time"]["dt"], units.time());
 						require_positive_dt(dt);
-						time_steps = int(std::ceil((tend - t0) / dt));
+						time_steps = steps_to_reach(t0, tend, dt);
 						require_positive_steps(time_steps);
 					}
 					else if (is_param_valid(args["time"], "time_steps"))

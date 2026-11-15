@@ -366,7 +366,13 @@ namespace polyfem::legacy
 				{
 					dt = Units::convert(args["time"]["dt"], units.time());
 					assert(dt > 0);
-					time_steps = int(ceil((tend - t0) / dt));
+					// a whole number of steps up to roundoff is that number
+					// (see init_time in State.cpp)
+					const double ratio = (tend - t0) / dt;
+					const double nearest = std::round(ratio);
+					time_steps = std::abs(ratio - nearest) <= 1e-12 * std::max(1.0, nearest)
+									 ? int(nearest)
+									 : int(std::ceil(ratio));
 					assert(time_steps > 0);
 				}
 				else if (is_param_valid(args["time"], "time_steps"))
