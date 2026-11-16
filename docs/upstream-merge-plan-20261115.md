@@ -223,8 +223,9 @@ now take it and call `set_block_size`. PolyFEM, the fork's and upstream's,
 passes nothing, so the block size is 1 unless the scene says otherwise. The
 Houdini asset writes `Hypre/dimension: 3` on purpose (it switches BoomerAMG to
 its elasticity settings); the fork's PolySolve keeps accepting that option
-(`f91643e`) so those scenes still run as before. Upstream PolySolve (#125)
-also made Hypre split its rows across rank threads, by default one per core.
+(`f91643e`) so those scenes still run as before, until step 3 removes it.
+Upstream PolySolve (#125) also made Hypre split its rows across rank threads,
+by default one per core.
 
 1. Pass the problem dimension from PolyFEM at every solver creation for a
    vector-valued problem. Call sites in the fork today:
@@ -237,16 +238,42 @@ also made Hypre split its rows across rank threads, by default one per core.
 2. Check with the Hypre scene of `houdini_HDAs/tests/test_polyfem_hda.py`
    that a run with `Hypre/dimension: 3` in the scene and a run without the
    option (block size from step 1) give the same iteration counts.
-3. Do not remove `Hypre/dimension` from the asset or from the fork's
-   PolySolve in this task; old scenes depend on it. Why it still matters
-   (measured 2026-11-16, `upstream-merge-work/hypre-dimension/`, a 4,913-node
-   NeoHookean cube, one rank, one thread): with `Hypre/dimension: 3` the run
-   took 6.0 s, 19 Newton iterations and 5 rejected linear solves; without
-   the option (block size 1, which is what upstream PolyFEM runs today) 16.8 s,
-   44 iterations and 54 rejected linear solves. The end results agree. Once
-   step 1 is in and step 2 passes, removing the key from the asset is a
-   separate change the user decides; the fork's PolySolve should keep
-   accepting it for scenes already written.
+3. `Hypre/dimension` goes, to match upstream's spec (**decided 2026-11-16**:
+   stay consistent with upstream, as part of this task and not before it).
+   The fork's acceptance of the option (`f91643e`) is temporary. Do these in
+   order, after step 2 passes:
+   1. Asset: in a copy (`upstream-merge-work/PS-1/`, not `houdini_HDAs/`),
+      stop writing `"dimension": 3` in the Hypre block of
+      `src/polyfem/PythonModule.py`, and change the check in
+      `tests/test_polyfem_hda.py` from `linear["Hypre"]["dimension"] == 3` to
+      the key being absent. The export-and-run Hypre case must still pass and
+      must give the iteration counts step 2 recorded.
+   2. PolySolve: on `iteration-callback`, remove what `f91643e` added (the
+      `Hypre/dimension` block in `HypreSolver::set_parameters`, the spec
+      entry in `linear-solver-spec.json`, the `hypre_dimension_option` test,
+      the `block_size` line in `get_info` if upstream's file does not have
+      it). Compare the result with upstream's `HypreSolver.cpp` and spec: the
+      only differences left should be ones the fork had before the merge.
+      Push, then move PolyFEM's pin.
+   3. A scene that still carries the key then fails validation the way it
+      does upstream (`No rule matched for ".../Hypre"`). The asset writes a
+      fresh scene on every run, so saved Houdini scenes are unaffected; only
+      scene files kept by hand need the key deleted. Say so in the record and
+      in the fork's README.
+   4. Publish the asset change only together with a binary that contains
+      step 1. An asset without the key on a binary without step 1 runs Hypre
+      at block size 1.
+
+   Why step 1 has to come first (measured 2026-11-16,
+   `upstream-merge-work/hypre-dimension/`, a 4,913-node NeoHookean cube, one
+   rank, one thread): with block size 3 the run took 6.0 s, 19 Newton
+   iterations and 5 rejected linear solves; with block size 1, which is what
+   upstream PolyFEM runs today, 16.8 s, 44 iterations and 54 rejected linear
+   solves. The end results agree. Step 1 is the one place where the fork
+   then differs from upstream PolyFEM (upstream passes no dimension); it
+   uses upstream PolySolve's interface as upstream's commit describes it, and
+   is a candidate to offer upstream. Report that to the user; do not open a
+   pull request.
 4. Hypre rank count: **decided 2026-11-16, leave upstream's behaviour.** Hypre
    runs on one nano-mpi rank per core unless `NANOMPI_NUM_RANKS` is set, and
    `--max_threads` does not limit it. Do not add a cap or a default in
@@ -269,7 +296,8 @@ also made Hypre split its rows across rank threads, by default one per core.
    `NLProblem` can supply the mapping; do not implement it in this task.
 
 Ladder: V1; V2 `[solver]`-style cases that use Hypre, if any; V3 (expect
-byte-identical: no smoke uses Hypre); V6 `test_polyfem_hda.py`.
+byte-identical: no smoke uses Hypre); PolySolve's own suite after step 3.2;
+V6 `test_polyfem_hda.py` from the step 3.1 copy against the final binary.
 
 ### IPC-1 — IPC Toolkit to `dff05854`
 
