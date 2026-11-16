@@ -180,8 +180,9 @@ PF-1 → PF-2a → PF-2b → PF-3 → PF-4 → PF-5 → RM-1 → RM-2 → PF-6 �
 PF-8 → IPC-2 → IPC-3 → IPC-4 → IPC-5 → REL-1
 ```
 
-* RM-0, IPC-1 and PS-1 have no prerequisites and can run at any time, in
-  parallel with the PF tasks.
+* RM-0 and IPC-1 have no prerequisites and can run at any time, in
+  parallel with the PF tasks. PS-1 waits for upstream (see the task) and
+  does not hold up REL-1.
 * PF-4 needs IPC-1. PF-6 needs RM-2. IPC-2 to IPC-5 come after PF-8 because
   upstream PolyFEM itself stops at IPC Toolkit `dff05854`.
 * Only one session at a time writes to a given integration branch.
@@ -244,15 +245,17 @@ by default one per core.
      QR-projected constraints.
    * `08b51cd7b7`: the same for the homogenization and differentiable paths.
 
-   Pending the user's choice between two routes. (a) Wait: when upstream
-   merges this work it arrives with an ordinary upstream merge, and steps 2
-   and 3 follow it; until then the asset keeps writing `Hypre/dimension` and
-   the fork's PolySolve keeps accepting it, so nothing gets slower. (b) Port
-   now: apply the varform, `RhsAssembler` and `NLProblem` parts of those two
-   commits (not the legacy-State parts, which upstream has since deleted,
-   and not the preconditioner commits around them) on top of PF-8, with the
-   risk that upstream changes them before merging. Either way the code is
-   upstream's design, not a new one.
+   **Decided 2026-11-16: wait for upstream.** Do not port the draft. When
+   upstream merges this work it arrives with an ordinary upstream merge, and
+   steps 2, 3 and 5 follow that merge. Until then the asset keeps writing
+   `Hypre/dimension` and the fork's PolySolve keeps accepting it (`f91643e`),
+   so Hypre runs as it does today; that acceptance is the fork's one
+   deliberate difference from upstream PolySolve's spec and has no end date
+   of its own. At each later upstream review, check whether #545 or a
+   successor has merged
+   (`git grep -n "block_mapping" upstream/main -- src/polyfem/solver/NLProblem.hpp`
+   finds it once it has). Only steps 4 (already decided, nothing to
+   implement) and the record apply before that.
 2. Check with the Hypre scene of `houdini_HDAs/tests/test_polyfem_hda.py`
    that a run with `Hypre/dimension: 3` in the scene and a run without the
    option (block size from step 1) give the same iteration counts.
