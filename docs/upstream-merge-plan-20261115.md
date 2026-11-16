@@ -1,7 +1,6 @@
 # Upstream merge plan: IPC Toolkit and PolyFEM (2026-11-15)
 
-Status: **plan, not started.** PolySolve is merged locally and not yet
-published (section 1). Written for
+Status: **plan, not started.** PolySolve is merged and published (section 1). Written for
 implementation sessions that have not seen the review; each task below is meant
 to be handed to one session on its own. Read sections 1–4 before any task.
 
@@ -13,7 +12,7 @@ task's record, and report to the user. Do not work around a stop condition.
 
 | Repository | Fork branch and tip | Upstream tip | Merge base |
 | --- | --- | --- | --- |
-| PolySolve | `iteration-callback` `43ca2e6`; the merge of upstream `623a7ea` is on local branch `merge-upstream-20261115` (worktree `upstream-merge-work/polysolve`), its own suite passes, PolyFEM smokes and the pin bump are still to do | `623a7ea` | `da4e7fe` |
+| PolySolve | `iteration-callback` `f175cabe`: **merged with upstream `623a7ea` and published 2026-11-15** (record: `docs/upstream-integration-20261115.md` in the PolySolve repository) | `623a7ea` | — |
 | IPC Toolkit | `semi-implicit-stiffness` `7b8fcac7` | `7d668025` (64 commits ahead of the base) | `869e489e` |
 | PolyFEM | `main` `320a08c1b` plus the PolySolve pin commit | `f974f45ed` (77 commits ahead of the base) | `591b08bd5` |
 | Test data | `sdast9/polyfem-data` branch `fable-fixtures`, pinned `aed03ab9` | `polyfem/polyfem-data` `ab3246ce` at the PolyFEM tip | — |
@@ -21,6 +20,11 @@ task's record, and report to the user. Do not work around a stop condition.
 Upstream PolyFEM `f974f45ed` pins IPC Toolkit `dff05854` (2026-10-21) and
 PolySolve `621e8fb3`. IPC Toolkit's later commits have not been run under any
 PolyFEM, upstream's included.
+
+Suite baseline for task ladder V5, measured 2026-11-15 on fork `main`
+`320a08c1b` with the merged PolySolve: 441 cases / 5,179,398 assertions pass,
+none fail, 19 minutes (`unit_tests` run directly, macOS arm64,
+RelWithDebInfo). The same build passes all 31 Houdini asset test files.
 
 The numbers in this plan come from in-memory trial merges
 (`git merge-tree --write-tree`) of the fork tips above. Nothing in IPC Toolkit
@@ -134,7 +138,8 @@ Each task names the levels it must pass.
 * **V3 smokes.** The five scenes in `polyfem/scenes/semi-implicit/`
   (`quasistatic-semi`, `quasistatic-semi-friction`, `transient-semi`,
   `quasistatic-adaptive`, `quasistatic-semi-alhess`), run with
-  `--max_threads 1`, compared with the same scenes from the previous task's
+  `--max_threads 1` (`tools/smoke/run_smoke.py` runs them and gives one
+  status), compared with the same scenes from the previous task's
   binary (keep each task's binary under `upstream-merge-work/bin/<task>/`).
   Report each scene as: byte-identical VTUs; same solver history with
   differences at roundoff (largest normalized difference at most `1e-12`); or
@@ -147,9 +152,9 @@ Each task names the levels it must pass.
   accepted record), as each tool's README describes.
 * **V5 full suite.** All of `unit_tests`, with a time limit of at least two
   hours (`timeout` is not installed; use `perl -e 'alarm N; exec @ARGV'`).
-  Baseline on fork `main`: every case passes except the two known golden-scene
-  failures, `gcp-contact/cube-on-floor` (`contact_2d`) and `stretch-cubes`.
-  Any other failure is a stop.
+  Baseline: the suite is green on fork `main` (see `CLAUDE.md` and section 1
+  for the last measured run). Any failure is new and is a stop, unless
+  [open-items-20260929.md](open-items-20260929.md) lists it.
 * **V6 Houdini.** The asset tests in `houdini_HDAs/tests/`, run with `hython`
   and `POLYFEM_BIN` set to the integration binary.
 
@@ -175,8 +180,8 @@ PF-1 → PF-2a → PF-2b → PF-3 → PF-4 → PF-5 → RM-1 → RM-2 → PF-6 �
 PF-8 → IPC-2 → IPC-3 → IPC-4 → IPC-5 → REL-1
 ```
 
-* RM-0 and IPC-1 have no prerequisites and can run at any time, in parallel
-  with the PF tasks.
+* RM-0, IPC-1 and PS-1 have no prerequisites and can run at any time, in
+  parallel with the PF tasks.
 * PF-4 needs IPC-1. PF-6 needs RM-2. IPC-2 to IPC-5 come after PF-8 because
   upstream PolyFEM itself stops at IPC Toolkit `dff05854`.
 * Only one session at a time writes to a given integration branch.
@@ -209,6 +214,45 @@ Keep the scenes, binary and outputs; RM-2 compares against them.
 Stop: the code does not compile without design choices, or no scene remeshes.
 The user then decides whether decision 1 still stands.
 
+### PS-1 — Block size and Hypre ranks after the PolySolve merge
+
+Background. Upstream PolySolve (#124) moved the block size (unknowns per
+node) out of the solver options: `linear::Solver::create(params, logger,
+strict, dimension)` and `nonlinear::Solver::create(..., norm_type, dimension)`
+now take it and call `set_block_size`. PolyFEM, the fork's and upstream's,
+passes nothing, so the block size is 1 unless the scene says otherwise. The
+Houdini asset writes `Hypre/dimension: 3` on purpose (it switches BoomerAMG to
+its elasticity settings); the fork's PolySolve keeps accepting that option
+(`f91643e`) so those scenes still run as before. Upstream PolySolve (#125)
+also made Hypre split its rows across rank threads, by default one per core.
+
+1. Pass the problem dimension from PolyFEM at every solver creation for a
+   vector-valued problem. Call sites in the fork today:
+   `NonlinearElasticVarForm.cpp` (the AL and plain nonlinear solvers),
+   `NavierStokesFSIVarForm.cpp`, `optimization/Optimizations.cpp`,
+   `optimization/VarFormDiff.cpp`, `LinearElasticVarForm.cpp`,
+   `assembler/RhsAssembler.cpp`, and the remeshing code's `make_nl_solver`.
+   Scalar problems keep 1. Mixed problems (displacement plus pressure) are
+   not a uniform block: leave them at 1 and say so in the record.
+2. Check with the Hypre scene of `houdini_HDAs/tests/test_polyfem_hda.py`
+   that a run with `Hypre/dimension: 3` in the scene and a run without the
+   option (block size from step 1) give the same iteration counts.
+3. Do not remove `Hypre/dimension` from the asset or from the fork's
+   PolySolve in this task; old scenes depend on it.
+4. Measure, do not decide: Hypre results depend on the rank count (the
+   2026-11-15 check on a 32³ Laplacian gave relative residuals `4.19e-11` at
+   1 rank, `4.57e-11` at 4 and `9.14e-11` at the default on an 18-core
+   machine, each repeatable), so a Hypre scene now gives different numbers on
+   machines with different core counts, and `--max_threads` does not limit
+   the ranks. Report the options to the user: leave upstream's default; have
+   PolyFEM set `NANOMPI_NUM_RANKS` from `--max_threads` when the variable is
+   unset (as it does for Accelerate's threads); or fix it at 1, which is what
+   the fork did before the merge. Include wall times for each on a production
+   Hypre scene the user names.
+
+Ladder: V1; V2 `[solver]`-style cases that use Hypre, if any; V3 (expect
+byte-identical: no smoke uses Hypre); V6 `test_polyfem_hda.py`.
+
 ### IPC-1 — IPC Toolkit to `dff05854`
 
 Goal: merge upstream IPC Toolkit up to the commit upstream PolyFEM pins.
@@ -229,8 +273,10 @@ areas (#273), CMake option fixes (#268), the Eigen download fallback (#277).
      `smooth_contact/smooth_collisions_builder.cpp`): the fork emits smooth
      collisions in a canonical order (`f8dafef3`). Keep that order on the
      renamed builders.
-   * `broad_phase.hpp`, `brute_force.cpp`, test `CMakeLists.txt` files: keep
-     both sides' includes and entries.
+   * `tests/src/tests/collisions/CMakeLists.txt`,
+     `tests/src/tests/potential/CMakeLists.txt`,
+     `tests/src/tests/collisions/test_normal_collisions.cpp`: keep both
+     sides' entries and test cases.
 3. Build the toolkit's own tests (clone `ipc-sim/ipc-toolkit-tests-data` into
    `tests/data` first; the download step is not a dependency of the test
    target) and run the whole suite.
@@ -256,7 +302,9 @@ Stop: a fork test fails and the cause is not a missed conflict resolution.
    the fork recipe with the new fork data pin.
 
 Note for the record: #547 changes results on tet meshes refined with
-`n_refs > 0`. No semi-implicit smoke uses refinement.
+`n_refs > 0`. No semi-implicit smoke uses refinement. The user has not ruled
+on this change separately (it was part of open item D10); the plan takes it
+with the merge, and REL-1 lists it among the points to confirm.
 
 Ladder: V1, V3 (expect byte-identical), V5.
 
@@ -326,7 +374,7 @@ What the fork stores today (HDF5 state file, flat dataset names):
 
 | Dataset | Written by | Holds |
 | --- | --- | --- |
-| `u` (and the integrator history) | `NonlinearElasticVarForm` | solution |
+| `u` and the time-integrator history | `NonlinearElasticVarForm`, `VarForm::save_step_state` | solution and history (upstream's checkpoint already stores these; do not duplicate them) |
 | `contact_scalars` | `ContactForm::write_restart_state` | contact form scalars |
 | `contact_si_scalars` (layout version 2; a 23-entry version 1 is still read) | `BarrierContactForm::write_restart_state` | semi-implicit controller memory |
 | `friction_scalars`, `friction_normal_force` | `FrictionForm::write_restart_state` | friction lag state |
@@ -403,16 +451,19 @@ commit and at the fork's PolySolve (`4d498266` content is already in it).
    `collision_set_type`, `skip_obstacles`, `barrier`); the
    `collision_set_type` / `use_improved_max_operator` precedence; a guard that
    adaptive stiffness needs the squared-distance barrier; the static
-   `cached_displaced_surface` becoming a member (the fork already repaired
-   this static in RB-06; keep the fork's version); `dhat_epsilon_scale`
-   passed to `ipc::update_barrier_stiffness`.
+   `cached_displaced_surface` becoming a member (the fork's file no longer
+   contains `cached_displaced_surface` at all; keep the fork's mechanism and
+   do not add upstream's member); `dhat_epsilon_scale` passed to
+   `ipc::update_barrier_stiffness`.
 3. Semi-implicit stiffness with a non-default `barrier` or with
    `collision_set_type` other than the ones the fork validated: refuse by
    name in the constructor, as the fork already does for unsupported
    combinations (see `[rbr04]`). Do not let a new option reach the
    semi-implicit law silently.
-4. `SmoothContactForm` becomes `GCPContactForm` upstream; the fork's eight
-   files that include `ipc/smooth_contact/...` follow the rename.
+4. `SmoothContactForm` becomes `GCPContactForm` upstream; the eight fork
+   files that use the toolkit's smooth-contact API
+   (`grep -rl "ipc/smooth_contact\|SmoothCollisions\|SmoothContactParameters" src tests`)
+   follow the rename.
 5. `json-specs/input-spec.json` (rule **B**): keep all of the fork's entries
    and add upstream's `contact/barrier`, `collision_set_type`,
    `skip_obstacles`, `dhat_epsilon_scale` and the ESP entries. After
@@ -578,7 +629,14 @@ and use that binary for V3–V6.
 Upstream's candidates no longer derive from `ipc::CollisionStencil`; the
 polymorphic interface comes from `candidates/stencil_adapter.hpp`
 (`StencilAdapter`, `DTypeStencilAdapter`). 93 upstream files change; two more
-toolkit files conflict.
+toolkit files conflict:
+
+* `broad_phase/broad_phase.hpp`: keep the fork's `checked_count.hpp` include
+  and upstream's `candidate_vector.hpp` include.
+* `broad_phase/brute_force.cpp`: upstream changes the thread-local storage to
+  `CandidateVector<Candidate>`; the fork has its resource-budget check
+  (RB-05) in front of the loop. Keep the budget check and take upstream's
+  storage type.
 
 The fork's PolyFEM passes candidates where a `CollisionStencil` is expected:
 `BarrierContactForm::estimate_stiffness(const ipc::CollisionStencil &, ...)`
