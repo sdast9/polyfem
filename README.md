@@ -176,8 +176,9 @@ repository's own claims current. **Open decisions, work and verification gaps:
   `PolyFEM_bin --build_info` prints the compiled-in build identity; CTest
   `cli_contract` checks both through the real executable on every lane.
 - **Dependencies:** the recipes pin `sdast9/ipc-toolkit@7b8fcac7`
-  (branch `semi-implicit-stiffness`), `sdast9/polysolve@43ca2e66` (branch
-  `iteration-callback`) and the test data `sdast9/polyfem-data@aed03ab`
+  (branch `semi-implicit-stiffness`), `sdast9/polysolve@f175cabe` (branch
+  `iteration-callback`; merged with upstream `623a7ea` on 2026-11-15, CI on
+  that commit not yet confirmed; the lane counts below are for `43ca2e66`) and the test data `sdast9/polyfem-data@aed03ab`
   (branch `fable-fixtures`; `main` mirrors upstream `polyfem/polyfem-data`);
   both code forks' `Build` workflows run on those branches
   (PolySolve 6/6 lanes green; IPC Toolkit green on Linux/macOS, its two Windows

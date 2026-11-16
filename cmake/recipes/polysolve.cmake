@@ -24,7 +24,11 @@
 # (and RobustArmijo, Wolfe's fallback) refuse an uphill direction as a failed
 # search instead of asserting (ADAM directions are unscreened;
 # docs/armijo-uphill-direction-20260927.md in the PolySolve repository;
-# 43ca2e66 adds its CI result, docs only).
+# 43ca2e66 adds its CI result, docs only). f175cabe merges upstream 623a7ea
+# (hypre on shared rank threads, the block size passed to Solver::create,
+# the accept_energy_decrease_in_grad_mode line-search option) and keeps
+# accepting Hypre/dimension, which upstream removed and the Houdini asset
+# writes (docs/upstream-integration-20261115.md in the PolySolve repository).
 # License: MIT
 
 if(TARGET polysolve)
@@ -34,4 +38,4 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#43ca2e661069ba3971e16ec4c26969ea1f1d41cc")
+CPMAddPackage("gh:sdast9/polysolve#f175cabe11deea2d3cafb74a6dec21a9e680ef69")
