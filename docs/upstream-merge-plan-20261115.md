@@ -238,17 +238,35 @@ also made Hypre split its rows across rank threads, by default one per core.
    that a run with `Hypre/dimension: 3` in the scene and a run without the
    option (block size from step 1) give the same iteration counts.
 3. Do not remove `Hypre/dimension` from the asset or from the fork's
-   PolySolve in this task; old scenes depend on it.
-4. Measure, do not decide: Hypre results depend on the rank count (the
-   2026-11-15 check on a 32³ Laplacian gave relative residuals `4.19e-11` at
-   1 rank, `4.57e-11` at 4 and `9.14e-11` at the default on an 18-core
-   machine, each repeatable), so a Hypre scene now gives different numbers on
-   machines with different core counts, and `--max_threads` does not limit
-   the ranks. Report the options to the user: leave upstream's default; have
-   PolyFEM set `NANOMPI_NUM_RANKS` from `--max_threads` when the variable is
-   unset (as it does for Accelerate's threads); or fix it at 1, which is what
-   the fork did before the merge. Include wall times for each on a production
-   Hypre scene the user names.
+   PolySolve in this task; old scenes depend on it. Why it still matters
+   (measured 2026-11-16, `upstream-merge-work/hypre-dimension/`, a 4,913-node
+   NeoHookean cube, one rank, one thread): with `Hypre/dimension: 3` the run
+   took 6.0 s, 19 Newton iterations and 5 rejected linear solves; without
+   the option (block size 1, which is what upstream PolyFEM runs today) 16.8 s,
+   44 iterations and 54 rejected linear solves. The end results agree. Once
+   step 1 is in and step 2 passes, removing the key from the asset is a
+   separate change the user decides; the fork's PolySolve should keep
+   accepting it for scenes already written.
+4. Hypre rank count: **decided 2026-11-16, leave upstream's behaviour.** Hypre
+   runs on one nano-mpi rank per core unless `NANOMPI_NUM_RANKS` is set, and
+   `--max_threads` does not limit it. Do not add a cap or a default in
+   PolyFEM. Consequence to state in the record and in the asset's Hypre help:
+   results depend on the rank count (the 2026-11-15 check on a 32³ Laplacian
+   gave relative residuals `4.19e-11` at 1 rank, `4.57e-11` at 4 and
+   `9.14e-11` at the default on an 18-core machine, each repeatable), so a
+   Hypre scene gives different numbers on machines with different core
+   counts; set `NANOMPI_NUM_RANKS` to the same value on both to compare runs.
+5. Not required by upstream's change but found with it: the block size
+   assumes row `i` belongs to component `i % dimension`. PolyFEM solves the
+   reduced system `Q2ᵀ H Q2` (`NLProblem.cpp`). If `Q2` only selects the free
+   unknowns, the assumption holds when every constrained node is constrained
+   in all components and fails otherwise; with a QR null-space basis the rows
+   have no node structure. This was not checked in the code or measured: on
+   the cube above with the bottom held only in z, the option still helped
+   (12.4 s against 19.5 s) but that is also a different problem. Upstream
+   PolySolve added `Problem::block_mapping()` for this and upstream PolyFEM
+   does not implement it. Record what `Q2` is in each case and whether
+   `NLProblem` can supply the mapping; do not implement it in this task.
 
 Ladder: V1; V2 `[solver]`-style cases that use Hypre, if any; V3 (expect
 byte-identical: no smoke uses Hypre); V6 `test_polyfem_hda.py`.
