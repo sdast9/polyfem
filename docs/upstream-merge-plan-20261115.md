@@ -227,14 +227,32 @@ its elasticity settings); the fork's PolySolve keeps accepting that option
 Upstream PolySolve (#125) also made Hypre split its rows across rank threads,
 by default one per core.
 
-1. Pass the problem dimension from PolyFEM at every solver creation for a
-   vector-valued problem. Call sites in the fork today:
-   `NonlinearElasticVarForm.cpp` (the AL and plain nonlinear solvers),
-   `NavierStokesFSIVarForm.cpp`, `optimization/Optimizations.cpp`,
-   `optimization/VarFormDiff.cpp`, `LinearElasticVarForm.cpp`,
-   `assembler/RhsAssembler.cpp`, and the remeshing code's `make_nl_solver`.
-   Scalar problems keep 1. Mixed problems (displacement plus pressure) are
-   not a uniform block: leave them at 1 and say so in the record.
+1. PolyFEM has to pass the problem dimension when it creates solvers.
+   **Upstream has this in progress; do not write a fork-only version**
+   (found 2026-11-16). Draft pull request polyfem/polyfem#545 (branch
+   `max-dev`, by the author of PolySolve #124 and #125, last updated
+   2026-10-05, based on `591b08bd5`, pins that author's PolySolve fork and
+   also carries unrelated preconditioner work) contains:
+   * `2dfde3e459`: the dimension at the solver-creation calls where the
+     system is uniformly interleaved per node (`LinearElasticVarForm`,
+     `ScalarVarForm`, `BilaplacianVarForm`, the mass solve in `RhsAssembler`,
+     the elastic and contact nonlinear solves, `make_nl_solver`), left at 1
+     on purpose for the solver inside `NLProblem`, mixed formulations and
+     homogenization; and `NLProblem::block_mapping()`, which gives the solver
+     the component of each row of the reduced system when the constraints
+     are an axis-aligned selection (Dirichlet conditions), and nothing for
+     QR-projected constraints.
+   * `08b51cd7b7`: the same for the homogenization and differentiable paths.
+
+   Pending the user's choice between two routes. (a) Wait: when upstream
+   merges this work it arrives with an ordinary upstream merge, and steps 2
+   and 3 follow it; until then the asset keeps writing `Hypre/dimension` and
+   the fork's PolySolve keeps accepting it, so nothing gets slower. (b) Port
+   now: apply the varform, `RhsAssembler` and `NLProblem` parts of those two
+   commits (not the legacy-State parts, which upstream has since deleted,
+   and not the preconditioner commits around them) on top of PF-8, with the
+   risk that upstream changes them before merging. Either way the code is
+   upstream's design, not a new one.
 2. Check with the Hypre scene of `houdini_HDAs/tests/test_polyfem_hda.py`
    that a run with `Hypre/dimension: 3` in the scene and a run without the
    option (block size from step 1) give the same iteration counts.
@@ -269,11 +287,7 @@ by default one per core.
    rank, one thread): with block size 3 the run took 6.0 s, 19 Newton
    iterations and 5 rejected linear solves; with block size 1, which is what
    upstream PolyFEM runs today, 16.8 s, 44 iterations and 54 rejected linear
-   solves. The end results agree. Step 1 is the one place where the fork
-   then differs from upstream PolyFEM (upstream passes no dimension); it
-   uses upstream PolySolve's interface as upstream's commit describes it, and
-   is a candidate to offer upstream. Report that to the user; do not open a
-   pull request.
+   solves. The end results agree.
 4. Hypre rank count: **decided 2026-11-16, leave upstream's behaviour.** Hypre
    runs on one nano-mpi rank per core unless `NANOMPI_NUM_RANKS` is set, and
    `--max_threads` does not limit it. Do not add a cap or a default in
@@ -283,17 +297,16 @@ by default one per core.
    `9.14e-11` at the default on an 18-core machine, each repeatable), so a
    Hypre scene gives different numbers on machines with different core
    counts; set `NANOMPI_NUM_RANKS` to the same value on both to compare runs.
-5. Not required by upstream's change but found with it: the block size
-   assumes row `i` belongs to component `i % dimension`. PolyFEM solves the
-   reduced system `Q2ᵀ H Q2` (`NLProblem.cpp`). If `Q2` only selects the free
-   unknowns, the assumption holds when every constrained node is constrained
-   in all components and fails otherwise; with a QR null-space basis the rows
-   have no node structure. This was not checked in the code or measured: on
-   the cube above with the bottom held only in z, the option still helped
-   (12.4 s against 19.5 s) but that is also a different problem. Upstream
-   PolySolve added `Problem::block_mapping()` for this and upstream PolyFEM
-   does not implement it. Record what `Q2` is in each case and whether
-   `NLProblem` can supply the mapping; do not implement it in this task.
+5. Rows of the reduced system. The block size alone assumes row `i` belongs
+   to component `i % dimension`; PolyFEM's reduced system drops the
+   constrained rows, so that fails when a node is constrained in only some
+   components. Upstream's draft answers this with `NLProblem::block_mapping()`
+   (step 1). The asset's `Hypre/dimension: 3` has never supplied a mapping,
+   so today's Hypre runs on such scenes use a misaligned assignment. Not
+   measured in isolation: on the cube of step 3 with the bottom held only in
+   z, the option still helped (12.4 s against 19.5 s), but that is also a
+   different problem. When step 1 arrives, check on that scene that the
+   mapping is passed and compare iteration counts with and without it.
 
 Ladder: V1; V2 `[solver]`-style cases that use Hypre, if any; V3 (expect
 byte-identical: no smoke uses Hypre); PolySolve's own suite after step 3.2;
