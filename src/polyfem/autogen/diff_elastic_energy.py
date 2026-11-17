@@ -29,17 +29,14 @@ class AMIPSEnergy:
                 [1, 0, 0],
                 [sp.Rational(1, 2), sp.sqrt(3) / 2, 0],
                 [sp.Rational(1, 2),
-                 sp.Rational(1, 2) / sp.sqrt(3), sp.sqrt(3) / 2]
+                 sp.Rational(1, 2) / sp.sqrt(3), sp.sqrt(sp.Rational(2, 3))]
             ])
         standard = standard.inv().T
 
         return standard
 
     def eval(self, p, t, el_id, def_grad):
-        if self.use_rest_pose:
-            power = 1 if self.dim == 2 else sp.Rational(2, 3)
-        else:
-            power = 2 if self.dim == 2 else sp.Rational(5, 3)
+        power = 1 if self.dim == 2 else sp.Rational(2, 3)
 
         standard = self.get_standard()
 

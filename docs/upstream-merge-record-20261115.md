@@ -70,3 +70,26 @@ Thermoelastic/FSI form-history limitations were traced to PF-1's actual save/res
 - Pinned clang-format 21.1.8 passed all changed extant source files, including the three new headers; diff whitespace check passed.
 
 Evidence is in sibling `PF-2a/`: chronological CHECKPOINT.md, all build/test exit receipts and logs, `v2-first/`, `smoke-first/`, `smoke-comparison.json`, `rb02/`, `rb05/`, `rb05-scene/`, `checkpoint-smokes/`, and `full-suite-second/`. Final executable/build-info/hash snapshots are in `bin/PF-2-validation-final/`; earlier snapshots remain preserved. Publication and later Houdini/merge-plan stages remain separate gates; no main-branch or shared-build update is implied.
+
+## 2026-11-17 — PF-3: corrected upstream AMIPS
+
+Merged upstream `008a1aeae97b277c8bcf644adf0673749b7889ef` (#487) onto PF-2 `c1066a57ca3a35450e30d424a281f7fc6a21ac06` in the isolated integration worktree. Data prerequisite is local merge `f92cfdcff8a7567e392d82d93c3433bba14af478`, merging upstream `4fa1e3e6674253e57477b65730713cc168a4184c` onto PF-2 data `270ece1f73fd10891ae1ee8f592a1a2942e50688`. Only `standard/amips.json` reference values changed; no fork fixture was removed. Neither PF-3 merge has been published at the time of this record. PF-2 data/source were separately approved, pushed in that order and verified remotely; integration pushes generated no CI runs.
+
+### Preservation decision and resolutions
+
+Inspection found additional restrictions beyond the plan's brief energy summary. Work stopped before compilation, and Steven explicitly chose **“Accept upstream”** after the alternatives were explained. Adopt the corrected regular-element map, determinant exponent 2/d, per-element normalization, corrected regular tetrahedron and per-point material parameters. Absolute mode (`use_rest_pose=false`) now supports straight simplices with linear displacement, emits NaN rather than misleading physical stress, and refuses stress derivatives. Deformation-gradient output remains available. Rest-pose AMIPS, including the existing FSI scenes and optimization AMIPSForm, is retained. WMTK remeshing's AMIPS implementation is separate and was not changed.
+
+The removed stress calculation differentiated the wrong map; retaining its old numbers would preserve reproducibility rather than correctness. No legacy compatibility mode, silent rest-pose substitution or bypass of upstream guards was introduced. A bounded source/JSON review found no existing fork-specific use of the affected paths, but did not cover binary HIP files or archived/external projects. This is an accepted upstream scope change, not a claim that nobody could have used those APIs.
+
+**Future goal:** a separately designed and tested broader AMIPS extension, if needed: define higher-order and non-simplex reference-cell distortion functionals and correctly derived energy-conjugate outputs/adjoints. Do not restore incorrect legacy numbers under the corrected model's name. No such extension is implemented or promised as validated here.
+
+Two textual conflicts (rather than the plan's predicted zero): `cmake/recipes/polyfem_data.cmake` retains the fork repository/recipe with the merged data pin; `tests/test_assembler.cpp` retains both the fork string-matcher include and upstream generator include. No file deletions. Automatic merges retain the fork material-cache/validation behavior; upstream adds boolean ExpressionValue input support. IPC remains `7b8fcac7`, PolySolve unchanged, MISO/ITR OFF. Shared checkout/build and RM-0 remain untouched.
+
+### Validation
+
+- **V1:** PolyFEM_bin and unit_tests built successfully, exit 0 (macOS arm64, RelWithDebInfo, four build jobs).
+- Additional focused `[amips],[amips_form],[material_cache]`: **5 cases / 187 assertions passed**, including upstream 2D energy/gradient/Hessian consistency, high-order refusal, absolute stress/F behavior, and fork material snapshots.
+- **V3:** five one-thread smoke scenes, **25/25 VTUs byte-identical to PF-2**, all exit 0. No changed solver history accepted or tolerance adjusted.
+- **V5:** default full suite, seed 1, four OpenMP threads, isolated Python, MKL_CBWR=COMPATIBLE, caffeinate -s and 7,200-second timeout: **470 cases / 5,180,153 assertions passed**, exit 0, **1,150.73 seconds**, completed approximately 02:26:59 UTC. No test filtering or accepted failure. These results are native coverage, not remote/cross-platform CI.
+
+Evidence: `PF-3/build-first.*`, `focused-first/`, `smoke-first/`, `smoke-output/`, `smoke-comparison.json`, `suite-first/`, `post-gates.*`, source/usage review and data patch. Tested binary/build-info/hash snapshot: `bin/PF-3-validation/`. Dedicated new 3D vertex-permutation/scale-invariance property tests were suggested during review but not added; the existing standard 3D AMIPS scene and full suite passed. Later publication and REL-1 remain separate; main and installed Houdini assets are unchanged.
