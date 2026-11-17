@@ -41,7 +41,7 @@ def main():
         cfg['time']['dt'] = dt
         cfg['solver']['contact'].setdefault('semi_implicit', {}).update(trim_lower=lower, trim_upper=.9)
         cfg['output'].update(directory=str(d/'output'), stats=True)
-        for asset in ('cube.mesh', 'slab.obj'):
+        for asset in ('cube.msh', 'slab.obj'):
             shutil.copy2(ROOT/'scenes/semi-implicit'/asset, d/asset)
         (d/'params.json').write_text(json.dumps(cfg, indent=2)+'\n')
         cmd = [str(binary), '--json', str(d/'params.json'), '--log_level', 'trace']

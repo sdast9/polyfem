@@ -80,17 +80,19 @@ namespace
 							std::swap(t[2], t[3]);
 						T.push_back(t);
 					}
-		const auto path = dir / "beam.mesh";
+		const auto path = dir / "beam.msh";
 		std::ofstream out(path);
-		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n"
+		out << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Nodes\n"
 			<< V.size() << "\n";
+		int node = 1;
 		for (const auto &v : V)
-			out << v[0] << " " << v[1] << " " << v[2] << " 0\n";
-		out << "Tetrahedra\n"
+			out << node++ << " " << v[0] << " " << v[1] << " " << v[2] << "\n";
+		out << "$EndNodes\n$Elements\n"
 			<< T.size() << "\n";
+		int element = 1;
 		for (const auto &t : T)
-			out << t[0] + 1 << " " << t[1] + 1 << " " << t[2] + 1 << " " << t[3] + 1 << " 0\n";
-		out << "End\n";
+			out << element++ << " 4 2 0 1 " << t[0] + 1 << " " << t[1] + 1 << " " << t[2] + 1 << " " << t[3] + 1 << "\n";
+		out << "$EndElements\n";
 		return path.string();
 	}
 
@@ -239,7 +241,7 @@ TEST_CASE("Referenced files are the input's strings that resolve to existing fil
 	}
 	json args = json::object();
 	args["root_path"] = (dir / "params.json").string();
-	args["geometry"] = json::array({{{"mesh", "beam.mesh"}}, {{"mesh", "absent.mesh"}}});
+	args["geometry"] = json::array({{{"mesh", "beam.msh"}}, {{"mesh", "absent.msh"}}});
 	args["space"] = {{"discr_order", "orders.txt"}};
 	args["materials"] = {{"type", "NeoHookean"}, {"E", "orders.txt"}}; // a per-element value file
 	args["output"] = {{"paraview", {{"file_name", "sim.pvd"}}}, {"directory", dir.string()}};
@@ -257,7 +259,7 @@ TEST_CASE("Referenced files are the input's strings that resolve to existing fil
 	}
 	CHECK(pointers == std::vector<std::string>{"/geometry/0/mesh", "/materials/E", "/space/discr_order"});
 	CHECK(files[0]["sha256"] == utils::Sha256::of_file(mesh));
-	CHECK(files[0]["value"] == "beam.mesh");
+	CHECK(files[0]["value"] == "beam.msh");
 	std::filesystem::remove_all(dir);
 }
 
@@ -278,7 +280,7 @@ TEST_CASE("A value string longer than the path limit is not a file and does not 
 
 	json args = json::object();
 	args["root_path"] = (dir / "params.json").string();
-	args["geometry"] = json::array({{{"mesh", "beam.mesh"}}});
+	args["geometry"] = json::array({{{"mesh", "beam.msh"}}});
 	args["boundary_conditions"] = {{"pressure_boundary", json::array({{{"id", 1}, {"value", expression}}})}};
 
 	json files;

@@ -72,7 +72,7 @@ def main():
         directory = out / name
         directory.mkdir()
         config = json.loads((SCENES / (scene + '.json')).read_text())
-        for asset in ('cube.mesh', 'slab.obj'):
+        for asset in ('cube.msh', 'slab.obj'):
             shutil.copy2(SCENES / asset, directory / asset)
         config['output'].update(directory=str(directory / 'output'), stats=True, physical_diagnostics=True)
         config['output']['paraview']['file_name'] = 'run.pvd'

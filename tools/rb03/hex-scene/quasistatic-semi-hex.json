@@ -1,7 +1,7 @@
 {
     "geometry": [
         {
-            "mesh": "hex-cube.mesh",
+            "mesh": "hex-cube.msh",
             "surface_selection": [
                 {
                     "id": 2,

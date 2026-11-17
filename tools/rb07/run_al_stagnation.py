@@ -182,7 +182,7 @@ def main():
         directory = out / name
         directory.mkdir()
         config = SCENE_BUILDERS[scene]()
-        for asset in ('cube.mesh', 'slab.obj'):
+        for asset in ('cube.msh', 'slab.obj'):
             shutil.copy2(SCENES / asset, directory / asset)
         config['output']['directory'] = str(directory / 'output')
         if budget is not None:

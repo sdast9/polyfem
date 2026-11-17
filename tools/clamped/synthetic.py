@@ -3,7 +3,7 @@
 
 usage: synthetic.py --binary B --out E [--scene S1 ...] [--mode keep ...]
 
-Every scene is quasistatic, uses the public smoke's cube.mesh (unit cube, 5x5x5
+Every scene is quasistatic, uses the public smoke's cube.msh (unit cube, 5x5x5
 vertices) and slab.obj (obstacle at z = -0.02), dhat 1e-3, NeoHookean E 1e7,
 Eigen::SimplicialLDLT, one thread, and the production controller stated
 explicitly (band_statistic rms, no initial estimate). The free cube C is
@@ -38,7 +38,7 @@ ALL = {'box': [[-0.1, -0.1, -0.1], [1.1, 1.1, 1.1]], 'relative': True}
 
 
 def block(x, y=2.0, z=0.0, sel_id=3, scale=1.0):
-    return {'mesh': str(SMOKE / 'cube.mesh'), 'transformation': {'translation': [x, y, z], 'scale': [scale] * 3},
+    return {'mesh': str(SMOKE / 'cube.msh'), 'transformation': {'translation': [x, y, z], 'scale': [scale] * 3},
             'surface_selection': [dict(ALL, id=sel_id)]}
 
 
@@ -47,7 +47,7 @@ def scene(name, mode):
     tend, dt = 1.0, 0.25
     if name in ('S0', 'S0late', 'S1', 'S2', 'S3', 'S5'):
         z0 = 0.3 if name in ('S0late', 'S3', 'S5') else 0.0
-        geometry.append({'mesh': str(SMOKE / 'cube.mesh'), 'transformation': {'translation': [0, 0, z0]},
+        geometry.append({'mesh': str(SMOKE / 'cube.msh'), 'transformation': {'translation': [0, 0, z0]},
                          'surface_selection': [{'id': 2, 'box': [[-0.1, -0.1, 0.99], [1.1, 1.1, 1.1]], 'relative': True}]})
         dirichlet.append({'id': 2, 'value': [0, 0, '-0.25*t']})
         if not name.startswith('S0'):
@@ -61,7 +61,7 @@ def scene(name, mode):
         faces = [dict(ALL, id=4)] if name == 'S4' else [
             {'id': 4, 'box': [[-0.1, -0.1, 0.99], [1.1, 1.1, 1.1]], 'relative': True},
             {'id': 4, 'box': [[-0.1, -0.1, -0.1], [1.1, 1.1, 0.01]], 'relative': True}]
-        geometry.append({'mesh': str(SMOKE / 'cube.mesh'), 'transformation': {'translation': [0, 3, 0]},
+        geometry.append({'mesh': str(SMOKE / 'cube.msh'), 'transformation': {'translation': [0, 3, 0]},
                          'surface_selection': faces})
         dirichlet.append({'id': 4, 'value': ['0.3*t', 0, 0]})
         geometry.append(block(1.1, y=3.0))

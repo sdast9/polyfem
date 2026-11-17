@@ -29,6 +29,15 @@ shape optimization, not the ongoing dynamics timestep. Keep all other fork
 capabilities, including write-only State diagnostics and checkpoint extensions.
 The original task descriptions below are historical where this amendment differs.
 
+## Amendment: upstream and fork functionality (user, 2026-11-17)
+
+For future merge decisions, check whether upstream previously provided the same
+functionality as the fork. When upstream moved away from shared functionality,
+aim to follow upstream. Preserve capabilities the fork added and
+fixes for upstream behavior that the merge still leaves broken. Identify any
+remaining tradeoff before accepting the loss of such functionality. Publication
+and release continue to require the existing owner approvals.
+
 ## 1. State on 2026-11-15
 
 | Repository | Fork branch and tip | Upstream tip | Merge base |

@@ -15,6 +15,7 @@
 #include <set>
 #include <cctype>
 #include <cmath>
+#include <set>
 
 namespace polyfem::assembler
 {

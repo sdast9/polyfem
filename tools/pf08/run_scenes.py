@@ -29,7 +29,7 @@ for name, base, refs, dt in cases:
     inp.mkdir(parents=True, exist_ok=False)
     output.mkdir()
     config = json.loads((source / (base + '.json')).read_text())
-    for asset in ('cube.mesh', 'slab.obj'):
+    for asset in ('cube.msh', 'slab.obj'):
         shutil.copy2(source / asset, inp / asset)
     config['time']['dt'] = dt
     if refs:

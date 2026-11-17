@@ -3,7 +3,7 @@
 
 usage: synthetic.py --binary B --out E [--scene D1 ...] [--mode default ...]
 
-Built like tools/clamped/synthetic.py: the public smoke's cube.mesh (unit
+Built like tools/clamped/synthetic.py: the public smoke's cube.msh (unit
 cube, 5x5x5 vertices, spacing 0.25) as the free body C, NeoHookean E 1e7,
 nu 0.45, rho 1000, dhat 1e-3, Eigen::SimplicialLDLT, one thread, the
 production controller stated explicitly (band_statistic rms, no initial
@@ -14,7 +14,7 @@ which Dirichlet rows enter the full-DOF balance:
                               0.05 above slab.obj (4 vertices): the obstacle
                               half of every contact sums onto 4 nodes
   D2  drop, fine obstacle     as D1 onto a 31x31 grid obstacle (spacing 0.1)
-  D3  drop, clamped block     as D1 onto a second cube.mesh whose whole
+  D3  drop, clamped block     as D1 onto a second cube.msh whose whole
                               surface is clamped (shifted 0.125 in x and y)
   D4  drop, elastic support   control: as D3 with only the support's bottom
                               face clamped; C touches free DOFs only, the
@@ -52,17 +52,17 @@ def scene(name, mode, grid):
     drop = name.startswith('D')
     geometry, dirichlet = [], []
     if drop:
-        geometry.append({'mesh': str(SMOKE / 'cube.mesh'), 'transformation': {'translation': [0, 0, 0.05]}})
+        geometry.append({'mesh': str(SMOKE / 'cube.msh'), 'transformation': {'translation': [0, 0, 0.05]}})
     else:
         z0 = 0.5 * DHAT
-        geometry.append({'mesh': str(SMOKE / 'cube.mesh'), 'transformation': {'translation': [0, 0, z0]},
+        geometry.append({'mesh': str(SMOKE / 'cube.msh'), 'transformation': {'translation': [0, 0, z0]},
                          'surface_selection': [dict(TOP, id=2)]})
         dirichlet.append({'id': 2, 'value': [0, 0, '-0.25*t']})
     if name in ('D1', 'D2'):
         geometry.append({'mesh': str(SMOKE / 'slab.obj') if name == 'D1' else str(grid), 'is_obstacle': True})
     else:
         clamped = name in ('D3', 'Q1')
-        geometry.append({'mesh': str(SMOKE / 'cube.mesh'), 'transformation': {'translation': [0.125, 0.125, -1.0]},
+        geometry.append({'mesh': str(SMOKE / 'cube.msh'), 'transformation': {'translation': [0.125, 0.125, -1.0]},
                          'surface_selection': [dict(ALL if clamped else BOTTOM, id=3)]})
         dirichlet.append({'id': 3, 'value': [0, 0, 0]})
     si = {'band_statistic': 'rms', 'initial_trim_estimate': False, 'clamped_contacts': 'exclude_statistics'}

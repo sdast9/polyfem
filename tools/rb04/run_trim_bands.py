@@ -39,7 +39,7 @@ def main():
             config = json.loads((ROOT / 'scenes/semi-implicit' / f'{scene}.json').read_text())
             config['solver']['contact'].setdefault('semi_implicit', {}).update(trim_lower=lower, trim_upper=upper)
             config['output'].update(directory=str(directory / 'output'), stats=True, physical_diagnostics=True)
-            for asset in ('cube.mesh', 'slab.obj'):
+            for asset in ('cube.msh', 'slab.obj'):
                 shutil.copy2(ROOT / 'scenes/semi-implicit' / asset, directory / asset)
             (directory / 'params.json').write_text(json.dumps(config, indent=2)+'\n')
             command = [str(binary), '--json', str(directory/'params.json'), '--log_level', 'debug']

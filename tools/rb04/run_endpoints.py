@@ -40,7 +40,7 @@ def main():
         directory = out / (name + ('-failure' if failure else '') + ('-on' if enabled else '-off'))
         directory.mkdir()
         config = json.loads((ROOT / 'scenes/semi-implicit' / (name + '.json')).read_text())
-        for asset in ('cube.mesh', 'slab.obj'):
+        for asset in ('cube.msh', 'slab.obj'):
             shutil.copy2(ROOT / 'scenes/semi-implicit' / asset, directory / asset)
         config['output']['paraview']['options'] = {'velocity': True, 'acceleration': True}
         config['output'].update(directory=str(directory / 'output'), stats=True, physical_diagnostics=enabled)

@@ -83,6 +83,7 @@ option(POLYFEM_WITH_TRIANGLE  "Build target igl_restricted::triangle"      OFF)
 # convergence studies; with miso off, polyfem falls back to Discrete jacobian
 # checking for all meshes. Turn on when needed: cmake -DPOLYFEM_WITH_MISO=ON ..
 option(POLYFEM_WITH_MISO "Use miso-generated code for the conservative P3 Jacobian check (long first-build compile)" OFF)
+option(POLYFEM_WITH_OPENMP "Compile PolyFEM (and its dependents) with OpenMP, e.g. for multithreaded Eigen products" OFF)
 option(POLYFEM_BUILD_DOCS     "Build documentation using Doxygen"          OFF)
 option(POLYFEM_REGENERATE_AUTOGEN    "Generate the python autogen files" OFF)
 set(POLYFEM_THREADING "TBB" CACHE STRING "Multithreading library to use (options: CPP, TBB, NONE)")
@@ -236,6 +237,22 @@ if(POLYFEM_TIGHT_INCLUSION_VERSION)
     target_compile_definitions(polyfem PRIVATE POLYFEM_TIGHT_INCLUSION_VERSION="${POLYFEM_TIGHT_INCLUSION_VERSION}")
 endif()
 
+# System libraries (threads and dynamic loading)
+find_package(Threads REQUIRED)
+target_link_libraries(polyfem PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+
+# OpenMP (opt-in)
+if(POLYFEM_WITH_OPENMP)
+    find_package(OpenMP REQUIRED COMPONENTS CXX)
+    target_link_libraries(polyfem PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+if(MSVC OR MSYS)
+    # Do not define min()/max() macros (they break std::min/std::max) and
+    # expose M_PI and friends.
+    target_compile_definitions(polyfem PUBLIC NOMINMAX _USE_MATH_DEFINES)
+endif()
+
 # Threading
 if(POLYFEM_THREADING STREQUAL "CPP")
     # IPC Toolkit uses TBB internally even when PolyFEM uses C++ threads.
@@ -277,10 +294,6 @@ endif()
 # Nanospline
 include(nanospline)
 target_link_libraries(polyfem PUBLIC nanospline)
-
-# Geogram
-include(geogram)
-target_link_libraries(polyfem PUBLIC geogram)
 
 # paraviewo (includes HDF5 and h5pp)
 include(paraviewo)

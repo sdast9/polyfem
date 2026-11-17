@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 
-ASSETS = ('cube.mesh', 'slab.obj')
+ASSETS = ('cube.msh', 'slab.obj')
 SMOKES = ('quasistatic-adaptive', 'quasistatic-semi', 'quasistatic-semi-alhess',
           'quasistatic-semi-friction', 'transient-semi')
 # The audit's two scenes; the other three are the wider public set.

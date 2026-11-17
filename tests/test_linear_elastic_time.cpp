@@ -84,17 +84,19 @@ namespace
 							std::swap(t[2], t[3]);
 						T.push_back(t);
 					}
-		const auto path = dir / "beam.mesh";
+		const auto path = dir / "beam.msh";
 		std::ofstream out(path);
-		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n"
+		out << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Nodes\n"
 			<< V.size() << "\n";
+		int node = 1;
 		for (const auto &v : V)
-			out << v[0] << " " << v[1] << " " << v[2] << " 0\n";
-		out << "Tetrahedra\n"
+			out << node++ << " " << v[0] << " " << v[1] << " " << v[2] << "\n";
+		out << "$EndNodes\n$Elements\n"
 			<< T.size() << "\n";
+		int element = 1;
 		for (const auto &t : T)
-			out << t[0] + 1 << " " << t[1] + 1 << " " << t[2] + 1 << " " << t[3] + 1 << " 0\n";
-		out << "End\n";
+			out << element++ << " 4 2 0 1 " << t[0] + 1 << " " << t[1] + 1 << " " << t[2] + 1 << " " << t[3] + 1 << "\n";
+		out << "$EndElements\n";
 		return path.string();
 	}
 

@@ -142,20 +142,12 @@ def _(d):
     fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene())
 
 
-@case("g1-medit-index-out-of-range", "geometry", "named_failure", "MEDIT .mesh tetrahedron references vertex 999 of 27", "ctl-medit", expect_error='Unable to load the FE mesh')
+@case("g1-msh22-index-out-of-range", "geometry", "named_failure", "Gmsh 2.2 tetrahedron references node tag 999 of 27", "ctl-msh22", expect_error='references node tag 999, which is not a node of the file')
 def _(d):
     V, T = fx.tet_cube(2)
-    raw = [[int(i) + 1 for i in t] for t in T]
-    raw[5][2] = 999
-    fx.write_medit(os.path.join(d, "cube.mesh"), V, T, raw_tets=raw)
-    fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene(mesh="cube.mesh"))
-
-
-@case("ctl-medit", "control", "accepted", "valid cube as a MEDIT .mesh file", None)
-def _(d):
-    V, T = fx.tet_cube(2)
-    fx.write_medit(os.path.join(d, "cube.mesh"), V, T)
-    fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene(mesh="cube.mesh"))
+    T[5][2] = 998  # The writer converts the zero-based index to a 1-based tag.
+    fx.write_msh22(os.path.join(d, "cube.msh"), V, T)
+    fx.dump_json(os.path.join(d, "scene.json"), fx.base_scene())
 
 
 @case("g1-inverted-tet", "geometry", "named_failure", "one rest tetrahedron with negative orientation", "ctl-nocontact", expect_error='element 7 is flipped')

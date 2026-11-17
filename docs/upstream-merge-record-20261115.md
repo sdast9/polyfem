@@ -362,3 +362,64 @@ unchanged installed asset hashes after each script; see
 Houdini invocation that could not detect NEON is retained as environment
 failure evidence, not a failed solver assertion. No HDA publication or
 installation.
+## PF-7: upstream mesh readers and FEM input formats (2026-11-17)
+
+Merge target `188bd09fc805a04cad687c65c280d9c46b191e57` from PF-6
+`635ea6cf22a9f0297bab1218c70179491997f68c`. The three conflict resolutions
+retain MISO OFF and upstream opt-in OpenMP in `CMakeLists.txt`, preserve the
+fork PolySolve pin and Eigen handling in `cmake/recipes/polysolve.cmake`, and
+keep the fork's rest-element and surface validation declarations with
+upstream matrix-based `is_planar` in `MeshUtils.hpp`. The pinned PolySolve
+`f175cabe` contains upstream `621e8fb3`. The published PF-6 data pin
+`ff5d77a7d216298cff19e5da4b61aacae2d6df12` carries forward.
+
+The owner approved alignment with upstream FEM dispatch. The Geogram fallback
+and the `State::set_mesh(GEO::Mesh &)` overload were present in the previous
+upstream revision `2b302cb749`. PF-7 accepts `.msh`, `.hybrid` and `.obj` and
+retires that shared fallback, including `.off`,
+`.mesh`, `.meshb`, `.ply` and `.stl`. CLI controls show that PF-6 solved all
+five retired inputs and PF-7 refuses each by extension. The OBJ control
+produced the same VTU bytes. Obstacle and surface inputs use the separate
+upstream surface reader. PF-6's remeshing decision carries forward as MMG
+shape-optimization restarts.
+
+The smoke tetrahedral and hexahedral assets use MSH 2.2 with exactly the
+same decoded coordinates and element corner order. Their Medit originals
+remain available as historical fixtures. Dependent scenes, regression
+runners and test-generated inputs use the migrated meshes. The RB-11
+out-of-range connectivity probe uses Gmsh 2.2 and checks the named
+missing-node diagnostic. The duplicate-rest-element test exercises the
+actual MSH loader. The existing HDF5 polygon checkpoint test uses the
+upstream geometry implementation.
+
+Verification on the isolated macOS arm64 build with MMG, optimization and
+Python enabled and MISO and OpenMP disabled:
+
+- **V1:** `PolyFEM_bin` and `unit_tests` built with exit 0. The pinned
+  clang-format 21.1.8 check passed for all 50 staged C-family files.
+- **V2:** 107 focused cases and 8,946 assertions passed, including MSH,
+  mesh geometry, MMG utilities and checkpoint/restart. Both selected
+  RB-11 cases passed. All 82 malformed-MSH outcomes, named diagnostics and
+  output file sets matched the retained corpus reference: 10 completions
+  and 72 named refusals. Ten MMG workflow cases passed both restarts with
+  zero coordinate difference between the emitted and reloaded geometry.
+- **V3:** Five single-threaded public smokes produced the same solver
+  histories and all 25 VTUs matched the retained PF-6 outputs byte for
+  byte. The independent Medit-to-MSH hex smoke comparison matched all
+  five VTUs.
+- **V4:** RB-02 passed 270 checks. All 24 RB-05 probe rows matched PF-6,
+  and both resource-limit scenes passed.
+- **V5:** The full default native suite passed 503 cases and 5,184,202
+  assertions on seed 1 in 20 minutes 22 seconds. Both the test process and
+  its bounded supervisor recorded exit 0.
+- **V6:** The isolated `test_msh_end_to_end.py`, `test_msh_parser.py` and
+  `test_msh_reader_topology.py` scripts each exited 0. Installed asset
+  digests matched their pre-run values after every script.
+
+Evidence is in sibling `PF-7/`, including the source snapshot
+`upstream-format-build-source.patch`, `fixture-migration-audit.json`,
+`build-upstream-formats/receipt.json`, and the per-gate logs, receipts and
+independent comparisons under `final-validation/`. The frozen executables,
+their digests and the generated build identity are under
+`bin/PF-7-upstream-format-validation/`.
+PF-7 publication requires owner authorization.

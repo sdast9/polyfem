@@ -58,18 +58,20 @@ namespace
 	// tetrahedra, twelve vertices, every one of them on the boundary.
 	std::filesystem::path write_beam_mesh(const std::filesystem::path &dir)
 	{
-		const auto path = dir / "beam.mesh";
+		const auto path = dir / "beam.msh";
 		std::ofstream out(path);
 		REQUIRE(out.is_open());
-		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n12\n";
+		out << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Nodes\n12\n";
+		int node = 1;
 		for (int i = 0; i <= 2; ++i)
 			for (int j = 0; j <= 1; ++j)
 				for (int k = 0; k <= 1; ++k)
-					out << i << " " << j << " " << k << " 0\n";
-		out << "Tetrahedra\n12\n"
-			<< "1 5 7 8 0\n1 5 8 6 0\n1 3 8 7 0\n1 3 4 8 0\n1 2 6 8 0\n1 2 8 4 0\n"
-			<< "5 9 11 12 0\n5 9 12 10 0\n5 7 12 11 0\n5 7 8 12 0\n5 6 10 12 0\n5 6 12 8 0\n"
-			<< "End\n";
+					out << node++ << " " << i << " " << j << " " << k << "\n";
+		out << "$EndNodes\n$Elements\n12\n"
+			<< "1 4 2 0 1 1 5 7 8\n2 4 2 0 1 1 5 8 6\n3 4 2 0 1 1 3 8 7\n4 4 2 0 1 1 3 4 8\n"
+			<< "5 4 2 0 1 1 2 6 8\n6 4 2 0 1 1 2 8 4\n7 4 2 0 1 5 9 11 12\n8 4 2 0 1 5 9 12 10\n"
+			<< "9 4 2 0 1 5 7 12 11\n10 4 2 0 1 5 7 8 12\n11 4 2 0 1 5 6 10 12\n12 4 2 0 1 5 6 12 8\n"
+			<< "$EndElements\n";
 		return path;
 	}
 

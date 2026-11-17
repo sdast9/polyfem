@@ -28,8 +28,6 @@
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 
-#include <geogram/mesh/mesh.h>
-
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -54,10 +52,6 @@ namespace
 	std::unique_ptr<Mesh> create_test_mesh(const Eigen::MatrixXd &vertices, const Eigen::MatrixXi &elements, bool non_conforming)
 	{
 		return Mesh::create(MeshData(vertices, elements), non_conforming);
-	}
-	std::unique_ptr<Mesh> create_test_mesh(GEO::Mesh &mesh, bool non_conforming)
-	{
-		return Mesh::create(MeshReader::from_geogram(mesh), non_conforming);
 	}
 	std::unique_ptr<Mesh> create_test_mesh(const std::string &path, bool non_conforming)
 	{
@@ -167,22 +161,25 @@ TEST_CASE("duplicate rest elements are refused", "[input_validation][mesh]")
 	}
 	SECTION("a loaded mesh with a duplicated element")
 	{
-		// geogram-loaded meshes get the same topological check before the
-		// connectivity is built (RB-12: geogram's adjacency assert fired
-		// first in Debug builds); validate_rest_elements covers geometry
-		GEO::Mesh M;
-		const Eigen::MatrixXd V = two_tet_vertices();
-		M.vertices.create_vertices(V.rows());
-		for (int i = 0; i < V.rows(); ++i)
-			for (int d = 0; d < 3; ++d)
-				M.vertices.point(i)[d] = V(i, d);
-		Eigen::MatrixXi T(3, 4);
-		T << 0, 1, 2, 3,
-			0, 2, 1, 4,
-			0, 1, 2, 3;
-		for (int c = 0; c < T.rows(); ++c)
-			M.cells.create_tet(T(c, 0), T(c, 1), T(c, 2), T(c, 3));
-		CHECK_THROWS_WITH(create_test_mesh(M, false), ContainsSubstring("Elements 0 and 2 are the same element"));
+		// Exercise the actual file decoder and runtime mesh construction as well
+		// as the cell-matrix API. The named topology check must precede adjacency.
+		const auto dir = scratch_dir("rb11-duplicate-mesh");
+		const auto make_mesh = [&](const std::string &name, bool duplicate) {
+			const auto path = dir / name;
+			std::ofstream out(path);
+			out << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n"
+				<< "$Nodes\n5\n1 0 0 0\n2 1 0 0\n3 0 1 0\n4 0 0 1\n5 0 0 -1\n$EndNodes\n"
+				<< "$Elements\n"
+				<< (duplicate ? 3 : 2)
+				<< "\n1 4 2 1 1 1 2 3 4\n2 4 2 1 1 1 3 2 5\n";
+			if (duplicate)
+				out << "3 4 2 1 1 1 2 3 4\n";
+			out << "$EndElements\n";
+			return path.string();
+		};
+		CHECK(create_test_mesh(make_mesh("valid.msh", false), false) != nullptr);
+		CHECK_THROWS_WITH(create_test_mesh(make_mesh("duplicate.msh", true), false), ContainsSubstring("Elements 0 and 2 are the same element"));
+		std::filesystem::remove_all(dir);
 	}
 }
 
@@ -884,20 +881,20 @@ TEST_CASE("Ogden term lists must pair up", "[input_validation][material]")
 
 	// the spec accepts a list of alphas (it refused one before this stage)
 	const auto dir = scratch_dir("rb11-ogden");
-	const auto mesh_path = dir / "two.mesh";
+	const auto mesh_path = dir / "two.msh";
 	{
 		Eigen::MatrixXd V = two_tet_vertices();
 		Eigen::MatrixXi T = two_tets();
 		std::ofstream out(mesh_path);
-		out << "MeshVersionFormatted 2\nDimension 3\nVertices\n"
+		out << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Nodes\n"
 			<< V.rows() << "\n";
 		for (int i = 0; i < V.rows(); ++i)
-			out << V(i, 0) << " " << V(i, 1) << " " << V(i, 2) << " 0\n";
-		out << "Tetrahedra\n"
+			out << i + 1 << " " << V(i, 0) << " " << V(i, 1) << " " << V(i, 2) << "\n";
+		out << "$EndNodes\n$Elements\n"
 			<< T.rows() << "\n";
 		for (int i = 0; i < T.rows(); ++i)
-			out << T(i, 0) + 1 << " " << T(i, 1) + 1 << " " << T(i, 2) + 1 << " " << T(i, 3) + 1 << " 0\n";
-		out << "End\n";
+			out << i + 1 << " 4 2 0 1 " << T(i, 0) + 1 << " " << T(i, 1) + 1 << " " << T(i, 2) + 1 << " " << T(i, 3) + 1 << "\n";
+		out << "$EndElements\n";
 	}
 	json args = minimal_args(mesh_path.string());
 	args["materials"] = {{"type", "UnconstrainedOgden"}, {"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}, {"rho", 1000.0}};

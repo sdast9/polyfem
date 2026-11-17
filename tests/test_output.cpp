@@ -113,10 +113,11 @@ TEST_CASE("PF4 2D volume obstacles export triangle VTU cells", "[pf4][output]")
 {
 	const auto dir = std::filesystem::current_path() / "DELETE_ME_pf4_obstacle_output";
 	std::filesystem::create_directories(dir);
-	const auto mesh = dir / "square.mesh";
+	const auto mesh = dir / "square.msh";
 	{
 		std::ofstream file(mesh);
-		file << "MeshVersionFormatted 1\nDimension 3\nVertices\n4\n0 0 0 0\n1 0 0 0\n1 1 0 0\n0 1 0 0\nTriangles\n2\n1 2 3 0\n1 3 4 0\nEnd\n";
+		file << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n$Nodes\n4\n1 0 0 0\n2 1 0 0\n3 1 1 0\n4 0 1 0\n"
+				"$EndNodes\n$Elements\n2\n1 2 2 0 1 1 2 3\n2 2 2 0 1 1 3 4\n$EndElements\n";
 	}
 	const auto obstacle_mesh = dir / "square.obj";
 	{

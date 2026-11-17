@@ -1,7 +1,7 @@
 {
     "geometry": [
         {
-            "mesh": "cube.mesh",
+            "mesh": "cube.msh",
             "surface_selection": [
                 {
                     "id": 2,

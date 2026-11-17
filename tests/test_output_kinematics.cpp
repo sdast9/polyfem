@@ -76,7 +76,7 @@ namespace
 
 	json scene_args(const std::filesystem::path &out_dir)
 	{
-		const std::filesystem::path mesh = std::filesystem::path(POLYFEM_TEST_DIR) / ".." / "scenes" / "semi-implicit" / "cube.mesh";
+		const std::filesystem::path mesh = std::filesystem::path(POLYFEM_TEST_DIR) / ".." / "scenes" / "semi-implicit" / "cube.msh";
 		json args = json::object();
 		args["geometry"] = json::array({{{"mesh", mesh.string()},
 										 {"volume_selection", 1},

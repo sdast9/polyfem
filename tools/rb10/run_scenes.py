@@ -81,7 +81,7 @@ def kinematics(name):
 def scene_json(kin, model, mu, epsv, budget, barrier='semi_implicit', friction_lag=None):
     """budget None / friction_lag None: leave the key out (the solver's current default)."""
     geometry = [
-        {'mesh': 'cube.mesh', 'surface_selection': [{'id': 2, 'axis': '+z', 'position': 0.99}]},
+        {'mesh': 'cube.msh', 'surface_selection': [{'id': 2, 'axis': '+z', 'position': 0.99}]},
         {'mesh': 'slab.obj', 'is_obstacle': True},
     ]
     bcs = {'dirichlet_boundary': [{'id': 2, 'value': [kin['ux'], kin['uy'], kin['uz']]}]}
@@ -199,12 +199,12 @@ for cfg in configurations(args.stage):
         kin = kinematics(cfg['fixture'])
         scene = scene_json(kin, cfg['model'], cfg['mu'], cfg['epsv'], cfg['budget'], cfg['barrier'], cfg.get('friction_lag'))
     (run_dir / 'scene.json').write_text(json.dumps(scene, indent=2) + '\n')
-    shutil.copy(SCENES / 'cube.mesh', run_dir / 'cube.mesh')
+    shutil.copy(SCENES / 'cube.msh', run_dir / 'cube.msh')
     shutil.copy(SCENES / 'slab.obj', run_dir / 'slab.obj')
     if kin['wall']:
         (run_dir / 'wall.obj').write_text(WALL)
     record = dict(cfg)
-    record['inputs'] = {f: sha(run_dir / f) for f in ['scene.json', 'cube.mesh', 'slab.obj'] + (['wall.obj'] if kin['wall'] else [])}
+    record['inputs'] = {f: sha(run_dir / f) for f in ['scene.json', 'cube.msh', 'slab.obj'] + (['wall.obj'] if kin['wall'] else [])}
     record['binary_sha256'] = sha(binary)
     record['command'] = [str(binary), '--json', 'scene.json', '-o', 'output', '--log_level', 'debug', '--max_threads', str(args.threads)]
     if args.dry_run:

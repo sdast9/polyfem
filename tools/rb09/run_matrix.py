@@ -70,7 +70,7 @@ def block_scene(cfg):
     quasistatic, barrier, fixed_kappa, unit_scale, unload_at, stacked."""
     s = cfg.get('unit_scale', 1.0)          # 1 = metres, 1000 = millimetres
     n_refs = cfg.get('n_refs', 0)
-    cube = {'mesh': 'cube.mesh', 'n_refs': n_refs,
+    cube = {'mesh': 'cube.msh', 'n_refs': n_refs,
             'surface_selection': [
                 {'id': 2, 'axis': '+z', 'position': 0.99 * s},
                 {'id': 3, 'axis': '-x', 'position': 0.01 * s},
@@ -224,10 +224,10 @@ for cfg in configurations(args.stage):
     run_dir.mkdir(parents=True, exist_ok=True)
     scene, slab = (block_scene if cfg['benchmark'] == 'block' else clamped_scene)(cfg)
     (run_dir / 'scene.json').write_text(json.dumps(scene, indent=2) + '\n')
-    shutil.copy(SCENES / 'cube.mesh', run_dir / 'cube.mesh')
+    shutil.copy(SCENES / 'cube.msh', run_dir / 'cube.msh')
     (run_dir / 'slab.obj').write_text(slab)
     record = dict(cfg)
-    record['inputs'] = {f: sha(run_dir / f) for f in ['scene.json', 'cube.mesh', 'slab.obj']}
+    record['inputs'] = {f: sha(run_dir / f) for f in ['scene.json', 'cube.msh', 'slab.obj']}
     record['binary_sha256'] = sha(binary)
     record['command'] = [str(binary), '--json', 'scene.json', '-o', 'output', '--log_level', 'debug', '--max_threads', str(args.threads)]
     if args.dry_run:

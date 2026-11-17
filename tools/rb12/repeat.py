@@ -51,7 +51,7 @@ except Exception:  # pragma: no cover - the HDA tree is optional
     vtu_parser = None
 
 SCENES = POLYFEM / "scenes" / "semi-implicit"
-ASSETS = ("cube.mesh", "slab.obj")
+ASSETS = ("cube.msh", "slab.obj")
 
 
 def parse_fixture(spec):
