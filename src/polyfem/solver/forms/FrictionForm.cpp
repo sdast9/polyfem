@@ -218,6 +218,19 @@ namespace polyfem::solver
 		note_objective_change("friction lag update");
 	}
 
+	void FrictionForm::write_diagnostic_state(const std::string &path) const
+	{
+		Eigen::MatrixXd scalars(1, 2);
+		scalars << lagged_trim_, double(friction_collision_set_.size());
+		io::write_matrix(path, "friction_scalars", scalars, /*replace=*/false);
+		if (friction_collision_set_.size() == 0)
+			return;
+		Eigen::MatrixXd forces(friction_collision_set_.size(), 1);
+		for (size_t i = 0; i < friction_collision_set_.size(); ++i)
+			forces(i) = friction_collision_set_[i].normal_force_magnitude;
+		io::write_matrix(path, "friction_normal_force", forces, /*replace=*/false);
+	}
+
 	void FrictionForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
 	{
 		if (mu_ != 0 && dynamic_cast<const ESPContactForm *>(&contact_form_))

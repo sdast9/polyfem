@@ -223,6 +223,7 @@ namespace polyfem::solver
 
 		/// @brief Restart: append the stiffness state that carries across
 		///        time steps to a step's state file (datasets "contact_*").
+		virtual void write_diagnostic_state(const std::string &path) const;
 		virtual void serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const;
 		virtual bool deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x);
 		/// @brief Restart: read that state back at the restored coordinates

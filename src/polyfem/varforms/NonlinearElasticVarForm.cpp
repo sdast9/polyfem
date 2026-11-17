@@ -2616,6 +2616,25 @@ namespace polyfem::varform
 		return fingerprint;
 	}
 
+	void NonlinearElasticVarForm::save_diagnostic_form_state(const std::string &state_path) const
+	{
+		// Each step's AL stage starts from the multipliers the previous step
+		// left (they are never reset between steps), so they are history: a
+		// resumed run that starts them at zero begins its first step from a
+		// different objective.
+		io::write_matrix(state_path, "al_scalars", Eigen::MatrixXd(Eigen::MatrixXd::Constant(1, 1, double(solve_data_.al_form.size()))), /*replace=*/false);
+		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+		{
+			const Eigen::VectorXd &mults = solve_data_.al_form[i]->lagrange_multipliers();
+			if (mults.size() > 0)
+				io::write_matrix(state_path, fmt::format("al_multipliers_{}", i), Eigen::MatrixXd(mults), /*replace=*/false);
+		}
+		if (solve_data_.contact_form)
+			solve_data_.contact_form->write_diagnostic_state(state_path);
+		if (solve_data_.friction_form)
+			solve_data_.friction_form->write_diagnostic_state(state_path);
+	}
+
 	void NonlinearElasticVarForm::serialize_checkpoint(
 		io::CheckpointWriter &writer, const Eigen::MatrixXd &solution,
 		const io::CheckpointMetadata &metadata) const

@@ -293,7 +293,7 @@ namespace polyfem
 		const bool contact_dhat_was_explicit = args_in.contains("/contact/dhat"_json_pointer);
 		// RB-12: the input file (root_path before `common` may override it)
 		// and the common chain, for the run manifest.
-		const std::string input_file = resource_root;
+		const std::string input_file = manifest_input_file.empty() ? resource_root : manifest_input_file;
 		std::vector<std::string> common_chain;
 
 		if (auto common_resources = apply_common_params(args_in, *resources_, &common_chain))
@@ -495,7 +495,19 @@ namespace polyfem
 	{
 		json checkpoint_config = continuation;
 		checkpoint_config["input"]["checkpoint"]["path"] = checkpoint.path().string();
-		init(checkpoint_config, checkpoint.resources(), strict_validation, false);
+		const std::string previous_identity = manifest_input_file;
+		if (manifest_input_file.empty())
+			manifest_input_file = checkpoint.path().string();
+		try
+		{
+			init(checkpoint_config, checkpoint.resources(), strict_validation, false);
+		}
+		catch (...)
+		{
+			manifest_input_file = previous_identity;
+			throw;
+		}
+		manifest_input_file = previous_identity;
 		checkpoint_ = std::cref(checkpoint);
 		variational_formulation->set_checkpoint_reader(checkpoint);
 		if (checkpoint_->get().metadata().formulation != variational_formulation->name())

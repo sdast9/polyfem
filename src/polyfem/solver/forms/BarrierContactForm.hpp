@@ -481,6 +481,7 @@ namespace polyfem::solver
 		///        coefficient history (caches, continuation keys, counters).
 		///        The snapshot surface, frozen Hessian and collision set are
 		///        functions of x and are rebuilt on read.
+		void write_diagnostic_state(const std::string &path) const override;
 		void serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const override;
 		bool deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x) override;
 		/// @brief Restores the captured state and, in semi-implicit mode,

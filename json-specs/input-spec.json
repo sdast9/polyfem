@@ -3378,6 +3378,7 @@
             "stress_mat",
             "mises",
             "nodes",
+            "diagnostic_state",
             "advanced"
         ],
         "doc": "File names to write output data to."
@@ -3411,6 +3412,12 @@
         "default": "",
         "type": "string",
         "doc": "File name to write per-node Von Mises stress values to."
+    },
+    {
+        "pointer": "/output/data/diagnostic_state",
+        "default": "",
+        "type": "string",
+        "doc": "Write-only HDF5 integrator and fork-form diagnostic state preserving u/v/a history layout. Not restart input; use checkpoints for continuation."
     },
     {
         "pointer": "/output/data/nodes",

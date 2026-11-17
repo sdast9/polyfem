@@ -437,6 +437,13 @@ namespace polyfem::solver
 		return is_valid;
 	}
 
+	void ContactForm::write_diagnostic_state(const std::string &path) const
+	{
+		Eigen::MatrixXd scalars(1, 3);
+		scalars << barrier_stiffness_, max_barrier_stiffness_, prev_distance_;
+		io::write_matrix(path, "contact_scalars", scalars, /*replace=*/false);
+	}
+
 	void ContactForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
 	{
 		Eigen::MatrixXd scalars(1, 3);

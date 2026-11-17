@@ -69,6 +69,7 @@ namespace polyfem::varform
 			ipc::CollisionMesh &collision_mesh);
 
 	protected:
+		void save_diagnostic_form_state(const std::string &path) const override;
 		void serialize_checkpoint(io::CheckpointWriter &writer, const Eigen::MatrixXd &solution, const io::CheckpointMetadata &metadata) const override;
 		void restore_checkpoint_form_state(const Eigen::MatrixXd &sol);
 		void reset() override;

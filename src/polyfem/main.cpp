@@ -39,6 +39,7 @@ bool has_arg(const CLI::App &command_line, const std::string &value)
 
 int forward_simulation(const CLI::App &command_line,
 					   const io::ResourceIO &resources,
+					   const std::string &source_file,
 					   const std::string &output_dir,
 					   const unsigned max_threads,
 					   const bool is_strict,
@@ -48,6 +49,7 @@ int forward_simulation(const CLI::App &command_line,
 
 int forward_simulation(const CLI::App &command_line,
 					   const io::CheckpointReader &checkpoint,
+					   const std::string &source_file,
 					   const std::string &output_dir,
 					   unsigned max_threads,
 					   bool is_strict,
@@ -67,21 +69,25 @@ int optimization_simulation(const CLI::App &command_line,
 int run_forward_simulation(State &state);
 
 int forward_simulation_with_varform_state(const io::ResourceIO &resources,
+										  const std::string &source_file,
 										  json &in_args,
 										  const bool is_strict)
 {
 	State state;
 	state.default_manifest = "run-manifest.json";
+	state.manifest_input_file = source_file;
 	state.init(in_args, resources, is_strict);
 	return run_forward_simulation(state);
 }
 
 int forward_simulation_with_varform_state(const io::CheckpointReader &checkpoint,
+										  const std::string &source_file,
 										  const json &in_args,
 										  const bool is_strict)
 {
 	State state;
 	state.default_manifest = "run-manifest.json";
+	state.manifest_input_file = source_file;
 	state.init(in_args, checkpoint, is_strict);
 	return run_forward_simulation(state);
 }
@@ -236,27 +242,28 @@ static int run(int argc, char **argv)
 #endif
 		}
 		else
-			return forward_simulation(command_line, *loaded.resources, output_dir, max_threads,
+			return forward_simulation(command_line, *loaded.resources, loaded.source_file, output_dir, max_threads,
 									  is_strict, fallback_solver, log_level, in_args);
 	}
 	else if (!hdf5_file.empty())
 	{
 		const io::LoadedInput loaded = io::load_hdf5_input(hdf5_file);
 		in_args = loaded.config;
-		return forward_simulation(command_line, *loaded.resources, output_dir, max_threads,
+		return forward_simulation(command_line, *loaded.resources, loaded.source_file, output_dir, max_threads,
 								  is_strict, fallback_solver, log_level, in_args);
 	}
 	else
 	{
 		io::CheckpointReader checkpoint(checkpoint_file);
 		in_args = checkpoint.config();
-		return forward_simulation(command_line, checkpoint, output_dir, max_threads,
+		return forward_simulation(command_line, checkpoint, std::filesystem::absolute(checkpoint_file).string(), output_dir, max_threads,
 								  is_strict, fallback_solver, log_level, in_args);
 	}
 }
 
 int forward_simulation(const CLI::App &command_line,
 					   const io::ResourceIO &resources,
+					   const std::string &source_file,
 					   const std::string &output_dir,
 					   const unsigned max_threads,
 					   const bool is_strict,
@@ -299,12 +306,12 @@ int forward_simulation(const CLI::App &command_line,
 				? in_args["/input/checkpoint/reorder"_json_pointer].get<bool>()
 				: false;
 		return forward_simulation(
-			command_line, checkpoint, output_dir, max_threads,
+			command_line, checkpoint, source_file, output_dir, max_threads,
 			is_strict, fallback_solver, log_level, continuation);
 	}
 
 	if (varform::uses_varform_state(in_args, resources))
-		return forward_simulation_with_varform_state(resources, in_args, is_strict);
+		return forward_simulation_with_varform_state(resources, source_file, in_args, is_strict);
 
 	if (dynamic_cast<const io::HDF5IO *>(&resources) != nullptr)
 		log_and_throw_error("HDF5 resources are supported only by the non-legacy State.");
@@ -315,6 +322,7 @@ int forward_simulation(const CLI::App &command_line,
 
 int forward_simulation(const CLI::App &command_line,
 					   const io::CheckpointReader &checkpoint,
+					   const std::string &source_file,
 					   const std::string &output_dir,
 					   const unsigned max_threads,
 					   const bool is_strict,
@@ -338,7 +346,7 @@ int forward_simulation(const CLI::App &command_line,
 		tmp["/input/checkpoint/reorder"_json_pointer] = true;
 	in_args.merge_patch(tmp);
 
-	return forward_simulation_with_varform_state(checkpoint, in_args, is_strict);
+	return forward_simulation_with_varform_state(checkpoint, source_file, in_args, is_strict);
 }
 
 #ifdef POLYFEM_WITH_OPTIMIZATION

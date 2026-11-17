@@ -879,6 +879,14 @@ namespace polyfem::varform
 		const time_integrator::ImplicitTimeIntegrator *time_integrator) const
 	{
 		const int global_t = output_file_index(t);
+		const std::string diagnostic = args["output"]["data"].value("diagnostic_state", std::string());
+		if (!diagnostic.empty() && time_integrator)
+		{
+			const std::string path = resolve_output_path(fmt::format(diagnostic, global_t));
+			time_integrator->save_state(path);
+			save_diagnostic_form_state(path);
+		}
+
 		const std::string pattern = args["output"]["checkpoint"]["path"];
 		if (pattern.empty())
 			return;

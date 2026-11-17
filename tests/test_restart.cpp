@@ -172,6 +172,7 @@ TEST_CASE("checkpoint preserves contact and AL continuation", "[.][restart]")
 	args["time"]["time_steps"] = total_time_steps;
 	args["/output/directory"_json_pointer] = full_outdir.string();
 	args["/output/checkpoint/path"_json_pointer] = "state_{:d}.hdf5";
+	args["/output/data/diagnostic_state"_json_pointer] = "diagnostic_{:d}.hdf5";
 	args["/solver/contact/barrier_stiffness"_json_pointer] = semi_implicit ? "semi_implicit" : "adaptive";
 	// The fixed face jumps 0.2 up in step 1 and again in step 4, more than
 	// an element height each, so those steps cannot snap onto it and run
@@ -197,6 +198,32 @@ TEST_CASE("checkpoint preserves contact and AL continuation", "[.][restart]")
 	const auto copied_checkpoint = relocated / "resume.hdf5";
 	std::filesystem::copy_file(full_outdir / fmt::format("state_{:d}.hdf5", restart_step), copied_checkpoint);
 	io::CheckpointReader checkpoint(copied_checkpoint);
+	const auto diagnostic_path = (full_outdir / "diagnostic_3.hdf5").string();
+	for (const auto &pair : std::vector<std::pair<std::string, std::string>>{
+			 {"al_multipliers_0", "/checkpoint/state/fork/al/multipliers_0"},
+			 {"contact_scalars", "/checkpoint/state/fork/contact/contact_scalars"}})
+	{
+		Eigen::MatrixXd value;
+		REQUIRE(io::read_matrix(diagnostic_path, pair.first, value));
+		REQUIRE(value.size() > 0);
+		CHECK(value.isApprox(checkpoint.read_matrix(pair.second), 0));
+	}
+	if (semi_implicit)
+	{
+		Eigen::MatrixXd forces;
+		REQUIRE(io::read_matrix(diagnostic_path, "friction_normal_force", forces));
+		REQUIRE(forces.size() > 0);
+		CHECK(forces.isApprox(checkpoint.read_matrix("/checkpoint/state/fork/friction/friction_normal_force"), 0));
+	}
+	// A failed nested init must not leave a temporary checkpoint identity.
+	State reused;
+	json invalid = checkpoint.config();
+	invalid["output"]["restart_json"] = "forbidden.json";
+	CHECK_THROWS(reused.init(invalid, checkpoint, true));
+	CHECK(reused.manifest_input_file.empty());
+	REQUIRE_NOTHROW(reused.init(checkpoint, true));
+	CHECK(reused.manifest_input_file.empty());
+
 	json restart_args = checkpoint.config();
 
 	CHECK(restart_args["/time/dt"_json_pointer].get<double>() == full_dt);
@@ -436,4 +463,74 @@ TEST_CASE("ESP friction checkpoint combination is refused before loading geometr
 	args["output"]["checkpoint"]["path"] = "not-created.h5";
 	State frictionless;
 	CHECK_NOTHROW(frictionless.init(args, strict));
+}
+
+TEST_CASE("write-only State diagnostics preserve historical datasets", "[restart][diagnostic_state]")
+{
+	const bool diagnostic = GENERATE(false, true);
+	const bool checkpoint = GENERATE(false, true);
+	const bool semi = GENERATE(false, true);
+	const auto dir = std::filesystem::current_path() / "DELETE_ME_diagnostic_state";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+	json args = load_sim_json(POLYFEM_DATA_DIR "/contact/examples/3D/unit-tests/2-cubes.json", 3);
+	args["output"]["directory"] = dir.string();
+	args["output"]["data"]["diagnostic_state"] = diagnostic ? "state.txt" : "";
+	args["output"]["checkpoint"]["path"] = checkpoint ? "step_{:d}.hdf5" : "";
+	args["solver"]["contact"]["barrier_stiffness"] = semi ? "semi_implicit" : "adaptive";
+	State state;
+	const auto enabled_solution = run_sim(state, args);
+	json baseline = args;
+	baseline["output"]["directory"] = (dir / "baseline").string();
+	baseline["output"]["data"]["diagnostic_state"] = "";
+	baseline["output"]["checkpoint"]["path"] = "";
+	State baseline_state;
+	const auto baseline_solution = run_sim(baseline_state, baseline);
+	CHECK(enabled_solution.isApprox(baseline_solution, 0));
+	CHECK(std::filesystem::exists(dir / "state.txt") == diagnostic);
+	CHECK(std::filesystem::exists(dir / "step_3.hdf5") == checkpoint);
+	if (diagnostic)
+	{
+		Eigen::MatrixXd u, v, a;
+		REQUIRE(io::read_matrix((dir / "state.txt").string(), "u", u));
+		REQUIRE(io::read_matrix((dir / "state.txt").string(), "v", v));
+		REQUIRE(io::read_matrix((dir / "state.txt").string(), "a", a));
+		CHECK(u.rows() == v.rows());
+		CHECK(u.rows() == a.rows());
+		CHECK(u.cols() == v.cols());
+		CHECK(u.cols() == a.cols());
+		CHECK(u.cols() > 0);
+		CHECK(std::filesystem::file_size(dir / "state.txt") < 10000000);
+		CHECK_THROWS(io::CheckpointReader(dir / "state.txt"));
+		if (checkpoint)
+		{
+			io::CheckpointReader saved(dir / "step_3.hdf5");
+			CHECK(u.isApprox(saved.read_matrix("/checkpoint/state/primary_integrator/x"), 0));
+			CHECK(v.isApprox(saved.read_matrix("/checkpoint/state/primary_integrator/v"), 0));
+			CHECK(a.isApprox(saved.read_matrix("/checkpoint/state/primary_integrator/a"), 0));
+			Eigen::MatrixXd count;
+			REQUIRE(io::read_matrix((dir / "state.txt").string(), "al_scalars", count));
+			CHECK(count(0) == saved.read_long("/checkpoint/state/fork/al/count"));
+			for (int i = 0; i < int(count(0)); ++i)
+			{
+				const auto key = fmt::format("multipliers_{}", i);
+				if (!saved.exists("/checkpoint/state/fork/al/" + key))
+					continue;
+				Eigen::MatrixXd value;
+				REQUIRE(io::read_matrix((dir / "state.txt").string(), "al_" + key, value));
+				CHECK(value.isApprox(saved.read_matrix("/checkpoint/state/fork/al/" + key), 0));
+			}
+			for (const auto &key : {"contact_scalars", "contact_si_scalars", "contact_si_kappa_cache", "contact_si_prev_kappa_cache", "contact_si_endpoint_kappa", "contact_si_continued_keys", "friction_scalars", "friction_normal_force"})
+			{
+				const std::string group = std::string(key).find("friction") == 0 ? "friction" : "contact";
+				const auto path = "/checkpoint/state/fork/" + group + "/" + key;
+				Eigen::MatrixXd value;
+				const bool exists = io::read_matrix((dir / "state.txt").string(), key, value);
+				CHECK(exists == saved.exists(path));
+				if (exists)
+					CHECK(value.isApprox(saved.read_matrix(path), 0));
+			}
+		}
+	}
+	std::filesystem::remove_all(dir);
 }

@@ -87,6 +87,7 @@ namespace polyfem::solver
 		/// @brief Restart: append the lagged normal force magnitudes and the
 		///        lagged trim (history: in realized-force mode they are the
 		///        forces that acted during the saved step) to a state file.
+		void write_diagnostic_state(const std::string &path) const;
 		void serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const;
 		bool deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x);
 		/// @brief Restart: put them back onto the lag rebuilt at the restored

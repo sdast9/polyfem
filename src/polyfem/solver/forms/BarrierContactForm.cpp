@@ -3007,6 +3007,35 @@ namespace polyfem::solver
 		prev_distance_ = curr_distance;
 	}
 
+	void BarrierContactForm::write_diagnostic_state(const std::string &path) const
+	{
+		ContactForm::write_diagnostic_state(path);
+		if (!uses_semi_implicit_stiffness())
+			return;
+
+		const std::vector<double> scalars = {
+			restart_state_version,
+			double(kappa_cache_.size()), double(prev_kappa_cache_.size()),
+			double(endpoint_kappa_.size()), double(continued_keys_.size()),
+			kappa_cap_, kappa_floor_, kappa_median_, kappa_hessian_max_, trim_solve_anchor_,
+			double(iters_since_refresh_), double(iters_since_trim_), double(force_band_age_),
+			double(trim_seed_pending_), double(kappa_snapshot_had_contacts_),
+			double(kappa_continued_count_), double(kappa_fresh_count_),
+			double(kappa_fallback_count_), double(kappa_abs_fallback_count_),
+			double(kappa_global_fallback_count_), double(kappa_interpolated_count_),
+			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_),
+			double(trim_seed_used_)};
+		io::write_matrix(path, "contact_si_scalars", Eigen::MatrixXd(Eigen::Map<const Eigen::MatrixXd>(scalars.data(), 1, scalars.size())), false);
+		if (!kappa_cache_.empty())
+			io::write_matrix(path, "contact_si_kappa_cache", coefficient_rows(kappa_cache_), false);
+		if (!prev_kappa_cache_.empty())
+			io::write_matrix(path, "contact_si_prev_kappa_cache", coefficient_rows(prev_kappa_cache_), false);
+		if (!endpoint_kappa_.empty())
+			io::write_matrix(path, "contact_si_endpoint_kappa", coefficient_rows(endpoint_kappa_), false);
+		if (!continued_keys_.empty())
+			io::write_matrix(path, "contact_si_continued_keys", key_rows(continued_keys_), false);
+	}
+
 	void BarrierContactForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
 	{
 		ContactForm::serialize_checkpoint(writer, group);

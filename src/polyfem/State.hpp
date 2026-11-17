@@ -39,6 +39,8 @@ namespace polyfem
 	{
 	public:
 		State();
+		/// Original host input identity for provenance, independent of resource roots.
+		std::string manifest_input_file;
 		~State() = default;
 
 		/// initialize the polyfem solver with a json settings

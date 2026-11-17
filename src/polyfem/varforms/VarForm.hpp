@@ -248,6 +248,9 @@ namespace polyfem
 			/// @brief Restart: append form state that carries across steps to
 			///        the step's state file, after the integrator history.
 
+			/// Write-only diagnostics, never accepted as checkpoint input.
+			virtual void save_diagnostic_form_state(const std::string &path) const {}
+
 			void ensure_output_sampler() const;
 			void save_timestep(const double time, const int t, const double t0, const double dt, const Eigen::MatrixXd &solution) const;
 			bool save_timestep_to_vtm(

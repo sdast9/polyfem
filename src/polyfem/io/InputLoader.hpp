@@ -8,6 +8,7 @@ namespace polyfem::io
 	{
 	public:
 		json config;
+		std::string source_file;
 		std::unique_ptr<const ResourceIO> resources;
 	};
 

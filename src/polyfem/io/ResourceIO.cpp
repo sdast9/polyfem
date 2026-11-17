@@ -595,14 +595,14 @@ namespace polyfem::io
 	LoadedInput load_json_input(const fs::path &path)
 	{
 		auto resources = std::make_unique<FileSystemIO>(path.parent_path());
-		LoadedInput result{json::parse(resources->read_string(path.filename().string())), std::move(resources)};
+		LoadedInput result{json::parse(resources->read_string(path.filename().string())), fs::absolute(path).lexically_normal().string(), std::move(resources)};
 		return apply_explicit_root(std::move(result));
 	}
 
 	LoadedInput load_yaml_input(const fs::path &path)
 	{
 		auto resources = std::make_unique<FileSystemIO>(path.parent_path());
-		LoadedInput result{yaml_string_to_json(resources->read_string(path.filename().string())), std::move(resources)};
+		LoadedInput result{yaml_string_to_json(resources->read_string(path.filename().string())), fs::absolute(path).lexically_normal().string(), std::move(resources)};
 		return apply_explicit_root(std::move(result));
 	}
 
@@ -617,7 +617,7 @@ namespace polyfem::io
 				log_and_throw_error("HDF5 input {} contains neither /config nor /json", path.string());
 			logger().warn("HDF5 input {} uses deprecated /json; rename it to /config.", path.string());
 		}
-		LoadedInput result{json::parse(resources->read_string(config_path)), std::move(resources)};
+		LoadedInput result{json::parse(resources->read_string(config_path)), fs::absolute(path).lexically_normal().string(), std::move(resources)};
 		return apply_explicit_root(std::move(result));
 	}
 } // namespace polyfem::io
