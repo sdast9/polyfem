@@ -22,6 +22,24 @@ namespace polyfem::solver
 		void update_lagrangian(const Eigen::VectorXd &x, const double k_al) override;
 		double compute_error(const Eigen::VectorXd &x) const override;
 
+		struct State : public AugmentedLagrangianForm::State
+		{
+			Eigen::VectorXd target_values;
+		};
+		std::unique_ptr<FormState> save_state() const override
+		{
+			auto state = std::make_unique<State>();
+			save_al_state(*state);
+			state->target_values = values;
+			return state;
+		}
+		void restore_state(const FormState &state, const Eigen::VectorXd &) override
+		{
+			const auto &saved = state_as<State>(state, "MacroStrainLagrangianForm");
+			restore_al_state(saved);
+			values = saved.target_values;
+		}
+
 	protected:
 		/// @brief Compute the contact barrier potential value
 		/// @param x Current solution

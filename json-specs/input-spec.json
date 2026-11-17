@@ -1539,6 +1539,7 @@
         "optional": [
             "initial_weight",
             "initial_weight_multiplier",
+            "error",
             "scaling",
             "max_weight",
             "eta",

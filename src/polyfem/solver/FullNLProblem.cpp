@@ -140,7 +140,9 @@ namespace polyfem::solver
 
 	double FullNLProblem::max_step_size(const TVector &x0, const TVector &x1)
 	{
-		const double step = probe_step_bound(x0, x1);
+		// Arguments here are already full coordinates; do not dispatch back
+		// through a derived reduced-coordinate adapter a second time.
+		const double step = FullNLProblem::probe_step_bound(x0, x1);
 
 		IterationObservation observation;
 		observation.kind = IterationObservation::Kind::StepBound;

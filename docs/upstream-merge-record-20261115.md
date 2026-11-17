@@ -167,3 +167,90 @@ The HDA-1 copy maps the existing Restart JSON toggle to self-contained checkpoin
 Additional V6 fixture adaptations preserve stronger assertions: static volumetric obstacles retain an interior output node, so the animated-obstacle test now checks exact exterior connectivity (26 nodes/48 faces), bijective coordinates and nonzero contacting-body response parity instead of equating all output nodes with surface vertices. Relocated reader scenes now explicitly name their original resource root. Reader tests support an isolated smoke root, and material-reader validation forces unique fresh output. Fresh manifests verify bound solver and input hashes. No collision behavior or tolerance was changed for these adaptations. Full HDA suite final status is recorded separately upon completion. HDA-1 remains prepare-only until REL-1; no publication or installed-asset update is implied.
 
 HDA final verification: **31/31 test scripts passed** across the retained first 20 passes and the repaired remaining 11, all with installed-asset hashes unchanged. Independent read-only review found no blocker. The volume/surface body-response comparison uses fixed stiffness; it is not a claim of new SI controller equivalence (native SI gates passed separately). Source/asset hashes and combined results are saved in `HDA-1/validation/accepted-source-assets-sha256.json` and `all-accepted-results.json`. HDA changes remain isolated and uninstalled/unpublished.
+
+## PF-5 — macro strain and Eigen mirror (2026-11-17)
+
+Merged upstream `50628af3d7` (#546 macro strain, #554 Eigen mirror) onto
+accepted `82ccc940388ab6bd37eb0bb5261bf0cdbb4f0fa8`, using a non-squashed
+merge. Shared checkout, installed Houdini assets and remeshing baseline were
+not changed. No deleted files. Fork IPC, PolySolve and test-data pins retained;
+MISO and ITR remain OFF, Python ON. Upstream inflator remains opt-in OFF.
+
+### Conflicts and preservation
+
+Five conflicts, rather than the plan's predicted zero: retained fork PolySolve
+recipe/pin per plan; retained both AL `initial_weight_multiplier` and upstream
+`error` schema entries; retained fork collision rebuilding rather than
+upstream's position-only cache in `BarrierContactForm.{cpp,hpp}`; combined
+macro routing with existing ordinary static publication guard and clamped
+contact filtering in `NonlinearElasticVarForm.cpp`. The new macro time loop
+must be outside the fork's staged ordinary time-loop setup, otherwise the
+merge runs both loops. Existing non-macro paths remain intact.
+
+Upstream migrates the specialized static macro solver into the common elastic
+VarForm and adds forward quasistatic macro loading. Historical audit of the
+fork legacy loop and pre-PF-5 differentiable path found no disk restoration of
+macro gradient or AL history. Legacy writes only generic restart JSON; its
+macro state writer is commented out. This is not evidence of a working exact
+macro restart. No old JSON adapter was reintroduced.
+
+Added explicit macro checkpoint ownership: versioned gradient, macro AL
+multipliers and periodic-contact state. Restore after form initialization,
+reconstruct fluctuation as total displacement minus the linear macro field,
+validate prescribed components at saved time, and start at the next step
+without re-solving or publishing the completed checkpoint step. Missing,
+invalid, nonfinite, incorrectly shaped and owner-mismatched histories fail;
+macro history requires `input.checkpoint.reorder=false`.
+
+Added complete macro problem snapshots for macro-owned forms, target values,
+fixed projection and base constraint projection, and restore the saved full
+state directly without rebuilding collisions during rollback. A macro step
+failure restores extended solution, full solution and gradient before
+rethrowing; publication follows acceptance. Existing AL/target snapshots now
+also retain constraint values. Added the missing macro `line_search_end`
+forwarding. The new upstream callback test exposed double projection:
+`FullNLProblem::max_step_size` dispatched virtually back through a reduced
+coordinate adapter. It now calls its full-coordinate probe explicitly; macro
+probes include macro forms and observations report the final bound.
+
+Periodic-contact friction previously dereferenced a null ordinary contact
+owner. It now fails by name instead of crashing. Nonperiodic friction remains
+available. Historical macro paths did not implement the ordinary outer
+friction-lag convergence policy or ordinary AL budget/stagnation handling;
+this task does not claim to add them, nor introduce arbitrary caps, tolerances,
+normalization or controller changes. These remain separate extension goals.
+
+### Validation
+
+Evidence: `upstream-merge-work/PF-5/`; accepted binary snapshot
+`bin/PF-5-validation`. All exploratory failures retained, including the first
+callback failure, an oversized interrupted fixture, a test namespace typo and
+an empty periodic-surface fixture. The bounded perforated-cell fixture now
+requires a nonempty active contact set, not merely successful contact setup.
+
+- V1: CLI and unit tests compile, seventh pass, pinned formatter clean.
+- Macro focused: 4 cases / 265 assertions pass. Prescribed/free macro
+  components, noncontact/active periodic contact, uninterrupted versus resumed
+  solution and per-step macro histories within `1e-10`, exact injected-AL-failure
+  solution/multiplier rollback, no duplicated/failed-step checkpoint, final
+  step-bound observation and no collision rebuild during rollback.
+- Ten malformed/reordered checkpoint CLI cases reject without publishing
+  continuation (`malformed-second/results.json`). Reusable script:
+  `tests/test_macro_checkpoint_validation.py` (h5py/numpy required).
+- V2: 73 cases / 4,331 assertions pass, including ordinary restart, contact,
+  AL budget, trim, optimization-gradient and macro tests.
+- V3: all 25 VTUs across all five smokes byte-identical to the immediately
+  preceding accepted State/provenance binary.
+- V4: RB-02 and RB-05 probes and scene limits pass with unchanged expected
+  outcomes/counts.
+- V5: 486 cases / 5,181,838 assertions pass, 1,232.34 seconds; seed 1,
+  OMP_NUM_THREADS=4, MKL_CBWR=COMPATIBLE, macOS arm64. Completed 16:15 UTC.
+- Source patch matched the tested snapshot exactly before adding this record
+  and the already-executed standalone negative-test script. Independent
+  read-only preservation review found no remaining blocking issue.
+
+No HDA rebuild or installation is needed for PF-5; HDA-1 remains prepare-only.
+PF-5 is locally accepted; publication is to the integration branch only and
+must be reported separately after remote verification. Next plan step RM-1
+still depends on resolving the preserved RM-0 remeshing goal/gates; this record
+does not declare remeshing functional or enable ITR.

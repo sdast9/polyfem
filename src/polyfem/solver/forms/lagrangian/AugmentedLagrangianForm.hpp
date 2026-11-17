@@ -57,6 +57,7 @@ namespace polyfem::solver
 			double k_al = 0;
 			double k_scale = 1;
 			Eigen::VectorXd lagr_mults;
+			Eigen::MatrixXd constraint_value, projection_value;
 		};
 		std::unique_ptr<FormState> save_state() const override
 		{
@@ -76,6 +77,8 @@ namespace polyfem::solver
 			state.k_al = k_al_;
 			state.k_scale = k_scale_;
 			state.lagr_mults = lagr_mults_;
+			state.constraint_value = b_;
+			state.projection_value = b_proj_;
 		}
 		void restore_al_state(const State &state)
 		{
@@ -83,6 +86,8 @@ namespace polyfem::solver
 			k_al_ = state.k_al;
 			k_scale_ = state.k_scale;
 			lagr_mults_ = state.lagr_mults;
+			b_ = state.constraint_value;
+			b_proj_ = state.projection_value;
 		}
 
 		inline double L_weight() const { return 1 / k_scale_; }

@@ -620,6 +620,8 @@ namespace polyfem::solver
 
 			if (friction_coefficient != 0)
 			{
+				if (!contact_form)
+					log_and_throw_error("Periodic contact with friction is unsupported: friction requires a non-periodic contact owner.");
 				friction_form = std::make_shared<FrictionForm>(
 					collision_mesh, time_integrator, epsv, friction_coefficient,
 					broad_phase, *contact_form, friction_iterations);

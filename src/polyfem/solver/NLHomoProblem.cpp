@@ -339,7 +339,12 @@ namespace polyfem::solver
 		TVector reduced;
 		reduced.setZero(dof1 + dof2);
 
+		// displacement u = periodic fluctuation ũ + macro strain GX.
+		// Maps full unknown u to reduced unknow [ unknown of ũ | unknown component of G ].
+
+		// To get ũ, first compute u - GX then enforce periodic constraint (model via linear constraint) via QR decomposition.
 		reduced.head(dof1) = NLProblem::full_to_reduced(full - io::Evaluator::generate_linear_field(n_bases_, mesh_nodes_, disp_grad));
+		// get unknown component of G.
 		reduced.tail(dof2) = macro_full_to_reduced(utils::flatten(disp_grad));
 
 		return reduced;
@@ -411,7 +416,7 @@ namespace polyfem::solver
 
 	bool NLHomoProblem::is_step_valid(const TVector &x0, const TVector &x1)
 	{
-		bool flag = NLProblem::is_step_valid(x0.head(reduced_size()), x1.head(reduced_size()));
+		bool flag = NLProblem::is_step_valid(x0, x1);
 		for (auto &form : homo_forms)
 			if (form->enabled())
 				flag &= form->is_step_valid(reduced_to_extended(x0), reduced_to_extended(x1));
@@ -420,7 +425,7 @@ namespace polyfem::solver
 	}
 	bool NLHomoProblem::is_step_collision_free(const TVector &x0, const TVector &x1)
 	{
-		bool flag = NLProblem::is_step_collision_free(x0.head(reduced_size()), x1.head(reduced_size()));
+		bool flag = NLProblem::is_step_collision_free(x0, x1);
 		for (auto &form : homo_forms)
 			if (form->enabled())
 				flag &= form->is_step_collision_free(reduced_to_extended(x0), reduced_to_extended(x1));
@@ -429,7 +434,20 @@ namespace polyfem::solver
 	}
 	double NLHomoProblem::max_step_size(const TVector &x0, const TVector &x1)
 	{
-		double size = NLProblem::max_step_size(x0.head(reduced_size()), x1.head(reduced_size()));
+		const double size = probe_step_bound(x0, x1);
+		const TVector full0 = reduced_to_full(x0), full1 = reduced_to_full(x1);
+		IterationObservation observation;
+		observation.kind = IterationObservation::Kind::StepBound;
+		observation.x0 = &full0;
+		observation.x1 = &full1;
+		observation.step_bound = size;
+		observe(observation);
+		return size;
+	}
+
+	double NLHomoProblem::probe_step_bound(const TVector &x0, const TVector &x1)
+	{
+		double size = NLProblem::probe_step_bound(x0, x1);
 		for (auto &form : homo_forms)
 			if (form->enabled())
 				size = std::min(size, form->max_step_size(reduced_to_extended(x0), reduced_to_extended(x1)));
@@ -438,13 +456,22 @@ namespace polyfem::solver
 
 	void NLHomoProblem::line_search_begin(const TVector &x0, const TVector &x1)
 	{
-		NLProblem::line_search_begin(x0.head(reduced_size()), x1.head(reduced_size()));
+		// Keep the macro variables: the base callbacks map to the same total
+		// displacement used by value(), gradient(), and hessian().
+		NLProblem::line_search_begin(x0, x1);
 		for (auto &form : homo_forms)
 			form->line_search_begin(reduced_to_extended(x0), reduced_to_extended(x1));
 	}
+	void NLHomoProblem::line_search_end()
+	{
+		NLProblem::line_search_end();
+		for (auto &form : homo_forms)
+			form->line_search_end();
+	}
+
 	void NLHomoProblem::post_step(const polysolve::nonlinear::PostStepData &data)
 	{
-		NLProblem::post_step(polysolve::nonlinear::PostStepData(data.iter_num, data.solver_info, reduced_to_full(data.x.head(reduced_size())), reduced_to_full(data.grad.head(reduced_size()))));
+		NLProblem::post_step(data);
 		for (auto &form : homo_forms)
 			form->post_step(polysolve::nonlinear::PostStepData(
 				data.iter_num, data.solver_info, reduced_to_extended(data.x), reduced_to_extended(data.grad)));
@@ -452,29 +479,58 @@ namespace polyfem::solver
 
 	void NLHomoProblem::solution_changed(const TVector &new_x)
 	{
-		NLProblem::solution_changed(new_x.head(reduced_size()));
+		NLProblem::solution_changed(new_x);
 		for (auto &form : homo_forms)
 			form->solution_changed(reduced_to_extended(new_x));
 	}
 
 	void NLHomoProblem::init_lagging(const TVector &x)
 	{
-		NLProblem::init_lagging(x.head(reduced_size()));
+		NLProblem::init_lagging(x);
 		for (auto &form : homo_forms)
 			form->init_lagging(reduced_to_extended(x));
 	}
 	void NLHomoProblem::update_lagging(const TVector &x, const int iter_num)
 	{
-		NLProblem::update_lagging(x.head(reduced_size()), iter_num);
+		NLProblem::update_lagging(x, iter_num);
 		for (auto &form : homo_forms)
 			form->update_lagging(reduced_to_extended(x), iter_num);
 	}
 
 	void NLHomoProblem::update_quantities(const double t, const TVector &x)
 	{
-		NLProblem::update_quantities(t, x.head(reduced_size()));
+		NLProblem::update_quantities(t, x);
 		for (auto &form : homo_forms)
 			form->update_quantities(t, reduced_to_extended(x));
+	}
+
+	std::unique_ptr<FullNLProblem::SavedState> NLHomoProblem::save_state() const
+	{
+		auto state = std::make_unique<SavedState>();
+		state->base = NLProblem::save_state();
+		for (const auto &form : homo_forms)
+			state->macro_forms.push_back(form->save_state());
+		state->fixed_mask = fixed_mask_;
+		state->macro_projection = macro_mid_to_reduced_;
+		state->constraint_projection = Q1R1iTb_;
+		state->time = t_;
+		return state;
+	}
+
+	void NLHomoProblem::restore_state(const FullNLProblem::SavedState &state, const TVector &extended)
+	{
+		const auto *saved = dynamic_cast<const SavedState *>(&state);
+		if (!saved || saved->macro_forms.size() != homo_forms.size() || extended.size() != full_size() + dimension_ * dimension_)
+			throw std::logic_error("Invalid homogenization transaction snapshot");
+		fixed_mask_ = saved->fixed_mask;
+		macro_mid_to_reduced_ = saved->macro_projection;
+		t_ = saved->time;
+		Q1R1iTb_ = saved->constraint_projection;
+		const Eigen::MatrixXd gradient = utils::unflatten(extended.tail(dimension_ * dimension_), dimension_);
+		const TVector full = extended.head(full_size()) + io::Evaluator::generate_linear_field(n_bases_, mesh_nodes_, gradient);
+		NLProblem::restore_state(*saved->base, full);
+		for (size_t i = 0; i < homo_forms.size(); ++i)
+			homo_forms[i]->restore_state(*saved->macro_forms[i], extended);
 	}
 
 	Eigen::MatrixXd NLHomoProblem::constraint_grad() const

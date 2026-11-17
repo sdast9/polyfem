@@ -12,6 +12,9 @@
 #include <polyfem/io/Checkpoint.hpp>
 
 #include <h5pp/h5pp.h>
+#include "VarFormTestAccess.hpp"
+#include <polyfem/solver/forms/PeriodicContactForm.hpp>
+#include <polyfem/solver/forms/lagrangian/MacroStrainLagrangianForm.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -533,4 +536,95 @@ TEST_CASE("write-only State diagnostics preserve historical datasets", "[restart
 		}
 	}
 	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("macro strain checkpoint continues without repeating the saved step", "[restart][macro_checkpoint]")
+{
+	const bool periodic_contact = GENERATE(false, true);
+	const bool free_component = GENERATE(false, true);
+	CAPTURE(periodic_contact, free_component);
+	const auto dir = std::filesystem::current_path() / "DELETE_ME_macro_checkpoint";
+	std::filesystem::remove_all(dir);
+	json args;
+	REQUIRE(load_json(POLYFEM_DATA_DIR "/standard/homogenization.json", args));
+	args["root_path"] = POLYFEM_DATA_DIR "/standard";
+	std::filesystem::create_directories(dir);
+	const auto mesh = dir / "square.obj";
+	{
+		std::ofstream file(mesh);
+		file << "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n";
+		if (periodic_contact)
+			file << "v 0.4 0.4 0\nv 0.6 0.4 0\nv 0.6 0.6 0\nv 0.4 0.6 0\n"
+				 << "f 1 2 6\nf 1 6 5\nf 2 3 7\nf 2 7 6\nf 3 4 8\nf 3 8 7\nf 4 1 5\nf 4 5 8\n";
+		else
+			file << "f 1 2 3\nf 1 3 4\n";
+	}
+	args["geometry"] = json::array({{{"mesh", mesh.string()}, {"surface_selection", {{"threshold", 1e-5}}}}});
+	args["materials"]["nu"] = 0.3;
+	args["solver"]["linear"]["solver"] = "Eigen::SparseLU";
+	args["contact"]["enabled"] = periodic_contact;
+	args["contact"]["periodic"] = periodic_contact;
+	if (periodic_contact)
+		args["contact"]["dhat"] = 0.3;
+	args["constraints"]["macro_displacement_gradient"] = {{"value", {{0, 0}, {0, "-0.01*t"}}}, {"fixed_components", {0, 1, 2, 3}}};
+	if (free_component)
+		args["constraints"]["macro_displacement_gradient"]["fixed_components"] = {3};
+	args["time"] = {{"quasistatic", true}, {"dt", 1}, {"time_steps", 3}};
+	args["output"] = {{"directory", (dir / "full").string()}, {"checkpoint", {{"path", "step_{:d}.h5"}}}};
+	State full;
+	const auto uninterrupted = run_sim(full, args);
+	if (periodic_contact)
+	{
+		const auto form = std::dynamic_pointer_cast<varform::NonlinearElasticVarForm>(full.variational_formulation);
+		REQUIRE(form);
+		REQUIRE(test::VarFormTestAccess::solve_data(*form).periodic_contact_form->collision_set().size() > 0);
+	}
+
+	io::CheckpointReader mid(dir / "full/step_1.h5");
+	REQUIRE(mid.exists("/checkpoint/state/fork/macro_strain/gradient"));
+	REQUIRE(mid.exists("/checkpoint/state/fork/macro_strain/multipliers"));
+	json continuation = mid.config();
+	continuation["output"]["directory"] = (dir / "resumed").string();
+	State resumed;
+	const auto result = run_sim(resumed, continuation, &mid);
+	CHECK((uninterrupted - result).lpNorm<Eigen::Infinity>() < 1e-10);
+	CHECK_FALSE(std::filesystem::exists(dir / "resumed/step_1.h5"));
+	json failing = continuation;
+	failing["output"]["directory"] = (dir / "failed").string();
+	failing["solver"]["advanced"]["failure_injection"] = {{"phase", "after_al"}, {"step", 1}, {"kind", "named"}};
+	State interrupted;
+	interrupted.init(failing, mid, true);
+	interrupted.set_max_threads(1);
+	interrupted.load_mesh();
+	Eigen::MatrixXd failed_solution;
+	CHECK_THROWS_AS(interrupted.solve(failed_solution), solver::InjectedFailure);
+	CHECK((failed_solution - mid.read_matrix("/checkpoint/state/solution")).norm() == 0);
+	CHECK_FALSE(std::filesystem::exists(dir / "failed/step_2.h5"));
+	const auto failed_form = std::dynamic_pointer_cast<varform::NonlinearElasticVarForm>(interrupted.variational_formulation);
+	REQUIRE(failed_form);
+	CHECK((test::VarFormTestAccess::solve_data(*failed_form).strain_al_lagr_form->lagrange_multipliers()
+		   - mid.read_matrix("/checkpoint/state/fork/macro_strain/multipliers"))
+			  .norm()
+		  == 0);
+	if (periodic_contact)
+	{
+		json invalid = args;
+		invalid["output"]["directory"] = (dir / "periodic-friction").string();
+		invalid["contact"]["friction_coefficient"] = 0.1;
+		State unsupported;
+		CHECK_THROWS_WITH(run_sim(unsupported, invalid), Catch::Matchers::ContainsSubstring("Periodic contact with friction is unsupported"));
+	}
+
+	for (int step : {2, 3})
+	{
+		io::CheckpointReader a(dir / "full" / fmt::format("step_{}.h5", step));
+		io::CheckpointReader b(dir / "resumed" / fmt::format("step_{}.h5", step));
+		CHECK(a.metadata().time == b.metadata().time);
+		CHECK(a.metadata().output_index == b.metadata().output_index);
+		for (const std::string key : {"gradient", "multipliers"})
+		{
+			const std::string path = "/checkpoint/state/fork/macro_strain/" + key;
+			CHECK((a.read_matrix(path) - b.read_matrix(path)).norm() < 1e-10);
+		}
+	}
 }
