@@ -1,3 +1,9 @@
+#include <polyfem/solver/forms/FrictionForm.hpp>
+#include <polyfem/solver/forms/FrictionCheckpoint.hpp>
+#include <polyfem/io/ForkCheckpoint.hpp>
+#include <polyfem/io/Checkpoint.hpp>
+#include <polyfem/mesh/MeshData.hpp>
+#include <h5pp/h5pp.h>
 // RB-20 / RB-21 regressions (docs/rb-20-force-continuation.md,
 // docs/rb-21-parent-keyed-kappa.md):
 //   RB-20 force continuation: a coefficient active at a published endpoint is
@@ -51,6 +57,28 @@ using Catch::Approx;
 
 namespace
 {
+	// Minimal valid checkpoint envelope, using the upstream writer, for
+	// form-level round trips independent of a full simulation.
+	void write_contact_checkpoint(const BarrierContactForm &form, const std::filesystem::path &path)
+	{
+		io::CheckpointMetadata metadata;
+		metadata.dt = 0.1;
+		metadata.formulation = "NonlinearElasticity";
+		io::CheckpointWriter writer(path, json::object(), metadata);
+		Eigen::MatrixXd vertices(3, 2);
+		vertices << 0, 0, 1, 0, 0, 1;
+		Eigen::MatrixXi cells(1, 3);
+		cells << 0, 1, 2;
+		writer.write_mesh("/checkpoint/meshes/active", mesh::MeshData(vertices, cells));
+		form.serialize_checkpoint(writer, "/checkpoint/state/fork/contact");
+		writer.finalize();
+	}
+	bool read_contact_checkpoint(BarrierContactForm &form, const std::filesystem::path &path, const Eigen::VectorXd &x)
+	{
+		const io::CheckpointReader reader(path);
+		return form.deserialize_checkpoint(reader, "/checkpoint/state/fork/contact", x);
+	}
+
 	// `count` disjoint point-over-edge pairs (vertices 3i, 3i+1 = edge,
 	// 3i+2 = point at height gap*L); pairs cannot collide with one another.
 	ipc::CollisionMesh make_pairs(double L = 1, double gap = .2, int count = 1)
@@ -1055,11 +1083,11 @@ TEST_CASE("History report: rollback and restart state", "[kappa_continuity][hist
 		Probe f(mesh, on);
 		f.start(together);
 		f.publish(together);
-		f.write_restart_state(path.string());
+		write_contact_checkpoint(f, path);
 
 		Probe g(mesh, on);
 		g.init(together);
-		REQUIRE(g.read_restart_state(path.string(), together));
+		REQUIRE(read_contact_checkpoint(g, path, together));
 		std::filesystem::remove(path);
 		CHECK(g.window() == g.endpoint());
 		CHECK(g.window().size() == 2);
@@ -1173,11 +1201,11 @@ TEST_CASE("Canonical pair keys: restart state written before canonical keys", "[
 		REQUIRE(reversed != key);
 		f.store_reversed();
 		REQUIRE(f.endpoint().count(reversed));
-		f.write_restart_state(path.string());
+		write_contact_checkpoint(f, path);
 
 		Probe g(mesh, on);
 		g.init(x);
-		REQUIRE(g.read_restart_state(path.string(), x));
+		REQUIRE(read_contact_checkpoint(g, path, x));
 		CHECK(g.endpoint() == std::map<std::array<long, 5>, double>{{key, f.endpoint().at(reversed)}});
 		CHECK(g.continued() == std::set<std::array<long, 5>>{key});
 		CHECK(g.memo().count(reversed) == 0);
@@ -1202,11 +1230,11 @@ TEST_CASE("Canonical pair keys: restart state written before canonical keys", "[
 		f.continued() = {reversed, q};
 		f.endpoint() = {{reversed, 2.}, {q, 7.}};
 		f.previous_memo() = {{key, 3.}, {reversed, 4.}, {p_reversed, 9.}, {p, 10.}};
-		f.write_restart_state(path.string());
+		write_contact_checkpoint(f, path);
 
 		Probe g(mesh, on);
 		g.init(x);
-		REQUIRE(g.read_restart_state(path.string(), x));
+		REQUIRE(read_contact_checkpoint(g, path, x));
 		CHECK(g.continued() == std::set<Key>{key, q});
 		CHECK(g.endpoint() == std::map<Key, double>{{key, 2.}, {q, 7.}});
 		CHECK(g.memo().at(key) == 2.);          // the continued entry, stored in the other order
@@ -1326,4 +1354,167 @@ TEST_CASE("First-contact refresh at the first accepted iterate, without a collap
 		CHECK(moves(f, truncated, "conditioning_cap") == 0);
 		CHECK(f.barrier_stiffness() > 1);
 	}
+}
+
+TEST_CASE("Fork contact checkpoint owner versions", "[checkpoint][restart][kappa_continuity]")
+{
+	auto collision_mesh = make_pairs();
+	const Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
+	Probe original(collision_mesh, {{"force_continuation", true}});
+	original.start(x);
+	original.publish(x);
+	const auto path = std::filesystem::temp_directory_path() / ("polyfem-owner-checkpoint-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".h5");
+	write_contact_checkpoint(original, path);
+	SECTION("unknown owner version is refused")
+	{
+		{
+			h5pp::File file(path.string(), h5pp::FileAccess::READWRITE);
+			file.writeAttribute(long(99), "/checkpoint/state/fork/contact", "layout_version");
+		}
+		Probe restored(collision_mesh, {{"force_continuation", true}});
+		restored.init(x);
+		CHECK_THROWS(read_contact_checkpoint(restored, path, x));
+	}
+	SECTION("same-size wrong-shaped scalar payload is refused")
+	{
+		{
+			h5pp::File file(path.string(), h5pp::FileAccess::READWRITE);
+			const Eigen::MatrixXd values = file.readDataset<Eigen::MatrixXd>("/checkpoint/state/fork/contact/contact_scalars");
+			REQUIRE(H5Ldelete(file.openFileHandle(), "/checkpoint/state/fork/contact/contact_scalars", H5P_DEFAULT) >= 0);
+			file.writeDataset(Eigen::MatrixXd(values.transpose()), "/checkpoint/state/fork/contact/contact_scalars");
+		}
+		Probe restored(collision_mesh, {{"force_continuation", true}});
+		restored.init(x);
+		CHECK_THROWS(read_contact_checkpoint(restored, path, x));
+	}
+	SECTION("missing owner group leaves the rebuilt controller untouched")
+	{
+		{
+			h5pp::File file(path.string(), h5pp::FileAccess::READWRITE);
+			REQUIRE(H5Ldelete(file.openFileHandle(), "/checkpoint/state/fork/contact", H5P_DEFAULT) >= 0);
+		}
+		Probe restored(collision_mesh, {{"force_continuation", true}});
+		restored.init(x);
+		const double stiffness = restored.barrier_stiffness();
+		CHECK_FALSE(read_contact_checkpoint(restored, path, x));
+		CHECK(restored.barrier_stiffness() == stiffness);
+	}
+	std::filesystem::remove(path);
+}
+
+TEST_CASE("Checkpoint AL reorder permits only exact zero history", "[checkpoint][restart]")
+{
+	Eigen::MatrixXd values = Eigen::MatrixXd::Zero(3, 1);
+	CHECK_NOTHROW(polyfem::io::validate_checkpoint_multipliers(values, true, "test"));
+	values(1) = std::numeric_limits<double>::denorm_min();
+	CHECK_THROWS(polyfem::io::validate_checkpoint_multipliers(values, true, "test"));
+	CHECK_NOTHROW(polyfem::io::validate_checkpoint_multipliers(values, false, "test"));
+	values(1) = std::numeric_limits<double>::quiet_NaN();
+	CHECK_THROWS(polyfem::io::validate_checkpoint_multipliers(values, false, "test"));
+}
+
+TEST_CASE("Friction checkpoint identities preserve signed order", "[checkpoint][restart]")
+{
+	using namespace polyfem::solver::friction_checkpoint;
+	ipc::TangentialCollisions saved;
+	saved.vv_collisions.emplace_back(0, 1);
+	saved.vv_collisions.emplace_back(0, 1);
+	saved.vv_collisions[0].weight = 2;
+	saved.vv_collisions[1].weight = -3;
+	saved.vv_collisions[0].normal_force_magnitude = 7;
+	saved.vv_collisions[1].normal_force_magnitude = 11;
+	auto rebuilt = saved;
+	std::swap(rebuilt.vv_collisions[0], rebuilt.vv_collisions[1]);
+	const auto order = match(keys(saved), keys(rebuilt));
+	REQUIRE(order == std::vector<size_t>{1, 0});
+	const auto restored = reordered(rebuilt, order);
+	CHECK(restored[0].weight == 2);
+	CHECK(restored[0].normal_force_magnitude == 7);
+	CHECK(restored[1].weight == -3);
+	CHECK(restored[1].normal_force_magnitude == 11);
+	CHECK(rebuilt[0].weight == -3); // input not mutated
+	auto invalid = keys(saved);
+	invalid[1] = invalid[0];
+	CHECK_THROWS(match(invalid, keys(rebuilt)));
+	CHECK_THROWS(match(keys(saved), invalid));
+	invalid = keys(saved);
+	std::swap(invalid[0].ids[1], invalid[0].ids[2]);
+	CHECK_THROWS(match(invalid, keys(rebuilt)));
+	invalid = keys(saved);
+	invalid.pop_back();
+	CHECK_THROWS(match(invalid, keys(rebuilt)));
+	invalid = keys(saved);
+	invalid[0].ids[1] = -1;
+	CHECK_THROWS(match(invalid, keys(rebuilt)));
+	CHECK(match({}, {}).empty());
+}
+
+TEST_CASE("Friction checkpoint restores saved forces by identity atomically", "[checkpoint][restart]")
+{
+	auto collision_mesh = make_pairs();
+	const Eigen::VectorXd x = Eigen::VectorXd::Zero(6);
+	Probe contact(collision_mesh, {{"force_continuation", true}});
+	contact.init(x);
+	FrictionForm form(collision_mesh, nullptr, 0.01, 0.3, ipc::BroadPhaseMethod::BRUTE_FORCE, contact, 1);
+	auto state = form.save_state();
+	auto &lag = dynamic_cast<FrictionForm::State &>(*state);
+	lag.friction_collision_set.vv_collisions.emplace_back(0, 1);
+	lag.friction_collision_set.vv_collisions.emplace_back(0, 1);
+	lag.friction_collision_set[0].weight = 1;
+	lag.friction_collision_set[1].weight = -1;
+	lag.friction_collision_set[0].normal_force_magnitude = 7;
+	lag.friction_collision_set[1].normal_force_magnitude = 11;
+	form.restore_state(lag, x);
+	const auto path = std::filesystem::temp_directory_path() / "polyfem-friction-identity.h5";
+	const std::string group = "/checkpoint/state/fork/friction";
+	{
+		io::CheckpointMetadata metadata;
+		metadata.dt = 0.1;
+		metadata.formulation = "NonlinearElasticity";
+		io::CheckpointWriter writer(path, json::object(), metadata);
+		Eigen::MatrixXd vertices(3, 2);
+		vertices << 0, 0, 1, 0, 0, 1;
+		Eigen::MatrixXi cells(1, 3);
+		cells << 0, 1, 2;
+		writer.write_mesh("/checkpoint/meshes/active", mesh::MeshData(vertices, cells));
+		form.serialize_checkpoint(writer, group);
+		writer.finalize();
+	}
+	std::swap(lag.friction_collision_set.vv_collisions[0], lag.friction_collision_set.vv_collisions[1]);
+	lag.friction_collision_set[0].normal_force_magnitude = 100;
+	lag.friction_collision_set[1].normal_force_magnitude = 200;
+	form.restore_state(lag, x);
+	bool corrupt = false;
+	SECTION("valid permutation restores saved forces and order") {}
+	SECTION("missing identities fail before mutation")
+	{
+		h5pp::File file(path.string(), h5pp::FileAccess::READWRITE);
+		REQUIRE(H5Ldelete(file.openFileHandle(), (group + "/friction_identity").c_str(), H5P_DEFAULT) >= 0);
+		corrupt = true;
+	}
+	SECTION("nonfinite trim fails before mutation")
+	{
+		h5pp::File file(path.string(), h5pp::FileAccess::READWRITE);
+		Eigen::MatrixXd values(1, 2);
+		values << std::numeric_limits<double>::quiet_NaN(), 2;
+		file.writeDataset(values, group + "/friction_scalars");
+		corrupt = true;
+	}
+	{
+		io::CheckpointReader reader(path);
+		if (corrupt)
+		{
+			CHECK_THROWS(form.deserialize_checkpoint(reader, group, x));
+			CHECK(form.friction_collision_set()[0].normal_force_magnitude == 100);
+			CHECK(form.friction_collision_set()[0].weight == -1);
+		}
+		else
+		{
+			CHECK(form.deserialize_checkpoint(reader, group, x));
+			CHECK(form.friction_collision_set()[0].normal_force_magnitude == 7);
+			CHECK(form.friction_collision_set()[1].normal_force_magnitude == 11);
+			CHECK(form.friction_collision_set()[0].weight == 1);
+		}
+	}
+	std::filesystem::remove(path);
 }

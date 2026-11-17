@@ -188,17 +188,6 @@ namespace polyfem
 			Eigen::MatrixXd &surface_vertices,
 			Eigen::MatrixXi &tris);
 
-		///
-		/// @brief      read a surface mesh
-		///
-		/// @param[in]  mesh_path       path to mesh file
-		/// @param[out] vertices        #V x 3/2 output vertices positions
-		/// @param[out] codim_vertices  indicies in vertices for the codimensional vertices
-		/// @param[out] codim_edges     indicies in vertices for the codimensional edges
-		/// @param[out] faces           indicies in vertices for the surface faces
-		///
-		bool read_surface_mesh(const std::string &mesh_path, Eigen::MatrixXd &vertices, Eigen::VectorXi &codim_vertices, Eigen::MatrixXi &codim_edges, Eigen::MatrixXi &faces);
-
 		/// @brief RB-11: refuse a rest mesh whose elements cannot be simulated:
 		///        an element listing a vertex twice, or two elements on the same
 		///        vertex set (the material would be assembled twice on that

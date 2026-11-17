@@ -182,7 +182,7 @@ namespace polyfem::assembler
 		}
 	} // namespace
 
-	void Assembler::set_materials(const std::vector<int> &body_ids, const json &body_params, const Units &units, const std::string &root_path, const std::shared_ptr<utils::MaterialFileCache> &snapshot)
+	void Assembler::set_materials(const std::vector<int> &body_ids, const json &body_params, const Units &units, const io::ResourceIO &resources, const std::shared_ptr<utils::MaterialFileCache> &snapshot)
 	{
 		const utils::MaterialFileCacheScope cache_scope(snapshot);
 		const long n_elements = long(body_ids.size());
@@ -193,7 +193,7 @@ namespace polyfem::assembler
 			json params = body_params;
 			if (params.is_object())
 				params[MATERIAL_ELEMENT_COUNTS] = {n_elements, n_elements};
-			this->add_multimaterial(0, params, units, root_path);
+			this->add_multimaterial(0, params, units, resources);
 			return;
 		}
 
@@ -259,7 +259,7 @@ namespace polyfem::assembler
 			json tmp = materials.at(bid);
 			tmp[MATERIAL_ELEMENT_INDEX] = eid_to_eid_in_body[e];
 			tmp[MATERIAL_ELEMENT_COUNTS] = {long(body_element_count[bid]), n_elements};
-			this->add_multimaterial(e, tmp, units, root_path);
+			this->add_multimaterial(e, tmp, units, resources);
 		}
 	}
 

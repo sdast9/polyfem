@@ -2,11 +2,11 @@
 
 namespace polyfem::assembler
 {
-	void GrowthNeoHookean::add_multimaterial(int index, const json &params, const Units &units, const std::string &root_path)
+	void GrowthNeoHookean::add_multimaterial(int index, const json &params, const Units &units, const io::ResourceIO &resources)
 	{
 		if (size() != 3)
 			log_and_throw_error("GrowthNeoHookean requires a 3D volume mesh");
-		params_.add_multimaterial(index, params, true, units.stress(), root_path);
+		params_.add_multimaterial(index, params, true, units.stress(), resources);
 		json p = params;
 		for (const auto *key : {"g11", "g22", "g33"})
 			if (!p.contains(key))
@@ -15,7 +15,7 @@ namespace polyfem::assembler
 			if (!p.contains(key))
 				p[key] = 0.0;
 		for (auto *g : {&g11_, &g22_, &g33_, &g12_, &g13_, &g23_})
-			g->add_multimaterial(index, p, "", root_path);
+			g->add_multimaterial(index, p, "", resources);
 	}
 
 	Eigen::Matrix3d GrowthNeoHookean::natural_configuration(const RowVectorNd &p, double t, int el_id) const

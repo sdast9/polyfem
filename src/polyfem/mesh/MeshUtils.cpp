@@ -3,22 +3,16 @@
 
 #include <polyfem/mesh/mesh2D/Mesh2D.hpp>
 #include <polyfem/mesh/mesh3D/Mesh3D.hpp>
-#include <polyfem/io/OBJReader.hpp>
-#include <polyfem/io/MshReader.hpp>
-#include <polyfem/utils/StringUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/HashUtils.hpp>
 
-#include <unordered_map>
 #include <unordered_set>
+#include <unordered_map>
 #include <set>
 #include <tuple>
 
 #include <igl/PI.h>
-#include <igl/read_triangle_mesh.h>
-
-#include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/basic/geometry.h>
 #include <geogram/mesh/mesh_preprocessing.h>
@@ -30,7 +24,6 @@
 #include <geogram/basic/logger.h>
 ////////////////////////////////////////////////////////////////////////////////
 
-using namespace polyfem::io;
 using namespace polyfem::utils;
 
 bool polyfem::mesh::is_planar(const GEO::Mesh &M, const double tol)
@@ -1185,38 +1178,6 @@ void polyfem::mesh::extract_parent_edges(const Eigen::MatrixXd &IV, const Eigen:
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void find_codim_vertices(
-	const Eigen::MatrixXd &vertices,
-	const Eigen::MatrixXi &codim_edges,
-	const Eigen::MatrixXi &faces,
-	Eigen::VectorXi &codim_vertices)
-{
-	std::vector<bool> is_vertex_codim(vertices.rows(), true);
-	for (int i = 0; i < codim_edges.rows(); i++)
-	{
-		for (int j = 0; j < codim_edges.cols(); j++)
-		{
-			is_vertex_codim[codim_edges(i, j)] = false;
-		}
-	}
-	for (int i = 0; i < faces.rows(); i++)
-	{
-		for (int j = 0; j < faces.cols(); j++)
-		{
-			is_vertex_codim[faces(i, j)] = false;
-		}
-	}
-	const auto n_codim_vertices = std::count(is_vertex_codim.begin(), is_vertex_codim.end(), true);
-	codim_vertices.resize(n_codim_vertices);
-	for (int i = 0, ci = 0; i < vertices.rows(); i++)
-	{
-		if (is_vertex_codim[i])
-		{
-			codim_vertices[ci++] = i;
-		}
-	}
-}
-
 void find_triangle_surface_from_tets(
 	const Eigen::MatrixXi &tets,
 	Eigen::MatrixXi &faces)
@@ -1288,199 +1249,6 @@ void polyfem::mesh::extract_triangle_surface_from_tets(
 			tris(i, j) = full_to_surface[full_tris(i, j)];
 		}
 	}
-}
-
-void polyfem::mesh::validate_rest_elements(const Mesh &mesh, const std::string &source)
-{
-	std::unordered_map<std::vector<int>, int, HashVector> seen;
-	seen.reserve(mesh.n_elements());
-	for (int e = 0; e < mesh.n_elements(); ++e)
-	{
-		std::vector<int> vs = mesh.element_vertices(e);
-		std::sort(vs.begin(), vs.end());
-		for (size_t k = 1; k < vs.size(); ++k)
-			if (vs[k] == vs[k - 1])
-				log_and_throw_error("Mesh {}: element {} lists vertex {} twice; a degenerate element cannot be simulated", source, e, vs[k]);
-		const auto [it, inserted] = seen.emplace(vs, e);
-		if (!inserted)
-			log_and_throw_error(
-				"Mesh {}: elements {} and {} are the same element (vertices [{}]); a duplicated element assembles its material twice on that region -- remove the duplicate",
-				source, it->second, e, fmt::format("{}", fmt::join(vs, ", ")));
-	}
-}
-
-void polyfem::mesh::validate_surface_mesh(
-	const std::string &source,
-	const Eigen::MatrixXd &vertices,
-	const Eigen::VectorXi &codim_vertices,
-	const Eigen::MatrixXi &codim_edges,
-	const Eigen::MatrixXi &faces)
-{
-	const int n_vertices = vertices.rows();
-	const auto at = [&](const int v) {
-		std::string out = "[";
-		for (int d = 0; d < vertices.cols(); ++d)
-			out += fmt::format("{}{:g}", d ? ", " : "", vertices(v, d));
-		return out + "]";
-	};
-	const auto check_index = [&](const char *what, const int p, const int v) {
-		if (v < 0 || v >= n_vertices)
-			log_and_throw_error("Obstacle {}: {} {} references vertex {} but the file has {} vertices (indices are 0-based here; 1-based in OBJ)", source, what, p, v, n_vertices);
-	};
-
-	for (int i = 0; i < codim_vertices.size(); ++i)
-		check_index("point", i, codim_vertices(i));
-
-	std::unordered_map<std::vector<int>, int, HashVector> seen;
-	for (int e = 0; e < codim_edges.rows(); ++e)
-	{
-		std::vector<int> vs(codim_edges.cols());
-		for (int k = 0; k < codim_edges.cols(); ++k)
-		{
-			check_index("edge", e, codim_edges(e, k));
-			vs[k] = codim_edges(e, k);
-		}
-		std::sort(vs.begin(), vs.end());
-		if (vs.size() == 2 && vs[0] == vs[1])
-			log_and_throw_error("Obstacle {}: edge {} joins vertex {} to itself", source, e, vs[0]);
-		if (vs.size() == 2 && (vertices.row(vs[0]) - vertices.row(vs[1])).norm() <= 0)
-			log_and_throw_error("Obstacle {}: edge {} has zero length (vertices {} and {} both at {})", source, e, vs[0], vs[1], at(vs[0]));
-		const auto [it, inserted] = seen.emplace(vs, e);
-		if (!inserted)
-			log_and_throw_error("Obstacle {}: edges {} and {} are the same edge (vertices {} and {}); a duplicated collision primitive doubles the contact force on it", source, it->second, e, vs[0], vs[1]);
-	}
-
-	seen.clear();
-	for (int f = 0; f < faces.rows(); ++f)
-	{
-		std::vector<int> vs(faces.cols());
-		for (int k = 0; k < faces.cols(); ++k)
-		{
-			check_index("face", f, faces(f, k));
-			vs[k] = faces(f, k);
-		}
-		std::sort(vs.begin(), vs.end());
-		for (size_t k = 1; k < vs.size(); ++k)
-			if (vs[k] == vs[k - 1])
-				log_and_throw_error("Obstacle {}: face {} lists vertex {} twice", source, f, vs[k]);
-		if (faces.cols() == 3 && vertices.cols() == 3)
-		{
-			const Eigen::RowVector3d a = vertices.row(faces(f, 0));
-			const Eigen::RowVector3d ab = vertices.row(faces(f, 1)) - a;
-			const Eigen::RowVector3d ac = vertices.row(faces(f, 2)) - a;
-			const double scale = std::max({ab.squaredNorm(), ac.squaredNorm(), (ac - ab).squaredNorm()});
-			if (!(ab.cross(ac).norm() > 1e-12 * scale))
-				log_and_throw_error(
-					"Obstacle {}: face {} has zero area (vertices {}, {}, {} at {}, {}, {} are coincident or collinear); it has no normal and would poison every contact distance it enters",
-					source, f, faces(f, 0), faces(f, 1), faces(f, 2), at(faces(f, 0)), at(faces(f, 1)), at(faces(f, 2)));
-		}
-		const auto [it, inserted] = seen.emplace(vs, f);
-		if (!inserted)
-			log_and_throw_error("Obstacle {}: faces {} and {} are the same face (vertices [{}]); a duplicated collision primitive doubles the contact force on it", source, it->second, f, fmt::format("{}", fmt::join(vs, ", ")));
-	}
-}
-
-bool polyfem::mesh::read_surface_mesh(
-	const std::string &mesh_path,
-	Eigen::MatrixXd &vertices,
-	Eigen::VectorXi &codim_vertices,
-	Eigen::MatrixXi &codim_edges,
-	Eigen::MatrixXi &faces)
-{
-	vertices.resize(0, 0);
-	codim_vertices.resize(0);
-	codim_edges.resize(0, 0);
-	faces.resize(0, 0);
-
-	std::string lowername = mesh_path;
-	std::transform(
-		lowername.begin(), lowername.end(), lowername.begin(), ::tolower);
-
-	if (StringUtils::endswith(lowername, ".msh"))
-	{
-		Eigen::MatrixXi cells;
-		std::vector<std::vector<int>> elements;
-		std::vector<std::vector<double>> weights;
-		std::vector<int> body_ids;
-		if (!MshReader::load(mesh_path, vertices, cells, elements, weights, body_ids))
-		{
-			logger().error("Unable to load mesh: {}", mesh_path);
-			return false;
-		}
-
-		if (cells.cols() == 1)
-			codim_vertices = cells;
-		else if (cells.cols() == 2)
-			codim_edges = cells;
-		else if (cells.cols() == 3)
-			faces = cells;
-		else if (cells.cols() == 4)
-		{
-			if (vertices.cols() == 2)
-			{
-				logger().error("read_surface_mesh not implemented for 2D quad meshes");
-				return false;
-			}
-			else
-			{
-				// TODO: how to distinguish between 3D tet mesh and 3D surface quad mesh?
-				assert(vertices.cols() == 3);
-				Eigen::MatrixXd surface_vertices;
-				extract_triangle_surface_from_tets(vertices, cells, surface_vertices, faces);
-				vertices = surface_vertices;
-			}
-		}
-		else
-		{
-			logger().error("read_surface_mesh not implemented for hexahedral and polygonal/polyhedral meshes");
-			return false;
-		}
-	}
-	else if (StringUtils::endswith(lowername, ".obj")) // Use specialized OBJ reader function with polyline support
-	{
-		if (!OBJReader::read(mesh_path, vertices, codim_edges, faces))
-		{
-			logger().error("Unable to load mesh: {}", mesh_path);
-			return false;
-		}
-	}
-	else if (!igl::read_triangle_mesh(mesh_path, vertices, faces))
-	{
-		GEO::Mesh mesh;
-		if (!GEO::mesh_load(mesh_path, mesh))
-		{
-			logger().error("Unable to load mesh: {}", mesh_path);
-			return false;
-		}
-
-		int dim = is_planar(mesh) ? 2 : 3;
-		vertices.resize(mesh.vertices.nb(), dim);
-		for (int vi = 0; vi < mesh.vertices.nb(); vi++)
-		{
-			const auto &v = mesh.vertices.point(vi);
-			for (int vj = 0; vj < dim; vj++)
-			{
-				vertices(vi, vj) = v[vj];
-			}
-		}
-
-		// TODO: Check that this works even for a volumetric mesh
-		assert(mesh.facets.nb());
-		int face_cols = mesh.facets.nb_vertices(0);
-		faces.resize(mesh.facets.nb(), face_cols);
-		for (int fi = 0; fi < mesh.facets.nb(); fi++)
-		{
-			assert(face_cols == mesh.facets.nb_vertices(fi));
-			for (int fj = 0; fj < mesh.facets.nb_vertices(fi); fj++)
-			{
-				faces(fi, fj) = mesh.facets.vertex(fi, fj);
-			}
-		}
-	}
-
-	find_codim_vertices(vertices, codim_edges, faces, codim_vertices);
-
-	return true;
 }
 
 int polyfem::mesh::count_faces(const int dim, const Eigen::MatrixXi &cells)
@@ -1573,5 +1341,95 @@ void polyfem::mesh::generate_edges(GEO::Mesh &M)
 			M.edges.create_edge(e.first, e.second);
 			prev_e = e;
 		}
+	}
+}
+
+void polyfem::mesh::validate_rest_elements(const Mesh &mesh, const std::string &source)
+{
+	std::unordered_map<std::vector<int>, int, HashVector> seen;
+	seen.reserve(mesh.n_elements());
+	for (int e = 0; e < mesh.n_elements(); ++e)
+	{
+		std::vector<int> vs = mesh.element_vertices(e);
+		std::sort(vs.begin(), vs.end());
+		for (size_t k = 1; k < vs.size(); ++k)
+			if (vs[k] == vs[k - 1])
+				log_and_throw_error("Mesh {}: element {} lists vertex {} twice; a degenerate element cannot be simulated", source, e, vs[k]);
+		const auto [it, inserted] = seen.emplace(vs, e);
+		if (!inserted)
+			log_and_throw_error(
+				"Mesh {}: elements {} and {} are the same element (vertices [{}]); a duplicated element assembles its material twice on that region -- remove the duplicate",
+				source, it->second, e, fmt::format("{}", fmt::join(vs, ", ")));
+	}
+}
+
+void polyfem::mesh::validate_surface_mesh(
+	const std::string &source,
+	const Eigen::MatrixXd &vertices,
+	const Eigen::VectorXi &codim_vertices,
+	const Eigen::MatrixXi &codim_edges,
+	const Eigen::MatrixXi &faces)
+{
+	const int n_vertices = vertices.rows();
+	const auto at = [&](const int v) {
+		std::string out = "[";
+		for (int d = 0; d < vertices.cols(); ++d)
+			out += fmt::format("{}{:g}", d ? ", " : "", vertices(v, d));
+		return out + "]";
+	};
+	const auto check_index = [&](const char *what, const int p, const int v) {
+		if (v < 0 || v >= n_vertices)
+			log_and_throw_error("Obstacle {}: {} {} references vertex {} but the file has {} vertices (indices are 0-based here; 1-based in OBJ)", source, what, p, v, n_vertices);
+	};
+
+	for (int i = 0; i < codim_vertices.size(); ++i)
+		check_index("point", i, codim_vertices(i));
+
+	std::unordered_map<std::vector<int>, int, HashVector> seen;
+	for (int e = 0; e < codim_edges.rows(); ++e)
+	{
+		std::vector<int> vs(codim_edges.cols());
+		for (int k = 0; k < codim_edges.cols(); ++k)
+		{
+			check_index("edge", e, codim_edges(e, k));
+			vs[k] = codim_edges(e, k);
+		}
+		std::sort(vs.begin(), vs.end());
+		if (vs.size() == 2 && vs[0] == vs[1])
+			log_and_throw_error("Obstacle {}: edge {} joins vertex {} to itself", source, e, vs[0]);
+		if (vs.size() == 2 && (vertices.row(vs[0]) - vertices.row(vs[1])).norm() <= 0)
+			log_and_throw_error("Obstacle {}: edge {} has zero length (vertices {} and {} both at {})", source, e, vs[0], vs[1], at(vs[0]));
+		const auto [it, inserted] = seen.emplace(vs, e);
+		if (!inserted)
+			log_and_throw_error("Obstacle {}: edges {} and {} are the same edge (vertices {} and {}); a duplicated collision primitive doubles the contact force on it", source, it->second, e, vs[0], vs[1]);
+	}
+
+	seen.clear();
+	for (int f = 0; f < faces.rows(); ++f)
+	{
+		std::vector<int> vs(faces.cols());
+		for (int k = 0; k < faces.cols(); ++k)
+		{
+			check_index("face", f, faces(f, k));
+			vs[k] = faces(f, k);
+		}
+		std::sort(vs.begin(), vs.end());
+		for (size_t k = 1; k < vs.size(); ++k)
+			if (vs[k] == vs[k - 1])
+				log_and_throw_error("Obstacle {}: face {} lists vertex {} twice", source, f, vs[k]);
+		if (faces.cols() == 3 && vertices.cols() == 3)
+		{
+			const Eigen::RowVector3d a = vertices.row(faces(f, 0));
+			const Eigen::RowVector3d ab = vertices.row(faces(f, 1)) - a;
+			const Eigen::RowVector3d ac = vertices.row(faces(f, 2)) - a;
+			const double scale = std::max({ab.squaredNorm(), ac.squaredNorm(), (ac - ab).squaredNorm()});
+			if (!(ab.cross(ac).norm() > 1e-12 * scale))
+				log_and_throw_error(
+					"Obstacle {}: face {} has zero area (vertices {}, {}, {} at {}, {}, {} are coincident or collinear); it has no normal and would poison every contact distance it enters",
+					source, f, faces(f, 0), faces(f, 1), faces(f, 2), at(faces(f, 0)), at(faces(f, 1)), at(faces(f, 2)));
+		}
+		const auto [it, inserted] = seen.emplace(vs, f);
+		if (!inserted)
+			log_and_throw_error("Obstacle {}: faces {} and {} are the same face (vertices [{}]); a duplicated collision primitive doubles the contact force on it", source, it->second, f, fmt::format("{}", fmt::join(vs, ", ")));
 	}
 }

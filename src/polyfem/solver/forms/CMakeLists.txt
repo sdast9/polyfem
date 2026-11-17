@@ -25,6 +25,7 @@ set(SOURCES
 	LaggedRegForm.cpp
 	LaggedRegForm.hpp
 	FrictionForm.cpp
+	FrictionCheckpoint.hpp
 	FrictionForm.hpp
 	ContactForm.cpp
 	ContactForm.hpp

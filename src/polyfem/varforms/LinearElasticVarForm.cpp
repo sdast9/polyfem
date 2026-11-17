@@ -154,6 +154,9 @@ namespace polyfem::varform
 			}
 
 			solve_data_.time_integrator->init(solution, velocity, acceleration, dt);
+			restore_checkpoint_integrator(
+				solve_data_.time_integrator, "/checkpoint/state/primary_integrator", dt,
+				"primary", space_, mesh_->dimension());
 			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
 			// RB-11: InertiaForm reads x_tilde from the integrator in its constructor
 			// (upstream #508), so it must be built after init: before, the history is
@@ -280,7 +283,7 @@ namespace polyfem::varform
 			solve_data_.time_integrator->update_quantities(sol);
 			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: this loop saves after advancing
 			save_timestep(time, t, t0, dt, sol);
-			save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
+			save_elastic_step_state(t0, dt, t, sol, solve_data_.time_integrator.get());
 
 			logger().info("{}/{}  t={}", t, time_steps, time);
 			notify_time_step(t, time_steps, t0, dt);

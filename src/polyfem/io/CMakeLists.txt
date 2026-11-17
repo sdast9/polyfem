@@ -1,8 +1,13 @@
 set(SOURCES
 	BuildInfo.hpp
 	DiagnosticSchemas.hpp
+	Checkpoint.cpp
+	Checkpoint.hpp
+	ForkCheckpoint.hpp
+	HDF5RowChunks.hpp
 	Evaluator.cpp
 	Evaluator.hpp
+	InputLoader.hpp
 	MatrixIO.cpp
 	MatrixIO.hpp
 	MshReader.cpp
@@ -19,6 +24,8 @@ set(SOURCES
 	OutStatsData.hpp
 	RunManifest.cpp
 	RunManifest.hpp
+	ResourceIO.cpp
+	ResourceIO.hpp
 	SolverCSVWriter.cpp
 	SolverCSVWriter.hpp
 	YamlToJson.cpp

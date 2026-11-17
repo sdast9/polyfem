@@ -1,4 +1,5 @@
 #include "ContactForm.hpp"
+#include <polyfem/io/ForkCheckpoint.hpp>
 
 #include <polyfem/solver/NLProblem.hpp>
 #include <polyfem/solver/forms/FrictionForm.hpp>
@@ -143,26 +144,6 @@ namespace polyfem::solver
 		use_cached_candidates_ = state.use_cached_candidates;
 		candidates_ = state.candidates;
 		candidate_statistics_ = state.candidate_statistics;
-	}
-
-	void ContactForm::write_restart_state(const std::string &path) const
-	{
-		Eigen::MatrixXd scalars(1, 3);
-		scalars << barrier_stiffness_, max_barrier_stiffness_, prev_distance_;
-		io::write_matrix(path, "contact_scalars", scalars, /*replace=*/false);
-	}
-
-	bool ContactForm::read_restart_state(const std::string &path, const Eigen::VectorXd &)
-	{
-		Eigen::MatrixXd scalars;
-		if (!io::read_matrix(path, "contact_scalars", scalars))
-			return false;
-		if (scalars.size() != 3)
-			log_and_throw_error("Restart state {}: contact_scalars has {} entries, expected 3", path, scalars.size());
-		barrier_stiffness_ = scalars(0);
-		max_barrier_stiffness_ = scalars(1);
-		prev_distance_ = scalars(2);
-		return true;
 	}
 
 	std::unique_ptr<FormState> ContactForm::save_state() const
@@ -452,5 +433,29 @@ namespace polyfem::solver
 				tight_inclusion_ccd_);
 
 		return is_valid;
+	}
+
+	void ContactForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
+	{
+		Eigen::MatrixXd scalars(1, 3);
+		scalars << barrier_stiffness_, max_barrier_stiffness_, prev_distance_;
+		writer.write_matrix(group + "/contact_scalars", scalars);
+		writer.write_attribute(group, "layout_version", long(1));
+	}
+
+	bool ContactForm::deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x)
+	{
+		if (!io::has_fork_checkpoint_group(reader, group))
+			return false;
+		const std::string path = reader.path().string();
+		Eigen::MatrixXd scalars;
+		if (!io::read_fork_checkpoint_matrix(reader, group, "contact_scalars", scalars))
+			return false;
+		if (scalars.rows() != 1 || scalars.cols() != 3)
+			log_and_throw_error("Restart state {}: contact_scalars has {} entries, expected 3", path, scalars.size());
+		barrier_stiffness_ = scalars(0);
+		max_barrier_stiffness_ = scalars(1);
+		prev_distance_ = scalars(2);
+		return true;
 	}
 } // namespace polyfem::solver

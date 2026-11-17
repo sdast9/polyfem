@@ -51,6 +51,8 @@ namespace polyfem::utils
 	private:
 		static std::string canonical_path(const std::string &path)
 		{
+			if (path.rfind("resource:", 0) == 0)
+				return path;
 			return std::filesystem::absolute(path).lexically_normal().string();
 		}
 		std::mutex mutex_;

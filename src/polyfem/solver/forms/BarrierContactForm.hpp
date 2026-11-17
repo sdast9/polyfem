@@ -1,4 +1,10 @@
 #pragma once
+
+namespace polyfem::io
+{
+	class CheckpointWriter;
+	class CheckpointReader;
+} // namespace polyfem::io
 #include "TrimController.hpp"
 
 #include "ContactForm.hpp"
@@ -470,8 +476,8 @@ namespace polyfem::solver
 		///        coefficient history (caches, continuation keys, counters).
 		///        The snapshot surface, frozen Hessian and collision set are
 		///        functions of x and are rebuilt on read.
-		void write_restart_state(const std::string &path) const override;
-		bool read_restart_state(const std::string &path, const Eigen::VectorXd &x) override;
+		void serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const override;
+		bool deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x) override;
 		/// @brief Restores the captured state and, in semi-implicit mode,
 		///        reports a "rollback" coefficient event (before = the failed
 		///        attempt's state at x, after = the restored state).

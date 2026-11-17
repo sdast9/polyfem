@@ -14,7 +14,7 @@ namespace polyfem::assembler
 		std::string name() const override { return "GrowthNeoHookean"; }
 		bool allow_inversion() const override { return false; }
 		std::map<std::string, ParamFunc> parameters() const override;
-		void add_multimaterial(int index, const json &params, const Units &units, const std::string &root_path) override;
+		void add_multimaterial(int index, const json &params, const Units &units, const io::ResourceIO &resources) override;
 		Eigen::Matrix3d natural_configuration(const RowVectorNd &p, double t, int el_id) const;
 
 		template <typename T>

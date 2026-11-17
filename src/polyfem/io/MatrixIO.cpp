@@ -1,4 +1,5 @@
 #include "MatrixIO.hpp"
+#include "HDF5RowChunks.hpp"
 
 #include <polyfem/utils/Logger.hpp>
 
@@ -11,35 +12,12 @@
 #include <fstream>
 #include <iomanip> // setprecision
 #include <optional>
+#include <limits>
 #include <vector>
 #include <filesystem>
 
 namespace polyfem::io
 {
-	namespace
-	{
-		/// Chunk dimensions for a dataset h5pp would store chunked: blocks of
-		/// whole rows of about 1 MiB. h5pp's own guess is a square (256 x 256
-		/// for any 2D array over 512 kB), which is allocated in full even for
-		/// an N x 1 column: a restart state of 652,440 DOFs stored 1.34 GB per
-		/// 5.2 MB vector, 4.0 GB per file. Smaller data keeps h5pp's compact
-		/// or contiguous layout (std::nullopt); an existing dataset keeps its
-		/// own layout.
-		template <typename Mat>
-		std::optional<std::vector<hsize_t>> row_block_chunks(const Mat &mat)
-		{
-			std::vector<hsize_t> dims = h5pp::util::getDimensions(mat);
-			const hsize_t bytes = hsize_t(mat.size()) * sizeof(typename Mat::Scalar);
-			if (dims.empty() || bytes < h5pp::constants::maxSizeContiguous)
-				return std::nullopt;
-
-			hsize_t row_bytes = sizeof(typename Mat::Scalar);
-			for (size_t i = 1; i < dims.size(); ++i)
-				row_bytes *= dims[i];
-			dims[0] = std::clamp<hsize_t>((hsize_t(1) << 20) / row_bytes, 1, dims[0]);
-			return dims;
-		}
-	} // namespace
 
 	template <typename T>
 	bool read_matrix(const std::string &path, Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat)
@@ -115,8 +93,7 @@ namespace polyfem::io
 	template <typename T>
 	bool read_matrix_ascii(const std::string &path, Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat)
 	{
-		std::fstream file;
-		file.open(path.c_str());
+		std::ifstream file(path);
 
 		if (!file.good())
 		{
@@ -139,9 +116,20 @@ namespace polyfem::io
 
 			std::vector<T> &currentLine = matrix.back();
 
-			while (input >> temp)
+			while (true)
+			{
+				input >> std::ws;
+				if (input.eof())
+					break;
+				if (!(input >> temp))
+					return false; // Reject malformed or out-of-range values, not a partial row.
 				currentLine.push_back(temp);
+			}
+			if (currentLine.empty())
+				matrix.pop_back();
 		}
+		if (file.bad())
+			return false;
 
 		if (!igl::list_to_matrix(matrix, mat))
 		{
@@ -190,12 +178,23 @@ namespace polyfem::io
 		Index rows = 0, cols = 0;
 		in.read((char *)(&rows), sizeof(Index));
 		in.read((char *)(&cols), sizeof(Index));
+		if (!in || rows < 0 || cols < 0
+			|| (cols && rows > std::numeric_limits<Index>::max() / cols))
+			return false;
+		const uintmax_t count = uintmax_t(rows) * uintmax_t(cols);
+		if (count > (uintmax_t(std::numeric_limits<std::streamsize>::max()) - 2 * sizeof(Index)) / sizeof(T))
+			return false;
+		in.seekg(0, std::ios::end);
+		if (in.tellg() != std::streamoff(2 * sizeof(Index) + count * sizeof(T)))
+			return false;
+		in.seekg(2 * sizeof(Index));
 
 		mat.resize(rows, cols);
 		in.read((char *)mat.data(), rows * cols * sizeof(T));
+		const bool success = bool(in);
 		in.close();
 
-		return true;
+		return success;
 	}
 
 	template <typename Mat>
@@ -279,6 +278,7 @@ namespace polyfem::io
 	// template instantiation
 	template bool read_matrix<int>(const std::string &, Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> &);
 	template bool read_matrix<double>(const std::string &, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &);
+	template bool read_matrix<long>(const std::string &, Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> &);
 
 	template bool read_matrix<Eigen::MatrixXi>(const std::string &, const std::string &, Eigen::MatrixXi &);
 	template bool read_matrix<Eigen::MatrixXd>(const std::string &, const std::string &, Eigen::MatrixXd &);
@@ -295,6 +295,7 @@ namespace polyfem::io
 
 	template bool read_matrix_ascii<int>(const std::string &, Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> &);
 	template bool read_matrix_ascii<double>(const std::string &, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &);
+	template bool read_matrix_ascii<long>(const std::string &, Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> &);
 
 	template bool write_matrix_ascii<Eigen::MatrixXd>(const std::string &, const Eigen::MatrixXd &);
 	template bool write_matrix_ascii<Eigen::MatrixXf>(const std::string &, const Eigen::MatrixXf &);
@@ -303,6 +304,7 @@ namespace polyfem::io
 
 	template bool read_matrix_binary<int>(const std::string &, Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> &);
 	template bool read_matrix_binary<double>(const std::string &, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &);
+	template bool read_matrix_binary<long>(const std::string &, Eigen::Matrix<long, Eigen::Dynamic, Eigen::Dynamic> &);
 
 	template bool write_matrix_binary<Eigen::MatrixXd>(const std::string &, const Eigen::MatrixXd &);
 	template bool write_matrix_binary<Eigen::MatrixXf>(const std::string &, const Eigen::MatrixXf &);

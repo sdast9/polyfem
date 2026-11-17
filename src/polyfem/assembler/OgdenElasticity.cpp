@@ -10,11 +10,11 @@ namespace polyfem::assembler
 	{
 	}
 
-	void UnconstrainedOgdenElasticity::add_multimaterial(const int index, const json &params, const Units &units, const std::string &root_path)
+	void UnconstrainedOgdenElasticity::add_multimaterial(const int index, const json &params, const Units &units, const io::ResourceIO &resources)
 	{
-		alphas_.add_multimaterial(index, params, "", root_path);
-		mus_.add_multimaterial(index, params, units.stress(), root_path);
-		Ds_.add_multimaterial(index, params, units.stress(), root_path);
+		alphas_.add_multimaterial(index, params, "", resources);
+		mus_.add_multimaterial(index, params, units.stress(), resources);
+		Ds_.add_multimaterial(index, params, units.stress(), resources);
 		// RB-11: the energy loops over the alphas and reads mus[N] for each; a
 		// mismatch silently dropped terms or read out of range (the assert is dead
 		// in release builds). Checked only when this law is configured: under
@@ -59,11 +59,11 @@ namespace polyfem::assembler
 	{
 	}
 
-	void IncompressibleOgdenElasticity::add_multimaterial(const int index, const json &params, const Units &units, const std::string &root_path)
+	void IncompressibleOgdenElasticity::add_multimaterial(const int index, const json &params, const Units &units, const io::ResourceIO &resources)
 	{
-		coefficients_.add_multimaterial(index, params, units.stress(), root_path);
-		expoenents_.add_multimaterial(index, params, "", root_path);
-		bulk_modulus_.add_multimaterial(index, params, units.stress(), root_path);
+		coefficients_.add_multimaterial(index, params, units.stress(), resources);
+		expoenents_.add_multimaterial(index, params, "", resources);
+		bulk_modulus_.add_multimaterial(index, params, units.stress(), resources);
 		if ((params.contains("c") || params.contains("m")) && coefficients_.size() != expoenents_.size())
 			log_and_throw_error(
 				"IncompressibleOgden: 'c' has {} term(s) but 'm' has {}; every Ogden term needs one coefficient and one exponent",

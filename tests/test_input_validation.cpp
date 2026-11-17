@@ -20,6 +20,8 @@
 #include <polyfem/assembler/MultiModel.hpp>
 #include <polyfem/assembler/NeoHookeanElasticity.hpp>
 #include <polyfem/mesh/Mesh.hpp>
+#include <polyfem/mesh/MeshLoader.hpp>
+#include <polyfem/io/Checkpoint.hpp>
 #include <polyfem/mesh/MeshUtils.hpp>
 #include <polyfem/solver/forms/ContactForm.hpp>
 #include <polyfem/utils/ExpressionValue.hpp>
@@ -44,6 +46,24 @@ using Catch::Matchers::ContainsSubstring;
 
 namespace
 {
+	const io::FileSystemIO &test_resources()
+	{
+		static const io::FileSystemIO resources(std::filesystem::current_path());
+		return resources;
+	}
+	std::unique_ptr<Mesh> create_test_mesh(const Eigen::MatrixXd &vertices, const Eigen::MatrixXi &elements, bool non_conforming)
+	{
+		return Mesh::create(MeshData(vertices, elements), non_conforming);
+	}
+	std::unique_ptr<Mesh> create_test_mesh(GEO::Mesh &mesh, bool non_conforming)
+	{
+		return Mesh::create(MeshReader::from_geogram(mesh), non_conforming);
+	}
+	std::unique_ptr<Mesh> create_test_mesh(const std::string &path, bool non_conforming)
+	{
+		return MeshLoader(test_resources()).load_fem(path, non_conforming);
+	}
+
 	// Two positively oriented tets sharing the face (0,1,2): body-id friendly.
 	Eigen::MatrixXd two_tet_vertices()
 	{
@@ -66,7 +86,7 @@ namespace
 
 	std::unique_ptr<Mesh> two_tet_mesh()
 	{
-		return Mesh::create(two_tet_vertices(), two_tets(), false);
+		return create_test_mesh(two_tet_vertices(), two_tets(), false);
 	}
 
 	std::filesystem::path scratch_dir(const std::string &tag)
@@ -101,31 +121,31 @@ TEST_CASE("cell matrices with invalid vertex indices are refused", "[input_valid
 
 	SECTION("valid")
 	{
-		CHECK(Mesh::create(V, two_tets(), false) != nullptr);
+		CHECK(create_test_mesh(V, two_tets(), false) != nullptr);
 	}
 	SECTION("out of range")
 	{
 		Eigen::MatrixXi T = two_tets();
 		T(1, 3) = 99;
-		CHECK_THROWS_WITH(Mesh::create(V, T, false), ContainsSubstring("references vertex 99"));
+		CHECK_THROWS_WITH(create_test_mesh(V, T, false), ContainsSubstring("references vertex 99"));
 	}
 	SECTION("negative")
 	{
 		Eigen::MatrixXi T = two_tets();
 		T(0, 0) = -3;
-		CHECK_THROWS_WITH(Mesh::create(V, T, false), ContainsSubstring("references vertex -3"));
+		CHECK_THROWS_WITH(create_test_mesh(V, T, false), ContainsSubstring("references vertex -3"));
 	}
 	SECTION("repeated vertex")
 	{
 		Eigen::MatrixXi T = two_tets();
 		T(0, 3) = T(0, 2);
-		CHECK_THROWS_WITH(Mesh::create(V, T, false), ContainsSubstring("lists vertex 2 twice"));
+		CHECK_THROWS_WITH(create_test_mesh(V, T, false), ContainsSubstring("lists vertex 2 twice"));
 	}
 	SECTION("too few corners")
 	{
 		Eigen::MatrixXi T(1, 4);
 		T << 0, 1, 2, -1;
-		CHECK_THROWS_WITH(Mesh::create(V, T, false), ContainsSubstring("lists only 3 vertices"));
+		CHECK_THROWS_WITH(create_test_mesh(V, T, false), ContainsSubstring("lists only 3 vertices"));
 	}
 }
 
@@ -143,7 +163,7 @@ TEST_CASE("duplicate rest elements are refused", "[input_validation][mesh]")
 		T << 0, 1, 2, 3,
 			0, 2, 1, 4,
 			1, 2, 3, 0; // a permutation of element 0 is still element 0 (topological check)
-		CHECK_THROWS_WITH(Mesh::create(two_tet_vertices(), T, false), ContainsSubstring("Elements 0 and 2 are the same element"));
+		CHECK_THROWS_WITH(create_test_mesh(two_tet_vertices(), T, false), ContainsSubstring("Elements 0 and 2 are the same element"));
 	}
 	SECTION("a loaded mesh with a duplicated element")
 	{
@@ -162,7 +182,7 @@ TEST_CASE("duplicate rest elements are refused", "[input_validation][mesh]")
 			0, 1, 2, 3;
 		for (int c = 0; c < T.rows(); ++c)
 			M.cells.create_tet(T(c, 0), T(c, 1), T(c, 2), T(c, 3));
-		CHECK_THROWS_WITH(Mesh::create(M, false), ContainsSubstring("Elements 0 and 2 are the same element"));
+		CHECK_THROWS_WITH(create_test_mesh(M, false), ContainsSubstring("Elements 0 and 2 are the same element"));
 	}
 }
 
@@ -215,7 +235,7 @@ TEST_CASE("the reported Gmsh file with a numpy repr stops by name", "[input_vali
 	json args = json::parse(R"({"geometry": [{"mesh": "one_tet.msh"}],
 		"materials": [{"id": 1, "type": "NeoHookean", "E": 1e5, "nu": 0.3}],
 		"time": {"t0": 0, "tend": 1, "time_steps": 1, "quasistatic": true}})");
-	args["root_path"] = (dir / "params.json").string();
+	args["root_path"] = dir.string();
 	args["/solver/linear/solver"_json_pointer] = "Eigen::SimplicialLDLT";
 	args["/output/directory"_json_pointer] = "";
 	args["/output/log/quiet"_json_pointer] = true;
@@ -231,7 +251,7 @@ TEST_CASE("malformed values in Gmsh files are refused with their line and token"
 	const auto dir = scratch_dir("rb11-msh");
 	int file = 0;
 	const auto load = [&](const std::vector<std::string> &lines) {
-		return Mesh::create(write_msh(dir / ("case" + std::to_string(file++) + ".msh"), lines), false);
+		return create_test_mesh(write_msh(dir / ("case" + std::to_string(file++) + ".msh"), lines), false);
 	};
 	const auto first = [](const std::vector<std::string> &lines, const size_t n) {
 		return std::vector<std::string>(lines.begin(), lines.begin() + n);
@@ -246,7 +266,7 @@ TEST_CASE("malformed values in Gmsh files are refused with their line and token"
 			CHECK(mesh->n_vertices() == 4);
 			CHECK(mesh->n_cells() == 1);
 		}
-		CHECK(Mesh::create(write_msh(dir / "crlf.msh", one_tet_v41, "\r\n"), false) != nullptr);
+		CHECK(create_test_mesh(write_msh(dir / "crlf.msh", one_tet_v41, "\r\n"), false) != nullptr);
 		CHECK(load(with_line(one_tet_v22, 7, "2\t1.0e+00 0.0E0 -0")) != nullptr);
 		// MSVC cannot take this as a raw string literal inside CHECK
 		const std::string escaped_name = "3 1 \"body \\\"one\\\" (soft)\"";
@@ -365,7 +385,7 @@ TEST_CASE("parametric Gmsh node blocks keep their positions", "[input_validation
 	const auto dir = scratch_dir("rb11-msh-parametric");
 	int file = 0;
 	const auto load = [&](const std::vector<std::string> &lines) {
-		return Mesh::create(write_msh(dir / ("case" + std::to_string(file++) + ".msh"), lines), false);
+		return create_test_mesh(write_msh(dir / ("case" + std::to_string(file++) + ".msh"), lines), false);
 	};
 	const auto check_vertices = [](const std::unique_ptr<Mesh> &mesh, const Eigen::MatrixXd &expected) {
 		REQUIRE(mesh != nullptr);
@@ -420,11 +440,11 @@ TEST_CASE("parametric Gmsh node blocks keep their positions", "[input_validation
 	}
 	SECTION("binary files")
 	{
-		check_vertices(Mesh::create(write_msh41_binary(dir / "binary.msh", 3, {0, 0, 0, 0.1, 0.2, 0.3, 1, 0, 0, 0.4, 0.5, 0.6, 0, 1, 0, 0.7, 0.8, 0.9, 0, 0, 1, 0.11, 0.12, 0.13}), false),
+		check_vertices(create_test_mesh(write_msh41_binary(dir / "binary.msh", 3, {0, 0, 0, 0.1, 0.2, 0.3, 1, 0, 0, 0.4, 0.5, 0.6, 0, 1, 0, 0.7, 0.8, 0.9, 0, 0, 1, 0.11, 0.12, 0.13}), false),
 					   unit_tet);
 		// mshio does not range-check a binary block header: this block holds
 		// 3 + (-1) values per node, and a stride of 3 read past their end
-		CHECK_THROWS_WITH(Mesh::create(write_msh41_binary(dir / "binary_dim.msh", -1, {0, 0, 1, 0, 0, 1, 0, 0}), false),
+		CHECK_THROWS_WITH(create_test_mesh(write_msh41_binary(dir / "binary_dim.msh", -1, {0, 0, 1, 0, 0, 1, 0, 0}), false),
 						  ContainsSubstring("parametric node block 1 has entity dimension -1 (0 to 3 expected)"));
 	}
 }
@@ -518,7 +538,7 @@ TEST_CASE("per-element value lists bind to global or body-local rows by length",
 		mass.set_size(3);
 		const json materials = json::array({{{"id", 7}, {"rho", json::array({10.0, 20.0, 11.0, 21.0})}},
 											{{"id", 8}, {"rho", json::array({10.0, 20.0, 11.0, 21.0})}}});
-		mass.set_materials(body_ids, materials, units, "");
+		mass.set_materials(body_ids, materials, units, test_resources());
 		CHECK(mass.density()(p, p, 0, 0) == 10.0);
 		CHECK(mass.density()(p, p, 0, 1) == 20.0);
 		CHECK(mass.density()(p, p, 0, 2) == 11.0);
@@ -530,7 +550,7 @@ TEST_CASE("per-element value lists bind to global or body-local rows by length",
 		mass.set_size(3);
 		const json materials = json::array({{{"id", 7}, {"rho", json::array({10.0, 11.0})}},
 											{{"id", 8}, {"rho", json::array({20.0, 21.0})}}});
-		mass.set_materials(body_ids, materials, units, "");
+		mass.set_materials(body_ids, materials, units, test_resources());
 		CHECK(mass.density()(p, p, 0, 0) == 10.0);
 		CHECK(mass.density()(p, p, 0, 1) == 20.0);
 		CHECK(mass.density()(p, p, 0, 2) == 11.0);
@@ -542,23 +562,23 @@ TEST_CASE("per-element value lists bind to global or body-local rows by length",
 		mass.set_size(3);
 		const json materials = json::array({{{"id", 7}, {"rho", json::array({10.0, 11.0, 12.0})}},
 											{{"id", 8}, {"rho", 1.0}}});
-		CHECK_THROWS_WITH(mass.set_materials(body_ids, materials, units, ""), ContainsSubstring("has 3 entries"));
+		CHECK_THROWS_WITH(mass.set_materials(body_ids, materials, units, test_resources()), ContainsSubstring("has 3 entries"));
 	}
 	SECTION("a single material object needs one row per element")
 	{
 		Mass mass;
 		mass.set_size(3);
-		CHECK_THROWS_WITH(mass.set_materials(body_ids, json{{"rho", json::array({1.0, 2.0, 3.0})}}, units, ""), ContainsSubstring("has 3 entries"));
+		CHECK_THROWS_WITH(mass.set_materials(body_ids, json{{"rho", json::array({1.0, 2.0, 3.0})}}, units, test_resources()), ContainsSubstring("has 3 entries"));
 		Mass ok;
 		ok.set_size(3);
-		ok.set_materials(body_ids, json{{"rho", json::array({1.0, 2.0, 3.0, 4.0})}}, units, "");
+		ok.set_materials(body_ids, json{{"rho", json::array({1.0, 2.0, 3.0, 4.0})}}, units, test_resources());
 		CHECK(ok.density()(p, p, 0, 3) == 4.0);
 	}
 	SECTION("a list of expressions is not a per-element value")
 	{
 		Mass mass;
 		mass.set_size(3);
-		CHECK_THROWS_WITH(mass.set_materials(body_ids, json{{"rho", json::array({"1", "2", "3", "4"})}}, units, ""), ContainsSubstring("list of expressions"));
+		CHECK_THROWS_WITH(mass.set_materials(body_ids, json{{"rho", json::array({"1", "2", "3", "4"})}}, units, test_resources()), ContainsSubstring("list of expressions"));
 	}
 }
 
@@ -589,7 +609,7 @@ TEST_CASE("per-element fibre files bind to global or body-local rows by length",
 		const json fibre = {{"type", "per_element_file"}, {"path", path}, {"field", "FIB"}};
 		const json materials = json::array({{{"id", 7}, {"k1", 1.0}, {"k2", 1.0}, {"kappa", 0.1}, {"fiber_direction", fibre}},
 											{{"id", 8}, {"k1", 1.0}, {"k2", 1.0}, {"kappa", 0.1}, {"fiber_direction", fibre}}});
-		hgo.set_materials(body_ids, materials, units, "");
+		hgo.set_materials(body_ids, materials, units, test_resources());
 		CHECK(fibre_of(hgo, 0) == 0.0);
 		CHECK(fibre_of(hgo, 1) == 1.0);
 		CHECK(fibre_of(hgo, 2) == 0.0);
@@ -603,7 +623,7 @@ TEST_CASE("per-element fibre files bind to global or body-local rows by length",
 		const json fibre = {{"type", "per_element_file"}, {"path", path}, {"field", "FIB"}};
 		const json materials = json::array({{{"id", 7}, {"k1", 1.0}, {"k2", 1.0}, {"kappa", 0.1}, {"fiber_direction", fibre}},
 											{{"id", 8}, {"k1", 1.0}, {"k2", 1.0}, {"kappa", 0.1}, {"fiber_direction", fibre}}});
-		hgo.set_materials(body_ids, materials, units, "");
+		hgo.set_materials(body_ids, materials, units, test_resources());
 		// element 0 = body 7 local 0 -> ey; element 1 = body 8 local 0 -> ey; elements 2, 3 -> ez
 		CHECK(fibre_of(hgo, 0) == 1.0);
 		CHECK(fibre_of(hgo, 1) == 1.0);
@@ -618,7 +638,7 @@ TEST_CASE("per-element fibre files bind to global or body-local rows by length",
 		const json fibre = {{"type", "per_element_file"}, {"path", path}, {"field", "FIB"}};
 		const json materials = json::array({{{"id", 7}, {"k1", 1.0}, {"k2", 1.0}, {"kappa", 0.1}, {"fiber_direction", fibre}},
 											{{"id", 8}, {"k1", 1.0}, {"k2", 1.0}, {"kappa", 0.1}, {"fiber_direction", fibre}}});
-		CHECK_THROWS_WITH(hgo.set_materials(body_ids, materials, units, ""), ContainsSubstring("has 3 vectors"));
+		CHECK_THROWS_WITH(hgo.set_materials(body_ids, materials, units, test_resources()), ContainsSubstring("has 3 vectors"));
 	}
 	std::filesystem::remove_all(dir);
 }
@@ -629,8 +649,8 @@ TEST_CASE("every body needs a material", "[input_validation][material]")
 	Mass mass;
 	mass.set_size(3);
 	const json materials = json::array({{{"id", 7}, {"rho", 1.0}}});
-	CHECK_THROWS_WITH(mass.set_materials({7, 8, 7, 8}, materials, units, ""), ContainsSubstring("No material for body id [8]"));
-	CHECK_NOTHROW(mass.set_materials({7, 7}, materials, units, ""));
+	CHECK_THROWS_WITH(mass.set_materials({7, 8, 7, 8}, materials, units, test_resources()), ContainsSubstring("No material for body id [8]"));
+	CHECK_NOTHROW(mass.set_materials({7, 7}, materials, units, test_resources()));
 }
 
 // ---------------------------------------------------------------------------
@@ -647,7 +667,7 @@ TEST_CASE("elastic parameters are validated at the element barycenters", "[input
 	const auto neo_hookean = [&](const json &mat) {
 		NeoHookeanElasticity nh;
 		nh.set_size(3);
-		nh.set_materials(body_ids, mat, units, "");
+		nh.set_materials(body_ids, mat, units, test_resources());
 		validate_material_parameters(nh, *mesh, 0.0, false, "test");
 	};
 
@@ -680,7 +700,7 @@ TEST_CASE("density, fibre and dispersion parameters are validated", "[input_vali
 		const auto density = [&](const double rho, const bool transient) {
 			Mass mass;
 			mass.set_size(3);
-			mass.set_materials(body_ids, json{{"rho", rho}}, units, "");
+			mass.set_materials(body_ids, json{{"rho", rho}}, units, test_resources());
 			validate_material_parameters(mass, *mesh, 0.0, transient, "mass");
 		};
 		CHECK_NOTHROW(density(1000.0, true));
@@ -695,7 +715,7 @@ TEST_CASE("density, fibre and dispersion parameters are validated", "[input_vali
 			h.set_size(3);
 			json m = mat;
 			m["fiber_direction"] = json::array({0, 0, 1});
-			h.set_materials(body_ids, m, units, "");
+			h.set_materials(body_ids, m, units, test_resources());
 			validate_material_parameters(h, *mesh, 0.0, false, "hgo");
 		};
 		CHECK_NOTHROW(hgo({{"k1", 1e4}, {"k2", 5.0}, {"kappa", 0.2}}));
@@ -711,7 +731,7 @@ TEST_CASE("density, fibre and dispersion parameters are validated", "[input_vali
 		V2 << 0, 0, 1, 0, 1, 1, 0, 1;
 		Eigen::MatrixXi T2(2, 3);
 		T2 << 0, 1, 2, 0, 2, 3;
-		const auto mesh2 = Mesh::create(V2, T2, false);
+		const auto mesh2 = create_test_mesh(V2, T2, false);
 		REQUIRE(mesh2 != nullptr);
 		const std::vector<int> body2(mesh2->n_elements(), 0);
 		const auto hgo2 = [&](const double kappa, const bool composite) {
@@ -730,7 +750,7 @@ TEST_CASE("density, fibre and dispersion parameters are validated", "[input_vali
 			}
 			REQUIRE(a != nullptr);
 			a->set_size(2);
-			a->set_materials(body2, m, units, "");
+			a->set_materials(body2, m, units, test_resources());
 			validate_material_parameters(*a, *mesh2, 0.0, false, "hgo2d");
 		};
 		for (const bool composite : {false, true})
@@ -755,7 +775,7 @@ TEST_CASE("fibre directions: constant, expression and dimension", "[input_valida
 		a->set_size(size);
 		const json mat = {{"models", json::array({{{"type", "NeoHookean"}, {"E", 1e6}, {"nu", 0.3}},
 												  {{"type", "HGOFiber"}, {"k1", 1e4}, {"k2", 5.0}, {"fiber_direction", direction}}})}};
-		a->set_materials(std::vector<int>(m.n_elements(), 0), mat, units, "");
+		a->set_materials(std::vector<int>(m.n_elements(), 0), mat, units, test_resources());
 		validate_material_parameters(*a, m, 0.0, false, "fibre");
 	};
 	CHECK_NOTHROW(fibre(json::array({0, 0, 1}), 3, *mesh));
@@ -768,7 +788,7 @@ TEST_CASE("fibre directions: constant, expression and dimension", "[input_valida
 	V2 << 0, 0, 1, 0, 1, 1, 0, 1;
 	Eigen::MatrixXi T2(2, 3);
 	T2 << 0, 1, 2, 0, 2, 3;
-	const auto mesh2 = Mesh::create(V2, T2, false);
+	const auto mesh2 = create_test_mesh(V2, T2, false);
 	REQUIRE(mesh2 != nullptr);
 	CHECK_NOTHROW(fibre(json::array({0, 1}), 2, *mesh2));
 	CHECK_THROWS_WITH(fibre(json::array({0, 0, 1}), 2, *mesh2), ContainsSubstring("components but the problem is 2D"));
@@ -801,19 +821,19 @@ TEST_CASE("shear-only laws accept the incompressible limit", "[input_validation]
 		const auto assembler = AssemblerUtils::make_assembler(type);
 		REQUIRE(assembler != nullptr);
 		assembler->set_size(3);
-		assembler->set_materials(body_ids, json{{"E", 1e6}, {"nu", 0.5}}, units, "");
+		assembler->set_materials(body_ids, json{{"E", 1e6}, {"nu", 0.5}}, units, test_resources());
 		INFO(type);
 		CHECK_NOTHROW(validate_material_parameters(*assembler, *mesh, 0.0, false, type));
 		const auto bad = AssemblerUtils::make_assembler(type);
 		bad->set_size(3);
-		bad->set_materials(body_ids, json{{"E", -1e6}, {"nu", 0.3}}, units, "");
+		bad->set_materials(body_ids, json{{"E", -1e6}, {"nu", 0.3}}, units, test_resources());
 		CHECK_THROWS_WITH(validate_material_parameters(*bad, *mesh, 0.0, false, type), ContainsSubstring("shear modulus must be positive"));
 	}
 	// inside a MaterialSum the child type is still recognised
 	const auto sum = AssemblerUtils::make_assembler("MaterialSum");
 	REQUIRE(sum != nullptr);
 	sum->set_size(3);
-	sum->set_materials(body_ids, json{{"models", json::array({{{"type", "IsochoricNeoHookean"}, {"E", 1e6}, {"nu", 0.5}}, {{"type", "VolumePenalty"}, {"k", 1e5}}})}}, units, "");
+	sum->set_materials(body_ids, json{{"models", json::array({{{"type", "IsochoricNeoHookean"}, {"E", 1e6}, {"nu", 0.5}}, {{"type", "VolumePenalty"}, {"k", 1e5}}})}}, units, test_resources());
 	CHECK_NOTHROW(validate_material_parameters(*sum, *mesh, 0.0, false, "sum"));
 }
 
@@ -830,7 +850,7 @@ TEST_CASE("Ogden term lists must pair up", "[input_validation][material]")
 	const auto unconstrained = [&](const json &mat) {
 		const auto assembler = AssemblerUtils::make_assembler("UnconstrainedOgden");
 		assembler->set_size(3);
-		assembler->set_materials(body_ids, mat, units, "");
+		assembler->set_materials(body_ids, mat, units, test_resources());
 	};
 	CHECK_NOTHROW(unconstrained({{"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}}));
 	CHECK_NOTHROW(unconstrained({{"alphas", 2.0}, {"mus", json::array({5e3})}, {"Ds", json::array({1e-4, 1e-5})}}));
@@ -844,7 +864,7 @@ TEST_CASE("Ogden term lists must pair up", "[input_validation][material]")
 	const auto incompressible = [&](const json &mat) {
 		const auto assembler = AssemblerUtils::make_assembler("IncompressibleOgden");
 		assembler->set_size(3);
-		assembler->set_materials(body_ids, mat, units, "");
+		assembler->set_materials(body_ids, mat, units, test_resources());
 	};
 	CHECK_NOTHROW(incompressible({{"c", json::array({5e3, 1e3})}, {"m", json::array({2.0, -2.0})}, {"k", 1e5}}));
 	CHECK_THROWS_WITH(incompressible({{"c", json::array({5e3, 1e3})}, {"m", 2.0}, {"k", 1e5}}),
@@ -859,7 +879,7 @@ TEST_CASE("Ogden term lists must pair up", "[input_validation][material]")
 			two_bodies,
 			json::array({{{"id", 0}, {"alphas", json::array({2.0, -2.0})}, {"mus", json::array({5e3, 1e3})}, {"Ds", json::array({1e-4})}},
 						 {{"id", 1}, {"alphas", json::array({2.0})}, {"mus", json::array({5e3})}, {"Ds", json::array({1e-4})}}}),
-			units, ""),
+			units, test_resources()),
 		ContainsSubstring("has 1 term(s) on element 1 but 2 on the elements before it"));
 
 	// the spec accepts a list of alphas (it refused one before this stage)
@@ -901,7 +921,7 @@ TEST_CASE("multi-model materials are validated against their own model only", "[
 	auto *multi = dynamic_cast<MultiModel *>(assembler.get());
 	REQUIRE(multi != nullptr);
 	multi->init_multimodels({"NeoHookean", "HGODispersion"});
-	assembler->set_materials(body_ids, materials, units, "");
+	assembler->set_materials(body_ids, materials, units, test_resources());
 	CHECK_NOTHROW(validate_material_parameters(*assembler, *mesh, 0.0, false, "multi"));
 
 	json bad = materials;
@@ -909,16 +929,16 @@ TEST_CASE("multi-model materials are validated against their own model only", "[
 	const auto assembler2 = AssemblerUtils::make_assembler("MultiModels");
 	assembler2->set_size(3);
 	dynamic_cast<MultiModel *>(assembler2.get())->init_multimodels({"NeoHookean", "HGODispersion"});
-	assembler2->set_materials(body_ids, bad, units, "");
+	assembler2->set_materials(body_ids, bad, units, test_resources());
 	CHECK_THROWS_WITH(validate_material_parameters(*assembler2, *mesh, 0.0, false, "multi"), ContainsSubstring("kappa"));
 }
 
 TEST_CASE("a value-file path that does not exist is reported as such", "[input_validation][material]")
 {
 	utils::ExpressionValue value;
-	CHECK_THROWS_WITH(value.init(std::string("materials/E_values.txt"), ""), ContainsSubstring("is not an existing value file"));
-	CHECK_THROWS_WITH(value.init(std::string("2 +* x"), ""), ContainsSubstring("Invalid expression"));
-	CHECK_NOTHROW(value.init(std::string("2 * x"), ""));
+	CHECK_THROWS_WITH(value.init(std::string("materials/E_values.txt"), test_resources()), ContainsSubstring("is not an existing value file"));
+	CHECK_THROWS_WITH(value.init(std::string("2 +* x"), test_resources()), ContainsSubstring("Invalid expression"));
+	CHECK_NOTHROW(value.init(std::string("2 * x"), test_resources()));
 }
 
 // ---------------------------------------------------------------------------
@@ -947,7 +967,7 @@ TEST_CASE("duplicate or shadowed Dirichlet entries are refused", "[input_validat
 			entry["interpolation"] = json::array({{{"type", "none"}}});
 		GenericTensorProblem problem("GenericTensor");
 		json params = {{"dirichlet_boundary", dirichlet}, {"root_path", ""}};
-		problem.set_parameters(params, "");
+		problem.set_parameters(params, test_resources());
 	};
 	CHECK_NOTHROW(parse(json::array({{{"id", 1}, {"value", {0, 0, 0}}}, {{"id", 2}, {"value", {0, 0, "t"}}}})));
 	CHECK_NOTHROW(parse(json::array({{{"id", 2}, {"value", {0, 0, "t"}}}, {{"id", "all"}, {"value", {0, 0, 0}}}})));

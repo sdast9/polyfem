@@ -1,4 +1,5 @@
 #include "BarrierContactForm.hpp"
+#include <polyfem/io/ForkCheckpoint.hpp>
 
 #include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -1894,180 +1895,28 @@ namespace polyfem::solver
 		{
 			CoefficientKey key;
 			for (int j = 0; j < 5; ++j)
-				key[j] = long(rows(r, j));
+				key[j] = io::checked_checkpoint_integer<long>(rows(r, j), "contact coefficient key", false);
 			return key;
 		}
 
 		// Empty tables are not written (zero-size datasets); their count says so.
-		Eigen::MatrixXd read_rows(const std::string &path, const std::string &name, const size_t count, const int cols)
+
+		Eigen::MatrixXd read_checkpoint_rows(const io::CheckpointReader &reader, const std::string &group, const std::string &name, const size_t count, const int cols)
 		{
+			const std::string path = reader.path().string();
 			Eigen::MatrixXd rows;
 			if (count == 0)
+			{
+				if (reader.exists(group + "/" + name))
+					log_and_throw_error("Checkpoint {}: unexpected table {} for zero saved count", path, name);
 				return Eigen::MatrixXd(0, cols);
-			if (!io::read_matrix(path, name, rows) || size_t(rows.rows()) != count || rows.cols() != cols)
+			}
+			if (!io::read_fork_checkpoint_matrix(reader, group, name, rows) || size_t(rows.rows()) != count || rows.cols() != cols)
 				log_and_throw_error("Restart state {}: {} is missing or not {}x{}", path, name, count, cols);
 			return rows;
 		}
+
 	} // namespace
-
-	void BarrierContactForm::write_restart_state(const std::string &path) const
-	{
-		ContactForm::write_restart_state(path);
-		if (!uses_semi_implicit_stiffness())
-			return;
-
-		const std::vector<double> scalars = {
-			restart_state_version,
-			double(kappa_cache_.size()), double(prev_kappa_cache_.size()),
-			double(endpoint_kappa_.size()), double(continued_keys_.size()),
-			kappa_cap_, kappa_floor_, kappa_median_, kappa_hessian_max_, trim_solve_anchor_,
-			double(iters_since_refresh_), double(iters_since_trim_), double(force_band_age_),
-			double(trim_seed_pending_), double(kappa_snapshot_had_contacts_),
-			double(kappa_continued_count_), double(kappa_fresh_count_),
-			double(kappa_fallback_count_), double(kappa_abs_fallback_count_),
-			double(kappa_global_fallback_count_), double(kappa_interpolated_count_),
-			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_),
-			double(trim_seed_used_)};
-		io::write_matrix(path, "contact_si_scalars", Eigen::MatrixXd(Eigen::Map<const Eigen::MatrixXd>(scalars.data(), 1, scalars.size())), false);
-		if (!kappa_cache_.empty())
-			io::write_matrix(path, "contact_si_kappa_cache", coefficient_rows(kappa_cache_), false);
-		if (!prev_kappa_cache_.empty())
-			io::write_matrix(path, "contact_si_prev_kappa_cache", coefficient_rows(prev_kappa_cache_), false);
-		if (!endpoint_kappa_.empty())
-			io::write_matrix(path, "contact_si_endpoint_kappa", coefficient_rows(endpoint_kappa_), false);
-		if (!continued_keys_.empty())
-			io::write_matrix(path, "contact_si_continued_keys", key_rows(continued_keys_), false);
-	}
-
-	bool BarrierContactForm::read_restart_state(const std::string &path, const Eigen::VectorXd &x)
-	{
-		if (!uses_semi_implicit_stiffness())
-			return ContactForm::read_restart_state(path, x);
-
-		Eigen::MatrixXd s;
-		if (!io::read_matrix(path, "contact_si_scalars", s))
-			return false;
-		const bool version_1 = s.size() == 23 && s(0) == 1;
-		if (!version_1 && (s.size() != restart_scalar_count || s(0) != restart_state_version))
-			log_and_throw_error("Restart state {}: contact_si_scalars has {} entries (version {}), expected {} (version {}) or 23 (version 1)", path, s.size(), s.size() > 0 ? s(0) : -1.0, restart_scalar_count, restart_state_version);
-		ContactForm::read_restart_state(path, x);
-
-		const Eigen::MatrixXd cache = read_rows(path, "contact_si_kappa_cache", size_t(s(1)), 6);
-		const Eigen::MatrixXd prev_cache = read_rows(path, "contact_si_prev_kappa_cache", size_t(s(2)), 6);
-		const Eigen::MatrixXd endpoint = read_rows(path, "contact_si_endpoint_kappa", size_t(s(3)), 6);
-		const Eigen::MatrixXd continued = read_rows(path, "contact_si_continued_keys", size_t(s(4)), 5);
-
-		// Canonical pair keys (docs/canonical-pair-keys-20261005.md): files
-		// written before 2026-10-05 store an edge-edge or vertex-vertex key in
-		// the order the broad phase emitted the pair, and a table may hold
-		// both orders of one pair (a continued value and a fresh re-estimate
-		// after a flip). Every key is canonicalized; of two entries for one
-		// pair the one stored under a continued or endpoint key wins (the
-		// value that acted at the saved endpoint), otherwise the one stored
-		// in sorted order (the orientation this binary estimates in). The
-		// rule does not depend on the row order.
-		std::set<CoefficientKey> stored_carried;
-		for (int r = 0; r < continued.rows(); ++r)
-			stored_carried.insert(row_key(continued, r));
-		for (int r = 0; r < endpoint.rows(); ++r)
-			stored_carried.insert(row_key(endpoint, r));
-		const auto rank = [&](const CoefficientKey &stored) {
-			return (stored_carried.count(stored) ? 0 : 2) + (stored == canonical_key(stored) ? 0 : 1);
-		};
-		size_t merged = 0;
-		const auto fill = [&](const Eigen::MatrixXd &rows, std::map<CoefficientKey, double> &map) {
-			std::map<CoefficientKey, std::pair<int, double>> ranked;
-			for (int r = 0; r < rows.rows(); ++r)
-			{
-				const CoefficientKey stored = row_key(rows, r);
-				const std::pair<int, double> entry(rank(stored), rows(r, 5));
-				const auto [it, inserted] = ranked.emplace(canonical_key(stored), entry);
-				if (inserted)
-					continue;
-				++merged;
-				if (entry.first < it->second.first)
-					it->second = entry;
-			}
-			map.clear();
-			for (const auto &[key, entry] : ranked)
-				map.emplace(key, entry.second);
-		};
-		fill(cache, kappa_cache_);
-		fill(prev_cache, prev_kappa_cache_);
-		fill(endpoint, endpoint_kappa_);
-		continued_keys_.clear();
-		for (int r = 0; r < continued.rows(); ++r)
-			if (!continued_keys_.insert(canonical_key(row_key(continued, r))).second)
-				++merged;
-		if (merged > 0)
-			logger().info(
-				"Restart state {}: {} coefficient entries were stored under both orders of an edge-edge or vertex-vertex pair (a state file written before canonical pair keys); one entry per pair was kept, the continued one where there is one",
-				path, merged);
-
-		kappa_cap_ = s(5);
-		kappa_floor_ = s(6);
-		kappa_median_ = s(7);
-		const double saved_hessian_max = s(8);
-		trim_solve_anchor_ = s(9);
-		iters_since_refresh_ = int(s(10));
-		iters_since_trim_ = int(s(11));
-		force_band_age_ = int(s(12));
-		trim_seed_pending_ = s(13) != 0;
-		kappa_snapshot_had_contacts_ = s(14) != 0;
-		kappa_continued_count_ = int(s(15));
-		kappa_fresh_count_ = int(s(16));
-		kappa_fallback_count_ = int(s(17));
-		kappa_abs_fallback_count_ = int(s(18));
-		kappa_global_fallback_count_ = int(s(19));
-		kappa_interpolated_count_ = int(s(20));
-		kappa_direction_fallback_count_ = int(s(21));
-		diagnostic_refresh_id_ = uint64_t(s(22));
-		if (!version_1)
-			trim_seed_used_ = s(23) != 0;
-		else
-		{
-			// Version 1 did not store trim_seed_used_. Under scope run the
-			// pending flag at a step boundary is exactly its negation (it is
-			// re-armed only while no estimate was used, and cleared together
-			// with setting it); under scope step the flag is never read.
-			trim_seed_used_ = loop_guard_.estimate_once && !trim_seed_pending_;
-			if (initial_trim_estimate_ && loop_guard_.estimate_once)
-				logger().warn("Restart state {}: layout version 1 has no initial-estimate flag; derived 'already used' = {} from the pending flag, which is exact only if the saved run also used initial_trim_estimate_scope: run", path, trim_seed_used_);
-		}
-		trim_decision_ = nullptr;
-		batch_first_pass_ = false;
-		pull_toward_fresh_ = false;
-		// History report: a state file is written right after the
-		// between-steps capture, so this step's window is exactly the
-		// endpoint map; the previous step's window is not saved, and the
-		// accumulation of the resumed step starts here (flagged).
-		history_windows_ = {};
-		history_windows_[0].carried = endpoint_kappa_;
-		history_ = HistoryLog();
-		history_.trim_start = barrier_stiffness_;
-		history_.restored = true;
-
-		// The snapshot was taken at the saved step's endpoint, i.e. at x.
-		kappa_surface_ = compute_displaced_surface(x);
-		if (system_hessian_provider_)
-		{
-			system_hessian_provider_(x, kappa_hessian_);
-			kappa_hessian_max_ = 0.0;
-			for (int k = 0; k < kappa_hessian_.outerSize(); k++)
-				for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
-					kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
-			if (kappa_hessian_max_ != saved_hessian_max)
-				logger().warn(
-					"Restart state {}: the frozen Hessian rebuilt at the restored coordinates has max |H| {:g}, the saved run had {:g}; the restart does not continue the saved snapshot exactly",
-					path, kappa_hessian_max_, saved_hessian_max);
-		}
-		update_collision_set(kappa_surface_);
-		note_objective_change("restart state restored");
-		logger().info(
-			"Restored semi-implicit contact state from {}: trim {:g}, {} coefficients ({} continued)",
-			path, barrier_stiffness_, kappa_cache_.size(), continued_keys_.size());
-		return true;
-	}
 
 	void BarrierContactForm::update_collision_set(const Eigen::MatrixXd &displaced_surface)
 	{
@@ -3135,5 +2984,169 @@ namespace polyfem::solver
 		}
 
 		prev_distance_ = curr_distance;
+	}
+
+	void BarrierContactForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
+	{
+		ContactForm::serialize_checkpoint(writer, group);
+		if (!uses_semi_implicit_stiffness())
+			return;
+
+		const std::vector<double> scalars = {
+			restart_state_version,
+			double(kappa_cache_.size()), double(prev_kappa_cache_.size()),
+			double(endpoint_kappa_.size()), double(continued_keys_.size()),
+			kappa_cap_, kappa_floor_, kappa_median_, kappa_hessian_max_, trim_solve_anchor_,
+			double(iters_since_refresh_), double(iters_since_trim_), double(force_band_age_),
+			double(trim_seed_pending_), double(kappa_snapshot_had_contacts_),
+			double(kappa_continued_count_), double(kappa_fresh_count_),
+			double(kappa_fallback_count_), double(kappa_abs_fallback_count_),
+			double(kappa_global_fallback_count_), double(kappa_interpolated_count_),
+			double(kappa_direction_fallback_count_), double(diagnostic_refresh_id_),
+			double(trim_seed_used_)};
+		writer.write_matrix(group + "/contact_si_scalars", Eigen::MatrixXd(Eigen::Map<const Eigen::MatrixXd>(scalars.data(), 1, scalars.size())));
+		if (!kappa_cache_.empty())
+			writer.write_matrix(group + "/contact_si_kappa_cache", coefficient_rows(kappa_cache_));
+		if (!prev_kappa_cache_.empty())
+			writer.write_matrix(group + "/contact_si_prev_kappa_cache", coefficient_rows(prev_kappa_cache_));
+		if (!endpoint_kappa_.empty())
+			writer.write_matrix(group + "/contact_si_endpoint_kappa", coefficient_rows(endpoint_kappa_));
+		if (!continued_keys_.empty())
+			writer.write_matrix(group + "/contact_si_continued_keys", key_rows(continued_keys_));
+	}
+
+	bool BarrierContactForm::deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x)
+	{
+		if (!io::has_fork_checkpoint_group(reader, group))
+			return false;
+		const std::string path = reader.path().string();
+		if (!uses_semi_implicit_stiffness())
+			return ContactForm::deserialize_checkpoint(reader, group, x);
+
+		Eigen::MatrixXd s;
+		if (!io::read_fork_checkpoint_matrix(reader, group, "contact_si_scalars", s))
+			return false;
+		if (s.rows() != 1)
+			log_and_throw_error("Checkpoint {}: contact_si_scalars must be a row vector", path);
+		const bool version_1 = s.size() == 23 && s(0) == 1;
+		if (!version_1 && (s.size() != restart_scalar_count || s(0) != restart_state_version))
+			log_and_throw_error("Restart state {}: contact_si_scalars has {} entries (version {}), expected {} (version {}) or 23 (version 1)", path, s.size(), s.size() > 0 ? s(0) : -1.0, restart_scalar_count, restart_state_version);
+		ContactForm::deserialize_checkpoint(reader, group, x);
+
+		const Eigen::MatrixXd cache = read_checkpoint_rows(reader, group, "contact_si_kappa_cache", io::checked_checkpoint_integer<size_t>(s(1), "contact cache count"), 6);
+		const Eigen::MatrixXd prev_cache = read_checkpoint_rows(reader, group, "contact_si_prev_kappa_cache", io::checked_checkpoint_integer<size_t>(s(2), "contact cache count"), 6);
+		const Eigen::MatrixXd endpoint = read_checkpoint_rows(reader, group, "contact_si_endpoint_kappa", io::checked_checkpoint_integer<size_t>(s(3), "contact cache count"), 6);
+		const Eigen::MatrixXd continued = read_checkpoint_rows(reader, group, "contact_si_continued_keys", io::checked_checkpoint_integer<size_t>(s(4), "contact cache count"), 5);
+
+		// Canonical pair keys (docs/canonical-pair-keys-20261005.md): files
+		// written before 2026-10-05 store an edge-edge or vertex-vertex key in
+		// the order the broad phase emitted the pair, and a table may hold
+		// both orders of one pair (a continued value and a fresh re-estimate
+		// after a flip). Every key is canonicalized; of two entries for one
+		// pair the one stored under a continued or endpoint key wins (the
+		// value that acted at the saved endpoint), otherwise the one stored
+		// in sorted order (the orientation this binary estimates in). The
+		// rule does not depend on the row order.
+		std::set<CoefficientKey> stored_carried;
+		for (int r = 0; r < continued.rows(); ++r)
+			stored_carried.insert(row_key(continued, r));
+		for (int r = 0; r < endpoint.rows(); ++r)
+			stored_carried.insert(row_key(endpoint, r));
+		const auto rank = [&](const CoefficientKey &stored) {
+			return (stored_carried.count(stored) ? 0 : 2) + (stored == canonical_key(stored) ? 0 : 1);
+		};
+		size_t merged = 0;
+		const auto fill = [&](const Eigen::MatrixXd &rows, std::map<CoefficientKey, double> &map) {
+			std::map<CoefficientKey, std::pair<int, double>> ranked;
+			for (int r = 0; r < rows.rows(); ++r)
+			{
+				const CoefficientKey stored = row_key(rows, r);
+				const std::pair<int, double> entry(rank(stored), rows(r, 5));
+				const auto [it, inserted] = ranked.emplace(canonical_key(stored), entry);
+				if (inserted)
+					continue;
+				++merged;
+				if (entry.first < it->second.first)
+					it->second = entry;
+			}
+			map.clear();
+			for (const auto &[key, entry] : ranked)
+				map.emplace(key, entry.second);
+		};
+		fill(cache, kappa_cache_);
+		fill(prev_cache, prev_kappa_cache_);
+		fill(endpoint, endpoint_kappa_);
+		continued_keys_.clear();
+		for (int r = 0; r < continued.rows(); ++r)
+			if (!continued_keys_.insert(canonical_key(row_key(continued, r))).second)
+				++merged;
+		if (merged > 0)
+			logger().info(
+				"Restart state {}: {} coefficient entries were stored under both orders of an edge-edge or vertex-vertex pair (a state file written before canonical pair keys); one entry per pair was kept, the continued one where there is one",
+				path, merged);
+
+		kappa_cap_ = s(5);
+		kappa_floor_ = s(6);
+		kappa_median_ = s(7);
+		const double saved_hessian_max = s(8);
+		trim_solve_anchor_ = s(9);
+		iters_since_refresh_ = io::checked_checkpoint_integer<int>(s(10), "contact controller count");
+		iters_since_trim_ = io::checked_checkpoint_integer<int>(s(11), "contact controller count");
+		force_band_age_ = io::checked_checkpoint_integer<int>(s(12), "contact controller count");
+		trim_seed_pending_ = s(13) != 0;
+		kappa_snapshot_had_contacts_ = s(14) != 0;
+		kappa_continued_count_ = io::checked_checkpoint_integer<int>(s(15), "contact controller count");
+		kappa_fresh_count_ = io::checked_checkpoint_integer<int>(s(16), "contact controller count");
+		kappa_fallback_count_ = io::checked_checkpoint_integer<int>(s(17), "contact controller count");
+		kappa_abs_fallback_count_ = io::checked_checkpoint_integer<int>(s(18), "contact controller count");
+		kappa_global_fallback_count_ = io::checked_checkpoint_integer<int>(s(19), "contact controller count");
+		kappa_interpolated_count_ = io::checked_checkpoint_integer<int>(s(20), "contact controller count");
+		kappa_direction_fallback_count_ = io::checked_checkpoint_integer<int>(s(21), "contact controller count");
+		diagnostic_refresh_id_ = io::checked_checkpoint_integer<uint64_t>(s(22), "contact diagnostic refresh id");
+		if (!version_1)
+			trim_seed_used_ = s(23) != 0;
+		else
+		{
+			// Version 1 did not store trim_seed_used_. Under scope run the
+			// pending flag at a step boundary is exactly its negation (it is
+			// re-armed only while no estimate was used, and cleared together
+			// with setting it); under scope step the flag is never read.
+			trim_seed_used_ = loop_guard_.estimate_once && !trim_seed_pending_;
+			if (initial_trim_estimate_ && loop_guard_.estimate_once)
+				logger().warn("Restart state {}: layout version 1 has no initial-estimate flag; derived 'already used' = {} from the pending flag, which is exact only if the saved run also used initial_trim_estimate_scope: run", path, trim_seed_used_);
+		}
+		trim_decision_ = nullptr;
+		batch_first_pass_ = false;
+		pull_toward_fresh_ = false;
+		// History report: a state file is written right after the
+		// between-steps capture, so this step's window is exactly the
+		// endpoint map; the previous step's window is not saved, and the
+		// accumulation of the resumed step starts here (flagged).
+		history_windows_ = {};
+		history_windows_[0].carried = endpoint_kappa_;
+		history_ = HistoryLog();
+		history_.trim_start = barrier_stiffness_;
+		history_.restored = true;
+
+		// The snapshot was taken at the saved step's endpoint, i.e. at x.
+		kappa_surface_ = compute_displaced_surface(x);
+		if (system_hessian_provider_)
+		{
+			system_hessian_provider_(x, kappa_hessian_);
+			kappa_hessian_max_ = 0.0;
+			for (int k = 0; k < kappa_hessian_.outerSize(); k++)
+				for (StiffnessMatrix::InnerIterator it(kappa_hessian_, k); it; ++it)
+					kappa_hessian_max_ = std::max(kappa_hessian_max_, std::abs(it.value()));
+			if (kappa_hessian_max_ != saved_hessian_max)
+				logger().warn(
+					"Restart state {}: the frozen Hessian rebuilt at the restored coordinates has max |H| {:g}, the saved run had {:g}; the restart does not continue the saved snapshot exactly",
+					path, kappa_hessian_max_, saved_hessian_max);
+		}
+		update_collision_set(kappa_surface_);
+		note_objective_change("restart state restored");
+		logger().info(
+			"Restored semi-implicit contact state from {}: trim {:g}, {} coefficients ({} continued)",
+			path, barrier_stiffness_, kappa_cache_.size(), continued_keys_.size());
+		return true;
 	}
 } // namespace polyfem::solver

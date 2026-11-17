@@ -1,4 +1,6 @@
 #include "FrictionForm.hpp"
+#include "FrictionCheckpoint.hpp"
+#include <polyfem/io/ForkCheckpoint.hpp>
 #include "BarrierContactForm.hpp"
 #include "SmoothContactForm.hpp"
 
@@ -144,45 +146,6 @@ namespace polyfem::solver
 		lag_x_ = friction_state.lag_x;
 	}
 
-	void FrictionForm::write_restart_state(const std::string &path) const
-	{
-		Eigen::MatrixXd scalars(1, 2);
-		scalars << lagged_trim_, double(friction_collision_set_.size());
-		io::write_matrix(path, "friction_scalars", scalars, /*replace=*/false);
-		if (friction_collision_set_.size() == 0)
-			return;
-		Eigen::MatrixXd forces(friction_collision_set_.size(), 1);
-		for (size_t i = 0; i < friction_collision_set_.size(); ++i)
-			forces(i) = friction_collision_set_[i].normal_force_magnitude;
-		io::write_matrix(path, "friction_normal_force", forces, /*replace=*/false);
-	}
-
-	bool FrictionForm::read_restart_state(const std::string &path, const Eigen::VectorXd &x)
-	{
-		Eigen::MatrixXd scalars;
-		if (!io::read_matrix(path, "friction_scalars", scalars))
-			return false;
-		if (scalars.size() != 2)
-			log_and_throw_error("Restart state {}: friction_scalars has {} entries, expected 2", path, scalars.size());
-		const size_t count = size_t(scalars(1));
-		if (count != friction_collision_set_.size())
-		{
-			logger().warn(
-				"Restart state {}: {} lagged friction collisions saved, {} rebuilt at the restored coordinates; keeping the rebuilt lag",
-				path, count, friction_collision_set_.size());
-			return false;
-		}
-		Eigen::MatrixXd forces;
-		if (count > 0 && (!io::read_matrix(path, "friction_normal_force", forces) || size_t(forces.size()) != count))
-			log_and_throw_error("Restart state {}: friction_normal_force is missing or not {} entries", path, count);
-		for (size_t i = 0; i < count; ++i)
-			friction_collision_set_[i].normal_force_magnitude = forces(i);
-		lagged_trim_ = scalars(0);
-		lag_x_ = x;
-		note_objective_change("restart state restored");
-		return true;
-	}
-
 	void FrictionForm::update_lagging(const Eigen::VectorXd &x, const int iter_num)
 	{
 		lag_x_ = x;
@@ -234,5 +197,82 @@ namespace polyfem::solver
 		// potential is built from: rebuilding them is a new function. This
 		// happens between minimizations, in the lagging loop.
 		note_objective_change("friction lag update");
+	}
+
+	void FrictionForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
+	{
+		Eigen::MatrixXd scalars(1, 2);
+		scalars << lagged_trim_, double(friction_collision_set_.size());
+		writer.write_matrix(group + "/friction_scalars", scalars);
+		writer.write_attribute(group, "layout_version", long(1));
+		if (friction_collision_set_.size() == 0)
+			return;
+		Eigen::MatrixXd forces(friction_collision_set_.size(), 1);
+		for (size_t i = 0; i < friction_collision_set_.size(); ++i)
+			forces(i) = friction_collision_set_[i].normal_force_magnitude;
+		writer.write_matrix(group + "/friction_normal_force", forces);
+		const auto identities = friction_checkpoint::keys(friction_collision_set_);
+		std::vector<long> ids;
+		Eigen::MatrixXd planes(identities.size(), 4);
+		for (size_t i = 0; i < identities.size(); ++i)
+		{
+			ids.insert(ids.end(), identities[i].ids.begin(), identities[i].ids.end());
+			for (int j = 0; j < 4; ++j)
+				planes(i, j) = identities[i].plane[j];
+		}
+		writer.write_long_vector(group + "/friction_identity", ids);
+		writer.write_matrix(group + "/friction_planes", planes);
+	}
+
+	bool FrictionForm::deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x)
+	{
+		if (!io::has_fork_checkpoint_group(reader, group))
+			return false;
+		const std::string path = reader.path().string();
+		Eigen::MatrixXd scalars;
+		if (!io::read_fork_checkpoint_matrix(reader, group, "friction_scalars", scalars))
+			return false;
+		if (scalars.rows() != 1 || scalars.cols() != 2)
+			log_and_throw_error("Restart state {}: friction_scalars has {} entries, expected 2", path, scalars.size());
+		if (!std::isfinite(scalars(0)))
+			log_and_throw_error("Checkpoint {}: friction lagged trim must be finite", path);
+		const size_t count = io::checked_checkpoint_integer<size_t>(scalars(1), "friction collision count");
+		if (count != friction_collision_set_.size())
+			log_and_throw_error("Checkpoint {}: friction collision count mismatch (saved {}, rebuilt {})", path, count, friction_collision_set_.size());
+		ipc::TangentialCollisions restored = friction_collision_set_;
+		if (count == 0)
+		{
+			for (const auto *name : {"friction_normal_force", "friction_identity", "friction_planes"})
+				if (reader.exists(group + "/" + name))
+					log_and_throw_error("Checkpoint {}: unexpected {} for empty friction history", path, name);
+		}
+		else
+		{
+			Eigen::MatrixXd forces, planes;
+			io::read_fork_checkpoint_matrix(reader, group, "friction_normal_force", forces);
+			io::read_fork_checkpoint_matrix(reader, group, "friction_planes", planes);
+			if (size_t(forces.rows()) != count || forces.cols() != 1 || !forces.allFinite()
+				|| size_t(planes.rows()) != count || planes.cols() != 4)
+				log_and_throw_error("Checkpoint {}: invalid friction force/plane payload shape or values", path);
+			const auto ids = reader.read_long_vector(group + "/friction_identity");
+			if (ids.size() / 4 != count || ids.size() % 4 != 0)
+				log_and_throw_error("Checkpoint {}: invalid friction identity payload size", path);
+			std::vector<friction_checkpoint::Key> saved(count);
+			for (size_t i = 0; i < count; ++i)
+				for (int j = 0; j < 4; ++j)
+				{
+					saved[i].ids[j] = ids[4 * i + j];
+					saved[i].plane[j] = planes(i, j);
+				}
+			const auto order = friction_checkpoint::match(saved, friction_checkpoint::keys(friction_collision_set_));
+			restored = friction_checkpoint::reordered(friction_collision_set_, order);
+			for (size_t i = 0; i < count; ++i)
+				restored[i].normal_force_magnitude = forces(i);
+		}
+		friction_collision_set_ = std::move(restored);
+		lagged_trim_ = scalars(0);
+		lag_x_ = x;
+		note_objective_change("restart state restored");
+		return true;
 	}
 } // namespace polyfem::solver

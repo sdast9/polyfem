@@ -1,3 +1,4 @@
+#include <polyfem/io/ForkCheckpoint.hpp>
 #include "NonlinearElasticVarForm.hpp"
 
 #include <polyfem/assembler/AssemblerUtils.hpp>
@@ -6,7 +7,6 @@
 #include <polyfem/mesh/mesh2D/Mesh2D.hpp>
 #include <polyfem/mesh/mesh3D/Mesh3D.hpp>
 #include <polyfem/mesh/collision_proxy/CollisionProxy.hpp>
-#include <polyfem/mesh/GeometryReader.hpp>
 
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
@@ -661,14 +661,11 @@ namespace polyfem::varform
 	void NonlinearElasticVarForm::load_mesh(const mesh::Mesh &mesh, const json &args)
 	{
 		ElasticVarForm::load_mesh(mesh, args);
+	}
 
-		logger().info("Loading obstacles...");
-		obstacle = mesh::read_obstacle_geometry(
-			units,
-			args["geometry"],
-			utils::json_as_array(args["boundary_conditions"]["obstacle_displacements"]),
-			utils::json_as_array(args["boundary_conditions"]["dirichlet_boundary"]),
-			root_path, mesh.dimension());
+	void NonlinearElasticVarForm::set_obstacle(mesh::Obstacle &&loaded_obstacle)
+	{
+		obstacle = std::move(loaded_obstacle);
 	}
 
 	io::OutputSpace NonlinearElasticVarForm::output_space() const
@@ -917,7 +914,7 @@ namespace polyfem::varform
 			*primary_assembler_, *mesh_, &obstacle,
 			boundary_.dirichlet_nodes, boundary_.neumann_nodes,
 			boundary_.dirichlet_nodes_position, boundary_.neumann_nodes_position,
-			space_.n_bases, size, space_.basis_list(), space_.geometry_basis_list(), mass_ass_vals_cache_, *problem,
+			space_.n_bases, size, space_.basis_list(), space_.geometry_basis_list(), mass_ass_vals_cache_, *problem, resources_,
 			args["space"]["advanced"]["bc_method"],
 			rhs_solver_params,
 			/*fe_space_id=*/-1);
@@ -930,7 +927,7 @@ namespace polyfem::varform
 	{
 		build_collision_mesh(
 			mesh, space_.n_bases, space_.basis_list(), space_.geometry_basis_list(), boundary_.total_local_boundary, obstacle,
-			args, [this](const std::string &p) { return utils::resolve_path(p, root_path, false); },
+			args, resources_,
 			space_.space_in_node_to_node, collision_mesh_);
 	}
 
@@ -942,7 +939,7 @@ namespace polyfem::varform
 		const std::vector<mesh::LocalBoundary> &total_local_boundary,
 		const mesh::Obstacle &obstacle,
 		const json &args,
-		const std::function<std::string(const std::string &)> &resolve_input_path,
+		const io::ResourceIO &resources,
 		const Eigen::VectorXi &in_node_to_node,
 		ipc::CollisionMesh &collision_mesh_)
 	{
@@ -1001,12 +998,12 @@ namespace polyfem::varform
 			{
 				assert(displacement_map_entries.empty());
 				assert(collision_mesh_args.contains("mesh"));
-				const std::string root_path = utils::json_value<std::string>(args, "root_path", "");
 				// TODO: handle transformation per geometry
 				const json transformation = utils::json_as_array(args["geometry"])[0]["transformation"];
 				mesh::load_collision_proxy(
-					utils::resolve_path(collision_mesh_args["mesh"], root_path),
-					utils::resolve_path(collision_mesh_args["linear_map"], root_path),
+					resources,
+					collision_mesh_args["mesh"].get<std::string>(),
+					collision_mesh_args["linear_map"].get<std::string>(),
 					in_node_to_node, transformation, collision_vertices, collision_codim_vids,
 					collision_edges, collision_triangles, displacement_map_entries);
 			}
@@ -1398,12 +1395,6 @@ namespace polyfem::varform
 		{
 			POLYFEM_SCOPED_TIMER("Setup RHS");
 
-			// FIXME
-			//  read_initial_x_from_file(
-			//  resolve_input_path(args["input"]["data"]["state"]), "u",
-			//  args["input"]["data"]["reorder"], in_node_to_node,
-			//  mesh->dimension(), solution);
-
 			if (initial_condition_override && initial_condition_override->solution.size() != 0)
 				initial_solution(sol, initial_condition_override);
 			else if (sol.size() <= 0)
@@ -1424,10 +1415,6 @@ namespace polyfem::varform
 		if (post_step)
 			post_step(0, sol);
 
-		const std::string state_path = resolve_output_path(args["output"]["data"]["state"]);
-		if (!state_path.empty())
-			io::write_matrix(state_path, "u", sol);
-
 		timer.stop();
 		timings.solving_time = timer.getElapsedTime();
 		logger().info(" took {}s", timings.solving_time);
@@ -1443,7 +1430,10 @@ namespace polyfem::varform
 		double forward_solve_time = 0;
 	};
 
-	NonlinearElasticTransientVarForm::NonlinearElasticTransientVarForm() = default;
+	NonlinearElasticTransientVarForm::NonlinearElasticTransientVarForm(const io::ResourceIO &resources)
+		: NonlinearElasticVarForm(resources)
+	{
+	}
 	NonlinearElasticTransientVarForm::~NonlinearElasticTransientVarForm() = default;
 
 	void NonlinearElasticTransientVarForm::solve_problem(
@@ -1479,12 +1469,6 @@ namespace polyfem::varform
 		{
 			POLYFEM_SCOPED_TIMER("Setup RHS");
 
-			// FIXME
-			//  read_initial_x_from_file(
-			//  resolve_input_path(args["input"]["data"]["state"]), "u",
-			//  args["input"]["data"]["reorder"], in_node_to_node,
-			//  mesh->dimension(), solution);
-
 			if (initial_condition_override && initial_condition_override->solution.size() != 0)
 				initial_solution(sol, initial_condition_override);
 			else if (sol.size() <= 0)
@@ -1494,7 +1478,6 @@ namespace polyfem::varform
 				sol.conservativeResize(Eigen::NoChange, 1);
 		}
 		init_solve(sol, t0 + dt, initial_condition_override);
-		restore_restart_form_state(sol);
 		configure_coefficient_diagnostics(0, "initial_state_after_setup");
 		if (post_step)
 			post_step(0, sol);
@@ -1570,7 +1553,7 @@ namespace polyfem::varform
 		logger().info("{}/{}  t={}", t, time_steps, t0 + dt * t);
 		notify_time_step(t, time_steps, t0, dt);
 
-		save_elastic_step_state(t0, dt, t, solve_data_.time_integrator.get());
+		save_elastic_step_state(t0, dt, t, sol, solve_data_.time_integrator.get());
 		if (run.stats_csv)
 			run.stats_csv->write(t, run.forward_solve_time, remeshing_time, global_relaxation_time);
 	}
@@ -1619,6 +1602,7 @@ namespace polyfem::varform
 		forms = solve_data_.init_forms(
 			// General
 			units,
+			resources_,
 			dim, t, space_.space_in_node_to_node,
 			// Elastic form
 			space_.n_bases, *space_.bases, space_.geometry_basis_list(), *primary_assembler_, ass_vals_cache_, mass_ass_vals_cache_, args["solver"]["advanced"]["jacobian_threshold"], check_inversion,
@@ -1692,75 +1676,6 @@ namespace polyfem::varform
 		}
 	}
 
-	void NonlinearElasticVarForm::save_restart_form_state(const std::string &state_path) const
-	{
-		// Each step's AL stage starts from the multipliers the previous step
-		// left (they are never reset between steps), so they are history: a
-		// resumed run that starts them at zero begins its first step from a
-		// different objective.
-		io::write_matrix(state_path, "al_scalars", Eigen::MatrixXd(Eigen::MatrixXd::Constant(1, 1, double(solve_data_.al_form.size()))), /*replace=*/false);
-		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
-		{
-			const Eigen::VectorXd &mults = solve_data_.al_form[i]->lagrange_multipliers();
-			if (mults.size() > 0)
-				io::write_matrix(state_path, fmt::format("al_multipliers_{}", i), Eigen::MatrixXd(mults), /*replace=*/false);
-		}
-		if (solve_data_.contact_form)
-			solve_data_.contact_form->write_restart_state(state_path);
-		if (solve_data_.friction_form)
-			solve_data_.friction_form->write_restart_state(state_path);
-	}
-
-	void NonlinearElasticVarForm::restore_restart_multipliers(const std::string &state_path)
-	{
-		Eigen::MatrixXd count;
-		if (!io::read_matrix(state_path, "al_scalars", count))
-		{
-			logger().warn(
-				"Restart state {} has no augmented-Lagrangian multipliers (written before they were saved); they start at zero, so the run will not continue the saved one exactly.",
-				state_path);
-			return;
-		}
-		if (count.size() != 1 || size_t(count(0)) != solve_data_.al_form.size())
-			log_and_throw_error(
-				"Restart state {}: {} augmented-Lagrangian forms saved, this run has {}",
-				state_path, count.size() == 1 ? count(0) : -1.0, solve_data_.al_form.size());
-		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
-		{
-			auto &form = *solve_data_.al_form[i];
-			if (form.lagrange_multipliers().size() == 0)
-				continue;
-			Eigen::MatrixXd mults;
-			if (!io::read_matrix(state_path, fmt::format("al_multipliers_{}", i), mults) || mults.size() != form.lagrange_multipliers().size())
-				log_and_throw_error(
-					"Restart state {}: al_multipliers_{} is missing or not {} entries",
-					state_path, i, form.lagrange_multipliers().size());
-			form.set_lagrange_multipliers(Eigen::Map<const Eigen::VectorXd>(mults.data(), mults.size()));
-		}
-	}
-
-	void NonlinearElasticVarForm::restore_restart_form_state(const Eigen::MatrixXd &sol)
-	{
-		const std::string state = args["input"]["data"]["state"];
-		if (state.empty())
-			return;
-		const std::string state_path = resolve_input_path(state);
-		restore_restart_multipliers(state_path);
-		if (!solve_data_.contact_form)
-			return;
-		if (!solve_data_.contact_form->read_restart_state(state_path, sol.col(0)))
-		{
-			logger().warn(
-				"Restart state {} has no contact stiffness state (written before it was saved); the contact controller starts fresh, so the run will not continue the saved one exactly.",
-				state_path);
-			return;
-		}
-		// After the contact state: the friction lag was rebuilt by init_solve
-		// at the same coordinates; only its force magnitudes are history.
-		if (solve_data_.friction_form && !solve_data_.friction_form->read_restart_state(state_path, sol.col(0)))
-			logger().warn("Restart state {}: friction lag not restored; the resumed friction may differ from the saved run.", state_path);
-	}
-
 	void NonlinearElasticVarForm::init_solve(
 		Eigen::MatrixXd &sol,
 		const double t,
@@ -1800,6 +1715,9 @@ namespace polyfem::varform
 		solve_data_.nl_problem->update_quantities(t, sol);
 
 		stats.solver_info = json::array();
+		// Restore only after forms, lag sets and the nonlinear problem exist.
+		// Shared by static and transient checkpoint entry points.
+		restore_checkpoint_form_state(sol);
 	}
 
 	void NonlinearElasticVarForm::init_solve_data(
@@ -1862,6 +1780,9 @@ namespace polyfem::varform
 			}
 
 			solve_data_.time_integrator->init(solution, velocity, acceleration, dt);
+			restore_checkpoint_integrator(
+				solve_data_.time_integrator, "/checkpoint/state/primary_integrator", dt,
+				"primary", space_, mesh_->dimension());
 			assert(solve_data_.time_integrator != nullptr && "Transient nonlinear elasticity requires an initialized time integrator");
 		}
 		else
@@ -2686,4 +2607,89 @@ namespace polyfem::varform
 		return fingerprint;
 	}
 
+	void NonlinearElasticVarForm::serialize_checkpoint(
+		io::CheckpointWriter &writer, const Eigen::MatrixXd &solution,
+		const io::CheckpointMetadata &metadata) const
+	{
+		ElasticVarForm::serialize_checkpoint(writer, solution, metadata);
+		const std::string al = "/checkpoint/state/fork/al";
+		writer.write_long(al + "/count", long(solve_data_.al_form.size()));
+		writer.write_attribute(al, "layout_version", long(1));
+		for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+		{
+			const Eigen::VectorXd &multipliers = solve_data_.al_form[i]->lagrange_multipliers();
+			if (multipliers.size() > 0)
+				writer.write_matrix(al + "/multipliers_" + std::to_string(i), Eigen::MatrixXd(multipliers));
+		}
+		if (solve_data_.contact_form)
+			solve_data_.contact_form->serialize_checkpoint(writer, "/checkpoint/state/fork/contact");
+		if (solve_data_.friction_form)
+			solve_data_.friction_form->serialize_checkpoint(writer, "/checkpoint/state/fork/friction");
+	}
+
+	void NonlinearElasticVarForm::restore_checkpoint_form_state(const Eigen::MatrixXd &sol)
+	{
+		if (!checkpoint_reader_)
+			return;
+		const auto &reader = checkpoint_reader_->get();
+		const std::string path = reader.path().string();
+		// Called only after init_solve constructs forms, initializes the
+		// nonlinear problem and rebuilds the collision/friction sets at sol.
+		// Upstream DOF reordering does not remap collision identities or AL
+		// form indices. Refuse this combination rather than misapply history.
+		if (checkpoint_reorder_enabled() && (reader.exists("/checkpoint/state/fork/contact") || reader.exists("/checkpoint/state/fork/friction")))
+			log_and_throw_error("Checkpoint {}: input.checkpoint.reorder is not supported with fork contact/friction history; resume without reordering.", path);
+
+		if ((!solve_data_.contact_form && reader.exists("/checkpoint/state/fork/contact"))
+			|| (!solve_data_.friction_form && reader.exists("/checkpoint/state/fork/friction")))
+			log_and_throw_error("Checkpoint {}: saved fork owner has no corresponding runtime contact/friction form", path);
+		const std::string al = "/checkpoint/state/fork/al";
+		if (!io::has_fork_checkpoint_group(reader, al))
+			logger().warn("Checkpoint {} has no augmented-Lagrangian multipliers; they start at zero, so the run will not continue the saved one exactly.", path);
+		else
+		{
+			const auto counts = reader.read_long_vector(al + "/count");
+			if (counts.size() != 1)
+				log_and_throw_error("Checkpoint {}: AL count must have exactly one entry", path);
+			const long count = counts[0];
+			if (count < 0 || size_t(count) != solve_data_.al_form.size())
+				log_and_throw_error("Checkpoint {}: {} augmented-Lagrangian forms saved, this run has {}", path, count, solve_data_.al_form.size());
+			std::vector<Eigen::MatrixXd> saved_multipliers(solve_data_.al_form.size());
+			for (size_t i = 0; i < solve_data_.al_form.size(); ++i)
+			{
+				auto &form = *solve_data_.al_form[i];
+				const std::string key = al + "/multipliers_" + std::to_string(i);
+				if (form.lagrange_multipliers().size() == 0)
+				{
+					if (reader.exists(key))
+						log_and_throw_error("Checkpoint {}: unexpected multipliers for empty AL form {}", path, i);
+					continue;
+				}
+				if (!reader.exists(key))
+					log_and_throw_error("Checkpoint {}: missing {}", path, key);
+				const Eigen::MatrixXd multipliers = reader.read_matrix(key);
+				if (multipliers.cols() != 1 || multipliers.rows() != form.lagrange_multipliers().size())
+					log_and_throw_error("Checkpoint {}: {} has {} entries, expected {}", path, key, multipliers.size(), form.lagrange_multipliers().size());
+				io::validate_checkpoint_multipliers(multipliers, checkpoint_reorder_enabled(), path + ":" + key);
+				saved_multipliers[i] = multipliers;
+			}
+			// Validate every owner entry before mutating any live multiplier.
+			for (size_t i = 0; i < saved_multipliers.size(); ++i)
+			{
+				const auto &multipliers = saved_multipliers[i];
+				if (multipliers.size() != 0)
+					solve_data_.al_form[i]->set_lagrange_multipliers(Eigen::Map<const Eigen::VectorXd>(multipliers.data(), multipliers.size()));
+			}
+		}
+		if (!solve_data_.contact_form)
+			return;
+		if (!solve_data_.contact_form->deserialize_checkpoint(reader, "/checkpoint/state/fork/contact", sol.col(0)))
+		{
+			logger().warn("Checkpoint {} has no contact stiffness state; the contact controller starts fresh, so the run will not continue the saved one exactly.", path);
+			return;
+		}
+		// Contact state must precede the saved friction lag forces.
+		if (solve_data_.friction_form && !solve_data_.friction_form->deserialize_checkpoint(reader, "/checkpoint/state/fork/friction", sol.col(0)))
+			logger().warn("Checkpoint {}: friction lag not restored; the resumed friction may differ from the saved run.", path);
+	}
 } // namespace polyfem::varform

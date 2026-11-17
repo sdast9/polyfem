@@ -1,5 +1,11 @@
 #pragma once
 
+namespace polyfem::io
+{
+	class CheckpointWriter;
+	class CheckpointReader;
+} // namespace polyfem::io
+
 #include "Form.hpp"
 #include "ContactForm.hpp"
 
@@ -81,11 +87,11 @@ namespace polyfem::solver
 		/// @brief Restart: append the lagged normal force magnitudes and the
 		///        lagged trim (history: in realized-force mode they are the
 		///        forces that acted during the saved step) to a state file.
-		void write_restart_state(const std::string &path) const;
+		void serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const;
+		bool deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x);
 		/// @brief Restart: put them back onto the lag rebuilt at the restored
 		///        coordinates x. Returns false when the file has none or the
 		///        rebuilt lag has a different number of collisions.
-		bool read_restart_state(const std::string &path, const Eigen::VectorXd &x);
 
 		/// @brief Get the maximum number of lagging iteration allowable.
 		int max_lagging_iterations() const override { return n_lagging_iters_; }

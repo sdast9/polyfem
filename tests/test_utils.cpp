@@ -7,6 +7,8 @@
 #include <polyfem/io/MshReader.hpp>
 #include <polyfem/mesh/LocalBoundary.hpp>
 #include <polyfem/mesh/Mesh.hpp>
+#include <polyfem/mesh/MeshLoader.hpp>
+#include <polyfem/io/ResourceIO.hpp>
 #include <polyfem/utils/MatrixUtils.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 
@@ -43,7 +45,7 @@ namespace
 		Eigen::MatrixXi cells(1, 3);
 		cells << 0, 1, 2;
 
-		return Mesh::create(vertices, cells);
+		return Mesh::create(MeshData(vertices, cells));
 	}
 
 	std::unique_ptr<Mesh> create_test_quad_mesh()
@@ -57,7 +59,7 @@ namespace
 		Eigen::MatrixXi cells(1, 4);
 		cells << 0, 1, 2, 3;
 
-		return Mesh::create(vertices, cells);
+		return Mesh::create(MeshData(vertices, cells));
 	}
 
 	std::unique_ptr<Mesh> create_test_tetra_mesh()
@@ -71,7 +73,7 @@ namespace
 		Eigen::MatrixXi cells(1, 4);
 		cells << 0, 1, 2, 3;
 
-		return Mesh::create(vertices, cells);
+		return Mesh::create(MeshData(vertices, cells));
 	}
 
 	std::unique_ptr<Mesh> create_test_hex_mesh()
@@ -89,7 +91,7 @@ namespace
 		Eigen::MatrixXi cells(1, 8);
 		cells << 0, 1, 2, 3, 4, 5, 6, 7;
 
-		return Mesh::create(vertices, cells);
+		return Mesh::create(MeshData(vertices, cells));
 	}
 
 	void require_sparse_equal(const StiffnessMatrix &actual, const Eigen::MatrixXd &expected)
@@ -168,16 +170,17 @@ TEST_CASE("bessel", "[utils]")
 
 TEST_CASE("expression", "[utils]")
 {
+	const io::FileSystemIO resources(".");
 	json jexpr = {{"value", "x^2+sqrt(x*y)+sin(z)*x"}};
 	json jexpr2d = {{"value", "x^2+sqrt(x*y)"}};
 	json jval = {{"value", 1}};
 
 	utils::ExpressionValue expr;
-	expr.init(jexpr["value"], "");
+	expr.init(jexpr["value"], resources);
 	utils::ExpressionValue expr2d;
-	expr2d.init(jexpr2d["value"], "");
+	expr2d.init(jexpr2d["value"], resources);
 	utils::ExpressionValue val;
-	val.init(jval["value"], "");
+	val.init(jval["value"], resources);
 
 	expr.set_unit_type("");
 	expr2d.set_unit_type("");
@@ -188,7 +191,7 @@ TEST_CASE("expression", "[utils]")
 	REQUIRE(val(2, 3, 4) == Catch::Approx(1).margin(1e-16));
 
 	utils::ExpressionValue time_expr;
-	time_expr.init(json::array({"x", "2*x"}), "");
+	time_expr.init(json::array({"x", "2*x"}), resources);
 	time_expr.set_t(json::array({0, 1}));
 	time_expr.set_unit_type("");
 
@@ -206,7 +209,7 @@ TEST_CASE("expression", "[utils]")
 	}
 
 	utils::ExpressionValue python_expr;
-	python_expr.init({{"file_name", python_file.string()}, {"function_name", "value"}}, "");
+	python_expr.init({{"file_name", python_file.string()}, {"function_name", "value"}}, resources);
 	python_expr.set_unit_type("");
 
 	REQUIRE_FALSE(python_expr.is_zero());
@@ -218,10 +221,10 @@ TEST_CASE("expression", "[utils]")
 
 TEST_CASE("mshreader", "[utils]")
 {
-	const std::string path = POLYFEM_DATA_DIR;
+	const io::FileSystemIO resources(POLYFEM_DATA_DIR);
 	Eigen::MatrixXd vertices;
 	Eigen::MatrixXi cells;
-	const auto mesh = Mesh::create(path + "/circle2.msh");
+	const auto mesh = MeshLoader(resources).load_fem("circle2.msh");
 	REQUIRE(mesh);
 }
 
@@ -681,6 +684,7 @@ TEST_CASE("Material files reload for independent consumers", "[material_cache]")
 		std::filesystem::path p;
 		~Cleanup() { std::filesystem::remove_all(p); }
 	} cleanup{base};
+	const io::FileSystemIO resources(".");
 	const auto scalar = (base / "values.txt").string();
 	const auto fiber = (base / "fiber.vtk").string();
 	auto write = [&](int value) {
@@ -691,16 +695,16 @@ TEST_CASE("Material files reload for independent consumers", "[material_cache]")
 	const json dir = {{"type", "per_element_file"}, {"path", fiber}};
 	write(1);
 	ExpressionValue old_value;
-	old_value.init(scalar, "");
+	old_value.init(scalar, resources);
 	assembler::FiberDirection old_fiber;
 	old_fiber.resize(3);
-	old_fiber.add_multimaterial(0, dir, "", "");
+	old_fiber.add_multimaterial(0, dir, "", resources);
 	write(9);
 	ExpressionValue fresh_value;
-	fresh_value.init(scalar, "");
+	fresh_value.init(scalar, resources);
 	assembler::FiberDirection fresh_fiber;
 	fresh_fiber.resize(3);
-	fresh_fiber.add_multimaterial(0, dir, "", "");
+	fresh_fiber.add_multimaterial(0, dir, "", resources);
 	CHECK(old_value.get_mat()(0, 0) == 1);
 	CHECK(fresh_value.get_mat()(0, 0) == 9);
 	CHECK(old_fiber(0, 0, 0, 0, 0, 0, 0, 0)(0, 0) == Catch::Approx(1 / std::sqrt(2.0)));
@@ -716,6 +720,7 @@ TEST_CASE("Material snapshots isolate concurrent readers and detach writes", "[m
 		std::filesystem::path p;
 		~Cleanup() { std::filesystem::remove_all(p); }
 	} cleanup{base};
+	const io::FileSystemIO resources(".");
 	const auto scalar = (base / "values.txt").string();
 	const auto fiber = (base / "fiber.vtk").string();
 	auto write = [&](int value) {
@@ -728,9 +733,9 @@ TEST_CASE("Material snapshots isolate concurrent readers and detach writes", "[m
 	auto read = [&](const std::shared_ptr<MaterialFileCache> &cache) {
 		MaterialFileCacheScope scope(cache);
 		Consumer c;
-		c.first.init(scalar, "");
+		c.first.init(scalar, resources);
 		c.second.resize(3);
-		c.second.add_multimaterial(0, dir, "", "");
+		c.second.add_multimaterial(0, dir, "", resources);
 		return c;
 	};
 	auto old = std::make_shared<MaterialFileCache>();
@@ -755,7 +760,7 @@ TEST_CASE("Material snapshots isolate concurrent readers and detach writes", "[m
 		CHECK(values[i].second(0, 0, 0, 0, 0, 0, 0, 0)(0, 0) == Catch::Approx(value / std::sqrt(double(value * value + 1))));
 	}
 	CHECK(first.first.get_mat().data() != values[1].first.get_mat().data());
-	auto old_fibers = old->fibers(fiber, "FIB_DIR1", []() -> MaterialFileCache::Fibers { throw std::runtime_error("Unexpected reload"); });
+	auto old_fibers = old->fibers("resource:" + resources.describe(fiber), "FIB_DIR1", []() -> MaterialFileCache::Fibers { throw std::runtime_error("Unexpected reload"); });
 	CHECK(old_fibers.use_count() == 11); // cache, first, eight workers, this handle
 	auto copy = first.first;
 	copy.set_mat(Eigen::MatrixXd::Constant(1, 1, 5));
@@ -773,13 +778,13 @@ TEST_CASE("Material snapshots isolate concurrent readers and detach writes", "[m
 		{
 		}
 		ExpressionValue restored;
-		restored.init(scalar, "");
+		restored.init(scalar, resources);
 		CHECK(restored.get_mat()(0, 0) == 1);
 		assembler::FiberDirection other_field;
 		other_field.resize(3);
 		auto dir2 = dir;
 		dir2["field"] = "FIB_DIR2";
-		other_field.add_multimaterial(0, dir2, "", "");
+		other_field.add_multimaterial(0, dir2, "", resources);
 		CHECK(other_field(0, 0, 0, 0, 0, 0, 0, 0)(2, 0) == 1);
 	}
 	std::filesystem::remove(scalar);

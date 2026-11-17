@@ -8,6 +8,12 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <memory>
+
+namespace polyfem::io
+{
+	class ResourceIO;
+}
 
 namespace polyfem
 {
@@ -18,9 +24,11 @@ namespace polyfem
 		///             the input's own `common` first, then that file's, and so
 		///             on -- the run manifest records them.
 		void apply_common_params(json &args, std::vector<std::string> *chain = nullptr);
+		std::unique_ptr<const io::ResourceIO> apply_common_params(json &args, const io::ResourceIO &resources, std::vector<std::string> *chain = nullptr);
 
 		/// @brief Expand string entries in dirichlet_boundary that point to .json files
 		void expand_bc_sidecars(json &args, const json &rules);
+		void expand_bc_sidecars(json &args, const json &rules, const io::ResourceIO &resources);
 
 		// Templated degree to radians so a scalar or vector can be given
 		template <typename T>
