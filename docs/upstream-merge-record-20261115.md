@@ -93,3 +93,61 @@ Two textual conflicts (rather than the plan's predicted zero): `cmake/recipes/po
 - **V5:** default full suite, seed 1, four OpenMP threads, isolated Python, MKL_CBWR=COMPATIBLE, caffeinate -s and 7,200-second timeout: **470 cases / 5,180,153 assertions passed**, exit 0, **1,150.73 seconds**, completed approximately 02:26:59 UTC. No test filtering or accepted failure. These results are native coverage, not remote/cross-platform CI.
 
 Evidence: `PF-3/build-first.*`, `focused-first/`, `smoke-first/`, `smoke-output/`, `smoke-comparison.json`, `suite-first/`, `post-gates.*`, source/usage review and data patch. Tested binary/build-info/hash snapshot: `bin/PF-3-validation/`. Dedicated new 3D vertex-permutation/scale-invariance property tests were suggested during review but not added; the existing standard 3D AMIPS scene and full suite passed. Later publication and REL-1 remain separate; main and installed Houdini assets are unchanged.
+
+## 2026-11-17 — PF-4: ESP and IPC-1 consumer integration
+
+Merge upstream `cc1eac01e1` onto accepted PF-3 `040429ca0aedc0444f506912c0f80bc3b2871f83`, consuming the separately accepted IPC-1 `eec0ff82d2b7a0a9ce27fff0afd7de2c18e57d3a`. PolySolve remains the fork pin `f175cabe11deea2d3cafb74a6dec21a9e680ef69`. Data prerequisite is local merge `efb3095ee97e490bb65edfba922fc9de689bc68c` (upstream `c103d197b7f4d5474208c9b0a470c81349e75dd7` onto PF-3 data): the only fixture change adds upstream's two Newton PSD-projection settings to `gcp-contact/parallel-edge/run.json`. No fixture is deleted or reference regenerated.
+
+### Conflict resolutions and preservation
+
+Seventeen textual conflicts, rather than the plan's predicted thirteen:
+
+- `.github/workflows/continuous.yml`: retain the fork's MKL-compatible, single-thread test environment while adding upstream's job-level OpenMP setting.
+- `cmake/recipes/ipc_toolkit.cmake`, `polyfem_data.cmake`, `polysolve.cmake`: retain fork recipes/repositories, update IPC and data pins to the verified integration prerequisites, preserve PolySolve pin. The isolated configuration now points at `ipc-toolkit` instead of the frozen pre-PF4 copy. MISO/ITR remain OFF, Python ON.
+- `json-specs/input-spec.json`: keep all fork settings and add ESP, barrier, collision-set type, obstacle skipping and adaptive-update scale. JSON parses and no previous pointer is lost. The preexisting schema deliberately repeats 26 pointers for alternative types; rather than delete valid alternatives to satisfy the plan's literal uniqueness wording, verify no additional repeated pointer was introduced (`spec-preservation.json`).
+- `legacy/state/StateHomogenization.cpp`, `StateSolveNonlinear.cpp`, `mesh/remesh/wild_remesh/LocalRelaxationData.cpp`, `varforms/NonlinearElasticVarForm.cpp`, `varforms/diff/DifferentiableNonlinearElasticVarForm.cpp`: combine new contact arguments with all existing semi-implicit options; retain legacy/remeshing code and deferred checkpoint restoration. No remeshing activation or claim follows.
+- `mesh/GeometryLoader.cpp`: retain fork surface validation/resource diagnostics and upstream obstacle-volume loading.
+- `solver/SolveData.cpp`, `SolveData.hpp`: keep fork stiffness-mode selection, lumped mass, initial trim, clamped/Dirichlet contact mapping, gradient/Hessian providers, budget/restart/failure hooks and rollback wiring. Add ESP as an opt-in branch; refuse semi-implicit ESP/GCP/periodic combinations by name.
+- `solver/forms/BarrierContactForm.cpp`, `BarrierContactForm.hpp`: start from the complete fork implementation and replay the small upstream API changes. Retain fork caches, experimental gap-floor handling, controller and checkpoint state. Explicit non-IPC collision type takes precedence over the legacy improved-max boolean; its effective type controls the signed-parent requirement. Semi-implicit mode refuses OGC, custom barriers and obstacle skipping, in addition to existing unsupported shape/physical modes. Adaptive stiffness keeps upstream's squared-distance guard and update scale (default 1e-9). No obsolete cache was reintroduced.
+- `solver/forms/FrictionForm.cpp`: retain realized lag, coefficient assignment, objective-change notifications and checkpoint methods. Rebuild copies collision type, signed-contribution and obstacle-skipping policies. ESP friction now explicitly uses the same normalization policy as its normal potential rather than silently taking the toolkit default.
+- `tests/test_diff.cpp`: retain the fork's documented forward-solve accuracy settings and assertions, not upstream's competing replacement. No test tolerances were loosened to make results pass.
+
+Smooth-contact classes/APIs migrate to GCP, including the fork rollback snapshot's collision set. Existing contact/friction/AL state remains retained. No source file deletion beyond the upstream SmoothContactForm-to-GCPContactForm rename; shared checkout/build and RM-0 are untouched.
+
+### ESP checkpoint safety boundary
+
+The existing checkpoint keys identify typed primitive pairs, orientation and sign. ESP can generate multiple quadrature contributions with identical such keys and distinct forces. The new actual 3D fixture demonstrates this ambiguity. Assigning occurrence indices from rebuilt order or aggregating forces would silently lose correspondence.
+
+Therefore **ESP with nonzero friction and checkpoint output/resume is refused by name before geometry loading**, with defensive serialization/deserialization checks as well. This new combination was not present in the pre-PF4 fork; ordinary ESP simulations and existing barrier/GCP restart remain available. ESP-specific quadrature history serialization is future work. A zero-friction ESP configuration is not covered by this refusal, but exact ESP-only continuation was not independently certified by these tests. Do not advertise general ESP restart equivalence.
+
+Tests cover strict/non-strict output/resume refusal without loaded geometry, supported neighboring configurations, explicit improved-max selection with the old boolean false, signed-parent requirements, and unvalidated-option refusals. The normalization fixture compares actual ESP friction forces to explicitly configured toolkit results for both policies and confirms duplicated primitive identities.
+
+### Validation and retained failures
+
+- **V1:** PolyFEM_bin and unit_tests built successfully. Initial compile failures were only test-constructor migration errors; their logs and corrections are retained. Final compiled-source snapshot is `bin/PF-4-validation/` with binary hashes/build info.
+- Added focused checkpoint/contact checks: **25 cases / 412 assertions passed**. The first attempt's one failed new test omitted required geometry/materials; only its fixture was corrected, with all assertions retained.
+- **V2:** prescribed fork tags, contact-form/ESP tests and all ESP scene cases. First pass: **65/66 cases passed, 3,921/3,922 assertions**. The sole failure was dolphin-funnel's relative `source/data` path, not a numerical mismatch. Both meshes existed in the isolated external data checkout. Add an ignored `polyfem/data -> ../polyfem-data` link inside the integration worktree; rerun that exact scene unchanged: **1 case / 3 assertions passed**. The ESP runner also resolves the tracked `esp_data` folder from the source test directory instead of assuming the data directory is nested in the source. No test skip, input/reference edit or tolerance change. Full V5 below includes all these cases again.
+- **V3:** all five one-thread smokes exit 0, **25/25 VTUs byte-identical to PF-3**. The potentially different IPC tie/controller history did not occur in these comparisons; no difference was accepted or tuned away.
+- **V4:** RB02 exits 0; RB05 probe and scene-limit runs exit 0. Strict comparison against accepted PF-2 evidence confirms identical probe estimates, measurements, candidate counts, expected exceptions/build outcomes and process exits. Scene default/generous results equal unlimited, and all expected refusal outcomes match. `v4-comparison.json` reports passed.
+- **V5:** full default suite, seed 1, four OpenMP threads, isolated Python, MKL_CBWR=COMPATIBLE, caffeinate -s and 7,200-second timeout: **480 cases / 5,181,433 assertions passed**, exit 0, **1,147.83 seconds**, completed about 03:48:57 UTC. Native macOS arm64 coverage, not cross-platform CI.
+
+Evidence: sibling `PF-4/` chronological checkpoint, all build/failure logs, focused attempts, `v2-first/`, `esp-path-recheck/`, `smoke-output/`, comparison JSON, RB02/RB05 results and `suite-first/`. No PF-4 source/data publication or main/shared-build update is implied by this local acceptance record. HDA-1 and later release gates remain separate.
+
+### Final audit repairs: acceptance still pending
+
+The first full-suite pass above predates two final-review repairs and is not final PF-4 acceptance. Two-dimensional obstacle-volume cells were labeled tetrahedra; OutData now chooses triangles for three-node connectivity and tetrahedra for four-node connectivity. ESP rollback previously inherited only base metadata, leaving trial collision/cache state behind. ESP now builds a fresh immutable shared collision container on geometry changes and snapshots/restores that container together with its matching displaced-surface cache and base state. This preserves exact ordering without cloning noncopyable IPC internals. Independent read-only review found no blocking concern.
+
+New repeated A-to-B-to-restored-A checks require exact value, gradient, Hessian and stiffness recovery. The 2D export regression requires all emitted cells to be triangles. Its initial fixture failures are retained: unsupported Dimension-2 Medit input, omitted explicit static export call, and a Medit surface import that did not supply obstacle triangle faces. The corrected fixture uses supported planar Dimension-3 Medit for the 2D body and explicit OBJ triangle faces for the obstacle, followed by the same export API as main. The triangle assertions and production tolerances were not relaxed.
+
+The ninth incremental build succeeded, and final focused checks passed **27 cases / 432 assertions** (`focused-sixth/`). A new binary/source snapshot is in `bin/PF-4-final-validation/` and `PF-4/final-tested-source.patch`. Final V2–V5 verification is still running under a stop-on-failure continuation; earlier passes remain evidence, not a substitute for final-source gates. No PF-4 publication has occurred.
+
+### PF-4 final local acceptance, 2026-11-17
+
+Final-source verification completed successfully after the audit repairs:
+- V1 incremental build passed; focused checks **27 cases / 432 assertions**.
+- V2 **68 cases / 3,942 assertions**, exit 0.
+- V3 all five smoke scenes exit 0 and **25/25 VTUs byte-identical to PF-3**.
+- V4 RB02, RB05 and scene limits exit 0; strict count/outcome and default/generous versus unlimited comparisons pass.
+- V5 **482 cases / 5,181,453 assertions**, exit 0 in **1,149.74 seconds**, completed approximately 04:38:51 UTC. Same native arm64, four-thread, seed-1 environment as the earlier pass.
+
+Final evidence: `PF-4/v2-final`, `smoke-final-output`, `smoke-final-comparison.json`, `v4-final-comparison.json`, `suite-final/receipt.json`, and `FINAL-ALL-GATES-PASSED`. `final-source-audit.json` verifies no unresolved conflicts/deleted paths and no changes to compiled sources after the final binary snapshot (only this record changed). PF-4 is locally accepted within the documented ESP checkpoint boundary; publication and release/HDA gates remain pending. No cross-platform CI claim.

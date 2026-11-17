@@ -216,11 +216,29 @@ namespace polyfem::solver
 										   const int ccd_max_iterations,
 										   const BarrierStiffnessMode stiffness_mode,
 										   const json &semi_implicit_opts,
-										   const Eigen::VectorXd &lumped_vertex_masses) : ContactForm(collision_mesh, dhat, avg_mass, use_adaptive_barrier_stiffness, is_time_dependent, enable_shape_derivatives, broad_phase_method, ccd_tolerance, ccd_max_iterations), barrier_potential_(make_barrier_potential(dhat, use_physical_barrier, stiffness_mode, semi_implicit_opts)), stiffness_mode_(stiffness_mode), lumped_vertex_masses_(lumped_vertex_masses)
+										   const Eigen::VectorXd &lumped_vertex_masses,
+										   const double dhat_epsilon_scale,
+										   const ipc::NormalCollisions::CollisionSetType collision_set_type,
+										   const bool skip_obstacles,
+										   std::shared_ptr<ipc::Barrier> barrier) : ContactForm(collision_mesh, dhat, avg_mass, use_adaptive_barrier_stiffness, is_time_dependent, enable_shape_derivatives, broad_phase_method, ccd_tolerance, ccd_max_iterations, dhat_epsilon_scale), barrier_potential_(barrier ? ipc::BarrierPotential(barrier, dhat, /*stiffness=*/1.0, /*use_physical_barrier=*/false, /*use_squared_distance=*/false) : make_barrier_potential(dhat, use_physical_barrier, stiffness_mode, semi_implicit_opts)), stiffness_mode_(stiffness_mode), lumped_vertex_masses_(lumped_vertex_masses)
 	{
 		// collision_set_.set_use_convergent_formulation(use_convergent_formulation);
 		collision_set_.set_use_area_weighting(use_area_weighting);
-		collision_set_.set_use_improved_max_approximator(use_improved_max_operator);
+		// Explicit non-IPC selection takes precedence over the legacy boolean.
+		const auto effective_collision_type = collision_set_type != ipc::NormalCollisions::CollisionSetType::IPC
+												  ? collision_set_type
+												  : (use_improved_max_operator ? ipc::NormalCollisions::CollisionSetType::IMPROVED_MAX_APPROX : ipc::NormalCollisions::CollisionSetType::IPC);
+		collision_set_.set_collision_set_type(effective_collision_type);
+		collision_set_.set_skip_obstacles(skip_obstacles);
+		if (uses_semi_implicit_stiffness())
+		{
+			if (barrier)
+				log_and_throw_error("Semi-implicit stiffness requires contact.barrier=default; custom barriers are not validated.");
+			if (effective_collision_type != ipc::NormalCollisions::CollisionSetType::IPC && effective_collision_type != ipc::NormalCollisions::CollisionSetType::IMPROVED_MAX_APPROX)
+				log_and_throw_error("Semi-implicit stiffness supports only IPC or validated parent-keyed IMPROVED_MAX_APPROX collision sets; OGC is not supported.");
+			if (skip_obstacles)
+				log_and_throw_error("Semi-implicit stiffness does not support contact.skip_obstacles=true.");
+		}
 		collision_set_.set_enable_shape_derivatives(enable_shape_derivatives);
 
 		if (uses_semi_implicit_stiffness())
@@ -351,7 +369,7 @@ namespace polyfem::solver
 			// its own coefficient, so weight * scale * b(d) summed over the
 			// set is sum_p w_p k_p b(d_p) exactly. Stencil identity has no
 			// parent coefficients and stays refused.
-			if (use_improved_max_operator)
+			if (effective_collision_type == ipc::NormalCollisions::CollisionSetType::IMPROVED_MAX_APPROX)
 			{
 				if (!parent_keyed_)
 					log_and_throw_error(unsupported_improved_max_message());
@@ -1706,6 +1724,9 @@ namespace polyfem::solver
 		if (!use_adaptive_barrier_stiffness())
 			return;
 
+		if (!barrier_potential_.use_squared_distance())
+			log_and_throw_error("Adaptive barrier stiffness is not supported for the selected barrier.");
+
 		const Eigen::MatrixXd displaced_surface = compute_displaced_surface(x);
 
 		// The adative stiffness is designed for the non-convergent formulation,
@@ -2966,7 +2987,7 @@ namespace polyfem::solver
 
 				barrier_stiffness_ = ipc::update_barrier_stiffness(
 					prev_distance_, curr_distance, max_barrier_stiffness_,
-					barrier_stiffness(), ipc::world_bbox_diagonal_length(displaced_surface));
+					barrier_stiffness(), ipc::world_bbox_diagonal_length(displaced_surface), dhat_epsilon_scale_);
 
 				if (barrier_stiffness() != prev_barrier_stiffness)
 				{

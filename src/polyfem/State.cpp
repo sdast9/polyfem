@@ -441,6 +441,10 @@ namespace polyfem
 			{
 				args["solver"]["contact"]["friction_iterations"] = std::numeric_limits<int>::max();
 			}
+			if (args["contact"]["use_esp_formulation"].get<bool>() && args["contact"]["friction_coefficient"].get<double>() != 0.0
+				&& (!args["output"]["checkpoint"]["path"].get<std::string>().empty() || !args["input"]["checkpoint"]["path"].get<std::string>().empty()))
+				log_and_throw_error("Checkpoint continuation with ESP friction is not yet supported: quadrature contributions require additional history identities. Disable checkpoint output or use a supported contact formulation.");
+
 			if (args["contact"]["friction_coefficient"] == 0.0)
 			{
 				args["solver"]["contact"]["friction_iterations"] = 0;

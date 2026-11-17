@@ -83,7 +83,8 @@ namespace polyfem::solver
 					const bool enable_shape_derivatives,
 					const ipc::BroadPhaseMethod broad_phase_method,
 					const double ccd_tolerance,
-					const int ccd_max_iterations);
+					const int ccd_max_iterations,
+					const double dhat_epsilon_scale);
 		virtual ~ContactForm() = default;
 
 		virtual std::string name() const override { return "contact"; }
@@ -133,6 +134,9 @@ namespace polyfem::solver
 		void set_barrier_stiffness(const double barrier_stiffness) { barrier_stiffness_ = barrier_stiffness; }
 		/// @brief Get use_adaptive_barrier_stiffness
 		bool use_adaptive_barrier_stiffness() const { return use_adaptive_barrier_stiffness_; }
+
+		/// @brief Get the dhat_epsilon_scale passed to ipc::update_barrier_stiffness.
+		double dhat_epsilon_scale() const { return dhat_epsilon_scale_; }
 		/// @brief Get use_convergent_formulation
 		virtual bool use_convergent_formulation() const { return false; }
 
@@ -276,6 +280,9 @@ namespace polyfem::solver
 		double barrier_stiffness_;
 		/// @brief Maximum barrier stiffness to use when using adaptive barrier stiffness
 		double max_barrier_stiffness_;
+
+		/// @brief dhat_epsilon_scale used by ipc::update_barrier_stiffness.
+		const double dhat_epsilon_scale_;
 
 		/// @brief Average mass of the mesh (used for adaptive barrier stiffness)
 		const double avg_mass_;

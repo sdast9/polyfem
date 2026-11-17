@@ -2,7 +2,8 @@
 #include "FrictionCheckpoint.hpp"
 #include <polyfem/io/ForkCheckpoint.hpp>
 #include "BarrierContactForm.hpp"
-#include "SmoothContactForm.hpp"
+#include "GCPContactForm.hpp"
+#include "ESPContactForm.hpp"
 
 #include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -11,7 +12,7 @@
 
 #include <ipc/broad_phase/create_broad_phase.hpp>
 #include <ipc/collisions/normal/normal_collisions.hpp>
-#include <ipc/smooth_contact/smooth_collisions.hpp>
+#include <ipc/gcp/gcp_collisions.hpp>
 
 #include <Eigen/Core>
 
@@ -156,7 +157,11 @@ namespace polyfem::solver
 		{
 			ipc::NormalCollisions collision_set;
 			collision_set.set_use_area_weighting(barrier_contact->use_area_weighting());
-			collision_set.set_use_improved_max_approximator(barrier_contact->use_improved_max_operator());
+			// Copy the collision set type directly rather than going through
+			// use_improved_max_operator(), which collapses it to a bool and so
+			// would silently downgrade OGC to IPC here.
+			collision_set.set_collision_set_type(barrier_contact->collision_set().collision_set_type());
+			collision_set.set_skip_obstacles(barrier_contact->collision_set().skip_obstacles());
 			collision_set.set_separate_signed_contributions(barrier_contact->collision_set().separate_signed_contributions());
 
 			collision_set.set_enable_shape_derivatives(barrier_contact->enable_shape_derivatives());
@@ -175,18 +180,32 @@ namespace polyfem::solver
 				collision_mesh_, displaced_surface, collision_set,
 				bp, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_);
 		}
-		else if (const auto smooth_contact = dynamic_cast<const SmoothContactForm *>(&contact_form_))
+		else if (const auto gcp = dynamic_cast<const GCPContactForm *>(&contact_form_))
 		{
-			ipc::SmoothCollisions collision_set;
-			if (smooth_contact->using_adaptive_dhat())
-				collision_set.compute_adaptive_dhat(collision_mesh_, collision_mesh_.rest_positions(), smooth_contact->get_params(), broad_phase.get());
+			ipc::GCPCollisions collision_set;
+			if (gcp->using_adaptive_dhat())
+				collision_set.compute_adaptive_dhat(collision_mesh_, collision_mesh_.rest_positions(), gcp->get_params(), broad_phase.get());
 			collision_set.build(
-				collision_mesh_, displaced_surface, smooth_contact->get_params(),
-				smooth_contact->using_adaptive_dhat(), broad_phase.get());
+				collision_mesh_, displaced_surface, gcp->get_params(),
+				gcp->using_adaptive_dhat(), broad_phase.get());
 
 			friction_collision_set_.build(
 				collision_mesh_, displaced_surface,
-				collision_set, smooth_contact->get_params(), contact_form_.barrier_stiffness(), Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_);
+				collision_set, gcp->get_params(), contact_form_.barrier_stiffness(), Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_, Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_);
+		}
+		else if (const auto esp_contact = dynamic_cast<const ESPContactForm *>(&contact_form_))
+		{
+			ipc::ESPCollisions collision_set;
+			collision_set.build(
+				collision_mesh_, displaced_surface, esp_contact->get_params(),
+				broad_phase.get());
+
+			friction_collision_set_.build(
+				collision_mesh_, displaced_surface, collision_set,
+				esp_contact->get_params(), contact_form_.barrier_stiffness(),
+				Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_,
+				Eigen::VectorXd::Ones(collision_mesh_.num_vertices()) * mu_,
+				ipc::TangentialCollisions::default_blend_mu, esp_contact->barrier_potential().use_near_far());
 		}
 		else
 		{
@@ -201,6 +220,8 @@ namespace polyfem::solver
 
 	void FrictionForm::serialize_checkpoint(io::CheckpointWriter &writer, const std::string &group) const
 	{
+		if (mu_ != 0 && dynamic_cast<const ESPContactForm *>(&contact_form_))
+			log_and_throw_error("Checkpoint continuation with ESP friction is not yet supported: quadrature contributions require additional history identities. Disable checkpoint output or use a supported contact formulation.");
 		Eigen::MatrixXd scalars(1, 2);
 		scalars << lagged_trim_, double(friction_collision_set_.size());
 		writer.write_matrix(group + "/friction_scalars", scalars);
@@ -226,6 +247,8 @@ namespace polyfem::solver
 
 	bool FrictionForm::deserialize_checkpoint(const io::CheckpointReader &reader, const std::string &group, const Eigen::VectorXd &x)
 	{
+		if (mu_ != 0 && dynamic_cast<const ESPContactForm *>(&contact_form_))
+			log_and_throw_error("Checkpoint continuation with ESP friction is not yet supported: quadrature contributions require additional history identities. Disable checkpoint output or use a supported contact formulation.");
 		if (!io::has_fork_checkpoint_group(reader, group))
 			return false;
 		const std::string path = reader.path().string();

@@ -1,3 +1,4 @@
+#include <polyfem/solver/forms/ESPContactForm.hpp>
 #include <polyfem/solver/forms/FrictionForm.hpp>
 #include <polyfem/solver/forms/FrictionCheckpoint.hpp>
 #include <polyfem/io/ForkCheckpoint.hpp>
@@ -1517,4 +1518,99 @@ TEST_CASE("Friction checkpoint restores saved forces by identity atomically", "[
 		}
 	}
 	std::filesystem::remove(path);
+}
+
+TEST_CASE("PF4 semi-implicit contact refuses unvalidated upstream options", "[rbr04][pf4]")
+{
+	using Type = ipc::NormalCollisions::CollisionSetType;
+	using Catch::Matchers::ContainsSubstring;
+	auto mesh = make_corner(true, .1, .2);
+	auto construct = [&](Type type, const std::string &identity, bool skip, std::shared_ptr<ipc::Barrier> barrier = nullptr) {
+		return std::make_unique<BarrierContactForm>(mesh, 1, 1, false, false, false, true, false, false,
+													ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, BarrierStiffnessMode::SemiImplicit,
+													json{{"coefficient_identity", identity}}, Eigen::VectorXd(), 1e-9, type, skip, barrier);
+	};
+	auto f = construct(Type::IMPROVED_MAX_APPROX, "parent", false);
+	CHECK(f->collision_set().collision_set_type() == Type::IMPROVED_MAX_APPROX);
+	CHECK(f->collision_set().separate_signed_contributions());
+	REQUIRE_THROWS_WITH(construct(Type::IMPROVED_MAX_APPROX, "stencil", false), ContainsSubstring("parent"));
+	REQUIRE_THROWS_WITH(construct(Type::OGC, "parent", false), ContainsSubstring("OGC"));
+	REQUIRE_THROWS_WITH(construct(Type::IPC, "parent", true), ContainsSubstring("skip_obstacles"));
+	REQUIRE_THROWS_WITH(construct(Type::IPC, "parent", false, std::make_shared<ipc::ClampedLogBarrier<>>()), ContainsSubstring("barrier=default"));
+	REQUIRE_NOTHROW(construct(Type::IPC, "parent", false));
+}
+
+TEST_CASE("PF4 ESP friction uses the normal potential normalization policy", "[pf4][contact_form]")
+{
+	Eigen::MatrixXd V(4, 3);
+	V << 0, 0, 0, 2, 0, 0, 0, 2, 0, .5, .5, .1;
+	Eigen::MatrixXi E(3, 2);
+	E << 0, 1, 1, 2, 2, 0;
+	Eigen::MatrixXi F(1, 3);
+	F << 0, 1, 2;
+	ipc::CollisionMesh mesh(V, E, F);
+	for (const bool normalize : {false, true})
+	{
+		CAPTURE(normalize);
+		json params = {{"quadrature_order", 5}, {"dbar_factor", 1.0}, {"normalize_weights", normalize}, {"area_weights", true}};
+		ESPContactForm contact(mesh, .5, 1, params, false, nullptr, false, false, false, false, ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, 1e-9);
+		contact.set_barrier_stiffness(2);
+		FrictionForm friction(mesh, nullptr, 1e-3, .3, ipc::BroadPhaseMethod::HASH_GRID, contact, -1);
+		friction.update_lagging(Eigen::VectorXd::Zero(mesh.full_num_vertices() * 3));
+		ipc::ESPCollisions normal;
+		normal.build(mesh, V, contact.get_params());
+		ipc::TangentialCollisions expected;
+		expected.build(mesh, V, normal, contact.get_params(), 2,
+					   Eigen::VectorXd::Constant(4, .3), Eigen::VectorXd::Constant(4, .3),
+					   ipc::TangentialCollisions::default_blend_mu, normalize);
+		REQUIRE(expected.size() > 0);
+		const auto keys = friction_checkpoint::keys(expected);
+		const std::set<friction_checkpoint::Key> unique(keys.begin(), keys.end());
+		CHECK(unique.size() < keys.size()); // Distinct quadrature contributions share primitive identities.
+
+		REQUIRE(friction.friction_collision_set().size() == expected.size());
+		std::vector<double> actual_forces, expected_forces;
+		for (size_t i = 0; i < expected.size(); ++i)
+		{
+			actual_forces.push_back(friction.friction_collision_set()[i].normal_force_magnitude);
+			expected_forces.push_back(expected[i].normal_force_magnitude);
+		}
+		std::sort(actual_forces.begin(), actual_forces.end());
+		std::sort(expected_forces.begin(), expected_forces.end());
+		CHECK(actual_forces == expected_forces);
+	}
+}
+
+TEST_CASE("PF4 ESP rollback restores collision cache and base state exactly", "[pf4][rollback][contact_form]")
+{
+	auto mesh = make_corner(true, .1, .2);
+	json params = {{"quadrature_order", 5}, {"dbar_factor", 1.0}, {"normalize_weights", false}, {"area_weights", true}};
+	ESPContactForm contact(mesh, 1, 1, params, false, nullptr, false, false, false, false, ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, 1e-9);
+	const Eigen::VectorXd a = Eigen::VectorXd::Zero(8);
+	Eigen::VectorXd b = a;
+	b[7] = 2;
+	contact.set_barrier_stiffness(3);
+	contact.update_quantities(0, a);
+	const double value = contact.value(a);
+	REQUIRE(value > 0);
+	Eigen::VectorXd gradient;
+	StiffnessMatrix hessian;
+	contact.first_derivative(a, gradient);
+	contact.second_derivative(a, hessian);
+	const auto snapshot = contact.save_state();
+	for (int i = 0; i < 2; ++i)
+	{
+		contact.set_barrier_stiffness(9);
+		contact.update_quantities(0, b);
+		REQUIRE(contact.value(b) != value);
+		contact.restore_state(*snapshot, a);
+		CHECK(contact.barrier_stiffness() == 3);
+		CHECK(contact.value(a) == value);
+		Eigen::VectorXd restored_gradient;
+		StiffnessMatrix restored_hessian;
+		contact.first_derivative(a, restored_gradient);
+		contact.second_derivative(a, restored_hessian);
+		CHECK(restored_gradient == gradient);
+		CHECK((restored_hessian - hessian).norm() == 0);
+	}
 }

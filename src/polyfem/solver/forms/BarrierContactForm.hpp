@@ -14,6 +14,7 @@ namespace polyfem::io
 
 #include <ipc/collisions/normal/normal_collisions.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
+#include <ipc/barrier/barrier.hpp>
 
 #include <array>
 #include <cstdint>
@@ -46,7 +47,11 @@ namespace polyfem::solver
 						   const int ccd_max_iterations,
 						   const BarrierStiffnessMode stiffness_mode = BarrierStiffnessMode::Adaptive,
 						   const json &semi_implicit_opts = json(nullptr),
-						   const Eigen::VectorXd &lumped_vertex_masses = Eigen::VectorXd());
+						   const Eigen::VectorXd &lumped_vertex_masses = Eigen::VectorXd(),
+						   const double dhat_epsilon_scale = 1e-9,
+						   const ipc::NormalCollisions::CollisionSetType collision_set_type = ipc::NormalCollisions::CollisionSetType::IPC,
+						   const bool skip_obstacles = false,
+						   std::shared_ptr<ipc::Barrier> barrier = nullptr);
 
 		virtual std::string name() const override { return "barrier-contact"; }
 

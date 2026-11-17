@@ -1,35 +1,32 @@
 #pragma once
 
 #include "ContactForm.hpp"
-
-#include <polyfem/utils/Types.hpp>
-#include <polysolve/nonlinear/PostStepData.hpp>
-
-#include <ipc/smooth_contact/smooth_collisions.hpp>
-#include <ipc/smooth_contact/smooth_contact_potential.hpp>
+#include <ipc/esp/esp_collisions.hpp>
+#include <ipc/esp/esp_potential.hpp>
+#include <cmath>
 
 namespace polyfem::solver
 {
-	class SmoothContactForm : public ContactForm
+
+	class ESPContactForm : public ContactForm
 	{
-		friend class SmoothContactForceDerivative;
-
 	public:
-		SmoothContactForm(const ipc::CollisionMesh &collision_mesh,
-						  const double dhat,
-						  const double avg_mass,
-						  const double alpha_t,
-						  const double alpha_n,
-						  const bool use_adaptive_dhat,
-						  const double min_distance_ratio,
-						  const bool use_adaptive_barrier_stiffness,
-						  const bool is_time_dependent,
-						  const bool enable_shape_derivatives,
-						  const ipc::BroadPhaseMethod broad_phase_method,
-						  const double ccd_tolerance,
-						  const int ccd_max_iterations);
+		ESPContactForm(const ipc::CollisionMesh &collision_mesh,
+					   const double dhat,
+					   const double avg_mass,
+					   const json esp_params,
+					   const bool skip_obstacles,
+					   std::shared_ptr<ipc::Barrier> barrier,
+					   const bool use_adaptive_dhat,
+					   const bool use_adaptive_barrier_stiffness,
+					   const bool is_time_dependent,
+					   const bool enable_shape_derivatives,
+					   const ipc::BroadPhaseMethod broad_phase_method,
+					   const double ccd_tolerance,
+					   const int ccd_max_iterations,
+					   const double dhat_epsilon_scale);
 
-		virtual std::string name() const override { return "smooth-contact"; }
+		virtual std::string name() const override { return "ESP"; }
 
 		void update_barrier_stiffness(const Eigen::VectorXd &x, const Eigen::MatrixXd &grad_energy) override;
 
@@ -38,29 +35,34 @@ namespace polyfem::solver
 		/// @param x Current solution
 		void post_step(const polysolve::nonlinear::PostStepData &data) override;
 
-		/// @brief RB-06: ContactForm::State plus the current collision set.
+		// RB-06: collision sets are immutable after publication. A new build
+		// never mutates an object retained by a rollback snapshot.
 		struct State : public ContactForm::State
 		{
-			ipc::SmoothCollisions collision_set;
+			std::shared_ptr<const ipc::ESPCollisions> collision_set;
+			Eigen::MatrixXd displaced_surface;
 		};
 		std::unique_ptr<FormState> save_state() const override
 		{
 			auto state = std::make_unique<State>();
 			save_contact_state(*state);
 			state->collision_set = collision_set_;
+			state->displaced_surface = cached_displaced_surface;
 			return state;
 		}
 		void restore_state(const FormState &state, const Eigen::VectorXd &) override
 		{
-			const State &smooth = state_as<State>(state, "SmoothContactForm");
-			restore_contact_state(smooth);
-			collision_set_ = smooth.collision_set;
+			const State &saved = state_as<State>(state, "ESPContactForm");
+			restore_contact_state(saved);
+			collision_set_ = saved.collision_set;
+			cached_displaced_surface = saved.displaced_surface;
 		}
 
-		bool using_adaptive_dhat() const { return use_adaptive_dhat; }
-		const ipc::SmoothContactParameters &get_params() const { return params; }
+		const ipc::ESPParameters &get_params() const { return params; }
 
-		const ipc::SmoothCollisions &collision_set() const { return collision_set_; }
+		const ipc::ESPCollisions &collision_set() const { return *collision_set_; }
+
+		const ipc::ESPPotential &barrier_potential() const { return barrier_potential_; }
 
 	protected:
 		/// @brief Compute the contact barrier potential value
@@ -88,13 +90,14 @@ namespace polyfem::solver
 		void update_collision_set(const Eigen::MatrixXd &displaced_surface) override;
 
 	private:
-		ipc::SmoothContactParameters params;
-		const bool use_adaptive_dhat;
+		ipc::ESPParameters params;
 
 		/// @brief Cached constraint set for the current solution
-		ipc::SmoothCollisions collision_set_;
+		std::shared_ptr<const ipc::ESPCollisions> collision_set_ = std::make_shared<ipc::ESPCollisions>();
 
 		/// @brief Contact potential
-		ipc::SmoothContactPotential barrier_potential_;
+		ipc::ESPPotential barrier_potential_;
+
+		Eigen::MatrixXd cached_displaced_surface;
 	};
 } // namespace polyfem::solver

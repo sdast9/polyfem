@@ -414,3 +414,26 @@ TEST_CASE("Retired restart JSON directs users to checkpoints", "[restart][input_
 	State state;
 	CHECK_THROWS_WITH(state.init(args, strict), Catch::Matchers::ContainsSubstring("/output/checkpoint/path"));
 }
+
+TEST_CASE("ESP friction checkpoint combination is refused before loading geometry", "[restart][checkpoint][pf4][input_validation]")
+{
+	const bool strict = GENERATE(false, true);
+	const json base = {{"geometry", json::array({{{"mesh", "not-loaded.msh"}}})},
+					   {"materials", {{"type", "NeoHookean"}, {"E", 1e6}, {"nu", .3}, {"rho", 1000.0}}}};
+	for (const std::string direction : {"input", "output"})
+	{
+		json args = base;
+		args["contact"] = {{"enabled", true}, {"use_esp_formulation", true}, {"friction_coefficient", 0.3}};
+		args[direction]["checkpoint"]["path"] = "not-created.h5";
+		State state;
+		CHECK_THROWS_WITH(state.init(args, strict), Catch::Matchers::ContainsSubstring("quadrature contributions require additional history identities"));
+	}
+	json args = base;
+	args["contact"] = {{"enabled", true}, {"use_esp_formulation", true}, {"friction_coefficient", 0.3}};
+	State ordinary;
+	CHECK_NOTHROW(ordinary.init(args, strict));
+	args["contact"]["friction_coefficient"] = 0.0;
+	args["output"]["checkpoint"]["path"] = "not-created.h5";
+	State frictionless;
+	CHECK_NOTHROW(frictionless.init(args, strict));
+}
