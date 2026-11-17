@@ -83,7 +83,7 @@ namespace polyfem::time_integrator
 			double expected_dt,
 			const std::function<void(Eigen::MatrixXd &)> &transform = {});
 
-		/// Legacy State persistence. Non-legacy code uses serialize_checkpoint().
+		/// Write-only u/v/a diagnostic export. Restart uses serialize_checkpoint().
 		virtual void save_state(const std::string &state_path) const;
 
 		/// @brief Factory method for constructing an implicit time integrator.

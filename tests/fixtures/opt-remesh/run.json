@@ -1,0 +1,63 @@
+{
+  "variable_to_simulation": [
+    {
+      "type": "shape",
+      "state": 0,
+      "composition": [],
+      "active_geometry_nodes": {
+        "type": "boundary_excluding_surface",
+        "selection": [
+          1
+        ]
+      }
+    }
+  ],
+  "parameters": "auto",
+  "output": {
+    "save_frequency": 1,
+    "solve_log_level": 3,
+    "directory": ""
+  },
+  "solver": {
+    "contact": {
+      "enabled": false
+    },
+    "nonlinear": {
+      "solver": "L-BFGS",
+      "max_iterations": 5,
+      "first_grad_norm_tol": 1e-08,
+      "line_search": {
+        "use_grad_norm_tol": 0.0,
+        "method": "Backtracking"
+      },
+      "norm_type": "Euclidean",
+      "rel_grad_norm_tol": 0,
+      "grad_norm_tol": 0.0001
+    },
+    "advanced": {
+      "characteristic_force_density": 1,
+      "characteristic_length": 1
+    },
+    "max_threads": 1
+  },
+  "functionals": [
+    {
+      "type": "AMIPS",
+      "state": 0,
+      "weight": 1.0
+    }
+  ],
+  "states": [
+    {
+      "path": "state.json"
+    }
+  ],
+  "remeshing": {
+    "max_restarts": 1,
+    "trigger": {
+      "periodic": {
+        "period": 1
+      }
+    }
+  }
+}

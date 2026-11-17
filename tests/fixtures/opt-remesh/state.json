@@ -1,0 +1,72 @@
+{
+    "geometry": [
+        {
+            "mesh": "triangle.obj",
+            "volume_selection": 1,
+            "n_refs": 0,
+            "surface_selection": [
+                {
+                    "id": 1,
+                    "box": [
+                        [
+                            -0.1,
+                            -0.1
+                        ],
+                        [
+                            1.1,
+                            0.1
+                        ]
+                    ]
+                }
+            ]
+        }
+    ],
+    "space": {
+        "discr_order": 1,
+        "advanced": {
+            "quadrature_order": 4,
+            "n_boundary_samples": 4
+        }
+    },
+    "solver": {
+        "linear": {
+            "solver": "Eigen::LDLT"
+        },
+        "advanced": {
+            "characteristic_force_density": 1,
+            "characteristic_length": 1
+        },
+        "nonlinear": {
+            "norm_type": "Euclidean",
+            "rel_grad_norm_tol": 0,
+            "first_grad_norm_tol": 1e-10,
+            "grad_norm_tol": 1e-08
+        }
+    },
+    "boundary_conditions": {
+        "rhs": [
+            0,
+            9.81
+        ],
+        "dirichlet_boundary": [
+            {
+                "id": 1,
+                "value": [
+                    0,
+                    0
+                ]
+            }
+        ]
+    },
+    "materials": {
+        "type": "LinearElasticity",
+        "E": 200.0,
+        "nu": 0.35
+    },
+    "output": {
+        "paraview": {
+            "high_order_mesh": false,
+            "vismesh_rel_area": 1
+        }
+    }
+}

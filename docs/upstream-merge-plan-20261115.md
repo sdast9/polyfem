@@ -1,12 +1,33 @@
 # Upstream merge plan: IPC Toolkit and PolyFEM (2026-11-15)
 
-Status: **plan, not started.** PolySolve is merged and published (section 1). Written for
+Status: implementation underway; see [the dated execution record](upstream-merge-record-20261115.md).
+PolySolve is merged and published (section 1). Written for
 implementation sessions that have not seen the review; each task below is meant
 to be handed to one session on its own. Read sections 1–4 before any task.
 
 A task is finished only when its acceptance checks pass and its record is
 written. If a "stop" condition is met, stop, write down what you found in the
 task's record, and report to the user. Do not work around a stop condition.
+
+## Amendment: upstream remeshing alignment (user, 2026-11-17)
+
+The user superseded decision 1: align with upstream MMG-based shape-optimization
+remeshing, rather than revive deprecated in-timestep dynamics remeshing. RM-0
+failure evidence and exploratory work remain archived. RM-1 and RM-2 are no
+longer implementation prerequisites. PF-6 takes upstream removal of ITR and
+legacy State; do not restore the remesh tree/build option. PF-6 through PF-8
+use the upstream build with no ITR switch. ITR-specific gates are replaced by
+MMG utility and optimization-workflow coverage plus explicit rejection of old
+`space/remesh/enabled` inputs. Run the baked-coordinate restart oracle as well
+as the malformed-MSH corpus in PF-7, then retain those coverage checks in PF-8.
+Other preservation/validation gates remain. HDA-1 must clearly mark retired in-timestep controls/imports,
+not silently reinterpret them as optimization settings, and remains uninstalled.
+
+This intentionally means no in-timestep dynamic displacement/velocity/
+acceleration/contact-history transfer support. Optimization remeshing restarts
+shape optimization, not the ongoing dynamics timestep. Keep all other fork
+capabilities, including write-only State diagnostics and checkpoint extensions.
+The original task descriptions below are historical where this amendment differs.
 
 ## 1. State on 2026-11-15
 

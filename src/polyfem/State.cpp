@@ -1,6 +1,7 @@
 #include <polyfem/State.hpp>
 
 #include <polyfem/Units.hpp>
+#include <polyfem/assembler/AssemblerUtils.hpp>
 
 #include <polyfem/io/RunManifest.hpp>
 #include <polyfem/io/ResourceIO.hpp>
@@ -33,9 +34,6 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <ipc/utils/logger.hpp>
-#ifdef POLYFEM_WITH_ITR
-#include <wmtk/utils/Logger.hpp>
-#endif
 
 #include <igl/Timer.h>
 
@@ -72,6 +70,39 @@ namespace polyfem
 
 	namespace
 	{
+		std::string formulation_from_args(const json &args)
+		{
+			if (!args.contains("materials") || args["materials"].is_null())
+				return "";
+
+			if (args["materials"].is_array())
+			{
+				std::string current;
+				for (const auto &m : args["materials"])
+				{
+					const std::string tmp = m["type"];
+					if (current.empty())
+						current = tmp;
+					else if (current != tmp)
+					{
+						if (assembler::AssemblerUtils::is_elastic_material(current)
+							&& assembler::AssemblerUtils::is_elastic_material(tmp))
+						{
+							current = "MultiModels";
+						}
+						else
+						{
+							return "";
+						}
+					}
+				}
+
+				return current;
+			}
+
+			return args["materials"].value("type", "");
+		}
+
 		std::string resolve_output_path(const std::string &output_dir, const std::string &path)
 		{
 			if (output_dir.empty() || path.empty() || std::filesystem::path(path).is_absolute())
@@ -241,15 +272,8 @@ namespace polyfem
 
 		ipc::set_logger(std::make_shared<spdlog::logger>("ipctk", sinks.begin(), sinks.end()));
 
-#ifdef POLYFEM_WITH_ITR
-		wmtk::set_logger(std::make_shared<spdlog::logger>("wmtk", sinks.begin(), sinks.end()));
-#endif
-
 		logger().set_level(spdlog::level::trace);
 		ipc::logger().set_level(spdlog::level::trace);
-#ifdef POLYFEM_WITH_ITR
-		wmtk::logger().set_level(spdlog::level::trace);
-#endif
 
 		set_log_level(log_level);
 	}
@@ -457,7 +481,7 @@ namespace polyfem
 			args["contact"]["periodic"] = false;
 		}
 
-		const std::string formulation = varform::formulation_from_args(args);
+		const std::string formulation = formulation_from_args(args);
 		if (formulation.empty())
 		{
 			logger().error("specify some 'materials'");
@@ -466,7 +490,18 @@ namespace polyfem
 
 		variational_formulation = varform::VarFormFactory::create(formulation, args, *resources_, is_adjoint_optimization);
 		if (!variational_formulation)
-			throw std::runtime_error("polyfem::State is varform-only; use polyfem::legacy::State for " + formulation + ".");
+		{
+			if (args.value("/space/remesh/enabled"_json_pointer, false))
+				log_and_throw_error("space/remesh/enabled requests deprecated in-timestep dynamics remeshing, which is no longer supported. MMG shape-optimization remeshing is separate and does not transfer dynamic state.");
+			std::string features;
+			for (const auto &path : {"/contact/enabled", "/contact/periodic", "/boundary_conditions/periodic", "/constraints/macro_displacement_gradient", "/constraints/hard", "/constraints/soft", "/constraints/zero_mean", "/time"})
+			{
+				const json::json_pointer key(path);
+				if (args.contains(key) && !args.at(key).is_null())
+					features += std::string(" ") + path + "=" + args.at(key).dump();
+			}
+			throw std::runtime_error("Unsupported configuration for formulation " + formulation + "; configured features:" + features);
+		}
 
 		logger().info("Using variational formulation: {}", variational_formulation->name());
 		args["contact"]["_dhat_was_explicit"] = contact_dhat_was_explicit;

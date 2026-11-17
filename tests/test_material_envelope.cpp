@@ -12,7 +12,8 @@
 
 #include <polyfem/assembler/AssemblerUtils.hpp>
 #include <polyfem/solver/forms/ElasticForm.hpp>
-#include <polyfem/legacy/State.hpp>
+#include <polyfem/State.hpp>
+#include "VarFormTestAccess.hpp"
 #include <polyfem/utils/Logger.hpp>
 
 #include <finitediff.hpp>
@@ -32,7 +33,6 @@
 using namespace polyfem;
 using namespace polyfem::assembler;
 using namespace polyfem::solver;
-using polyfem::legacy::State;
 
 namespace
 {
@@ -130,21 +130,24 @@ namespace
 		Eigen::MatrixXd V;
 		Eigen::MatrixXi T;
 		cube_mesh(V, T);
-		f.state->load_mesh(V, T);
-		f.state->build_basis();
-		f.n = f.state->n_bases;
+		f.state->set_mesh(V, T);
+		auto formulation = std::dynamic_pointer_cast<varform::ElasticVarForm>(f.state->variational_formulation);
+		REQUIRE(formulation);
+		test::VarFormTestAccess::prepare(*formulation);
+		auto data = test::VarFormTestAccess::elastic_form_data(*formulation);
+		f.n = data.space.n_bases;
 		REQUIRE(f.n == 8);
 
 		f.assembler = AssemblerUtils::make_assembler(law.params["type"].get<std::string>());
-		f.state->set_materials(*f.assembler);
+		test::VarFormTestAccess::set_materials(*formulation, *f.assembler);
 
 		f.form = std::make_unique<ElasticForm>(
-			f.state->n_bases, f.state->bases, f.state->geom_bases(), *f.assembler,
-			f.state->ass_vals_cache, /*t=*/0.0, /*dt=*/1.0, /*is_volume=*/true);
+			f.n, data.bases, data.space.geometry_basis_list(), *f.assembler,
+			data.assembly_cache, /*t=*/0.0, /*dt=*/1.0, /*is_volume=*/true);
 
 		f.nodes.resize(f.n, 3);
 		for (int i = 0; i < f.n; ++i)
-			f.nodes.row(i) = f.state->mesh_nodes->node_position(i);
+			f.nodes.row(i) = data.space.mesh_nodes->node_position(i);
 		return f;
 	}
 

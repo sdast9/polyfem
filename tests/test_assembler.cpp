@@ -33,7 +33,7 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
-#include <polyfem/legacy/State.hpp>
+
 #include <polyfem/assembler/HGOFiber.hpp>
 
 using namespace polyfem;
@@ -1690,25 +1690,6 @@ TEST_CASE("Simulation initialization owns scalar and fiber snapshots", "[materia
 		old.init(args, false);
 		old.set_mesh(V, F);
 		check(*assembler_of(old), 9);
-	}
-	SECTION("Legacy simulation and reinitialization")
-	{
-		write(1);
-		legacy::State old;
-		old.init(args, false);
-		old.load_mesh(V, F);
-		check(*old.assembler, 1);
-		write(9);
-		legacy::State fresh;
-		fresh.init(args, false);
-		fresh.load_mesh(V, F);
-		check(*fresh.assembler, 9);
-		check(*old.assembler, 1);
-		old.load_mesh(V, F);
-		check(*old.assembler, 1);
-		old.init(args, false);
-		old.load_mesh(V, F);
-		check(*old.assembler, 9);
 	}
 	SECTION("Assembler reused with a new explicit snapshot")
 	{

@@ -2,39 +2,24 @@
 
 ## Status
 
-This document describes the VarForm architecture in the sdast9 fork on `main`,
-reviewed September 5, 2026 after integration of upstream `6c9e7a390`.
+This document describes the fork integration after upstream legacy State removal.
+
 
 The current migration target is:
 
-- preserve unsupported functionality through `polyfem::legacy::State`;
 - make the new forward-simulation path small and understandable;
 - move physics-specific solve and output behavior into VarForms;
-- keep shared FEM, mesh, solver, and assembler code independent of either
-  `State`;
+- keep shared FEM, mesh, solver, and assembler code independent of `State`;
 
 ## Runtime Routing
 
-`src/polyfem/main.cpp` and `app/app.cpp` are the application boundaries between
-the new and legacy paths.
+`src/polyfem/main.cpp` and `app/app.cpp` are the application boundaries.
 
 1. The input JSON is loaded and command-line overrides are applied.
-2. `varform::uses_varform_state(args)` asks `VarFormFactory` whether the setup is
-   supported by the new path.
-3. Supported setups run through `polyfem::State`.
-4. Unsupported setups run through `polyfem::legacy::State`.
+2. Forward simulations run through `polyfem::State`.
+3. `State::init` infers the formulation from the materials and asks
+   `VarFormFactory` to create it, rejecting unsupported configurations.
 
-The routing decision is intentionally temporary. It allows the new path to have
-one coherent design without partially supporting legacy-only features.
-
-Current reasons to select the legacy path include:
-
-- remeshing;
-- periodic-contact configurations outside the supported factory combinations;
-- formulations not represented by a VarForm;
-- forward homogenisation (optimization has separate support checks);
-- unsupported combinations of contact, pressure boundary conditions, and
-  constraints.
 
 ## Ownership Boundaries
 
@@ -89,10 +74,10 @@ Duplicating auxiliary-space bookkeeping in mixed VarForms is intentional. It
 keeps the base class honest: the only universal FE-space assumption is that a
 formulation has at least one primary space.
 
-### `polyfem::legacy::State`
+`mesh/MMGRemesh` remains a shared mesh utility used by optimization remeshing;
+it does not depend on the removed legacy `State` or its remeshing subsystem.
 
-The legacy state is a preserved implementation for functionality that has not
-been migrated. New VarForms and new I/O must not depend on it.
+## Boundary conditions
 
 Optimization now uses `varform::DifferentiableVarForm` and its scalar, linear
 elastic, and nonlinear elastic subclasses. `optimization::OptState` builds and
@@ -101,6 +86,22 @@ validates those forms; `optimization::VarFormDiff` provides differentiation supp
 forward support. Additional checks in `OptState.cpp` reject unsupported choices,
 including nonconstant contact barrier stiffness. Optimization is no longer a
 blanket reason to route through `legacy::State`.
+
+`Problem::setup_bc` selects boundary primitives by kind and FE-space ID. Its
+DOF overload collects Dirichlet constraints, including scalar constraints on a
+pressure FE space. Its grouped overload returns selected primitives by boundary
+tag; cavity selection uses this interface instead of a separate setup function.
+
+`NormalAlignedNeumann` selects follower loads from `pressure_boundary`;
+`PressureCavity` selects `pressure_cavity`. The JSON
+`normal_aligned_neumann_boundary` remains part of ordinary Neumann assembly.
+
+Only nonlinear elasticity requests follower and cavity loads. Scalar, fluid,
+bilaplacian, incompressible-elastic, and operator-splitting forms request their
+Dirichlet and Neumann data. These VarForms log and throw during initialization
+when follower or cavity loads are configured. The factory still uses these
+loads to select nonlinear elasticity where needed.
+
 
 ## Lifecycle
 
@@ -211,8 +212,6 @@ The geometry writer owns:
 - Paraview/HDF5/VTM/PVD serialization;
 - geometry-only fields such as normals, sidesets, and discretization order.
 
-The writer must not depend on `State`, `legacy::State`, or a concrete VarForm
-subclass.
 
 ## Adding a VarForm
 
@@ -246,20 +245,21 @@ The migration needs four complementary kinds of tests:
 - restart tests: verify every transient VarForm can save and resume its own
   time-integrator state.
 
-Direct legacy-versus-VarForm comparisons are useful for a small representative
-set while the migration is active. They should not become a permanent
-requirement after the legacy path is removed.
 
 ## Validation boundaries
 
 Support is formulation-specific. Factory routing and optimization validation are
-the current authorities; unsupported forward cases may use the legacy path,
+the current authorities; unsupported forward cases are rejected,
 whereas unsupported optimization setups are rejected. The historical migration
 TODO list has not been retained as a statement of current failures.
 
 For the dated build and regression status of this fork, see the
 [repository README](../README.md). Targeted semi-implicit checks do not establish
 coverage of every mixed-space, restart, or adjoint configuration.
+- restore and diagnose the disabled 2D homogenization integration test;
+- design state-file naming and restart behavior for VarForms with multiple
+  independent time integrators;
+
 
 ## Multiphysics and remaining boundaries
 

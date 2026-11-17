@@ -16,7 +16,7 @@
 #include <polyfem/optimization/var2sims/ShapeVariableToSimulation.hpp>
 
 #include <polyfem/io/MshWriter.hpp>
-#include <polyfem/mesh/remesh/MMGRemesh.hpp>
+#include <polyfem/mesh/MMGRemesh.hpp>
 
 #include <polysolve/nonlinear/Solver.hpp>
 
@@ -364,15 +364,41 @@ namespace polyfem
 			const std::optional<double> quality_threshold = mode == "scaled_jacobian"
 																? std::optional<double>(args["remeshing"]["trigger"]["scaled_jacobian"]["quality_threshold"].get<double>())
 																: std::nullopt;
+			// A single ordinary FEM entry owns this entire mesh. MMG writes its
+			// current internal coordinates; replaying import preprocessing would
+			// transform/refine that already-baked geometry again on the next round.
+			// Other layouts retain their upstream behavior, not a guessed ownership
+			// or material-label transfer policy.
+			const auto &geometries = state_args[state]["geometry"];
+			int enabled_fem_entries = 0;
+			for (const auto &entry : geometries)
+				if (entry.value("enabled", true) && !entry.value("is_obstacle", false))
+					++enabled_fem_entries;
+			const auto &current_mesh = varforms[state]->get_mesh();
+			bool uniform_body = current_mesh.n_elements() > 0;
+			for (int e = 1; e < current_mesh.n_elements(); ++e)
+				uniform_body = uniform_body && current_mesh.get_body_id(e) == current_mesh.get_body_id(0);
+			const bool baked_single_entry = enabled_fem_entries == 1
+											&& geometries[geometry].value("type", std::string("mesh")) == "mesh"
+											&& geometries[geometry].value("enabled", true) && uniform_body;
+			const int output_body_id = baked_single_entry ? current_mesh.get_body_id(0) : body_id;
 			if (!remesh_and_write(
-					*this, state, body_id,
+					*this, state, output_body_id,
 					remeshed_path, quality_threshold))
 			{
 				logger().error("MMG failed to produce a valid optimization restart mesh.");
 				return EXIT_FAILURE;
 			}
 
-			state_args[state]["geometry"][geometry]["mesh"] = remeshed_path.string();
+			auto &restart_geometry = state_args[state]["geometry"][geometry];
+			restart_geometry["mesh"] = remeshed_path.string();
+			if (baked_single_entry)
+			{
+				restart_geometry["transformation"] = json::object();
+				restart_geometry["unit"] = ""; // already in the state's internal units
+				restart_geometry["advanced"]["normalize_mesh"] = false;
+				restart_geometry["n_refs"] = 0;
+			}
 			logger().info("Restarting optimization from remeshed mesh {}.", remeshed_path.string());
 			++remesh_count;
 		}

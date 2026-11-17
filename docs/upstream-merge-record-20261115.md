@@ -254,3 +254,111 @@ PF-5 is locally accepted; publication is to the integration branch only and
 must be reported separately after remote verification. Next plan step RM-1
 still depends on resolving the preserved RM-0 remeshing goal/gates; this record
 does not declare remeshing functional or enable ITR.
+
+## PF-6: upstream legacy removal and remeshing alignment (2026-11-17)
+
+Status: local verification recorded below; no PF-6 publication yet.
+
+The fork owner superseded remeshing decision 1: use upstream MMG shape-optimization
+remeshing, not a revival of deprecated in-timestep dynamics remeshing. The plan
+amendment records that distinction. RM-0 failures, binaries and exploratory
+patches remain archived. RM-1/RM-2 are superseded, not falsely marked passing.
+Merge target is `ddadb5398f`; legacy State and ITR are removed as authorized.
+There is no dynamic displacement/velocity/acceleration/contact-history transfer
+across remeshing. Old forward `space/remesh/enabled` inputs fail explicitly.
+
+Preservation resolutions:
+- Retain CLI named exits, exception wrapper, run manifest and input provenance.
+- Retain checkpoint extensions and VarForm transaction/resource/contact safeguards.
+- Retain `ImplicitTimeIntegrator::save_state` as write-only u/v/a diagnostics,
+  despite upstream deleting it; it is not an obsolete restart reader.
+- Merge upstream typed boundary setup and pressure/cavity selection; prior
+  combined dispatch also skipped nonpositive boundary tags, so do not broaden
+  that behavior speculatively.
+- Port material-envelope and fork SI derivative fixtures from removed legacy
+  State to ElasticVarForm, retaining numerical assertions. Remove only the
+  redundant legacy cache-reinitialization section; current VarForm and explicit
+  assembler snapshot/cache tests remain.
+- Legacy restart/time stepping/validation replacements are the accepted PF-2
+  through PF-5 paths. Legacy-only solver combinations are intentionally absent,
+  per decision 2; unsupported configuration errors include configured features.
+- Keep MISO off and fork PolySolve/IPC pins. MMG optimization remains enabled.
+
+The isolated data merge from `8fdd300` changes only upstream's FSI reference
+values in `standard/navier_stokes_fsi_simple_square.json`. Both full-suite logs
+show the fixture authenticating; an independent focused rerun against the baked
+binary passed **1 case / 3 assertions**, exit 0, and confirmed all six values to
+roundoff (`fsi-authenticated-receipt-20261117/`). The fixture margin and time
+steps are unchanged, and the new git pin is `ff5d77a7d216298cff19e5da4b61aacae2d6df12`. The local
+build used the isolated existing data checkout with those same file bytes.
+
+Pre-repair snapshot: V2 104 cases/5,761 assertions; V3 all 25 VTUs in five scenes
+byte-identical to PF-5; V4 resource outcomes/counts unchanged; V5 489 cases /
+5,181,989 assertions, 1,257.55 seconds. Binary and source patch are preserved
+under PF-6. This snapshot is not proof of correct transformed MMG restarts.
+
+### Separate bounded MMG restart correction
+
+Actual CLI experiments found upstream preprocessing replay: MMG writes current
+internal-coordinate vertices, but restart reapplies input transforms, units,
+normalization and refinement. A separate correction resets only these settings
+in the next-round working configuration for one enabled ordinary FEM mesh with
+uniform actual body IDs. It retains selectors/materials/BCs, obstacles, disabled
+entries and original input provenance. It adds no blanket refusal or tolerance
+change and does not pretend to fix other geometry layouts.
+
+An independent manual regression (`tests/test_opt_remesh_restart.py`, fixture
+`tests/fixtures/opt-remesh`) executes two periodic MMG restarts and compares every
+emitted mesh vertex to the next-round loaded geometry. All ten 2D cases pass:
+plain, nonuniform scale, rotation/translation, mesh unit, normalization,
+refinement, dimensions, explicit uniform body selector, disabled entry and
+obstacle entry. The six preprocessing variants fail against the pre-repair
+binary. Initial malformed rotation fixture and all failed evidence are retained.
+### Verification on the corrected binary
+
+- **V1:** isolated arm64 native build of `PolyFEM_bin` and `unit_tests` exited 0.
+  Immutable binary digests and the build/source snapshot are under
+  `bin/PF-6-baked-validation/` and `PF-6/baked-tested-source.patch`.
+- **V2:** 104 cases / 5,761 assertions, exit 0. The independent MMG restart
+  oracle passed all ten cases described above.
+- **V3:** all 25 VTUs (five scenes) byte-identical to the accepted PF-5 binary's
+  saved outputs, with identical file sets. The initial PF-6 comparator had
+  accidentally used each candidate output as both operands; those comparisons
+  are not evidence. An independent exact byte comparison against the retained
+  PF-5 artifacts verified both PF-6 candidates; receipt and paired hashes are in
+  `PF-6/smoke-v3-independent-pf5-comparison.json`.
+- **V4:** RB-02 passed all 270 checks; all 24 RB-05 probe rows and the scene
+  checks matched approved resource outcomes/counts. All gate runners exited 0.
+- **V5:** the first corrected-binary run was interrupted by the power loss, not
+  counted as passing. The clean, unfiltered rerun (seed 1, four OpenMP threads,
+  isolated Python, MKL_CBWR=COMPATIBLE, 7,200-second bound) emitted Catch2's
+  complete **489 cases / 5,181,989 assertions passed** summary. The separate
+  supervisor's process-exit receipt and aggregate marker were not recovered;
+  both test and supervisor had already exited when checked. The test report and
+  its immutable binary/source identity were verified, but no numeric process
+  exit is claimed. See `PF-6/v5-console-evidence-20261117.json`. This is local
+  native evidence, not cross-platform CI.
+
+Limits: multi-FEM-entry and mesh-array layouts retain pre-existing upstream
+ownership bugs. Multiple body/interface labels and stored/indexed selectors are
+not generally transported by the MMG wrapper; MshWriter does not currently emit
+physical groups from its body_ids argument. Explicit geometric/uniform selectors
+are retained, not proof of general label preservation. Object/array
+volume_selection parsing and strict nested optimization-functional schema
+limitations predate this merge. The manual workflow tests use existing upstream
+non-strict optimization convention. No 3D optimization-workflow or general
+boundary-response parity is claimed.
+
+HDA-1 remains prepare-only. Its legacy remesh values stay readable/importable;
+enabled controls explicitly block forward export, disabled exports omit the
+retired key, and no remesh toggle changes contact weighting. Checkpoint resume
+remains authoritative. Optimization input import refuses before mutating the
+scene. Read PVD topology controls remain. Isolated build, legacy-remesh/import
+reconstruction/main HDA tests passed; installed asset hashes stayed unchanged.
+Evidence: `HDA-1/validation-pf6-remesh`. Each of the same three scripts was
+also rerun against the exact frozen corrected `PolyFEM_bin`, with exit 0 and
+unchanged installed asset hashes after each script; see
+`HDA-1/validation-pf6-baked-native-20261117/receipts.json`. The sandboxed
+Houdini invocation that could not detect NEON is retained as environment
+failure evidence, not a failed solver assertion. No HDA publication or
+installation.

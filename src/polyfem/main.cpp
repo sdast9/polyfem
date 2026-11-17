@@ -3,7 +3,6 @@
 #include <CLI/CLI.hpp>
 
 #include <polyfem/State.hpp>
-#include <polyfem/legacy/State.hpp>
 #ifdef POLYFEM_WITH_OPTIMIZATION
 #include <polyfem/optimization/OptState.hpp>
 #endif
@@ -17,7 +16,6 @@
 #include <polyfem/io/ResourceIO.hpp>
 #include <polyfem/io/InputLoader.hpp>
 #include <polyfem/io/Checkpoint.hpp>
-#include <polyfem/varforms/VarFormFactory.hpp>
 
 #include <ipc/broad_phase/broad_phase.hpp>
 #include <ipc/utils/logger.hpp>
@@ -112,50 +110,9 @@ int run_forward_simulation(State &state)
 	return EXIT_SUCCESS;
 }
 
-int forward_simulation_with_legacy_state(const std::vector<std::string> &names,
-										 const std::vector<Eigen::MatrixXi> &cells,
-										 const std::vector<Eigen::MatrixXd> &vertices,
-										 json &in_args,
-										 const bool is_strict)
-{
-	legacy::State state;
-	state.init(in_args, is_strict);
-
-	logger().warn("Running forward simulation with legacy state.");
-	state.load_mesh(/*non_conforming=*/false, names, cells, vertices);
-
-	// Mesh was not loaded successfully; load_mesh() logged the error.
-	if (state.mesh == nullptr)
-	{
-		// Cannot proceed without a mesh.
-		return EXIT_FAILURE;
-	}
-
-	state.stats.compute_mesh_stats(*state.mesh);
-
-	state.build_basis();
-
-	state.assemble_rhs();
-	state.assemble_mass_mat();
-
-	Eigen::MatrixXd sol;
-	Eigen::MatrixXd pressure;
-
-	state.solve_problem(sol, pressure);
-
-	state.compute_errors(sol);
-
-	logger().info("total time: {}s", state.timings.total_time());
-
-	state.save_json(sol);
-	state.export_data(sol, pressure);
-
-	return EXIT_SUCCESS;
-}
-
-// The former main: argument parsing and the simulation. Any named failure
-// it throws is reported by main below.
+// Argument parsing and simulation; main below reports named failures.
 static int run(int argc, char **argv)
+
 {
 	using namespace polyfem;
 
@@ -310,14 +267,7 @@ int forward_simulation(const CLI::App &command_line,
 			is_strict, fallback_solver, log_level, continuation);
 	}
 
-	if (varform::uses_varform_state(in_args, resources))
-		return forward_simulation_with_varform_state(resources, source_file, in_args, is_strict);
-
-	if (dynamic_cast<const io::HDF5IO *>(&resources) != nullptr)
-		log_and_throw_error("HDF5 resources are supported only by the non-legacy State.");
-	in_args["root_path"] = resources.describe("");
-
-	return forward_simulation_with_legacy_state({}, {}, {}, in_args, is_strict);
+	return forward_simulation_with_varform_state(resources, source_file, in_args, is_strict);
 }
 
 int forward_simulation(const CLI::App &command_line,
@@ -330,9 +280,6 @@ int forward_simulation(const CLI::App &command_line,
 					   const spdlog::level::level_enum &log_level,
 					   json &in_args)
 {
-	if (!varform::uses_varform_state(in_args, checkpoint.resources()))
-		log_and_throw_error("Checkpoints are supported only by the non-legacy State.");
-
 	json tmp = json::object();
 	if (has_arg(command_line, "log_level"))
 		tmp["/output/log/level"_json_pointer] = int(log_level);
