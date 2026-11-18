@@ -577,3 +577,49 @@ Evidence is under `IPC-3/` in `consumer-build-source.patch`,
 `consumer-validation/`, and `consumer-validation-run/`. The executable
 digests are in `bin/IPC-3-polyfem-validation/`. Publication requires
 owner approval for the toolkit ref followed by PolyFEM.
+
+IPC-3 was published with owner approval on November 18. GitHub verified
+toolkit `50041d99f90dea65a1f37f4a492c4380fcb54c44` before the PolyFEM
+consumer `c7adfffd8207be6b467d3c7c9449a1b3b00bdcf4` on their
+`upstream-merge` branches. Both remote main refs, the four local main
+refs and all 31 installed Houdini asset hashes matched their preflight
+values. See `IPC-3/publication-20261118.json`.
+
+## IPC-4 — HashGrid cell traversal (2026-11-18)
+
+Pin toolkit `4f99f337357b366daf0984ea9c775273403e7e46` with upstream
+`282d4830f0f2a48f741e46ecfc8bfb72ec2b50d5`. The toolkit keeps its checked
+budget immediately before each upstream `detect_cell_pairs` call. Each
+common key is queued once, and the parallel tiles partition its index
+pairs. Two lists emit at most `n0 * n1` pairs per key. One list emits at
+most `n * (n - 1) / 2` because only pairs with the second index greater
+than the first are visited. The filter, AABB test and deduplication can
+only reduce the emissions. The cross-list budget counts checked products
+directly from the original sorted items. The same-list checked sum and
+pre-insertion cell-item budget remain in place.
+
+The isolated macOS arm64 toolkit build, pinned formatter and Python
+binding smoke passed. The focused run passed 20
+cases. The full default toolkit suite passed 466
+cases and 5,811,140 assertions. Six private CCD
+fixtures were unavailable in both IPC-3 and IPC-4.
+
+- **V1:** The isolated PolyFEM build recompiled HashGrid and linked both
+  `PolyFEM_bin` and `unit_tests` with exit 0.
+- **V2:** 50 focused cases and 3,569
+  assertions passed, including MSH, MMG and HDF5 checkpoint/restart.
+- **V3:** All five single-threaded solver histories and 25 VTU files
+  matched IPC-3 exactly.
+- **V4:** RB-02 passed all 270 checks. The 24
+  RB-05 probes matched IPC-3 exactly for exits, estimates, measured
+  counts, candidates, statistics and exceptions. Both resource-limit
+  scenes passed.
+- **V5:** The full default PolyFEM suite passed 509 cases and
+  5,184,365 assertions with seed 1 in 20 minutes
+  24 seconds. The suite and supervisor receipts both record exit 0.
+
+The consumer code change is the toolkit pin. See sibling `IPC-4/` for
+the captured build source, toolkit and consumer reports, gate
+comparisons and receipts. The frozen native executables are under
+`bin/IPC-4-toolkit-validation/` and `bin/IPC-4-polyfem-validation/`.
+Publication requires owner authorization.
