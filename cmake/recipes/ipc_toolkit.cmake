@@ -38,4 +38,4 @@ endif()
 message(STATUS "Third-party: creating target 'ipc::toolkit'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/ipc-toolkit#eec0ff82d2b7a0a9ce27fff0afd7de2c18e57d3a")
+CPMAddPackage("gh:sdast9/ipc-toolkit#8854a705370d3cdd933748268955ca611f0c9491")

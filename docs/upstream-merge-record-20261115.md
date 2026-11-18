@@ -486,3 +486,48 @@ See `PF-8/production-build-source.patch`, `production-build-pins.json`,
 The frozen executables and SHA-256 digests are under
 `bin/PF-8-production-validation/`. PF-8 publication requires owner
 authorization for the data ref followed by its consuming source ref.
+
+## IPC-2: compact candidates and PolyFEM stencil adapters (2026-11-17)
+
+PF-8 publication was verified with data
+`386006a6faee31b1a82e8ae145349bc229a8664e` published before source
+`6ea60259a33c8c3275fb4a003073db445de1f3c8`. Both remote integration refs,
+both repositories' main refs, and the installed Houdini asset digests
+were read back. See `PF-8/publication-20261117.json`.
+
+Toolkit integration commit `8854a705370d3cdd933748268955ca611f0c9491`
+merges upstream `c7ada28baa1ed875ad361f9404c2f7a0ee950efb` into IPC-1.
+The two conflict resolutions retain checked broad-phase accounting and the
+BruteForce pre-allocation budget with upstream's candidate storage.
+The existing budget tests were ported to the new container and typed visitor.
+The toolkit native suite passed 453 cases and 5,802,571 assertions with
+exit 0. The frozen Python binding passed all four independent fork flag
+combinations and candidate-to-stencil numerical parity. The toolkit's
+`docs/upstream-integration-20261117-ipc2.md` records its source audit.
+
+PolyFEM pins the accepted local toolkit revision and uses upstream's
+`VertexVertexStencil`, `EdgeVertexStencil`, `EdgeEdgeStencil`, and
+`FaceVertexStencil` for the four parent coefficient estimates.
+These preserve AUTO classification and existing canonical parent IDs.
+
+- **V1:** Both isolated production targets built with exit 0. The
+  consumer's pinned formatting check passed.
+- **V2:** 63 focused cases and 5,630 assertions passed, including the
+  contact and checkpoint/restart gates.
+- **V3:** All five single-threaded solver histories and all 25 VTUs
+  matched PF-8 exactly.
+- **V4:** RB-02 passed 270 checks. RB-05 matched PF-8 in all 24 probe
+  outcomes and in both resource-limit scenes. All 17 candidate reports
+  kept the same per-type counts. Reported storage changed from 16 to
+  8 bytes per candidate on this build as expected from the upstream
+  representation. The first exact comparison flagged that field.
+  The independent verification checks the exact size change as well as
+  the preserved estimates, measured counts, statistics, and refusals.
+- **V5:** The full native PolyFEM suite passed 509 cases and 5,184,365
+  assertions on seed 1 in 20 minutes 23 seconds with exit 0.
+
+Evidence is under `IPC-2/`, including `consumer-build-source.patch`,
+`consumer-validation/`, `rb05-compact-layout-verification.json`, and
+`consumer-suite/`. The executable digests are in
+`bin/IPC-2-polyfem-validation/`. IPC-2 publication requires owner approval
+for the toolkit ref followed by the consuming PolyFEM ref.

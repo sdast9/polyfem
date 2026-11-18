@@ -1490,7 +1490,7 @@ namespace polyfem::solver
 		double kappa;
 		if (key[0] >= 10)
 		{
-			// RB-21 parent candidate: rebuild the candidate (AUTO distance
+			// RB-21 parent candidate: rebuild its stencil (AUTO distance
 			// type, closest point on the whole primitive). An edge-edge or
 			// vertex-vertex pair is rebuilt in its canonical (sorted) order,
 			// whichever order the build emitted; the estimate is symmetric up
@@ -1500,17 +1500,17 @@ namespace polyfem::solver
 			switch (ipc::ParentContribution::Type(key[0] - 10))
 			{
 			case ipc::ParentContribution::Type::VertexVertex:
-				kappa = estimate_stiffness(ipc::VertexVertexCandidate(id0, id1), key);
+				kappa = estimate_stiffness(ipc::VertexVertexStencil(id0, id1), key);
 				break;
 			case ipc::ParentContribution::Type::EdgeVertex:
-				kappa = estimate_stiffness(ipc::EdgeVertexCandidate(id0, id1), key);
+				kappa = estimate_stiffness(ipc::EdgeVertexStencil(id0, id1), key);
 				break;
 			case ipc::ParentContribution::Type::EdgeEdge:
-				kappa = estimate_stiffness(ipc::EdgeEdgeCandidate(id0, id1), key);
+				kappa = estimate_stiffness(ipc::EdgeEdgeStencil(id0, id1), key);
 				break;
 			case ipc::ParentContribution::Type::FaceVertex:
 			default:
-				kappa = estimate_stiffness(ipc::FaceVertexCandidate(id0, id1), key);
+				kappa = estimate_stiffness(ipc::FaceVertexStencil(id0, id1), key);
 				break;
 			}
 		}
