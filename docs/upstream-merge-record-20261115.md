@@ -423,3 +423,66 @@ independent comparisons under `final-validation/`. The frozen executables,
 their digests and the generated build identity are under
 `bin/PF-7-upstream-format-validation/`.
 PF-7 publication requires owner authorization.
+
+## PF-8: static exact problems and full regression (2026-11-17)
+
+PF-7 was published with owner approval. The verified remote source ref is
+`8092c35d87aa160b8baf0149678dcf53c79bfddf`. The remote and local `main`
+refs and all 31 installed Houdini asset digests matched their pre-push
+values. Evidence is in `PF-7/publication-20261117.json`.
+
+Merge upstream `f974f45ed12acbf0e824a3fa480991d9ec7a7f59` into that base.
+Resolve the data recipe to the fork's merged fixture commit
+`386006a6faee31b1a82e8ae145349bc229a8664e` (upstream data `ab3246ce`).
+The 44 upstream data changes leave the nine fork-specific fixture paths
+intact. In `State.cpp`, insert upstream's time-dependence check before
+the existing run-manifest registration. In `test_problem.cpp`, add the
+upstream static exact-solution case beside the fork's problem tests.
+The unchanged fork policies include checkpoint continuation, the existing
+FEM formats and MMG shape-optimization remeshing.
+
+Adopt upstream's time-independent `Franke`, `FrankeOld`, and `ElasticExact`
+behavior and the corresponding regression references. The build follows the
+recorded production configuration with the accepted IPC-1 source and
+isolated auxiliary fixture paths. Data pin checks include upstream's updated
+pref and polyspline revisions. MMG, optimization, Python, and TBB remain
+enabled. MISO and OpenMP remain off.
+
+- **V1:** Both production targets built with exit 0. The 18 staged C/C++
+  files passed the pinned formatter.
+- **V2:** 142 focused cases and 10,198 assertions passed. The 82-case MSH
+  corpus matches its original outcomes and diagnostics. Both targeted RB-11
+  cases passed. All ten MMG workflow cases passed two restart comparisons
+  each with zero coordinate difference.
+- **V3:** The five one-thread public smokes match PF-7's solver histories.
+  All 25 VTUs are byte-identical.
+- **V4:** All 270 RB-02 checks passed. The 24 RB-05 probe rows and both
+  resource-limit scenes passed against PF-7.
+- **RB-12:** All 30 runs completed. Reanalysis of the retained VTUs extracted
+  30 solutions and compared 75 cross-thread pairs. Within each thread
+  setting each fixture had one solver history, with maximum displacement
+  difference `3.08e-15` and zero numerical violations.
+  Fifty cross-thread pairs had the same history and agreed to within
+  `2.93e-15`. The other 25 pairs, from the quasistatic-semi fixture, had
+  different histories at step 3 (six default-thread iterations and nine
+  serial iterations) and a maximum solution difference of `3.68e-16`.
+  The initial report contained zero displacement comparisons because the
+  isolated runner missed its decoder. The reanalysis checksum matches the
+  frozen binary, and the original solver outputs are retained.
+- **V5:** The full native suite passed 509 cases and 5,184,365 assertions
+  on seed 1 with exit 0. The same process resumed on AC with the lid open
+  after its recorded power pause. The complete Catch2 log and supervisor
+  receipt are in `PF-8/native-suite/`.
+- **V6:** All 31 isolated Houdini scripts passed with the same frozen solver
+  and HDA definitions. The first 20 passes were retained. The next reader test
+  stopped at an absent staged VTU. The continuation copied the verified
+  PF-8 quasistatic smoke to the reader's expected layout and passed all 11
+  remaining tests. Installed asset digests matched their pre-run values
+  throughout. See `hda-complete/receipts.json` and
+  `hda-resume-run/receipt.json`.
+
+See `PF-8/production-build-source.patch`, `production-build-pins.json`,
+`validation/`, `validation-run/`, and `repeat-analysis-receipt.json`.
+The frozen executables and SHA-256 digests are under
+`bin/PF-8-production-validation/`. PF-8 publication requires owner
+authorization for the data ref followed by its consuming source ref.

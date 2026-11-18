@@ -503,6 +503,8 @@ namespace polyfem
 		variational_formulation->init(formulation, units, args, output_dir);
 		args["contact"].erase("_dhat_was_explicit");
 
+		variational_formulation->validate_time_dependence();
+
 		// RB-12: the run manifest, once the effective input is final and the
 		// output directory exists. Written here, before the mesh is read, so
 		// that a run which fails later still leaves its identity behind; the
