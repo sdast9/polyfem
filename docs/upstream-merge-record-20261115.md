@@ -531,3 +531,49 @@ Evidence is under `IPC-2/`, including `consumer-build-source.patch`,
 `consumer-suite/`. The executable digests are in
 `bin/IPC-2-polyfem-validation/`. IPC-2 publication requires owner approval
 for the toolkit ref followed by the consuming PolyFEM ref.
+
+## IPC-3: per-primitive thickness and zero-thickness parity (2026-11-17)
+
+IPC-2 publication was verified with toolkit
+`8854a705370d3cdd933748268955ca611f0c9491` published before PolyFEM
+`b76ecd237ac95cdd569a797673376f40eaff47e5`. Both `main` refs and all
+31 installed Houdini digests matched their pre-push values.
+See `IPC-2/publication-20261117.json`.
+
+Toolkit commit `50041d99f90dea65a1f37f4a492c4380fcb54c44` merges upstream
+`54d58ebcf1f6dd0cf95bcc58afd79839ca603a99` into IPC-2. The candidate
+resolution keeps the fork's budget checks, cleanup and aggregate statistics
+alongside upstream thickness-aware static and swept broad-phase builds.
+The normal builder keeps signed parent construction alongside upstream
+thickness helpers. The consumer pins that toolkit revision and continues
+passing its existing scalar minimum distance.
+
+- **Direct parity:** Both frozen toolkit bindings match all 60 collision
+  records exactly across absent and explicit-zero thickness, including
+  vertex-vertex, edge-vertex, edge-edge, face-vertex and plane-vertex
+  stencils. Omitted, explicit-zero and positive legacy scalar minima
+  and the corresponding collision weights agree.
+- **Toolkit:** 462 cases and 5,808,918 assertions passed with exit 0.
+  The Python smoke passed the two fork collision flags and candidate
+  and stencil parity. See `minimum-distance-parity.json` and
+  `toolkit-tests-run/` under `IPC-3/`.
+- **V1:** Both isolated PolyFEM production targets built with exit 0.
+- **V2:** 43 focused cases and 1,574 assertions passed, including
+  contact and checkpoint/restart.
+- **V3:** All five single-threaded solver histories and all 25 VTUs
+  matched the frozen IPC-2 baseline exactly.
+- **V4:** RB-02 passed 270 checks. All 24 RB-05 rows and both
+  resource-limit scenes matched the IPC-2 outcomes and accounting.
+  An exact raw-report comparison found unordered scale samples and
+  one-ULP energy differences. Eight replays per frozen probe reproduced
+  the same energy pairs on both versions. With the scale multisets
+  compared, every other report value matched. See
+  `rb02-repeat-evidence/verification.json`.
+- **V5:** The full native PolyFEM suite passed 509 cases and 5,184,365
+  assertions on seed 1. Both the suite and its outer supervisor recorded
+  exit 0.
+
+Evidence is under `IPC-3/` in `consumer-build-source.patch`,
+`consumer-validation/`, and `consumer-validation-run/`. The executable
+digests are in `bin/IPC-3-polyfem-validation/`. Publication requires
+owner approval for the toolkit ref followed by PolyFEM.
