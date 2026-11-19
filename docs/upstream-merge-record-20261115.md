@@ -623,3 +623,83 @@ the captured build source, toolkit and consumer reports, gate
 comparisons and receipts. The frozen native executables are under
 `bin/IPC-4-toolkit-validation/` and `bin/IPC-4-polyfem-validation/`.
 Publication requires owner authorization.
+
+IPC-4 publication was verified by GitHub readback. The integration refs
+carried toolkit `4f99f337357b366daf0984ea9c775273403e7e46` and PolyFEM
+`1547f52cf23c2751305496204d84a125fc8f494a`. The protected main refs and 31
+installed Houdini asset hashes matched the IPC-3 baseline. See sibling
+`IPC-4/publication-reconciled-20261118.json`.
+
+## IPC-5 — Eigen ABI and codimensional filtering (2026-11-18)
+
+The owner selected `IPC_TOOLKIT_WITH_SIMD=ON` for the IPC-5 integration.
+The validated macOS arm64 configuration passes that option explicitly.
+The existing toolkit option also defaults to ON. With this setting, its
+shared Eigen target defines `EIGEN_DONT_VECTORIZE`. The compile commands
+show it in 270 PolyFEM, 31 PolySolve and 105 IPC Toolkit C++ translation
+units.
+
+Pin toolkit `706f55e8ff224478dafe50046c3d628ca508d60c`, whose parents are
+IPC-4 `4f99f337357b366daf0984ea9c775273403e7e46` and upstream
+`7d668025590e20adf58968d7d17104bb7a739a71`. The conflict in
+`src/ipc/candidates/candidates.cpp` takes the upstream vertex-index
+mapping in both codimensional passes. Scoped filter restoration keeps
+the fork's cleanup, statistics and budget guards on the normal and
+exception paths. The upstream Python packaging replaces the previous
+setuptools entry point with scikit-build-core. The candidate OBJ writer
+moves to the I/O module and retains deprecated forwarding wrappers.
+
+- **Toolkit validation.** The pinned formatter passed. The focused
+  resource, collision-filter and Eigen ABI checks passed 18 cases
+  and 377 assertions. The full default suite passed 482 cases and
+  5,811,532 assertions. The Python binding smoke passed. Six private CCD
+  fixtures were unavailable in both IPC-4 and IPC-5.
+- **V1 and V2.** Both isolated consumer configurations built the native
+  solver and test executable. Each passed 50 focused cases and 3,569
+  assertions, including MSH, MMG and HDF5 checkpoint/restart.
+- **V3.** SIMD on matched all five IPC-4 solver histories and all 25 VTUs.
+  SIMD off changed the line search at zero-based Newton iteration 5 in
+  four smokes, first at step 2 in the adaptive scene and step 3 in the
+  other three. The saved V3 stop and its output are retained. The owner
+  authorized further comparison with the solver paths recorded and the
+  existing numerical checks intact. The largest normalized difference
+  in the public-smoke floating arrays was 1.67e-13.
+- **V4.** Both configurations passed all 270 RB-02 checks and matched
+  all 24 IPC-4 RB-05 cases. Both budget-limit scenes passed. The
+  analytical spring probe passed all 25 checks with IPC-4 and both
+  IPC-5 configurations.
+- **V5.** The first runs each recorded one missing-fixture failure in
+  the ESP dolphin-funnel case. Restored the detached worktree's ignored
+  data alias to the accepted `386006a6` fixture pin. The exact case and
+  unfiltered reruns passed with their original inputs and criteria.
+  Both builds passed 509 cases, with 5,184,365 assertions on and
+  5,184,377 off. Both full reruns recorded exit 0.
+- **V6.** SIMD on passed all 31 isolated HDA-1 scripts. SIMD off passed
+  30 with the original animated-obstacle translation failure carried
+  in the combined receipt. On an exact-input replay, the SIMD-off
+  keyed/expression body difference was 3.66e-10 at time 0.5, above the
+  existing 1e-12 limit. IPC-4 and SIMD on measured 2.40e-16 on the
+  same exports.
+
+In the 180 public repeat runs, all trajectories completed. Each build
+recorded the same 310 force-balance passes and 50 failures. The strict
+RB-12 residual comparison found one above-threshold pair with SIMD off
+and two with IPC-4 in four-thread adaptive runs. SIMD on passed that
+comparison. The separate 18-run animated-obstacle study reproduced
+the ordinary replay solutions and recorded matching force-balance flags.
+For SIMD off in that fixture, the keyed/expression differences were
+9.23e-9 of the body displacement scale, 1.44e-9 of the normal resultant
+force scale and 5.38e-14 of the external-work increment scale. Repeats of
+each motion within a build gave identical solutions.
+
+The serial public-smoke timing recorded one observation per scene and
+configuration. It measured 6.16 s in total for IPC-4, 6.95 s for SIMD on
+and 6.70 s for SIMD off. The larger timing comparison still requires
+owner-named `test_cases` fixtures and run lengths.
+
+See sibling `IPC-5/CHECKPOINT.md`, `IPC-5/validation-summary.json` and
+`IPC-5/v3/comparison.json` for the build identity, verdicts and timings.
+The retained failures, exact-input replay and physical measurements are
+under `IPC-5/`. The selected binaries are frozen under
+`bin/IPC-5-polyfem-simd-on/`. Publication and release require separate
+owner approval.
