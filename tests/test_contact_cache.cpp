@@ -28,6 +28,25 @@ namespace
 		return ipc::CollisionMesh(vertices, edges);
 	}
 
+	ipc::CollisionMesh make_mixed_mesh()
+	{
+		// One edge-vertex contact and one separate pair of codimensional vertices.
+		Eigen::MatrixXd vertices(5, 2);
+		vertices << -1, 0, 1, 0, 0, .2, 3, 0, 3, .4;
+		Eigen::MatrixXi edges(1, 2);
+		edges << 0, 1;
+		return ipc::CollisionMesh(vertices, edges);
+	}
+
+	void set_mixed_hessian(BarrierContactForm &form)
+	{
+		Eigen::VectorXd diagonal(10);
+		diagonal << 10, 24, 10, 48, 10, 102, 10, 150, 10, 250;
+		form.set_system_hessian_provider([diagonal](const Eigen::VectorXd &, StiffnessMatrix &h) {
+			h = diagonal.asDiagonal().toDenseMatrix().sparseView();
+		});
+	}
+
 	// Only the reference exposes a direct rebuild, bypassing the production
 	// position-cache path entirely. Stiffness/derivatives use the real form.
 	class ReferenceForm : public BarrierContactForm
@@ -36,10 +55,11 @@ namespace
 		ReferenceForm(const ipc::CollisionMesh &mesh, double support, BarrierStiffnessMode mode, const json &options = json::object())
 			: BarrierContactForm(mesh, support, 1., false, false, false, false, false, false,
 								 ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, mode,
-								 options, Eigen::VectorXd::Ones(3))
+								 options, Eigen::VectorXd::Ones(mesh.full_num_vertices()))
 		{
-			set_system_hessian_provider([](const Eigen::VectorXd &, StiffnessMatrix &h) {
-				h.resize(6, 6);
+			const auto ndof = mesh.full_num_vertices() * mesh.dim();
+			set_system_hessian_provider([ndof](const Eigen::VectorXd &, StiffnessMatrix &h) {
+				h.resize(ndof, ndof);
 				h.setIdentity();
 				h *= 100.;
 			});
@@ -181,26 +201,110 @@ TEST_CASE("Contact rebuilds follow candidate and filter lifecycle at unchanged p
 	check(sample(form, mesh, zero), empty);
 }
 
-TEST_CASE("Frozen contact derivatives agree with finite differences after rebuilding", "[contact_cache]")
+TEST_CASE("Semi-implicit assembly retains distinct stiffnesses when candidates change", "[contact_cache][semi_implicit_contact]")
 {
-	auto mesh = make_mesh();
-	ReferenceForm form(mesh, 1., BarrierStiffnessMode::SemiImplicit);
-	form.init(zero);
-	form.refresh_semi_implicit_stiffness(zero, false);
-	const auto center = sample(form, mesh, zero);
+	const double dhat = .75;
+	const double form_weight = 3.;
+	const double trim = 2.;
+	// Rayleigh quotients of the diagonal Hessian along the contact normals
+	// at the snapshot: (-.5, -.5, 1) on the edge/point and (-1, 1) on the pair.
+	const double edge_curvature = (.25 * (24 + 48) + 102) / 1.5;
+	const double pair_curvature = (150 + 250) / 2.;
+	const auto only_edge = [](size_t a, size_t b) { return a < 3 && b < 3; };
+	const auto only_pair = [](size_t a, size_t b) { return a >= 3 && b >= 3; };
+
+	auto mesh = make_mixed_mesh();
+	auto edge_mesh = make_mixed_mesh();
+	auto pair_mesh = make_mixed_mesh();
+	edge_mesh.can_collide = only_edge;
+	pair_mesh.can_collide = only_pair;
+	ReferenceForm form(mesh, dhat, BarrierStiffnessMode::SemiImplicit);
+	ReferenceForm edge(edge_mesh, dhat, BarrierStiffnessMode::Fixed);
+	ReferenceForm pair(pair_mesh, dhat, BarrierStiffnessMode::Fixed);
+	set_mixed_hessian(form);
+	form.set_weight(form_weight);
+	form.set_barrier_stiffness(trim);
+	edge.set_barrier_stiffness(trim * edge_curvature / (dhat * dhat));
+	pair.set_barrier_stiffness(trim * pair_curvature / (dhat * dhat));
+
+	const Eigen::VectorXd origin = Eigen::VectorXd::Zero(10);
+	form.init(origin);
+	form.refresh_semi_implicit_stiffness(origin, false);
+	const auto verify = [&](const Eigen::VectorXd &x, bool include_pair) {
+		form.solution_changed(x);
+		const auto &collisions = form.collision_set();
+		REQUIRE(collisions.ev_collisions.size() == 1);
+		REQUIRE(collisions.vv_collisions.size() == (include_pair ? 1 : 0));
+		CHECK(collisions.ev_collisions[0].stiffness_scale == Catch::Approx(edge_curvature / (dhat * dhat * form_weight)).epsilon(1e-12));
+
+		edge.direct_rebuild(x);
+		auto expected = sample(edge, edge_mesh, x);
+		REQUIRE(expected.stencils.size() == 1);
+		REQUIRE(expected.energy > 0);
+		if (include_pair)
+		{
+			CHECK(collisions.vv_collisions[0].stiffness_scale == Catch::Approx(pair_curvature / (dhat * dhat * form_weight)).epsilon(1e-12));
+			pair.direct_rebuild(x);
+			const auto pair_sample = sample(pair, pair_mesh, x);
+			REQUIRE(pair_sample.stencils.size() == 1);
+			REQUIRE(pair_sample.energy > 0);
+			expected.stencils.insert(expected.stencils.end(), pair_sample.stencils.begin(), pair_sample.stencils.end());
+			std::sort(expected.stencils.begin(), expected.stencils.end());
+			expected.energy += pair_sample.energy;
+			expected.gradient += pair_sample.gradient;
+			expected.hessian += pair_sample.hessian;
+		}
+		check(sample(form, mesh, x), expected);
+	};
+
+	verify(origin, true);
+	Eigen::VectorXd trial = origin;
+	trial[4] = .1; // Move the closest point along the edge without refreshing stiffness.
+	trial[9] = .05;
+	form.line_search_begin(origin, trial);
+	verify(trial, true);
+	form.line_search_end();
+
+	mesh.can_collide = only_edge;
+	form.line_search_begin(origin, trial);
+	verify(trial, false);
+	form.line_search_end();
+
+	mesh.can_collide = [](size_t, size_t) { return true; };
+	verify(trial, true);
+}
+
+TEST_CASE("Frozen contact derivatives agree with finite differences after rebuilding", "[contact_cache][semi_implicit_contact]")
+{
+	const bool mixed = GENERATE(false, true);
+	CAPTURE(mixed);
+	auto mesh = mixed ? make_mixed_mesh() : make_mesh();
+	ReferenceForm form(mesh, mixed ? .75 : 1., BarrierStiffnessMode::SemiImplicit);
+	if (mixed)
+		set_mixed_hessian(form);
+	const int ndof = mesh.full_num_vertices() * mesh.dim();
+	const Eigen::VectorXd origin = Eigen::VectorXd::Zero(ndof);
+	form.init(origin);
+	form.refresh_semi_implicit_stiffness(origin, false);
+	const auto center = sample(form, mesh, origin);
+	REQUIRE(center.stencils.size() == (mixed ? 2 : 1));
 	REQUIRE(center.energy > 0);
-	Eigen::VectorXd fd_gradient(6);
-	Eigen::MatrixXd fd_hessian(6, 6);
+	REQUIRE(center.gradient.squaredNorm() > 0);
+	REQUIRE(center.hessian.squaredNorm() > 0);
+	Eigen::VectorXd fd_gradient(ndof);
+	Eigen::MatrixXd fd_hessian(ndof, ndof);
 	const double step = 1e-6;
-	for (int j = 0; j < 6; ++j)
+	for (int j = 0; j < ndof; ++j)
 	{
-		Eigen::VectorXd x = zero;
+		Eigen::VectorXd x = origin;
 		x[j] += step;
 		form.solution_changed(x);
 		const auto plus = sample(form, mesh, x);
 		x[j] -= 2 * step;
 		form.solution_changed(x);
 		const auto minus = sample(form, mesh, x);
+		REQUIRE(plus.stencils == center.stencils);
+		REQUIRE(minus.stencils == center.stencils);
 		fd_gradient[j] = (plus.energy - minus.energy) / (2 * step);
 		fd_hessian.col(j) = (plus.gradient - minus.gradient) / (2 * step);
 	}
