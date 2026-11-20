@@ -27,16 +27,13 @@
 #include <polyfem/utils/Logger.hpp>
 #include "TestTempPath.hpp"
 #include "VarFormTestAccess.hpp"
+#include "VtuTestUtils.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include "VarFormTestAccess.hpp"
-
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -214,37 +211,8 @@ namespace
 
 	Eigen::MatrixXd read_vtu_field(const std::filesystem::path &path, const std::string &name, const int components)
 	{
-		CAPTURE(path, name);
-		std::ifstream input(path, std::ios::binary);
-		REQUIRE(input.good());
-		const std::string bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-		const std::string marker = "<AppendedData encoding=\"raw\">\n_";
-		const auto marker_pos = bytes.find(marker);
-		REQUIRE(marker_pos != std::string::npos);
-		const auto start = marker_pos + marker.size();
-		const auto metadata = bytes.substr(0, marker_pos);
-		const auto name_pos = metadata.find("Name=\"" + name + "\"");
-		REQUIRE(name_pos != std::string::npos);
-		const auto tag_start = metadata.rfind("<DataArray", name_pos);
-		REQUIRE(tag_start != std::string::npos);
-		const auto tag_end = metadata.find('>', name_pos);
-		REQUIRE(tag_end != std::string::npos);
-		const auto tag = metadata.substr(tag_start, tag_end - tag_start);
-		REQUIRE(tag.find("type=\"Float64\"") != std::string::npos);
-		REQUIRE(tag.find("NumberOfComponents=\"" + std::to_string(components) + "\"") != std::string::npos);
-		const std::string offset_key = "offset=\"";
-		const auto offset_pos = tag.find(offset_key);
-		REQUIRE(offset_pos != std::string::npos);
-		const uint64_t offset = std::stoull(tag.substr(offset_pos + offset_key.size()));
-		REQUIRE(offset <= bytes.size() - start);
-		REQUIRE(sizeof(uint64_t) <= bytes.size() - start - offset);
-		uint64_t size;
-		std::memcpy(&size, bytes.data() + start + offset, sizeof(size));
-		REQUIRE(size <= bytes.size() - start - offset - sizeof(size));
-		REQUIRE(size % (components * sizeof(double)) == 0);
-		Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> values(size / (components * sizeof(double)), components);
-		if (size > 0)
-			std::memcpy(values.data(), bytes.data() + start + offset + sizeof(size), size);
+		const auto values = test::read_vtu_field(path, name);
+		REQUIRE(values.cols() == components);
 		return values;
 	}
 } // namespace

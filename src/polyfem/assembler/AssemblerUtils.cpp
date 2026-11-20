@@ -333,6 +333,10 @@ namespace polyfem
 		{
 			for (auto &it : elastic_material_map_)
 			{
+				// GrowthNeoHookean only accepts 3D bodies. Its dimension check
+				// applies when this element actually selects that material.
+				if (it.first == "GrowthNeoHookean" && params.value("type", "") != it.first)
+					continue;
 				it.second->add_multimaterial(index, params, units, resources);
 			}
 		}

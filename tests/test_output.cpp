@@ -682,20 +682,10 @@ TEST_CASE("PF4 2D volume obstacles export triangle VTU cells", "[pf4][output]")
 	Eigen::MatrixXd solution;
 	state.solve(solution);
 	state.variational_formulation->export_data(solution);
-	std::ifstream file(dir / "result.vtu");
-	REQUIRE(file.is_open());
-	const std::string vtu((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-	const auto name = vtu.find("Name=\"types\"");
-	REQUIRE(name != std::string::npos);
-	const auto begin = vtu.find('>', name);
-	const auto end = vtu.find("</DataArray>", begin);
-	const auto bytes = test::base64_decode(vtu.substr(begin + 1, end - begin - 1));
-	REQUIRE(bytes.size() > 8);
-	std::uint64_t count;
-	std::memcpy(&count, bytes.data(), 8);
-	REQUIRE(count == bytes.size() - 8);
-	REQUIRE(count >= 4); // two simulated and two obstacle triangles
-	for (size_t i = 8; i < bytes.size(); ++i)
-		CHECK(bytes[i] == 5); // VTK_TRIANGLE, never VTK_TETRA (10)
+	const auto types = test::read_vtu_array(dir / "result.vtu", "types");
+	REQUIRE(types.header.find("type=\"UInt8\"") != std::string::npos);
+	REQUIRE(types.payload.size() >= 4); // two simulated and two obstacle triangles
+	for (const auto type : types.payload)
+		CHECK(type == 5); // VTK_TRIANGLE
 	std::filesystem::remove_all(dir);
 }
