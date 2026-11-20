@@ -27,6 +27,8 @@ set(SOURCES
 	FrictionForm.cpp
 	FrictionCheckpoint.hpp
 	FrictionForm.hpp
+	GrowthDissipationForm.cpp
+	GrowthDissipationForm.hpp
 	ContactForm.cpp
 	ContactForm.hpp
 	NormalAdhesionForm.cpp

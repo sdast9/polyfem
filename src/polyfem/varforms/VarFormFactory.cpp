@@ -9,6 +9,7 @@
 #include <polyfem/varforms/OperatorSplittingVarForm.hpp>
 #include <polyfem/varforms/ScalarVarForm.hpp>
 #include <polyfem/varforms/ThermoElasticVarForm.hpp>
+#include <polyfem/varforms/GrowthElasticVarForm.hpp>
 #include <polyfem/varforms/diff/DifferentiableLinearElasticVarForm.hpp>
 #include <polyfem/varforms/diff/DifferentiableNonlinearElasticVarForm.hpp>
 #include <polyfem/varforms/diff/DifferentiableScalarVarForm.hpp>
@@ -133,7 +134,8 @@ namespace polyfem::varform
 
 		if (formulation == "ThermoElasticity")
 			return !is_optimization && !has_constraints;
-
+		if (formulation == "GrowthElasticity")
+			return !is_optimization && !has_constraints;
 		if (formulation == "Stokes")
 			return !is_optimization && !has_contact && !has_constraints;
 		if (formulation == "NavierStokes")
@@ -170,6 +172,8 @@ namespace polyfem::varform
 
 		if (formulation == "ThermoElasticity")
 			return std::make_shared<ThermoElasticVarForm>(resources);
+		if (formulation == "GrowthElasticity")
+			return std::make_shared<GrowthElasticVarForm>(resources);
 		if (formulation == "Stokes")
 			return std::make_shared<StokesVarForm>(resources);
 		if (formulation == "NavierStokes")
