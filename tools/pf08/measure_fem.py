@@ -3,31 +3,24 @@
 Reconstruct F, energy and elastic nodal forces from rest coordinates and saved
 nodal displacements. Never interpret elastic residuals at contact nodes as the
 full residual. Transient forces omit inertia and are labeled accordingly.
-Requires NumPy; supports only the uncompressed inline binary fixture format.
+Requires NumPy and uncompressed binary VTU fixtures.
 """
 import argparse
-import base64
 import json
 from pathlib import Path
-import xml.etree.ElementTree as ET
+import sys
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vtu_binary import DTYPES, read_arrays
 
 
 def arrays(path):
-    root = ET.parse(path).getroot()
-    if root.get('compressor') or root.get('header_type') != 'UInt64':
-        raise ValueError(f'Unsupported VTU: {path}')
     result = {}
-    for a in root.iter('DataArray'):
-        if a.get('format') != 'binary':
-            raise ValueError('Expected binary array')
-        dtype = {'Float64': '<f8', 'Int64': '<i8', 'UInt8': 'u1'}[a.get('type')]
-        payload = base64.b64decode(a.text.strip())
-        if int.from_bytes(payload[:8], 'little') != len(payload)-8:
-            raise ValueError('Invalid byte count')
-        v = np.frombuffer(payload, dtype=dtype, offset=8)
-        nc = int(a.get('NumberOfComponents', 1))
-        result[a.get('Name', 'points')] = v.reshape(-1, nc) if nc > 1 else v
+    for array, payload in read_arrays(path):
+        v = np.frombuffer(payload, dtype=DTYPES[array['type']])
+        nc = int(array.get('NumberOfComponents', 1))
+        result[array.get('Name', 'points')] = v.reshape(-1, nc) if nc > 1 else v
     return result
 
 

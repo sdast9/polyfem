@@ -2,29 +2,23 @@
 """Compare the 'solution' point field of two runs step by step.
 
 usage: compare_vtu.py RUN_A RUN_REF   (run directories under runs/)
-Reads output/step_K.vtu (PolyFEM binary-appended-free base64 VTU, UInt64
-headers, uncompressed). Prints per step: ‖uA-uR‖/‖uR‖, max|uA-uR|, ‖uR‖∞.
+Reads uncompressed binary output/step_K.vtu with UInt64 headers. Prints
+the relative L2 error and maximum absolute error and reference per step.
 """
-import base64, re, sys
+import sys
 from pathlib import Path
 import numpy as np
 
-DT = {'Float64': np.float64, 'Float32': np.float32, 'Int64': np.int64,
-      'Int32': np.int32, 'UInt8': np.uint8, 'UInt64': np.uint64}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vtu_binary import DTYPES, read_arrays
 
 
 def read_field(path, name):
-    text = Path(path).read_text()
-    m = re.search(r'<DataArray[^>]*Name="%s"[^>]*>(.*?)</DataArray>' % re.escape(name), text, re.S)
-    if not m:
-        raise KeyError(f'{name} not in {path}')
-    head = m.group(0)[:m.group(0).index('>')]
-    dtype = DT[re.search(r'type="(\w+)"', head).group(1)]
-    ncomp = int((re.search(r'NumberOfComponents="(\d+)"', head) or [None, 1])[1])
-    raw = base64.b64decode(''.join(m.group(1).split()))
-    nbytes = np.frombuffer(raw[:8], dtype=np.uint64)[0]
-    data = np.frombuffer(raw[8:8 + nbytes], dtype=dtype)
-    return data.reshape(-1, ncomp)
+    for array, payload in read_arrays(path, {name}):
+        ncomp = int(array.get('NumberOfComponents', 1))
+        data = np.frombuffer(payload, dtype=DTYPES[array['type']])
+        return data.reshape(-1, ncomp)
+    raise KeyError(f'{name} not in {path}')
 
 
 def main():

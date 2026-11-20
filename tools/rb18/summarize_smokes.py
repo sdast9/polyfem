@@ -2,8 +2,8 @@
 """Summarize RB-18 smoke endpoints for before/after comparison.
 
 For each scene directory under the given smoke output root, read the last
-``step_N.vtu`` and extract the ``solution`` point array (base64 Float64,
-UInt64 header, uncompressed as PolyFEM writes it). Emit per-scene: number of
+``step_N.vtu`` and extract the ``solution`` point array (Float64 with
+an uncompressed UInt64 header). Emit per-scene: number of
 steps, exit code (from run.log presence of the finish line), max |u|, sum of u,
 and a SHA-256 of the raw solution bytes. With ``--compare`` also print the max
 absolute per-component difference against a previous summary.
@@ -11,7 +11,6 @@ absolute per-component difference against a previous summary.
 This is bounded evidence extraction, not a physical acceptance criterion.
 """
 import argparse
-import base64
 import hashlib
 import json
 import re
@@ -19,20 +18,17 @@ import struct
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vtu_binary import read_arrays
+
 
 def read_solution(vtu: Path):
-    text = vtu.read_text()
-    m = re.search(
-        r'<DataArray[^>]*Name="solution"[^>]*NumberOfComponents="(\d+)"[^>]*format="binary"[^>]*>\s*([A-Za-z0-9+/=]+)',
-        text)
-    if m is None:
-        return None, None
-    ncomp = int(m.group(1))
-    raw = base64.b64decode(m.group(2))
-    (nbytes,) = struct.unpack("<Q", raw[:8])
-    payload = raw[8:8 + nbytes]
-    vals = struct.unpack("<%dd" % (nbytes // 8), payload)
-    return ncomp, vals
+    for array, payload in read_arrays(vtu, {"solution"}):
+        if array.get("type") != "Float64" or len(payload) % 8:
+            raise ValueError(f"Invalid solution array in {vtu}")
+        ncomp = int(array.get("NumberOfComponents", 1))
+        return ncomp, struct.unpack(f"<{len(payload) // 8}d", payload)
+    return None, None
 
 
 def summarize(root: Path):

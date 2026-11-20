@@ -1,16 +1,17 @@
 """Read PF-02 scene logs and saved deformation gradients; never launch a scene.
 
 Usage: python3 tools/pf02/summarize_scenes.py /absolute/evidence
-Requires NumPy; supports uncompressed inline-binary VTU output (UInt64 headers).
+Requires NumPy and uncompressed binary VTU output with UInt64 headers.
 """
-import base64
 import json
 from pathlib import Path
 import re
 import sys
-import xml.etree.ElementTree as ET
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vtu_binary import DTYPES, read_arrays
 
 root = Path(sys.argv[1]).resolve()
 summaries = []
@@ -33,27 +34,14 @@ for record in json.loads((root / 'scene-results.json').read_text()):
     for path in sorted((run / 'output').glob('step_*.vtu'), key=lambda p: int(p.stem.split('_')[-1])):
         tensors = {}
         cells = {}
-        for event, node in ET.iterparse(path, events=('start', 'end')):
-            if event == 'start' and node.tag == 'VTKFile':
-                if node.get('header_type') != 'UInt64' or node.get('compressor'):
-                    raise ValueError(f'Unsupported VTU encoding: {path}')
-            if event != 'end' or node.tag != 'DataArray':
-                continue
-            name = node.get('Name')
-            if name in ('F_1', 'F_2', 'F_3', 'connectivity', 'offsets', 'types'):
-                dtypes = {'Float64': '<f8', 'Int64': '<i8', 'UInt8': 'u1'}
-                if node.get('format') != 'binary' or node.get('type') not in dtypes:
-                    raise ValueError(f'Unsupported array encoding: {path}')
-                payload = base64.b64decode(node.text.strip())
-                size = int.from_bytes(payload[:8], 'little')
-                if size != len(payload) - 8:
-                    raise ValueError(f'Invalid array length: {path}')
-                values = np.frombuffer(payload, dtype=dtypes[node.get('type')], offset=8)
-                if name.startswith('F_'):
-                    tensors[name] = values.reshape(-1, 3)
-                else:
-                    cells[name] = values
-            node.clear()
+        needed = {'F_1', 'F_2', 'F_3', 'connectivity', 'offsets', 'types'}
+        for array, payload in read_arrays(path, needed):
+            name = array['Name']
+            values = np.frombuffer(payload, dtype=DTYPES[array['type']])
+            if name.startswith('F_'):
+                tensors[name] = values.reshape(-1, 3)
+            else:
+                cells[name] = values
         if tensors:
             deformation = np.stack([tensors[f'F_{i}'] for i in (1, 2, 3)], axis=1)
             determinant = np.linalg.det(deformation)
