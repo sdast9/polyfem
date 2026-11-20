@@ -2222,7 +2222,8 @@ TEST_CASE("growth natural configuration assembled derivatives", "[assembler][gro
 	auto fixture = make_synthetic_nonlinear_element(3, 4);
 	const NonLinearAssemblerData data(fixture.vals, 0, 0, fixture.x, fixture.x_prev, fixture.da);
 	const auto grad = growth.assemble_gradient(data);
-	const auto hess = growth.assemble_hessian(data);
+	LocalHessian hess;
+	growth.assemble_hessian(data, hess);
 	const double eps = 1e-6;
 	for (int i = 0; i < fixture.x.size(); ++i)
 	{
