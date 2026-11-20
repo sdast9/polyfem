@@ -635,7 +635,6 @@ namespace polyfem::assembler
 					delF_delU(a, 0) * hessian_temp.template block<dim, dim * dim>(0, 0);
 				for (int k = 1; k < dim; ++k)
 					BaA += delF_delU(a, k) * hessian_temp.template block<dim, dim * dim>(k * dim, 0);
-				BaA *= data.da(p);
 
 				for (int b = 0; b < local_disp.rows(); ++b)
 				{
@@ -643,7 +642,8 @@ namespace polyfem::assembler
 						delF_delU(b, 0) * BaA.template block<dim, dim>(0, 0);
 					for (int k = 1; k < dim; ++k)
 						Kab += delF_delU(b, k) * BaA.template block<dim, dim>(0, k * dim);
-					H.template block<dim, dim>(a * dim, b * dim) += Kab;
+					// Weight the completed block as in the original contraction.
+					H.template block<dim, dim>(a * dim, b * dim) += Kab * data.da(p);
 				}
 			}
 		}
