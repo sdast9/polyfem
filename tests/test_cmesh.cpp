@@ -12,6 +12,7 @@
 #include <polyfem/io/ResourceIO.hpp>
 #include <polyfem/mesh/Obstacle.hpp>
 #include <polyfem/State.hpp>
+#include <polyfem/io/Checkpoint.hpp>
 #include <polyfem/io/InputLoader.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/varforms/VarForm.hpp>
@@ -33,6 +34,7 @@
 #include <iostream>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -1122,6 +1124,137 @@ TEST_CASE("node ids stay per vertex through prepare and checkpoints", "[mesh_tes
 	// Preparing again (as after a shape update) gives the same FE ids.
 	test::VarFormTestAccess::invalidate(form);
 	CHECK(fe_ids() == first);
+}
+
+TEST_CASE("tagged vertex loads survive HDF5 restart without input node ordering", "[mesh_test][checkpoint][point_load]")
+{
+	namespace fs = std::filesystem;
+	using Access = test::VarFormTestAccess;
+
+	const std::string scenario = GENERATE("P1", "P4", "mixed P1/P4", "nonconforming P1");
+	CAPTURE(scenario);
+	const bool nonconforming = scenario == "nonconforming P1";
+	const bool mixed = scenario == "mixed P1/P4";
+	const bool high_order = mixed || scenario == "P4";
+	constexpr double dt = 0.125;
+	const fs::path output = test::unique_temp_path("polyfem-point-load-restart");
+	io::LoadedInput input = io::load_json_input(std::string(POLYFEM_DATA_DIR) + "/standard/laplace_nodal_neumann.json");
+	json args = input.config;
+	auto common_resources = utils::apply_common_params(args, *input.resources);
+	const io::ResourceIO &resources = common_resources ? *common_resources : *input.resources;
+	args.erase("tests");
+	args["/geometry/n_refs"_json_pointer] = 0;
+	args["/space/discr_order"_json_pointer] = high_order ? 4 : 1;
+	if (mixed)
+	{
+		args["/geometry/volume_selection"_json_pointer] = {{"axis", "x"}, {"relative", true}, {"position", 0.5}, {"id", 4}};
+		args["/space/discr_order"_json_pointer] = json::array({{{"id", 4}, {"order", 4}}});
+	}
+	args["time"] = {{"dt", dt}, {"time_steps", 2}, {"integrator", "ImplicitEuler"}};
+	args["/boundary_conditions/rhs"_json_pointer] = 0;
+	args["output"] = {
+		{"advanced", {{"save_time_sequence", false}}},
+		{"checkpoint", {{"path", "point-{:d}.hdf5"}}},
+	};
+	args["/output/directory"_json_pointer] = (output / "loaded").string();
+	args["/output/log/level"_json_pointer] = "error";
+	json zero = args;
+	zero["/boundary_conditions/nodal_neumann_boundary/value"_json_pointer] = 0;
+	zero["/output/directory"_json_pointer] = (output / "zero").string();
+
+	State fresh, fresh_zero;
+	fresh.init(args, resources, true);
+	fresh_zero.init(zero, resources, true);
+	const auto load = [&](State &state) {
+		state.set_max_threads(1);
+		state.load_mesh(nonconforming);
+		Access::prepare(*state.variational_formulation);
+	};
+	load(fresh);
+	load(fresh_zero);
+
+	const auto vertex_is_selected = [](const mesh::Mesh &mesh, const RowVectorNd &point) {
+		RowVectorNd min, max;
+		mesh.bounding_box(min, max);
+		return point(0) == max(0);
+	};
+	const auto load_by_vertex = [&](const State &state, const State &control, const double time) {
+		const auto &form = *state.variational_formulation;
+		const auto &mesh = Access::mesh(form);
+		CHECK(mesh.is_conforming() == !nonconforming);
+		const auto &space = Access::scalar_space(form);
+		CHECK(space.disc_orders.minCoeff() == (scenario == "P4" ? 4 : 1));
+		CHECK(space.disc_orders.maxCoeff() == (high_order ? 4 : 1));
+		CHECK((space.space_in_node_to_node.size() == 0) == (high_order || nonconforming));
+		REQUIRE(space.mesh_nodes != nullptr);
+		const auto &nodes = *space.mesh_nodes;
+		REQUIRE(nodes.n_nodes() == space.ndof());
+		const Eigen::VectorXd delta = Access::scalar_boundary_load(form, time)
+									  - Access::scalar_boundary_load(*control.variational_formulation, time);
+		REQUIRE(delta.size() == nodes.n_nodes());
+		std::map<std::array<double, 3>, std::pair<int, double>> by_position;
+		int selected = 0, edge_nodes = 0, cell_nodes = 0;
+		for (int n = 0; n < nodes.n_nodes(); ++n)
+		{
+			const int primitive = nodes.node_to_primitive()[n];
+			const bool vertex = nodes.is_vertex_node(primitive);
+			const RowVectorNd position = nodes.node_position(n);
+			const bool tagged = vertex && vertex_is_selected(mesh, position);
+			CAPTURE(n, position);
+			CHECK(space.node_tag(n) == (tagged ? 2 : -1));
+			CHECK(delta(n) == (tagged ? 1 + position(0) + position(1) + position(2) : 0));
+			if (vertex)
+				CHECK(by_position.emplace(std::array{position(0), position(1), position(2)},
+										  std::pair{space.node_tag(n), delta(n)})
+						  .second);
+			selected += tagged;
+			edge_nodes += nodes.is_edge_node(primitive);
+			cell_nodes += nodes.is_cell_node(primitive);
+		}
+		CHECK(selected == 4);
+		if (high_order)
+		{
+			CHECK(edge_nodes > 0);
+			CHECK(cell_nodes > 0);
+		}
+		return by_position;
+	};
+	const auto original = load_by_vertex(fresh, fresh_zero, dt);
+	Eigen::MatrixXd continuous, continuous_zero;
+	fresh.solve(continuous);
+	fresh_zero.solve(continuous_zero);
+	REQUIRE((continuous - continuous_zero).norm() > 0);
+
+	const io::CheckpointReader saved(output / "loaded/point-1.hdf5");
+	const io::CheckpointReader saved_zero(output / "zero/point-1.hdf5");
+	REQUIRE(saved.metadata().time == dt);
+	REQUIRE(saved.metadata().remaining_steps == 1);
+	const auto stored = saved.read_mesh("/checkpoint/meshes/active", nonconforming);
+	REQUIRE(stored->has_node_ids());
+	REQUIRE(stored->n_vertices() == original.size());
+	for (int v = 0; v < stored->n_vertices(); ++v)
+	{
+		const RowVectorNd position = stored->point(v);
+		const auto saved_tag = original.find({position(0), position(1), position(2)});
+		REQUIRE(saved_tag != original.end());
+		CHECK(stored->get_node_id(v) == saved_tag->second.first);
+	}
+
+	const auto resume = [&](State &state, const io::CheckpointReader &checkpoint, const fs::path &folder) {
+		json continuation = checkpoint.config();
+		continuation["/output/directory"_json_pointer] = (output / folder).string();
+		state.init(continuation, checkpoint, true);
+		load(state);
+	};
+	State resumed, resumed_zero;
+	resume(resumed, saved, "resume");
+	resume(resumed_zero, saved_zero, "resume-zero");
+	CHECK(load_by_vertex(resumed, resumed_zero, 2 * dt) == original);
+	Eigen::MatrixXd resumed_solution, resumed_zero_solution;
+	resumed.solve(resumed_solution);
+	resumed_zero.solve(resumed_zero_solution);
+	CHECK(resumed_solution.isApprox(continuous, 1e-12));
+	CHECK(resumed_zero_solution.isApprox(continuous_zero, 1e-12));
 }
 
 TEST_CASE("nodal boundary conditions with higher-order elements", "[mesh_test]")

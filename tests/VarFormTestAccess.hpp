@@ -3,6 +3,7 @@
 #include <polyfem/mesh/Obstacle.hpp>
 #include <polyfem/varforms/BilaplacianVarForm.hpp>
 #include <polyfem/varforms/FluidVarForm.hpp>
+#include <polyfem/varforms/GrowthElasticVarForm.hpp>
 #include <polyfem/varforms/LinearElasticVarForm.hpp>
 #include <polyfem/varforms/NavierStokesFSIVarForm.hpp>
 #include <polyfem/varforms/NonlinearElasticVarForm.hpp>
@@ -138,6 +139,31 @@ namespace polyfem::test
 				*form.mesh_, form.space_, *form.space_.bases, form.boundary_, form.ass_vals_cache_, form.mass_ass_vals_cache_,
 				form.mass_, form.rhs_, *form.primary_assembler_, *form.mass_assembler_,
 				*form.problem, form.rhs_assembler_, form.elastic_boundary_samples(), form.avg_mass_};
+		}
+
+		static const varform::FESpace &scalar_space(const varform::VarForm &form)
+		{
+			return dynamic_cast<const varform::ScalarVarForm &>(form).space_;
+		}
+
+		static const varform::FESpace &growth_space(const varform::GrowthElasticVarForm &form)
+		{
+			return form.growth_space_;
+		}
+
+		static Eigen::VectorXd scalar_boundary_load(const varform::VarForm &form, const double time)
+		{
+			const auto &scalar = dynamic_cast<const varform::ScalarVarForm &>(form);
+			const auto &space = scalar.space_;
+			const auto &boundary = scalar.boundary_;
+			const auto &orders = scalar.mesh_->orders();
+			const int geometry_order = orders.size() == 0 ? 1 : orders.maxCoeff();
+			const QuadratureOrders samples = scalar.n_boundary_samples(
+				space.disc_orders.maxCoeff(), space.disc_ordersq.maxCoeff(), geometry_order);
+			Eigen::MatrixXd rhs = Eigen::MatrixXd::Zero(space.ndof(), 1);
+			scalar.rhs_assembler_->set_bc(boundary.local_boundary, boundary.boundary_nodes, samples,
+										  boundary.local_neumann_boundary, rhs, Eigen::MatrixXd(), time);
+			return rhs.col(0);
 		}
 
 		static void build_collision_mesh(varform::ElasticVarForm &form, ipc::CollisionMesh &collision_mesh)

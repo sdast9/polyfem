@@ -21,12 +21,15 @@
 #include <polyfem/Units.hpp>
 #include <polyfem/io/MatrixIO.hpp>
 #include <polyfem/io/OutputData.hpp>
+#include <polyfem/mesh/MeshNodes.hpp>
 #include <polyfem/utils/ElasticityUtils.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include "VarFormTestAccess.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -203,6 +206,41 @@ namespace
 		return dir;
 	}
 } // namespace
+
+TEST_CASE("mixed growth and displacement spaces tag their own DOFs on shared geometry", "[growth][point_load]")
+{
+	json args = cube_args(write_cube_mesh(scratch_dir(), 1), 1.0, 0.0, 1, 1.0, "t");
+	args["materials"].erase("growth_law");
+	args["geometry"][0]["point_selection"] = {{"id", 9}, {"axis", "x"}, {"position", 1 - 1e-6}};
+	args["space"]["discr_order"][1]["order"] = 2;
+	State state;
+	state.set_max_threads(1);
+	state.init(args, true);
+	state.load_mesh();
+	auto &form = dynamic_cast<varform::GrowthElasticVarForm &>(*state.variational_formulation);
+	test::VarFormTestAccess::prepare(form);
+	const auto &displacement = test::VarFormTestAccess::elastic_form_data(form).space;
+	const auto &growth = test::VarFormTestAccess::growth_space(form);
+	CHECK(displacement.geometry == growth.geometry);
+	REQUIRE(displacement.mesh_nodes != nullptr);
+	REQUIRE(growth.mesh_nodes != nullptr);
+	CHECK(displacement.mesh_nodes != growth.mesh_nodes);
+	CHECK(displacement.n_bases < growth.n_bases);
+	for (const auto *space : {&displacement, &growth})
+	{
+		const auto &nodes = *space->mesh_nodes;
+		REQUIRE(nodes.n_nodes() == space->n_bases);
+		int selected = 0;
+		for (int n = 0; n < nodes.n_nodes(); ++n)
+		{
+			const bool tagged = nodes.is_vertex_node(nodes.node_to_primitive()[n])
+								&& nodes.node_position(n)(0) == 1;
+			CHECK(space->node_tag(n) == (tagged ? 9 : -1));
+			selected += tagged;
+		}
+		CHECK(selected == 4);
+	}
+}
 
 TEST_CASE("growth_law_off_keeps_prescribed_mode", "[growth][growth_law]")
 {

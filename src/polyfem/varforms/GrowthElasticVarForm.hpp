@@ -45,6 +45,8 @@ namespace polyfem::varform
 	/// Exported stresses are those of the grown material.
 	class GrowthElasticVarForm : public NonlinearElasticVarForm
 	{
+		friend class polyfem::test::VarFormTestAccess;
+
 	public:
 		using NonlinearElasticVarForm::NonlinearElasticVarForm;
 		std::string name() const override { return "GrowthElastic"; }
