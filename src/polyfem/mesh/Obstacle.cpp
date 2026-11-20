@@ -23,6 +23,7 @@ namespace polyfem
 		{
 			dim_ = 0;
 			v_.resize(0, 0);
+			codim_v_.resize(0);
 			f_.resize(0, 0);
 			e_.resize(0, 0);
 			tets_.resize(0, 0);
@@ -47,7 +48,12 @@ namespace polyfem
 			const Eigen::MatrixXi &tets)
 		{
 			if (vertices.size() == 0)
+			{
+				// Keep one (empty) entry per obstacle so that endings_ stays aligned
+				// with displacements_.
+				endings_.push_back(v_.rows());
 				return;
+			}
 
 			if (tets.size() && (tets.cols() == 3 || tets.cols() == 4))
 			{
@@ -119,15 +125,15 @@ namespace polyfem
 			const io::ResourceIO &resources,
 			const Eigen::MatrixXi &tets)
 		{
-			append_mesh(vertices, codim_vertices, codim_edges, faces, tets);
-
 			// const json::operator[] past the end of an array is undefined behaviour
+			const int dim = dim_ > 0 ? dim_ : vertices.cols();
 			const json &value = displacement.at("value");
-			if (!value.is_array() || value.size() < dim_)
-				log_and_throw_error("Obstacle displacement value {} needs {} components", value.dump(), dim_);
+			if (!value.is_array() || value.size() < dim)
+				log_and_throw_error("Obstacle displacement value {} needs {} components", value.dump(), dim);
 
+			append_mesh(vertices, codim_vertices, codim_edges, faces, tets);
 			displacements_.emplace_back();
-			for (size_t d = 0; d < dim_; ++d)
+			for (int d = 0; d < dim; ++d)
 				displacements_.back().value[d].init(value[d], resources);
 
 			if (displacement.contains("interpolation"))
@@ -152,6 +158,10 @@ namespace polyfem
 		{
 			if (vertices.size() == 0 || vertices[0].size() == 0)
 				return;
+			for (size_t i = 1; i < vertices.size(); ++i)
+				if (vertices[i].rows() != vertices[0].rows() || vertices[i].cols() != vertices[0].cols())
+					log_and_throw_error("Obstacle mesh sequence: frame {} has {}x{} vertices, the first frame has {}x{}.",
+										i, vertices[i].rows(), vertices[i].cols(), vertices[0].rows(), vertices[0].cols());
 
 			append_mesh(vertices[0], codim_vertices, codim_edges, faces, tets);
 
@@ -170,6 +180,8 @@ namespace polyfem
 				displacements_.back().value[d].init(
 					[displacements, fps](double x, double y, double z, double t, int index) -> double {
 						const double frame = t * fps;
+						if (frame <= 0)
+							return displacements.front()(index);
 						const double interp = frame - floor(frame);
 						const int frame0 = (int)floor(frame);
 						const int frame1 = (int)ceil(frame);
