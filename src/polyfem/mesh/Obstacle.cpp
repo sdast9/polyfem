@@ -129,7 +129,7 @@ namespace polyfem
 			const int dim = dim_ > 0 ? dim_ : vertices.cols();
 			const json &value = displacement.at("value");
 			if (!value.is_array() || value.size() < dim)
-				log_and_throw_error("Obstacle displacement value {} needs {} components", value.dump(), dim);
+				log_and_throw_error("Obstacle displacement value {} needs {} components, one entry per dimension", value.dump(), dim);
 
 			append_mesh(vertices, codim_vertices, codim_edges, faces, tets);
 			displacements_.emplace_back();

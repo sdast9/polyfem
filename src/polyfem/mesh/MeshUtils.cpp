@@ -1290,7 +1290,7 @@ void polyfem::mesh::validate_surface_mesh(
 	};
 	const auto check_index = [&](const char *what, const int p, const int v) {
 		if (v < 0 || v >= n_vertices)
-			log_and_throw_error("Obstacle {}: {} {} references vertex {} but the file has {} vertices (indices are 0-based here; 1-based in OBJ)", source, what, p, v, n_vertices);
+			log_and_throw_error("Obstacle {} has an invalid vertex index. {} {} references vertex {} but the file has {} vertices (indices are 0-based here and 1-based in OBJ)", source, what, p, v, n_vertices);
 	};
 
 	for (int i = 0; i < codim_vertices.size(); ++i)
