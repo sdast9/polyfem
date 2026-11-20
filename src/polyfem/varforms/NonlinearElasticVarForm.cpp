@@ -975,7 +975,23 @@ namespace polyfem::varform
 		std::string extraction_name = "preconstructed collision proxy";
 
 		const auto extract_default_collision_mesh = [&]() {
-			if (args.at("/space/basis_type"_json_pointer) == "Spline")
+			if (!mesh.is_volume() && args.at("/space/basis_type"_json_pointer) == "Bernstein")
+			{
+				extraction_name = "Bernstein boundary sampling (2D)";
+				io::OutGeometryData::extract_boundary_mesh_2d_sampled(
+					mesh, n_bases - obstacle.n_vertices(), bases, geom_bases, total_local_boundary,
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					0, &extraction_report);
+			}
+			else if (args.at("/space/basis_type"_json_pointer) == "Bernstein")
+			{
+				extraction_name = "Bernstein boundary sampling (3D)";
+				io::OutGeometryData::extract_boundary_mesh_sampled(
+					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
+					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+					0, &extraction_report, &geom_bases);
+			}
+			else if (args.at("/space/basis_type"_json_pointer) == "Spline")
 			{
 				extraction_name = "max_order lattice sampling (spline basis)";
 				io::OutGeometryData::extract_boundary_mesh_sampled(
@@ -1029,10 +1045,26 @@ namespace polyfem::varform
 					 && collision_mesh_args["tessellation_type"] == "max_order")
 			{
 				extraction_name = "max_order lattice sampling";
-				io::OutGeometryData::extract_boundary_mesh_sampled(
-					mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
-					collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
-					utils::json_value<int>(collision_mesh_args, "sampling_order", 0), &extraction_report);
+				if (!mesh.is_volume() && args.at("/space/basis_type"_json_pointer) != "Spline")
+				{
+					int order = utils::json_value<int>(collision_mesh_args, "sampling_order", 0);
+					if (order == 0)
+						for (const auto &lb : total_local_boundary)
+							if (!bases[lb.element_id()].bases.empty())
+								order = std::max(order, bases[lb.element_id()].bases.front().order());
+					polyfem::io::OutGeometryData::extract_boundary_mesh_2d_sampled(
+						mesh, n_bases - obstacle.n_vertices(), bases, geom_bases, total_local_boundary,
+						collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+						order, &extraction_report);
+				}
+				else
+				{
+					io::OutGeometryData::extract_boundary_mesh_sampled(
+						mesh, n_bases - obstacle.n_vertices(), bases, total_local_boundary,
+						collision_vertices, collision_edges, collision_triangles, displacement_map_entries,
+						utils::json_value<int>(collision_mesh_args, "sampling_order", 0), &extraction_report,
+						args.at("/space/basis_type"_json_pointer) == "Bernstein" ? &geom_bases : nullptr);
+				}
 			}
 			else if (collision_mesh_args.contains("tessellation_type")
 					 && collision_mesh_args["tessellation_type"] == "dof")
