@@ -241,6 +241,33 @@ TEST_CASE("the problem sums the generations of all its forms", "[objective_gener
 	CHECK(reduced.objective_generation() == 2); // a rolled-back weight is a change
 }
 
+TEST_CASE("A zero form Hessian still has to match the problem shape", "[assembler][rb22]")
+{
+	class ZeroHessian : public Retunable
+	{
+	public:
+		explicit ZeroHessian(const int size) : size_(size) {}
+		void second_derivative_unweighted(const Eigen::VectorXd &, StiffnessMatrix &h) const override
+		{
+			h.resize(size_, size_);
+		}
+
+	private:
+		int size_;
+	};
+
+	const Eigen::VectorXd x = Eigen::VectorXd::Zero(3);
+	StiffnessMatrix h;
+	FullNLProblem valid({std::make_shared<ZeroHessian>(3)});
+	REQUIRE_NOTHROW(valid.hessian(x, h));
+	CHECK(h.rows() == 3);
+	CHECK(h.cols() == 3);
+	CHECK(h.nonZeros() == 0);
+
+	FullNLProblem invalid({std::make_shared<ZeroHessian>(2)});
+	CHECK_THROWS(invalid.hessian(x, h));
+}
+
 TEST_CASE("a form retuned mid-solve discards the quasi-Newton history", "[objective_generation]")
 {
 	for (const std::string &type : {"L-BFGS", "BFGS"})

@@ -22,6 +22,13 @@ namespace polyfem::assembler
 		use_rest_pose_.add_multimaterial(index, params, "", resources);
 
 		weight_.add_multimaterial(index, params, "", resources);
+
+		if (params.contains("power"))
+			power_.add_multimaterial(index, params, "", resources);
+		else
+			power_.add_multimaterial(index, {{"power", 1.0}}, "", resources);
+
+		normalized_.add_multimaterial(index, params, "", resources);
 	}
 
 	std::map<std::string, Assembler::ParamFunc> AMIPSEnergy::parameters() const
@@ -33,6 +40,14 @@ namespace polyfem::assembler
 		};
 		res["weight"] = [this](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
 			return weight_(p, t, e);
+		};
+
+		res["power"] = [this](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
+			return power_(p, t, e);
+		};
+
+		res["normalized"] = [this](const RowVectorNd &, const RowVectorNd &p, double t, int e) {
+			return normalized_(p, t, e);
 		};
 
 		return res;
@@ -58,20 +73,21 @@ namespace polyfem::assembler
 		}
 
 		const double weight = weight_(p, t, el_id);
-
+		const double power = power_(p, t, el_id);
+		const double normalization = normalized_(p, t, el_id) != 0 ? size() : 1;
 		if (use_rest_pose(p, t, el_id))
 		{
 			if (size() == 2)
-				return weight * autogen::AMIPS2drest_gradient(p, t, el_id, F);
+				return weight * autogen::AMIPS2drest_gradient(p, t, el_id, F, power, normalization);
 			else
-				return weight * autogen::AMIPS3drest_gradient(p, t, el_id, F);
+				return weight * autogen::AMIPS3drest_gradient(p, t, el_id, F, power, normalization);
 		}
 		else
 		{
 			if (size() == 2)
-				return weight * autogen::AMIPS2d_gradient(p, t, el_id, F);
+				return weight * autogen::AMIPS2d_gradient(p, t, el_id, F, power, normalization);
 			else
-				return weight * autogen::AMIPS3d_gradient(p, t, el_id, F);
+				return weight * autogen::AMIPS3d_gradient(p, t, el_id, F, power, normalization);
 		}
 	}
 
@@ -90,20 +106,21 @@ namespace polyfem::assembler
 		}
 
 		const double weight = weight_(p, t, el_id);
-
+		const double power = power_(p, t, el_id);
+		const double normalization = normalized_(p, t, el_id) != 0 ? size() : 1;
 		if (use_rest_pose(p, t, el_id))
 		{
 			if (size() == 2)
-				return weight * autogen::AMIPS2drest_hessian(p, t, el_id, F);
+				return weight * autogen::AMIPS2drest_hessian(p, t, el_id, F, power, normalization);
 			else
-				return weight * autogen::AMIPS3drest_hessian(p, t, el_id, F);
+				return weight * autogen::AMIPS3drest_hessian(p, t, el_id, F, power, normalization);
 		}
 		else
 		{
 			if (size() == 2)
-				return weight * autogen::AMIPS2d_hessian(p, t, el_id, F);
+				return weight * autogen::AMIPS2d_hessian(p, t, el_id, F, power, normalization);
 			else
-				return weight * autogen::AMIPS3d_hessian(p, t, el_id, F);
+				return weight * autogen::AMIPS3d_hessian(p, t, el_id, F, power, normalization);
 		}
 	}
 

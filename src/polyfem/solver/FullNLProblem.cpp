@@ -265,7 +265,12 @@ namespace polyfem::solver
 			// system Hessian and corrupt the reduced projection (RB-22)
 			if (tmp.rows() != hessian.rows() || tmp.cols() != hessian.cols())
 				log_and_throw_error("Form \"{}\" returned a {}x{} Hessian for a problem with {} DOFs", f->name(), tmp.rows(), tmp.cols(), hessian.rows());
-			hessian += tmp;
+			if (tmp.nonZeros() == 0)
+				continue;
+			if (hessian.nonZeros() == 0)
+				hessian.swap(tmp);
+			else
+				hessian += tmp;
 		}
 	}
 

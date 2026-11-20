@@ -73,14 +73,10 @@ namespace polyfem
 				Eigen::MatrixXd rhs_fun;
 
 				const int n_elements = int(bases_.size());
-				ElementAssemblyValues vals;
+				ElementAssemblyValues scratch;
 				for (int e = 0; e < n_elements; ++e)
 				{
-					// vals.compute(e, mesh_.is_volume(), bases_[e], gbases_[e]);
-
-					// compute geometric mapping
-					// evaluate and store basis functions/their gradients at quadrature points
-					ass_vals_cache_.compute(e, mesh_.is_volume(), bases_[e], gbases_[e], vals);
+					const ElementAssemblyValues &vals = ass_vals_cache_.get_or_compute(e, mesh_.is_volume(), bases_[e], gbases_[e], scratch);
 
 					const Quadrature &quadrature = vals.quadrature;
 
@@ -147,7 +143,7 @@ namespace polyfem
 			Eigen::MatrixXd loc_sol;
 
 			const int n_elements = int(bases_.size());
-			ElementAssemblyValues vals;
+			ElementAssemblyValues scratch;
 			Eigen::MatrixXi ids;
 
 			if (bc_method_ == "sample")
@@ -155,8 +151,6 @@ namespace polyfem
 				for (int e = 0; e < n_elements; ++e)
 				{
 					const basis::ElementBases &bs = bases_[e];
-					// vals.compute(e, mesh_.is_volume(), bases_[e], gbases_[e]);
-					ass_vals_cache_.compute(e, mesh_.is_volume(), bases_[e], gbases_[e], vals);
 					ids.resize(1, 1);
 					ids.setConstant(e);
 
@@ -182,8 +176,7 @@ namespace polyfem
 
 				for (int e = 0; e < n_elements; ++e)
 				{
-					// vals.compute(e, mesh_.is_volume(), bases_[e], gbases_[e]);
-					ass_vals_cache_.compute(e, mesh_.is_volume(), bases_[e], gbases_[e], vals);
+					const ElementAssemblyValues &vals = ass_vals_cache_.get_or_compute(e, mesh_.is_volume(), bases_[e], gbases_[e], scratch);
 					ids.resize(vals.val.rows(), 1);
 					ids.setConstant(e);
 
@@ -739,9 +732,7 @@ namespace polyfem
 
 					for (int e = start; e < end; ++e)
 					{
-						ElementAssemblyValues &vals = local_storage.vals;
-						// vals.compute(e, mesh_.is_volume(), bases_[e], gbases_[e]);
-						ass_vals_cache_.compute(e, mesh_.is_volume(), bases_[e], gbases_[e], vals);
+						const ElementAssemblyValues &vals = ass_vals_cache_.get_or_compute(e, mesh_.is_volume(), bases_[e], gbases_[e], local_storage.vals);
 
 						const Quadrature &quadrature = vals.quadrature;
 						const Eigen::VectorXd da = vals.det.array() * quadrature.weights.array();
