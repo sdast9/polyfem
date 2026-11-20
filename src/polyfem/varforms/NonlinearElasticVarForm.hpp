@@ -48,7 +48,8 @@ namespace polyfem::varform
 		void update_barrier_stiffness_for_embedding(const Eigen::VectorXd &solution);
 		bool save_timestep_for_embedding(
 			double time, int step, double dt, const Eigen::MatrixXd &solution,
-			paraviewo::VTMWriter &vtm, const std::string &block_prefix) const;
+			paraviewo::VTMWriter &vtm, const std::string &block_prefix,
+			io::OutGeometryData::WriteJobs *writes = nullptr) const;
 
 		int embedding_ndof() const;
 		const std::vector<std::shared_ptr<solver::Form>> &embedding_forms() const { return forms; }
@@ -73,6 +74,11 @@ namespace polyfem::varform
 		void save_diagnostic_form_state(const std::string &path) const override;
 		void serialize_checkpoint(io::CheckpointWriter &writer, const Eigen::MatrixXd &solution, const io::CheckpointMetadata &metadata) const override;
 		void restore_checkpoint_form_state(const Eigen::MatrixXd &sol);
+
+		io::OutputFieldFunction snapshot_output_fields(
+			const Eigen::MatrixXd &solution, const io::OutGeometryData::ExportOptions &opts,
+			const io::OutputSpace &space, double time, double dt) const override;
+
 		void reset() override;
 		void set_obstacle(mesh::Obstacle &&obstacle) override;
 		void load_mesh(const mesh::Mesh &mesh, const json &args) override;

@@ -13,6 +13,6 @@ include(CPM)
 # and ~80 s to read one 2.4M-point frame). PATCHES is part of CPM's source
 # cache key, so the unpatched cached checkout is left untouched.
 CPMAddPackage(
-    URI "gh:polyfem/paraviewo#1c01aae7ad37020f751eb598c62ae4ae74a3ada7"
+    URI "gh:polyfem/paraviewo#42f6d4e45de1e536851cb96268a5e78f22cbb42a"
     PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/paraviewo-hdf5-row-chunks.patch"
 )

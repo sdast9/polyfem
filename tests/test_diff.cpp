@@ -159,6 +159,7 @@ namespace
 			double eps = compute_relative_eps(derivative, finite_difference);
 			logger().info("{} relative error (vs fd): {:.12f}", prefix, eps);
 		}
+		CAPTURE(test_tag, trial, seed, dt, tol);
 		REQUIRE(derivative == Catch::Approx(finite_difference).epsilon(tol));
 	}
 
@@ -365,7 +366,8 @@ TEST_CASE("shape-walker-2d", EXPENSIVE_TEST_LABEL)
 	constexpr uint64_t SEED = BASE_SEED + 9;
 	constexpr int REPEAT = 3;
 	constexpr double TOL = 2.2e-4;
-	run_test1("walker-shape-opt.json", 1e-7, TOL, 0.0, 1.0, SEED, REPEAT);
+	// A 1e-7 step amplifies the nonlinear forward solve's numerical noise.
+	run_test1("walker-shape-opt.json", 1e-6, TOL, 0.0, 1.0, SEED, REPEAT);
 }
 
 TEST_CASE("shape-contact-force-norm", "[opt_gradient]")
