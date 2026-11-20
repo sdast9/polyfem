@@ -56,6 +56,8 @@ namespace polyfem::solver
 		/// @param t New time
 		/// @param x Solution at time t
 		void update_quantities(const double t, const Eigen::VectorXd &x) override;
+		std::unique_ptr<FormState> save_state() const override;
+		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
 
 		void hessian_wrt_u_prev(
 			const Eigen::VectorXd &u_prev,
@@ -63,6 +65,15 @@ namespace polyfem::solver
 			StiffnessMatrix &hessian) const;
 
 	private:
+		struct State : FormState
+		{
+			double time;
+			Eigen::MatrixXd previous_solution;
+			Eigen::MatrixXd rhs;
+			Eigen::MatrixXd energy_rhs;
+			bool energy_rhs_initialized;
+		};
+
 		double t_;       ///< Current time
 		const int ndof_; ///< Number of degrees of freedom
 		const int n_pressure_bases_;
@@ -81,6 +92,8 @@ namespace polyfem::solver
 		bool is_formulation_mixed_; ///< True if the formulation is mixed
 
 		Eigen::MatrixXd current_rhs_; ///< Cached RHS for the current time
+		Eigen::MatrixXd energy_rhs_;  ///< Loads for the energy at t_, including lagged boundary normals
+		bool energy_rhs_initialized_ = false;
 
 		/// @brief Update current_rhs
 		void update_current_rhs(const Eigen::VectorXd &x);

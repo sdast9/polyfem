@@ -5,6 +5,7 @@
 #include <polyfem/utils/ExpressionValue.hpp>
 #include <polyfem/utils/MaterialFileCache.hpp>
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,10 +46,15 @@ namespace polyfem::assembler
 		double operator()(double x, double y, double z, double t, int index) const;
 
 		void add_multimaterial(const int index, const json &params, const std::string &unit_type, const io::ResourceIO &resources);
+		bool is_constant() const;
+		bool is_time_dependent() const;
 
 	private:
+		void ensure_value_slot(int index, const std::string &unit_type);
 		const std::string param_name_;
 		std::vector<utils::ExpressionValue> param_;
+		std::size_t nonconstant_count_ = 0;
+		std::size_t time_dependent_count_ = 0;
 
 		friend class GenericMatParams;
 	};
@@ -142,6 +148,11 @@ namespace polyfem::assembler
 		Density();
 		virtual ~Density() = default;
 
+		/// Each material entry is independent of coordinates, time and index.
+		/// Densities may differ between materials. Custom evaluators must override these queries.
+		virtual bool is_constant() const;
+		virtual bool is_time_dependent() const;
+
 		virtual void add_multimaterial(const int index, const json &params, const std::string &density_unit, const io::ResourceIO &resources);
 
 		virtual double operator()(double px, double py, double pz, double x, double y, double z, double t, int el_id) const;
@@ -158,6 +169,8 @@ namespace polyfem::assembler
 		void set_rho(const json &rho);
 
 		std::vector<utils::ExpressionValue> rho_;
+		std::size_t nonconstant_count_ = 0;
+		std::size_t time_dependent_count_ = 0;
 	};
 
 	class NoDensity : public Density
@@ -166,6 +179,8 @@ namespace polyfem::assembler
 		using Density::operator();
 
 		NoDensity() {}
+		bool is_constant() const override { return true; }
+		bool is_time_dependent() const override { return false; }
 
 		void add_multimaterial(const int index, const json &params, const std::string &density_unit, const io::ResourceIO &resources) override
 		{
@@ -184,6 +199,8 @@ namespace polyfem::assembler
 		using Density::operator();
 
 		ThermalMassDensity();
+		bool is_constant() const override;
+		bool is_time_dependent() const override;
 
 		void add_multimaterial(const int index, const json &params, const std::string &density_unit, const io::ResourceIO &resources) override;
 		void add_multimaterial(const int index, const json &params, const std::string &density_unit, const std::string &heat_capacity_unit, const io::ResourceIO &resources);

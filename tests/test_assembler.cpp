@@ -6,6 +6,7 @@
 #include <polyfem/assembler/AMIPSEnergy.hpp>
 #include <polyfem/assembler/AssemblyValsCache.hpp>
 #include <polyfem/assembler/MatParams.hpp>
+#include <polyfem/assembler/Mass.hpp>
 #include <polyfem/assembler/NeoHookeanElasticity.hpp>
 #include <polyfem/assembler/GrowthNeoHookean.hpp>
 #include <polyfem/assembler/NeoHookeanElasticityAutodiff.hpp>
@@ -1847,6 +1848,7 @@ TEST_CASE("material parameter helpers", "[assembler][mat_params]")
 	SECTION("generic scalar parameters")
 	{
 		GenericMatParam parameter("coefficient");
+		CHECK_FALSE(parameter.is_constant());
 		parameter.add_multimaterial(0, {{"coefficient", 2.5}}, "", test_resources());
 		parameter.add_multimaterial(1, {{"coefficient", "x + 2*y + t"}}, "", test_resources());
 
@@ -1855,6 +1857,13 @@ TEST_CASE("material parameter helpers", "[assembler][mat_params]")
 		REQUIRE(parameter(point, 5, 0) == Catch::Approx(2.5));
 		REQUIRE(parameter(point, 5, 1) == Catch::Approx(16));
 		REQUIRE(parameter(3, 4, 7, 5, 1) == Catch::Approx(16));
+		CHECK_FALSE(parameter.is_constant());
+		parameter.add_multimaterial(1, {{"coefficient", 3.0}}, "", test_resources());
+		CHECK(parameter.is_constant());
+		CHECK_FALSE(parameter.is_time_dependent());
+		parameter.add_multimaterial(0, {{"coefficient", "t"}}, "", test_resources());
+		CHECK_FALSE(parameter.is_constant());
+		CHECK(parameter.is_time_dependent());
 	}
 
 	SECTION("generic parameter arrays")
@@ -1870,6 +1879,17 @@ TEST_CASE("material parameter helpers", "[assembler][mat_params]")
 		REQUIRE(parameters[1](2, 5, 0, 0, 0) == Catch::Approx(7));
 		REQUIRE(parameters[0](0, 0, 0, 0, 1) == Catch::Approx(3));
 		REQUIRE(parameters[1](0, 0, 0, 0, 1) == Catch::Approx(4));
+		CHECK(parameters[0].is_constant());
+		CHECK_FALSE(parameters[1].is_constant());
+		CHECK_FALSE(parameters[1].is_time_dependent()); // Spatial variation only.
+		parameters.add_multimaterial(0, {{"coefficients", json::array({1.0, 2.0})}}, "", test_resources());
+		CHECK(parameters[1].is_constant());
+		parameters.add_multimaterial(1, {{"coefficients", json::array({"t", 4.0})}}, "", test_resources());
+		CHECK_FALSE(parameters[0].is_constant());
+		CHECK(parameters[0].is_time_dependent());
+		parameters.add_multimaterial(1, {{"coefficients", json::array({3.0, 4.0})}}, "", test_resources());
+		CHECK_FALSE(parameters[0].is_time_dependent());
+		CHECK(parameters[0].is_constant());
 	}
 
 	SECTION("elasticity tensors")
@@ -1963,9 +1983,16 @@ TEST_CASE("density and Lame parameter helpers", "[assembler][mat_params]")
 	SECTION("densities")
 	{
 		Density density;
+		CHECK(density.is_constant());
 		density.add_multimaterial(0, {{"rho", 2.5}}, "", test_resources());
+		CHECK(density.is_constant());
+		density.add_multimaterial(1, {{"density", 3.0}}, "", test_resources());
+		CHECK(density.is_constant()); // Constants may differ between materials.
+		CHECK_FALSE(density.is_time_dependent());
 		density.add_multimaterial(1, {{"density", "x + y"}}, "", test_resources());
+		CHECK_FALSE(density.is_constant());
 		REQUIRE(density(0, 0, 0, 0, 0, 0, 0, 0) == Catch::Approx(2.5));
+		CHECK_FALSE(density.is_time_dependent());
 		REQUIRE(density(0, 0, 0, 2, 3, 0, 0, 1) == Catch::Approx(5));
 
 		Eigen::Vector2d param(0, 0);
@@ -1973,21 +2000,130 @@ TEST_CASE("density and Lame parameter helpers", "[assembler][mat_params]")
 		REQUIRE(density(param, point, 0, 1) == Catch::Approx(5));
 
 		NoDensity no_density;
+		CHECK(no_density.is_constant());
+		CHECK_FALSE(no_density.is_time_dependent());
 		REQUIRE(no_density(param, point, 0, 42) == Catch::Approx(1));
 		REQUIRE_THROWS(no_density.add_multimaterial(0, json::object(), "", test_resources()));
+		density.add_multimaterial(1, {{"rho", 5.0}}, "", test_resources());
+		CHECK(density.is_constant());
+		density.add_multimaterial(0, {{"rho", "t"}}, "", test_resources());
+		CHECK_FALSE(density.is_constant());
+		CHECK(density.is_time_dependent());
+		density.add_multimaterial(0, {{"rho", 2.5}}, "", test_resources());
+		CHECK_FALSE(density.is_time_dependent());
+		CHECK(density.is_constant());
+	}
+
+	SECTION("failed per-element bindings keep values and their metadata")
+	{
+		const json invalid_entries = json::array({7.0, 8.0});
+		const json counts = {3, 3};
+		const auto mismatch = Catch::Matchers::ContainsSubstring("does not describe this mesh");
+		Density density;
+		density.add_multimaterial(0, {{"rho", 5.0}}, "", test_resources());
+		REQUIRE_THROWS_WITH(density.add_multimaterial(
+								0, {{"rho", invalid_entries}, {MATERIAL_ELEMENT_COUNTS, counts}}, "", test_resources()),
+							mismatch);
+		CHECK(density.is_constant());
+		CHECK_FALSE(density.is_time_dependent());
+		CHECK(density(0, 0, 0, 0, 0, 0, 1, 0) == 5);
+
+		GenericMatParam single("k");
+		single.add_multimaterial(0, {{"k", "2+t"}}, "", test_resources());
+		REQUIRE_THROWS_WITH(single.add_multimaterial(
+								0, {{"k", invalid_entries}, {MATERIAL_ELEMENT_COUNTS, counts}}, "", test_resources()),
+							mismatch);
+		CHECK_FALSE(single.is_constant());
+		CHECK(single.is_time_dependent());
+		CHECK(single(0, 0, 0, 1, 0) == 3);
+
+		GenericMatParams terms("k");
+		terms.add_multimaterial(0, {{"k", json::array({"2+t", 3.0})}}, "", test_resources());
+		REQUIRE_THROWS_WITH(terms.add_multimaterial(
+								0, {{"k", json::array({11.0, invalid_entries})}, {MATERIAL_ELEMENT_COUNTS, counts}}, "", test_resources()),
+							mismatch);
+		CHECK(terms[0].is_time_dependent());
+		CHECK(terms[0](0, 0, 0, 1, 0) == 3);
+		CHECK(terms[1].is_constant());
+		CHECK(terms[1](0, 0, 0, 1, 0) == 3);
 	}
 
 	SECTION("thermal mass density")
 	{
 		ThermalMassDensity density;
+		CHECK_FALSE(density.is_constant());
 		density.add_multimaterial(0, {{"rho", 3.0}, {"heat_capacity", 4.0}}, "", "", test_resources());
+		CHECK(density.is_constant());
 		REQUIRE(density(0, 0, 0, 0, 0, 0, 0, 0) == Catch::Approx(12));
+		CHECK_FALSE(density.is_time_dependent());
 
 		RowVectorNd point(3);
 		point << 1, 2, 3;
 		REQUIRE(density.rho(point, 0, 0) == Catch::Approx(3));
 		REQUIRE(density.heat_capacity(point, 0, 0) == Catch::Approx(4));
+		density.add_multimaterial(0, {{"rho", 3.0}, {"heat_capacity", "4+t"}}, "", "", test_resources());
+		CHECK_FALSE(density.is_constant());
+		CHECK(density.is_time_dependent());
+		density.add_multimaterial(0, {{"rho", 3.0}, {"heat_capacity", 4.0}}, "", "", test_resources());
+		CHECK(density.is_constant());
+		CHECK_FALSE(density.is_time_dependent());
 	}
+}
+
+TEST_CASE("mass evaluates constant density once per quadrature loop", "[assembler][constant_inputs]")
+{
+	class CountingDensity : public Density
+	{
+	public:
+		explicit CountingDensity(int dependence) : dependence_(dependence) {}
+		bool is_constant() const override { return dependence_ == 0; }
+		bool is_time_dependent() const override { return dependence_ == 2; }
+		double operator()(double, double, double, double x, double, double, double t, int) const override
+		{
+			++calls;
+			return 3 + (dependence_ == 1 ? x : dependence_ == 2 ? t
+																: 0);
+		}
+		mutable int calls = 0;
+
+	private:
+		int dependence_;
+	};
+	const int dim = GENERATE(2, 3);
+	const int dependence = GENERATE(0, 1, 2);
+	const bool constant = dependence == 0;
+	const bool empty = GENERATE(false, true);
+	CAPTURE(dim, dependence, empty);
+	auto density = std::make_shared<CountingDensity>(dependence);
+	Mass mass(density);
+	mass.set_size(dim);
+	ElementAssemblyValues vals;
+	vals.element_id = 0;
+	vals.val = Eigen::MatrixXd::Zero(3, dim);
+	vals.val.col(0) << 0.1, 0.2, 0.3;
+	vals.quadrature.points = vals.val;
+	vals.basis_values.resize(2);
+	vals.basis_values[0].val = Eigen::Vector3d(0.2, 0.3, 0.5);
+	vals.basis_values[1].val = Eigen::Vector3d(0.8, 0.7, 0.5);
+	QuadratureVector da;
+	if (!empty)
+	{
+		da.resize(3);
+		da << 0.1, 0.2, 0.3;
+	}
+	const double t = 0.4;
+	const auto actual = mass.assemble(LinearAssemblerData(vals, t, 0, 1, da));
+	double expected = 0;
+	for (int q = 0; q < da.size(); ++q)
+		expected += (3 + (dependence == 1 ? vals.val(q, 0) : dependence == 2 ? t
+																			 : 0))
+					* vals.basis_values[0].val(q) * vals.basis_values[1].val(q) * da(q);
+	CHECK(density->calls == (empty ? 0 : constant ? 1
+												  : 3));
+	REQUIRE(actual.size() == dim * dim);
+	for (int i = 0; i < dim; ++i)
+		for (int j = 0; j < dim; ++j)
+			CHECK(actual(i * dim + j) == Catch::Approx(i == j ? expected : 0).margin(1e-15));
 }
 
 TEST_CASE("assembler utility factories and metadata", "[assembler][assembler_utils]")

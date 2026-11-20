@@ -4,6 +4,7 @@
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/Logger.hpp>
 #include <polyfem/utils/StringUtils.hpp> // utils::resolve_path
+#include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -15,6 +16,18 @@ namespace polyfem::assembler
 {
 	namespace
 	{
+		void commit_material_value(utils::ExpressionValue &value, utils::ExpressionValue next,
+								   std::size_t &nonconstant_count, std::size_t &time_dependent_count)
+		{
+			const bool was_nonconstant = !value.is_constant();
+			const bool was_time_dependent = value.is_time_dependent();
+			value = std::move(next);
+			nonconstant_count -= was_nonconstant;
+			nonconstant_count += !value.is_constant();
+			time_dependent_count -= was_time_dependent;
+			time_dependent_count += value.is_time_dependent();
+		}
+
 		double convert_to_lambda(const bool is_volume, const double E, const double nu)
 		{
 			if (is_volume)
@@ -152,19 +165,43 @@ namespace polyfem::assembler
 	{
 	}
 
-	void GenericMatParam::add_multimaterial(const int index, const json &params, const std::string &unit_type, const io::ResourceIO &resources)
+	bool GenericMatParam::is_constant() const
+	{
+		return !param_.empty() && nonconstant_count_ == 0;
+	}
+
+	bool GenericMatParam::is_time_dependent() const
+	{
+		return param_.empty() || time_dependent_count_ != 0;
+	}
+
+	void GenericMatParam::ensure_value_slot(const int index, const std::string &unit_type)
 	{
 		for (int i = param_.size(); i <= index; ++i)
 		{
 			param_.emplace_back();
 			param_.back().set_unit_type(unit_type);
 		}
+	}
 
-		if (params.count(param_name_))
+	void GenericMatParam::add_multimaterial(const int index, const json &params, const std::string &unit_type, const io::ResourceIO &resources)
+	{
+		const auto input = params.find(param_name_);
+		if (input == params.end())
 		{
-			param_[index].init(params[param_name_], resources);
-			bind_material_value(param_[index], params, param_name_);
+			ensure_value_slot(index, unit_type);
+			return;
 		}
+
+		utils::ExpressionValue next;
+		if (index < param_.size())
+			next = param_[index];
+		else
+			next.set_unit_type(unit_type);
+		next.init(*input, resources);
+		bind_material_value(next, params, param_name_);
+		ensure_value_slot(index, unit_type);
+		commit_material_value(param_[index], std::move(next), nonconstant_count_, time_dependent_count_);
 	}
 
 	double GenericMatParam::operator()(const RowVectorNd &p, double t, int index) const
@@ -203,20 +240,24 @@ namespace polyfem::assembler
 				"Material parameter '{}' has {} term(s) on element {} but {} on the elements before it; PolyFEM keeps one term list per law, so every body using this law must give the same number of terms (an implementation limitation, not a material restriction)",
 				param_name_, params_array.size(), index, params_.size());
 
+		std::vector<utils::ExpressionValue> next(params_array.size());
+		for (int i = 0; i < params_array.size(); ++i)
+		{
+			if (!params_.empty() && index < params_[i].param_.size())
+				next[i] = params_[i].param_[index];
+			else
+				next[i].set_unit_type(unit_type);
+			next[i].init(params_array[i], resources);
+			bind_material_value(next[i], params, param_name_ + "_" + std::to_string(i));
+		}
 		if (params_.empty())
 			for (int i = 0; i < params_array.size(); ++i)
 				params_.emplace_back(param_name_ + "_" + std::to_string(i));
-
 		for (int i = 0; i < params_.size(); ++i)
 		{
-			for (int j = params_.at(i).param_.size(); j <= index; ++j)
-			{
-				params_.at(i).param_.emplace_back();
-				params_.at(i).param_.back().set_unit_type(unit_type);
-			}
-
-			params_.at(i).param_[index].init(params_array[i], resources);
-			bind_material_value(params_.at(i).param_[index], params, params_.at(i).param_name_);
+			auto &entry = params_[i];
+			entry.ensure_value_slot(index, unit_type);
+			commit_material_value(entry.param_[index], std::move(next[i]), entry.nonconstant_count_, entry.time_dependent_count_);
 		}
 	}
 
@@ -586,6 +627,16 @@ namespace polyfem::assembler
 		rho_.back().init(1.0);
 	}
 
+	bool Density::is_constant() const
+	{
+		return nonconstant_count_ == 0;
+	}
+
+	bool Density::is_time_dependent() const
+	{
+		return time_dependent_count_ != 0;
+	}
+
 	double Density::operator()(double px, double py, double pz, double x, double y, double z, double t, int el_id) const
 	{
 		assert(rho_.size() == 1 || el_id < rho_.size());
@@ -599,27 +650,33 @@ namespace polyfem::assembler
 
 	void Density::add_multimaterial(const int index, const json &params, const std::string &density_unit, const io::ResourceIO &resources)
 	{
-		for (int i = rho_.size(); i <= index; ++i)
-		{
-			rho_.emplace_back();
-		}
-
+		utils::ExpressionValue next;
+		if (index < rho_.size())
+			next = rho_[index];
 		if (params.count("rho"))
-		{
-			rho_[index].init(params["rho"], resources);
-		}
+			next.init(params["rho"], resources);
 		else if (params.count("density"))
-		{
-			rho_[index].init(params["density"], resources);
-		}
-		bind_material_value(rho_[index], params, "rho");
-
-		rho_[index].set_unit_type(density_unit);
+			next.init(params["density"], resources);
+		bind_material_value(next, params, "rho");
+		next.set_unit_type(density_unit);
+		if (index >= rho_.size())
+			rho_.resize(index + 1);
+		commit_material_value(rho_[index], std::move(next), nonconstant_count_, time_dependent_count_);
 	}
 
 	ThermalMassDensity::ThermalMassDensity()
 		: rho_("rho"), heat_capacity_("heat_capacity")
 	{
+	}
+
+	bool ThermalMassDensity::is_constant() const
+	{
+		return rho_.is_constant() && heat_capacity_.is_constant();
+	}
+
+	bool ThermalMassDensity::is_time_dependent() const
+	{
+		return rho_.is_time_dependent() || heat_capacity_.is_time_dependent();
 	}
 
 	void ThermalMassDensity::add_multimaterial(const int index, const json &params, const std::string &density_unit, const io::ResourceIO &resources)
