@@ -36,6 +36,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
 
 using namespace polyfem;
 
@@ -233,9 +234,10 @@ TEST_CASE("mixed growth and displacement spaces tag their own DOFs on shared geo
 		int selected = 0;
 		for (int n = 0; n < nodes.n_nodes(); ++n)
 		{
-			const bool tagged = nodes.is_vertex_node(nodes.node_to_primitive()[n])
-								&& nodes.node_position(n)(0) == 1;
-			CHECK(space->node_tag(n) == (tagged ? 9 : -1));
+			const bool vertex = nodes.is_vertex_node(nodes.node_to_primitive()[n]);
+			const bool tagged = vertex && nodes.node_position(n)(0) == 1;
+			const int expected_tag = tagged ? 9 : (vertex ? std::numeric_limits<int>::max() : -1);
+			CHECK(space->node_tag(n) == expected_tag);
 			selected += tagged;
 		}
 		CHECK(selected == 4);

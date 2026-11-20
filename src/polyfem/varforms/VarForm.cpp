@@ -204,6 +204,7 @@ namespace polyfem::varform
 		time_callback = nullptr;
 		mesh_ = nullptr;
 		checkpoint_reader_.reset();
+		per_space_point_tags_ = true;
 		output_index_offset_ = 0;
 	}
 
@@ -437,10 +438,30 @@ namespace polyfem::varform
 			logger().debug("Done (took {}s)", timer2.getElapsedTime());
 		}
 
-		// The nodes are complete: give them the point-selection ids of the
-		// mesh (the mesh itself is not changed).
 		if (space.mesh_nodes)
-			space.mesh_nodes->finalize();
+		{
+			if (per_space_point_tags_)
+				space.mesh_nodes->finalize();
+			else
+			{
+				// Old solves indexed point tags using the primary input node map.
+				// An empty map left ID-based loads inactive, even if the HDF5 mesh
+				// retained tags. Rebuild that legacy view for the whole continuation.
+				auto &tags = space.geometry->legacy_checkpoint_node_tags;
+				const auto &input_to_fe = space.space_in_node_to_node;
+				if (build_geom_mapping && mesh.has_node_ids() && input_to_fe.size() > 0)
+				{
+					const int vertices = std::min<int>(mesh.n_vertices(), input_to_fe.size());
+					tags.assign(space.n_bases, -1);
+					for (int v = 0; v < vertices; ++v)
+					{
+						if (input_to_fe(v) >= 0)
+							tags.at(input_to_fe(v)) = mesh.get_node_id(v);
+					}
+				}
+				space.mesh_nodes->restore_legacy_checkpoint_tags(tags);
+			}
+		}
 
 		logger().info("n_bases {}", space.n_bases);
 
@@ -916,6 +937,7 @@ namespace polyfem::varform
 		metadata.dt = dt;
 		metadata.remaining_steps = continuation["time"]["time_steps"];
 		metadata.output_index = global_t;
+		metadata.per_space_point_tags = per_space_point_tags_;
 
 		io::CheckpointWriter writer(resolve_output_path(fmt::format(pattern, global_t)), continuation, metadata);
 		writer.write_mesh("/checkpoint/meshes/active", *mesh_);

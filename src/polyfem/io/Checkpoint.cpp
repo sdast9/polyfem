@@ -87,6 +87,7 @@ namespace polyfem::io
 		write_double("/checkpoint/metadata/dt", metadata.dt);
 		write_long("/checkpoint/metadata/remaining_steps", metadata.remaining_steps);
 		write_long("/checkpoint/metadata/output_index", metadata.output_index);
+		write_long("/checkpoint/metadata/per_space_point_tags", metadata.per_space_point_tags);
 		write_string("/resources/root", "/");
 	}
 
@@ -258,6 +259,11 @@ namespace polyfem::io
 			log_and_throw_error(
 				"Unsupported checkpoint schema {} in {}; expected {}.",
 				metadata_.schema_version, path_.string(), CHECKPOINT_SCHEMA_VERSION);
+		const std::string point_tags = "/checkpoint/metadata/per_space_point_tags";
+		const long per_space_point_tags = exists(point_tags) ? read_long(point_tags) : 0;
+		if (per_space_point_tags != 0 && per_space_point_tags != 1)
+			log_and_throw_error("Checkpoint {} has invalid point-tag metadata.", path_.string());
+		metadata_.per_space_point_tags = per_space_point_tags == 1;
 		if (!(metadata_.dt > 0) || metadata_.step < 0 || metadata_.remaining_steps < 0)
 			log_and_throw_error("Checkpoint {} has invalid temporal metadata.", path_.string());
 	}

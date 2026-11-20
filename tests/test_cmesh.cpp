@@ -1201,7 +1201,8 @@ TEST_CASE("tagged vertex loads survive HDF5 restart without input node ordering"
 			const RowVectorNd position = nodes.node_position(n);
 			const bool tagged = vertex && vertex_is_selected(mesh, position);
 			CAPTURE(n, position);
-			CHECK(space.node_tag(n) == (tagged ? 2 : -1));
+			const int expected_tag = tagged ? 2 : (vertex ? std::numeric_limits<int>::max() : -1);
+			CHECK(space.node_tag(n) == expected_tag);
 			CHECK(delta(n) == (tagged ? 1 + position(0) + position(1) + position(2) : 0));
 			if (vertex)
 				CHECK(by_position.emplace(std::array{position(0), position(1), position(2)},
@@ -1227,6 +1228,7 @@ TEST_CASE("tagged vertex loads survive HDF5 restart without input node ordering"
 
 	const io::CheckpointReader saved(output / "loaded/point-1.hdf5");
 	const io::CheckpointReader saved_zero(output / "zero/point-1.hdf5");
+	CHECK(saved.metadata().per_space_point_tags);
 	REQUIRE(saved.metadata().time == dt);
 	REQUIRE(saved.metadata().remaining_steps == 1);
 	const auto stored = saved.read_mesh("/checkpoint/meshes/active", nonconforming);

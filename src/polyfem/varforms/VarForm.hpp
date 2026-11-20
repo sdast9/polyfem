@@ -89,7 +89,11 @@ namespace polyfem
 				const json &args,
 				const std::string &out_path);
 
-			void set_checkpoint_reader(const io::CheckpointReader &reader) { checkpoint_reader_ = std::cref(reader); }
+			void set_checkpoint_reader(const io::CheckpointReader &reader)
+			{
+				checkpoint_reader_ = std::cref(reader);
+				per_space_point_tags_ = reader.metadata().per_space_point_tags;
+			}
 
 			/// Check time configuration after the derived formulation initializes its problem.
 			virtual void validate_time_dependence() const;
@@ -293,6 +297,7 @@ namespace polyfem
 			std::shared_ptr<utils::MaterialFileCache> material_file_cache_ = std::make_shared<utils::MaterialFileCache>();
 			std::string output_path;
 			std::optional<std::reference_wrapper<const io::CheckpointReader>> checkpoint_reader_;
+			bool per_space_point_tags_ = true;
 
 			std::unique_ptr<mesh::Mesh> mesh_;
 

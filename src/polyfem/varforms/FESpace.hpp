@@ -43,6 +43,9 @@ namespace polyfem::varform
 
 		void init_from_fe_space(const FESpace &space);
 
+		/// Legacy checkpoints used the primary numbering for every space sharing this geometry.
+		std::vector<int> legacy_checkpoint_node_tags;
+
 		void reset()
 		{
 			n_bases = 0;
@@ -51,6 +54,7 @@ namespace polyfem::varform
 			polys.clear();
 			polys_3d.clear();
 			mesh_nodes = nullptr;
+			legacy_checkpoint_node_tags.clear();
 		}
 	};
 

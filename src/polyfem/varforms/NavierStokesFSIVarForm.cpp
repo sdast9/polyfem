@@ -599,6 +599,7 @@ namespace polyfem::varform
 			}
 
 			mesh_ = std::move(fluid_mesh);
+			solid_varform_->per_space_point_tags_ = per_space_point_tags_;
 			solid_varform_->set_mesh(std::move(solid_mesh));
 		}
 

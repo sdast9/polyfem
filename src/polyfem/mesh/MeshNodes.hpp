@@ -79,6 +79,7 @@ namespace polyfem
 				return node_id >= 0 && node_id < int(node_tags_.size()) ? node_tags_[node_id] : -1;
 			}
 			bool has_node_tags() const { return !node_tags_.empty(); }
+			void restore_legacy_checkpoint_tags(const std::vector<int> &tags) { node_tags_ = tags; }
 
 			// Whether a node is on the mesh boundary or not
 			bool is_boundary(int node_id) const { return is_boundary_[node_to_primitive_[node_id]]; }

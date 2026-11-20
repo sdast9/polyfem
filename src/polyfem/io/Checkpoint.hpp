@@ -29,6 +29,7 @@ namespace polyfem::io
 		double dt = 0;
 		long remaining_steps = 0;
 		long output_index = 0;
+		bool per_space_point_tags = true;
 	};
 
 	class CheckpointWriter
