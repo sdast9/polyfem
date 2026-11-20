@@ -38,4 +38,5 @@ endif()
 message(STATUS "Third-party: creating target 'polysolve'")
 
 include(CPM)
-CPMAddPackage("gh:sdast9/polysolve#f175cabe11deea2d3cafb74a6dec21a9e680ef69")
+# Local candidate merge of upstream 2c11064 with the fork safeguards.
+CPMAddPackage("gh:sdast9/polysolve#d6b534de0f1c10a5098edd2a32c0352a6dacaeef")
