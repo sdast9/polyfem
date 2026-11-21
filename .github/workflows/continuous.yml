@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, ci/push-trigger-probe-20261121]
   pull_request:
 
 concurrency:
