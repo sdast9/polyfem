@@ -26,16 +26,16 @@ namespace polyfem::solver::friction_checkpoint
 	{
 		std::vector<Key> result;
 		for (const auto &c : collisions.vv_collisions)
-			result.push_back({{0, long(c.vertex0_id), long(c.vertex1_id), sign(c.weight)}, {}});
+			result.push_back({{{0, long(c.vertex0_id), long(c.vertex1_id), sign(c.weight)}}, {}});
 		for (const auto &c : collisions.ev_collisions)
-			result.push_back({{1, long(c.edge_id), long(c.vertex_id), sign(c.weight)}, {}});
+			result.push_back({{{1, long(c.edge_id), long(c.vertex_id), sign(c.weight)}}, {}});
 		for (const auto &c : collisions.ee_collisions)
-			result.push_back({{2, long(c.edge0_id), long(c.edge1_id), sign(c.weight)}, {}});
+			result.push_back({{{2, long(c.edge0_id), long(c.edge1_id), sign(c.weight)}}, {}});
 		for (const auto &c : collisions.fv_collisions)
-			result.push_back({{3, long(c.face_id), long(c.vertex_id), sign(c.weight)}, {}});
+			result.push_back({{{3, long(c.face_id), long(c.vertex_id), sign(c.weight)}}, {}});
 		for (const auto &c : collisions.pv_collisions)
 		{
-			Key key{{4, long(c.vertex_id), 0, sign(c.weight)}, {}};
+			Key key{{{4, long(c.vertex_id), 0, sign(c.weight)}}, {}};
 			for (int i = 0; i < 4; ++i)
 				key.plane[i] = c.plane.coeffs()(i);
 			result.push_back(key);
