@@ -1205,7 +1205,7 @@ TEST_CASE("tagged vertex loads survive HDF5 restart without input node ordering"
 			CHECK(space.node_tag(n) == expected_tag);
 			CHECK(delta(n) == (tagged ? 1 + position(0) + position(1) + position(2) : 0));
 			if (vertex)
-				CHECK(by_position.emplace(std::array{position(0), position(1), position(2)},
+				CHECK(by_position.emplace(std::array<double, 3>{{position(0), position(1), position(2)}},
 										  std::pair{space.node_tag(n), delta(n)})
 						  .second);
 			selected += tagged;
@@ -1237,7 +1237,7 @@ TEST_CASE("tagged vertex loads survive HDF5 restart without input node ordering"
 	for (int v = 0; v < stored->n_vertices(); ++v)
 	{
 		const RowVectorNd position = stored->point(v);
-		const auto saved_tag = original.find({position(0), position(1), position(2)});
+		const auto saved_tag = original.find(std::array<double, 3>{{position(0), position(1), position(2)}});
 		REQUIRE(saved_tag != original.end());
 		CHECK(stored->get_node_id(v) == saved_tag->second.first);
 	}
