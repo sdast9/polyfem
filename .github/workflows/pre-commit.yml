@@ -3,7 +3,7 @@ name: pre-commit
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, ci/push-trigger-probe-20261121]
 
 jobs:
   pre-commit:
