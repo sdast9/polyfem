@@ -615,24 +615,13 @@ namespace polyfem::varform
 			if (!has_obstacle_rows)
 				return sample.points.rows() == 0 || sample.points.rows() == sampled_values.rows();
 
-			// The obstacle's rows of a node-major DOF field hold field_dim
-			// values per obstacle vertex -- obstacle->ndof() (n_vertices x
-			// mesh dimension) is only that count for a vector field. For the
-			// averaged scalar/tensor fields it sliced the wrong number of
-			// rows: an Eigen assertion in a Debug build, a silently wrong
-			// obstacle row in Release (RB-12 CI stage).
+			// Each obstacle vertex stores the field's component count, which
+			// can differ from the spatial dimension for scalar and tensor fields.
 			const int obstacle_rows = obstacle->n_vertices() * int(sampled_values.cols());
 			sampled_values.conservativeResize(sampled_values.rows() + obstacle->n_vertices(), sampled_values.cols());
-			if (dof_values.rows() >= obstacle->ndof())
-			{
-				const Eigen::MatrixXd obstacle_values =
-					utils::unflatten(dof_values.bottomRows(obstacle->ndof()), sampled_values.cols());
-				if (obstacle_values.rows() == obstacle->n_vertices()
-					&& obstacle_values.cols() == sampled_values.cols())
-					sampled_values.bottomRows(obstacle->n_vertices()) = obstacle_values;
-				else
-					sampled_values.bottomRows(obstacle->n_vertices()).setZero();
-			}
+			if (dof_values.rows() >= obstacle_rows)
+				sampled_values.bottomRows(obstacle->n_vertices()) =
+					utils::unflatten(dof_values.bottomRows(obstacle_rows), sampled_values.cols());
 			else
 				sampled_values.bottomRows(obstacle->n_vertices()).setZero();
 			return true;
