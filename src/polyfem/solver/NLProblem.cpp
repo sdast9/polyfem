@@ -322,7 +322,6 @@ namespace polyfem::solver
 			return;
 		}
 
-		int constraint_size = A.rows();
 		num_penalty_constraints_ = A.rows();
 #ifdef POLYSOLVE_WITH_SPQR
 		SuiteSparseMatrix At = A.transpose();
@@ -349,11 +348,9 @@ namespace polyfem::solver
 
 		fill_cholmod(At, Ac);
 
-		const auto rank = SuiteSparseQR<double>(ordering, tol, econ, &Ac,
-												// outputs
-												&Qc, &Rc, &E, &cc);
+		const auto constraint_size = SuiteSparseQR<double>(ordering, tol, econ, &Ac, &Qc, &Rc, &E, &cc);
 
-		if (!Rc)
+		if (constraint_size < 0 || !Qc || !Rc)
 			log_and_throw_error("Failed to factorize constraints matrix");
 
 		const auto n = Rc->ncol;
@@ -403,17 +400,12 @@ namespace polyfem::solver
 		logger().debug("Computation of Q took: {}", timer.getElapsedTime());
 
 		const Eigen::SparseMatrix<double, Eigen::RowMajor> R = QR.matrixR();
+		const auto constraint_size = QR.rank();
 
 		P_ = QR.colsPermutation();
 #endif
 
-		while (constraint_size > 0)
-		{
-			const StiffnessMatrix tmp = R.row(constraint_size - 1);
-			if (tmp.nonZeros() != 0)
-				break;
-			--constraint_size;
-		}
+		// The QR rank counts independent constraints even when there are more rows in A than DOFs.
 		if (constraint_size != num_penalty_constraints_)
 			logger().warn("Matrix A is not full rank, constraint size: {} instead of {}", constraint_size, num_penalty_constraints_);
 
@@ -435,7 +427,8 @@ namespace polyfem::solver
 		assert(R1_.rows() == constraint_size);
 		assert(R1_.cols() == num_penalty_constraints_);
 
-		assert((Q1_.transpose() * Q2_).norm() < 1e-10);
+		// The bases are trivially orthogonal when either subspace is empty.
+		assert(Q1_.cols() == 0 || Q2_.cols() == 0 || (Q1_.transpose() * Q2_).norm() < 1e-10);
 
 		timer.stop();
 		logger().debug("Getting Q1 Q2, R1 took: {}", timer.getElapsedTime());
@@ -463,11 +456,14 @@ namespace polyfem::solver
 			logger().debug("No free degrees of freedom: every one of the {} DOFs is constrained; the reduced problem is empty", full_size_);
 
 #ifndef NDEBUG
-		StiffnessMatrix test = R.bottomRows(reduced_size_);
-		assert(test.nonZeros() == 0);
+		const StiffnessMatrix dependent_rows = R.bottomRows(R.rows() - constraint_size);
+		assert(dependent_rows.nonZeros() == 0);
 
-		StiffnessMatrix test1 = R1_.row(R1_.rows() - 1);
-		assert(test1.nonZeros() != 0);
+		if (constraint_size > 0)
+		{
+			const StiffnessMatrix last_independent_row = R1_.row(constraint_size - 1);
+			assert(last_independent_row.nonZeros() != 0);
+		}
 #endif
 
 		// assert((Q1_ * R1_ - At * P_).norm() < 1e-10);
