@@ -653,6 +653,7 @@ TEST_CASE("full sim", "[.][full_sim]")
 
 TEST_CASE("PF4 2D volume obstacles export triangle VTU cells", "[pf4][output]")
 {
+	const int obstacle_vertices = GENERATE(3, 4);
 	const auto dir = std::filesystem::current_path() / "DELETE_ME_pf4_obstacle_output";
 	std::filesystem::create_directories(dir);
 	const auto mesh = dir / "square.msh";
@@ -664,13 +665,18 @@ TEST_CASE("PF4 2D volume obstacles export triangle VTU cells", "[pf4][output]")
 	const auto obstacle_mesh = dir / "square.obj";
 	{
 		std::ofstream file(obstacle_mesh);
-		file << "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3\nf 1 3 4\n";
+		file << "v 0 0 0\nv 1 0 0\nv 1 1 0\n";
+		if (obstacle_vertices == 4)
+			file << "v 0 1 0\n";
+		file << "f 1 2 3\n";
+		if (obstacle_vertices == 4)
+			file << "f 1 3 4\n";
 	}
 	json args = {
 		{"geometry", json::array({{{"mesh", mesh.string()}, {"surface_selection", 1}},
-								  {{"mesh", obstacle_mesh.string()}, {"is_obstacle", true}, {"transformation", {{"translation", {3, 0}}}}}})},
+								  {{"mesh", obstacle_mesh.string()}, {"is_obstacle", true}, {"surface_selection", 2}, {"transformation", {{"translation", {3, 0}}}}}})},
 		{"materials", {{"type", "NeoHookean"}, {"E", 1e6}, {"nu", .3}}},
-		{"boundary_conditions", {{"dirichlet_boundary", json::array({{{"id", "all"}, {"value", {0, 0}}}})}}}};
+		{"boundary_conditions", {{"dirichlet_boundary", json::array({{{"id", "all"}, {"value", {"0.125*x", 0}}}})}, {"obstacle_displacements", json::array({{{"id", 2}, {"value", {-0.125, 0.25}}}})}}}};
 	args["/solver/linear/solver"_json_pointer] = "Eigen::SimplicialLDLT";
 	args["/output/directory"_json_pointer] = dir.string();
 	args["/output/paraview/file_name"_json_pointer] = "result.vtu";
@@ -682,10 +688,23 @@ TEST_CASE("PF4 2D volume obstacles export triangle VTU cells", "[pf4][output]")
 	Eigen::MatrixXd solution;
 	state.solve(solution);
 	state.variational_formulation->export_data(solution);
-	const auto types = test::read_vtu_array(dir / "result.vtu", "types");
+	const auto vtu = dir / "result.vtu";
+	const auto types = test::read_vtu_array(vtu, "types");
 	REQUIRE(types.header.find("type=\"UInt8\"") != std::string::npos);
-	REQUIRE(types.payload.size() >= 4); // two simulated and two obstacle triangles
+	REQUIRE(types.payload.size() >= obstacle_vertices); // two simulated triangles and one or two obstacle triangles
 	for (const auto type : types.payload)
 		CHECK(type == 5); // VTK_TRIANGLE
+
+	const auto stress = test::read_vtu_field(vtu, "von_mises_avg");
+	REQUIRE(stress.rows() > obstacle_vertices);
+	CHECK(stress.topRows(stress.rows() - obstacle_vertices).minCoeff() > 0);
+	CHECK(stress.bottomRows(obstacle_vertices).isZero(0));
+	const auto deformation = test::read_vtu_field(vtu, "F_avg_1");
+	REQUIRE(deformation.rows() == stress.rows());
+	CHECK(deformation.bottomRows(obstacle_vertices).isZero(0));
+	const auto displacement = test::read_vtu_field(vtu, "solution");
+	REQUIRE(displacement.rows() == stress.rows());
+	CHECK((displacement.col(0).tail(obstacle_vertices).array() == -0.125).all());
+	CHECK((displacement.col(1).tail(obstacle_vertices).array() == 0.25).all());
 	std::filesystem::remove_all(dir);
 }
