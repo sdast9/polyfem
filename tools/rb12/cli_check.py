@@ -63,6 +63,28 @@ def prepare(scene, directory, edit=None):
     return path
 
 
+def check_mesh_references(config, input_dir, references):
+    expected = {
+        f"/geometry/{i}/mesh": geometry["mesh"]
+        for i, geometry in enumerate(config["geometry"])
+        if "mesh" in geometry
+    }
+    check(expected, "smoke scene has mesh inputs")
+    meshes = [
+        entry for entry in references
+        if entry["pointer"].startswith("/geometry/") and entry["pointer"].endswith("/mesh")
+    ]
+    pointers = sorted(entry["pointer"] for entry in meshes)
+    check(pointers == sorted(expected), f"manifest mesh pointers {pointers}, expected {sorted(expected)}")
+    for entry in meshes:
+        pointer = entry["pointer"]
+        value = expected[pointer]
+        path = (input_dir / value).resolve()
+        check(entry.get("value") == value, f"manifest mesh value at {pointer} is {value}")
+        check(Path(entry["path"]) == path, f"manifest mesh path at {pointer} resolves to {path}")
+        check(entry.get("sha256") == sha256(path), f"manifest mesh at {pointer} has the exact SHA-256 of {path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--binary", type=Path, required=True)
@@ -102,12 +124,12 @@ def main():
         inp = root / "smoke" / "input"
         out = root / "smoke" / "output"
         params = prepare(scene, inp)
+        config = json.loads(params.read_text())
         out.mkdir()
         rc, text = run([str(binary), "--json", "params.json", "-o", str(out), "--log_level", "info", "--max_threads", "1"], inp, out / "run.log", args.timeout)
         check(rc == 0, f"smoke exited {rc}")
         check("total time:" in text, "smoke did not reach 'total time'")
         vtus = [p for p in out.glob("step_*.vtu") if "surf" not in p.name]
-        config = json.loads(params.read_text())
         intended = config["time"]["time_steps"] if "time_steps" in config.get("time", {}) else round(config["time"]["tend"] / config["time"]["dt"])
         check(len(vtus) == intended + 1, f"smoke saved {len(vtus) - 1} steps, intended {intended}")
         manifest_path = out / "run-manifest.json"
@@ -119,10 +141,7 @@ def main():
         check(all(s["outcome"] == "accepted" for s in m["steps"]), "every manifest step accepted")
         check(m["process"]["executable"].get("sha256") == binary_sha, "manifest executable hash is this binary")
         check(m["input"]["file"].get("sha256") == sha256(params), "manifest input file hash")
-        referenced = {Path(f["path"]).name: f["sha256"] for f in m["input"]["referenced_files"]}
-        for asset in inp.iterdir():
-            if asset.suffix in (".mesh", ".obj", ".msh"):
-                check(referenced.get(asset.name) == sha256(asset), f"manifest references {asset.name} with its hash")
+        check_mesh_references(config, inp, m["input"]["referenced_files"])
         check(m["build"] == info, "manifest build identity equals --build_info")
         check(m["process"]["threads"]["effective"] == 1, "manifest effective threads")
         check(m["solver"]["model"].get("form") == "barrier-contact", "manifest model description")
