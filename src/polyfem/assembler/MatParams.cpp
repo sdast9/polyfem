@@ -455,7 +455,10 @@ namespace polyfem::assembler
 	{
 		assert(size_ == 3);
 
-		// from https://www.efunda.com/formulae/solid_mechanics/mat_mechanics/hooke_orthotropic.cfm
+		// Engineering-strain Voigt compliance [xx, yy, zz, 2*yz, 2*zx, 2*xy]
+		// (matches HookeLinearElasticity / SaintVenantElasticity and
+		// set_transversely_isotropic; eFunda lists tensorial shear compliance
+		// 1/(2*G) for unscaled eps_ij, whereas gamma_ij = 2*eps_ij uses 1/G).
 		double nuYX = nuXY * Ey / Ex;
 		double nuZX = nuXZ * Ez / Ex;
 		double nuZY = nuYZ * Ez / Ey;
@@ -465,9 +468,9 @@ namespace polyfem::assembler
 		compliance << 1 / Ex, -nuYX / Ey, -nuZX / Ez, 0, 0, 0,
 			-nuXY / Ex, 1 / Ey, -nuZY / Ez, 0, 0, 0,
 			-nuXZ / Ex, -nuYZ / Ey, 1 / Ez, 0, 0, 0,
-			0, 0, 0, 1 / (2 * muYZ), 0, 0,
-			0, 0, 0, 0, 1 / (2 * muZX), 0,
-			0, 0, 0, 0, 0, 1 / (2 * muXY);
+			0, 0, 0, 1 / muYZ, 0, 0,
+			0, 0, 0, 0, 1 / muZX, 0,
+			0, 0, 0, 0, 0, 1 / muXY;
 		stiffness_tensor_ = compliance.inverse();
 	}
 
@@ -475,14 +478,14 @@ namespace polyfem::assembler
 	{
 		assert(size_ == 2);
 
-		// from https://www.efunda.com/formulae/solid_mechanics/mat_mechanics/hooke_orthotropic.cfm
+		// Engineering-strain Voigt compliance [xx, yy, 2*xy].
 		double nuYX = nuXY * Ey / Ex;
 
 		Eigen::MatrixXd compliance;
 		compliance.setZero(3, 3);
 		compliance << 1.0 / Ex, -nuYX / Ey, 0.0,
 			-nuXY / Ex, 1.0 / Ey, 0.0,
-			0.0, 0.0, 1.0 / (2 * muXY);
+			0.0, 0.0, 1.0 / muXY;
 		stiffness_tensor_ = compliance.inverse();
 	}
 
@@ -518,8 +521,13 @@ namespace polyfem::assembler
 
 	void ElasticityTensor::rotate_stiffness(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, 6, 6> &rotation_mtx_voigt)
 	{
-		reference_stiffness_tensor_ = stiffness_tensor_;
-		stiffness_tensor_ = rotation_mtx_voigt * stiffness_tensor_ * rotation_mtx_voigt.transpose();
+		// operator()(i, j) writes only the upper triangle (used by
+		// set_from_entries and set_from_lambda_mu), so mirror it before
+		// forming the full matrix product M * C * M^T.
+		const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, 6, 6> sym =
+			stiffness_tensor_.template selfadjointView<Eigen::Upper>();
+		reference_stiffness_tensor_ = sym;
+		stiffness_tensor_ = rotation_mtx_voigt * sym * rotation_mtx_voigt.transpose();
 	}
 
 	void ElasticityTensor::unrotate_stiffness()
@@ -771,35 +779,33 @@ namespace polyfem::assembler
 
 	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 6, 6> FiberDirection::stiffness_rotation_voigt(double px, double py, double pz, double x, double y, double z, double t, int el_id) const
 	{
-		// Rotate stiffness mtx in voigt notation according to:
-		// https://scicomp.stackexchange.com/questions/35600/4th-order-tensor-rotation-sources-to-refer
+		// Exact Bond stress/stiffness transformation matrix M for engineering
+		// Voigt notation (stress [xx, yy, zz, yz, xz, xy], strain [xx, yy, zz,
+		// 2*yz, 2*xz, 2*xy]) so that C' = M * C * M^T matches 4th-order tensor
+		// rotation C'_{ijkl} = R_{ip} R_{jq} R_{kr} R_{ls} C_{pqrs}.
 
 		Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 3, 3> rot = (*this)(px, py, pz, x, y, z, t, el_id);
 		Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 6, 6> res;
 
 		int dim = rot.rows();
 
-		static const double sqrt2 = std::sqrt(2.0);
-
 		if (dim == 2)
 		{
 			res.resize(3, 3);
-			// Still need to compute for 2d
-			assert(false);
-			// res << rot(0, 0) * rot(0, 0), rot(0, 1) * rot(0, 1), 0,
-			// 	rot(1, 0) * rot(1, 0), rot(1, 1) * rot(1, 1), 0,
-			// 	0, 0, 1;
+			res << rot(0, 0) * rot(0, 0), rot(0, 1) * rot(0, 1), 2.0 * rot(0, 0) * rot(0, 1),
+				rot(1, 0) * rot(1, 0), rot(1, 1) * rot(1, 1), 2.0 * rot(1, 0) * rot(1, 1),
+				rot(0, 0) * rot(1, 0), rot(0, 1) * rot(1, 1), rot(0, 0) * rot(1, 1) + rot(0, 1) * rot(1, 0);
 		}
 		else
 		{
 			assert(dim == 3);
 			res.resize(6, 6);
-			res << rot(0, 0) * rot(0, 0), rot(0, 1) * rot(0, 1), rot(0, 2) * rot(0, 2), sqrt2 * rot(0, 1) * rot(0, 2), sqrt2 * rot(0, 0) * rot(0, 2), sqrt2 * rot(0, 0) * rot(0, 1),
-				rot(1, 0) * rot(1, 0), rot(1, 1) * rot(1, 1), rot(1, 2) * rot(1, 2), sqrt2 * rot(1, 1) * rot(1, 2), sqrt2 * rot(1, 0) * rot(1, 2), sqrt2 * rot(1, 0) * rot(1, 1),
-				rot(2, 0) * rot(2, 0), rot(2, 1) * rot(2, 1), rot(2, 2) * rot(2, 2), sqrt2 * rot(2, 1) * rot(2, 2), sqrt2 * rot(2, 0) * rot(2, 2), sqrt2 * rot(2, 0) * rot(2, 1),
-				sqrt2 * rot(1, 0) * rot(2, 0), sqrt2 * rot(1, 1) * rot(2, 1), sqrt2 * rot(1, 2) * rot(2, 2), rot(1, 1) * rot(2, 2) + rot(1, 2) * rot(2, 1), rot(1, 0) * rot(2, 2) + rot(1, 2) * rot(2, 0), rot(1, 0) * rot(2, 1) + rot(1, 1) * rot(2, 0),
-				sqrt2 * rot(0, 0) * rot(2, 0), sqrt2 * rot(0, 1) * rot(2, 1), sqrt2 * rot(0, 2) * rot(2, 2), rot(0, 1) * rot(2, 2) + rot(0, 2) * rot(2, 1), rot(0, 0) * rot(2, 2) + rot(0, 2) * rot(2, 0), rot(0, 0) * rot(2, 1) + rot(0, 1) * rot(2, 0),
-				sqrt2 * rot(0, 0) * rot(1, 0), sqrt2 * rot(0, 1) * rot(1, 1), sqrt2 * rot(0, 2) * rot(1, 2), rot(0, 1) * rot(1, 2) + rot(0, 2) * rot(1, 1), rot(0, 0) * rot(1, 2) + rot(0, 2) * rot(1, 0), rot(0, 0) * rot(1, 1) + rot(0, 1) * rot(1, 0);
+			res << rot(0, 0) * rot(0, 0), rot(0, 1) * rot(0, 1), rot(0, 2) * rot(0, 2), 2.0 * rot(0, 1) * rot(0, 2), 2.0 * rot(0, 0) * rot(0, 2), 2.0 * rot(0, 0) * rot(0, 1),
+				rot(1, 0) * rot(1, 0), rot(1, 1) * rot(1, 1), rot(1, 2) * rot(1, 2), 2.0 * rot(1, 1) * rot(1, 2), 2.0 * rot(1, 0) * rot(1, 2), 2.0 * rot(1, 0) * rot(1, 1),
+				rot(2, 0) * rot(2, 0), rot(2, 1) * rot(2, 1), rot(2, 2) * rot(2, 2), 2.0 * rot(2, 1) * rot(2, 2), 2.0 * rot(2, 0) * rot(2, 2), 2.0 * rot(2, 0) * rot(2, 1),
+				rot(1, 0) * rot(2, 0), rot(1, 1) * rot(2, 1), rot(1, 2) * rot(2, 2), rot(1, 1) * rot(2, 2) + rot(1, 2) * rot(2, 1), rot(1, 0) * rot(2, 2) + rot(1, 2) * rot(2, 0), rot(1, 0) * rot(2, 1) + rot(1, 1) * rot(2, 0),
+				rot(0, 0) * rot(2, 0), rot(0, 1) * rot(2, 1), rot(0, 2) * rot(2, 2), rot(0, 1) * rot(2, 2) + rot(0, 2) * rot(2, 1), rot(0, 0) * rot(2, 2) + rot(0, 2) * rot(2, 0), rot(0, 0) * rot(2, 1) + rot(0, 1) * rot(2, 0),
+				rot(0, 0) * rot(1, 0), rot(0, 1) * rot(1, 1), rot(0, 2) * rot(1, 2), rot(0, 1) * rot(1, 2) + rot(0, 2) * rot(1, 1), rot(0, 0) * rot(1, 2) + rot(0, 2) * rot(1, 0), rot(0, 0) * rot(1, 1) + rot(0, 1) * rot(1, 0);
 		}
 
 		return res;

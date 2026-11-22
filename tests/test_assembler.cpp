@@ -1948,6 +1948,127 @@ TEST_CASE("material parameter helpers", "[assembler][mat_params]")
 		REQUIRE(voigt(0, 1) == Catch::Approx(1));
 		REQUIRE(voigt(1, 0) == Catch::Approx(1));
 	}
+
+	SECTION("orthotropic shear convention and Bond Voigt stiffness rotation")
+	{
+		const double E = 50000.0;
+		const double nu = 0.25;
+		const double G = E / (2.0 * (1.0 + nu));
+
+		// 3D: isotropic orthotropic and transversely isotropic tensors must match E/nu.
+		ElasticityTensor iso3d, ortho3d, ti3d;
+		iso3d.resize(3);
+		ortho3d.resize(3);
+		ti3d.resize(3);
+		iso3d.set_from_young_poisson(E, nu, "", test_resources());
+		ortho3d.set_orthotropic(E, E, E, nu, nu, nu, G, G, G, "", test_resources());
+		ti3d.set_transversely_isotropic(E, E, nu, nu, G, "", test_resources());
+		for (int i = 0; i < 6; ++i)
+		{
+			for (int j = 0; j < 6; ++j)
+			{
+				REQUIRE(ortho3d(i, j) == Catch::Approx(iso3d(i, j)).margin(1e-9));
+				REQUIRE(ti3d(i, j) == Catch::Approx(iso3d(i, j)).margin(1e-9));
+			}
+		}
+		REQUIRE(ortho3d(3, 3) == Catch::Approx(G));
+		REQUIRE(ortho3d(4, 4) == Catch::Approx(G));
+		REQUIRE(ortho3d(5, 5) == Catch::Approx(G));
+
+		// 2D: isotropic orthotropic tensor must match plane-stress E/nu.
+		ElasticityTensor iso2d, ortho2d;
+		iso2d.resize(2);
+		ortho2d.resize(2);
+		iso2d.set_from_young_poisson(E, nu, "", test_resources());
+		ortho2d.set_orthotropic(E, E, nu, G, "", test_resources());
+		for (int i = 0; i < 3; ++i)
+			for (int j = 0; j < 3; ++j)
+				REQUIRE(ortho2d(i, j) == Catch::Approx(iso2d(i, j)).margin(1e-9));
+		REQUIRE(ortho2d(2, 2) == Catch::Approx(G));
+
+		// 3D: isotropic tensor must be invariant under a 45-degree rotation.
+		const double c45 = std::sqrt(0.5);
+		FiberDirection rot45;
+		rot45.resize(3);
+		rot45.add_multimaterial(0, json::array({c45, -c45, 0.0, c45, c45, 0.0, 0.0, 0.0, 1.0}), "", test_resources());
+		const auto M45 = rot45.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0);
+		ElasticityTensor iso3d_rot = iso3d;
+		iso3d_rot.rotate_stiffness(M45);
+		for (int i = 0; i < 6; ++i)
+			for (int j = 0; j < 6; ++j)
+				REQUIRE(iso3d_rot(i, j) == Catch::Approx(iso3d(i, j)).margin(1e-9));
+
+		// 3D: general 21-entry anisotropic rotation must match 4th-order tensor transform.
+		const std::vector<double> entries21 = {
+			12.0, 3.5, 2.1, 0.4, -0.3, 0.7,
+			15.0, 4.2, -0.5, 0.6, 0.2,
+			18.0, 0.8, -0.4, 0.5,
+			5.5, 0.3, -0.2,
+			6.2, 0.1,
+			4.8};
+		ElasticityTensor aniso;
+		aniso.resize(3);
+		aniso.set_from_entries(entries21, "", test_resources());
+
+		Eigen::Vector3d axis(0.3, -0.7, 0.648074069840786);
+		axis.normalize();
+		const Eigen::Matrix3d R = Eigen::AngleAxisd(1.13, axis).toRotationMatrix();
+		FiberDirection rot_gen;
+		rot_gen.resize(3);
+		rot_gen.add_multimaterial(0, json::array({R(0, 0), R(0, 1), R(0, 2), R(1, 0), R(1, 1), R(1, 2), R(2, 0), R(2, 1), R(2, 2)}), "", test_resources());
+		ElasticityTensor aniso_rot = aniso;
+		aniso_rot.rotate_stiffness(rot_gen.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0));
+
+		const std::array<std::pair<int, int>, 6> voigt_pairs = {{{0, 0}, {1, 1}, {2, 2}, {1, 2}, {0, 2}, {0, 1}}};
+		auto to_voigt = [](int a, int b) -> int {
+			if (a == b)
+				return a;
+			if ((a == 1 && b == 2) || (a == 2 && b == 1))
+				return 3;
+			if ((a == 0 && b == 2) || (a == 2 && b == 0))
+				return 4;
+			return 5;
+		};
+		for (int vi = 0; vi < 6; ++vi)
+		{
+			const auto [i, j] = voigt_pairs[vi];
+			for (int vj = 0; vj < 6; ++vj)
+			{
+				const auto [k, l] = voigt_pairs[vj];
+				double ref = 0.0;
+				for (int p = 0; p < 3; ++p)
+					for (int q = 0; q < 3; ++q)
+						for (int r = 0; r < 3; ++r)
+							for (int s = 0; s < 3; ++s)
+								ref += R(i, p) * R(j, q) * R(k, r) * R(l, s) * aniso(to_voigt(p, q), to_voigt(r, s));
+				REQUIRE(aniso_rot(vi, vj) == Catch::Approx(ref).margin(1e-11));
+			}
+		}
+
+		// 2D: Bond rotation preserves isotropic tensor and swaps orthotropic axes at 90 degrees.
+		const double th = 0.61;
+		const double c2 = std::cos(th), s2 = std::sin(th);
+		FiberDirection rot2d;
+		rot2d.resize(2);
+		rot2d.add_multimaterial(0, json::array({c2, -s2, s2, c2}), "", test_resources());
+		ElasticityTensor iso2d_rot = iso2d;
+		iso2d_rot.rotate_stiffness(rot2d.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0));
+		for (int i = 0; i < 3; ++i)
+			for (int j = 0; j < 3; ++j)
+				REQUIRE(iso2d_rot(i, j) == Catch::Approx(iso2d(i, j)).margin(1e-9));
+
+		ElasticityTensor aniso2d;
+		aniso2d.resize(2);
+		aniso2d.set_orthotropic(80000.0, 20000.0, 0.25, 10000.0, "", test_resources());
+		FiberDirection rot90_2d;
+		rot90_2d.resize(2);
+		rot90_2d.add_multimaterial(0, json::array({0.0, -1.0, 1.0, 0.0}), "", test_resources());
+		ElasticityTensor aniso2d_rot = aniso2d;
+		aniso2d_rot.rotate_stiffness(rot90_2d.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0));
+		REQUIRE(aniso2d_rot(0, 0) == Catch::Approx(aniso2d(1, 1)).margin(1e-9));
+		REQUIRE(aniso2d_rot(1, 1) == Catch::Approx(aniso2d(0, 0)).margin(1e-9));
+		REQUIRE(aniso2d_rot(2, 2) == Catch::Approx(aniso2d(2, 2)).margin(1e-9));
+	}
 }
 
 TEST_CASE("density and Lame parameter helpers", "[assembler][mat_params]")
