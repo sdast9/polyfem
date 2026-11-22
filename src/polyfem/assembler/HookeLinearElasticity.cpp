@@ -1,6 +1,7 @@
 #include "HookeLinearElasticity.hpp"
 
 #include <polyfem/autogen/auto_elasticity_rhs.hpp>
+#include <polyfem/utils/Logger.hpp>
 
 namespace polyfem::assembler
 {
@@ -272,10 +273,23 @@ namespace polyfem::assembler
 		assert(pt.size() == size());
 		Eigen::Matrix<double, Eigen::Dynamic, 1, 0, 3, 1> res;
 
+		// The generated divergence operator differentiates displacement only.
+		if (!fiber_direction_.has_uniform_rotation())
+			log_and_throw_error("HookeLinearElasticity manufactured RHS requires a constant fiber_direction rotation shared by all elements. "
+								"Supply an explicit RHS for spatially varying, time-dependent, or per-element rotations.");
+
+		const bool rotate = fiber_direction_.has_rotation();
+		ElasticityTensor rotated;
+		if (rotate)
+		{
+			rotated = elasticity_tensor_;
+			rotated.rotate_stiffness(fiber_direction_.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0));
+		}
+		const auto &tensor = rotate ? rotated : elasticity_tensor_;
 		if (size() == 2)
-			autogen::hooke_2d_function(pt, elasticity_tensor_, res);
+			autogen::hooke_2d_function(pt, tensor, res);
 		else if (size() == 3)
-			autogen::hooke_3d_function(pt, elasticity_tensor_, res);
+			autogen::hooke_3d_function(pt, tensor, res);
 		else
 			assert(false);
 

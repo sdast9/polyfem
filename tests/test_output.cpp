@@ -1,5 +1,6 @@
 #include "VtuTestUtils.hpp"
 ////////////////////////////////////////////////////////////////////////////////
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -7,12 +8,14 @@
 
 #include <polyfem/State.hpp>
 #include <polyfem/Common.hpp>
+#include <polyfem/assembler/GenericProblem.hpp>
 #include <polyfem/io/OutStatsData.hpp>
 #include <polyfem/io/Evaluator.hpp>
 #include <polyfem/io/OutputWriter.hpp>
 #include <polyfem/solver/forms/Form.hpp>
 #include <polyfem/time_integrator/ImplicitEuler.hpp>
 #include <polyfem/autogen/auto_p_bases.hpp>
+#include <polyfem/mesh/MeshData.hpp>
 #include <polyfem/utils/JSONUtils.hpp>
 #include <polyfem/utils/ExpressionValue.hpp>
 #include <polyfem/utils/par_for.hpp>
@@ -42,6 +45,58 @@ using namespace polyfem::assembler;
 using namespace polyfem::utils;
 
 bool load_json(const std::string &json_file, json &out);
+
+TEST_CASE("sampled gradient error is independent of element order and displacement error", "[output]")
+{
+	const bool reverse = GENERATE(false, true);
+	const double offset = GENERATE(0.0, 20.0);
+	CAPTURE(reverse, offset);
+
+	Eigen::MatrixXd reference;
+	autogen::p_nodes_2d(1, reference);
+	Eigen::MatrixXd vertices(6, 2);
+	vertices.topRows(3) = reference;
+	vertices.bottomRows(3) = reference.rowwise() + Eigen::RowVector2d(2, 0);
+	Eigen::MatrixXi cells(2, 3);
+	cells << 0, 1, 2, 3, 4, 5;
+	if (reverse)
+		cells.row(0).swap(cells.row(1));
+	const auto mesh = mesh::Mesh::create(mesh::MeshData(vertices, cells));
+
+	std::vector<basis::ElementBases> bases(2);
+	for (int element = 0; element < 2; ++element)
+	{
+		bases[element].set_quadrature([](quadrature::Quadrature &quadrature) {
+			quadrature.points = Eigen::MatrixXd::Constant(1, 2, 1.0 / 3.0);
+			quadrature.weights = Eigen::VectorXd::Constant(1, 0.5);
+		});
+		bases[element].bases.resize(3);
+		for (int local = 0; local < 3; ++local)
+		{
+			const int global = cells(element, local);
+			auto &base = bases[element].bases[local];
+			base.init(1, global, local, vertices.row(global));
+			base.set_basis([local](const Eigen::MatrixXd &points, Eigen::MatrixXd &values) {
+				autogen::p_basis_value_2d(false, 1, local, points, values);
+			});
+			base.set_grad([local](const Eigen::MatrixXd &points, Eigen::MatrixXd &values) {
+				autogen::p_grad_basis_value_2d(false, 1, local, points, values);
+			});
+		}
+	}
+
+	GenericScalarProblem problem("zero");
+	problem.set_parameters({{"reference", {{"solution", 0}, {"gradient", {0, 0}}}}}, io::FileSystemIO("."));
+	REQUIRE(problem.has_exact_sol());
+	// The first triangle has u = 3x and the second has a constant offset.
+	Eigen::VectorXd solution(6);
+	solution.head(3) = 3 * vertices.col(0).head(3);
+	solution.tail(3).setConstant(offset);
+	io::OutStatsData stats;
+	stats.compute_errors(6, bases, bases, *mesh, problem, 0, solution);
+	CHECK(stats.linf_err == Catch::Approx(std::max(1.0, offset)));
+	CHECK(stats.grad_max_err == Catch::Approx(3.0));
+}
 
 TEST_CASE("output interpolation preserves weighted mappings and sample order", "[output]")
 {

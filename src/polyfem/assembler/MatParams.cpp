@@ -777,6 +777,21 @@ namespace polyfem::assembler
 		return res;
 	}
 
+	bool FiberDirection::has_uniform_rotation() const
+	{
+		if (per_element_rotation_)
+			return false;
+		if (!has_rotation_)
+			return true;
+		if (use_per_element_file_ || dir_.size() != 1)
+			return false;
+
+		const auto &rotation = dir_.front();
+		return rotation.rows() == size_ && rotation.cols() == size_
+			   && std::all_of(rotation.data(), rotation.data() + rotation.size(),
+							  [](const utils::ExpressionValue &entry) { return entry.is_constant(); });
+	}
+
 	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 1, 6, 6> FiberDirection::stiffness_rotation_voigt(double px, double py, double pz, double x, double y, double z, double t, int el_id) const
 	{
 		// Exact Bond stress/stiffness transformation matrix M for engineering
@@ -985,6 +1000,11 @@ namespace polyfem::assembler
 		{
 			log_and_throw_error("Fiber direction must be a 3x3 or 2x2 matrix");
 		}
+
+		// A rotation assigned through a material array is element-specific even
+		// when only the first element supplies an explicit matrix.
+		if (has_rotation_ && binding.contains(MATERIAL_ELEMENT_INDEX))
+			per_element_rotation_ = true;
 	}
 
 	// template instantiation

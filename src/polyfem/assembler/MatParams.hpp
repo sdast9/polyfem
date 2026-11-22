@@ -250,11 +250,14 @@ namespace polyfem::assembler
 		}
 
 		bool has_rotation() const { return has_rotation_; }
+		/// True for an unspecified rotation or a constant matrix shared by all elements.
+		bool has_uniform_rotation() const;
 
 	private:
 		std::vector<Eigen::Matrix<utils::ExpressionValue, Eigen::Dynamic, Eigen::Dynamic, 1, 3, 3>> dir_;
 		int size_ = -1; // set by resize(); -1 = unknown, the dimension checks are skipped
 		bool has_rotation_ = false;
+		bool per_element_rotation_ = false;
 
 		// Per-element fiber file branch: global el_id -> unit a0.
 		// Populated only when "fiber_direction" uses the per_element_file object

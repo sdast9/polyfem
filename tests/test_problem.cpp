@@ -16,7 +16,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <algorithm>
+#include <array>
 
 #include <filesystem>
 #include <fstream>
@@ -1161,6 +1163,112 @@ TEST_CASE("zero bc 3d", "[problem]")
 		Eigen::MatrixXd diff = (other - rhs);
 
 		REQUIRE(diff.array().abs().maxCoeff() < 1e-10);
+	}
+}
+
+TEST_CASE("ElasticExact Hooke RHS uses the constant material rotation", "[problem][assembler]")
+{
+	const auto &problem = ProblemFactory::factory().get_problem("ElasticExact");
+	const Eigen::MatrixXd point = Eigen::RowVector3d::Constant(0.5);
+	constexpr double Ex = 20e6, Ey = 10e6, Ez = 10e6, G = 6e6;
+	const json material = {{"elasticity_tensor", {Ex, Ey, Ez, 0.28, 0.28, 0.5, G, G, G}}};
+	const json identity = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+	const json quarter_turn = {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}};
+
+	HookeLinearElasticity hooke;
+	hooke.set_size(3);
+	hooke.set_materials({0, 0}, material, Units(), test_resources());
+	Eigen::MatrixXd rhs;
+	for (int plane = 3; plane < 6; ++plane)
+	{
+		const double stress = hooke.elasticity_tensor()(plane, plane) * 0.01;
+		CHECK(stress == Catch::Approx(60000.0));
+		CHECK(0.5 * stress * 0.01 == Catch::Approx(300.0));
+	}
+
+	// Analytic displacement Hessians at the centre, with 1/80 factored out.
+	std::array<Eigen::Matrix3d, 3> hessian;
+	hessian[0] << 2, 1, 0, 1, 3, 0, 0, 0, 0;
+	hessian[1] << 9, 1, 1, 1, 1, 0, 1, 0, -3;
+	hessian[2] << 0, 0.5, 0.5, 0.5, 0.5, 1.5, 0.5, 1.5, 0.5;
+	Eigen::Matrix3d normal_compliance;
+	normal_compliance << 1 / Ex, -0.28 / Ex, -0.28 / Ex,
+		-0.28 / Ex, 1 / Ey, -0.5 / Ey,
+		-0.28 / Ex, -0.5 / Ey, 1 / Ez;
+	const Eigen::Matrix3d normal_stiffness = normal_compliance.inverse();
+	const auto expected_divergence = [&](const Eigen::Matrix3d &rotation) {
+		Eigen::Vector3d divergence = Eigen::Vector3d::Zero();
+		for (int direction = 0; direction < 3; ++direction)
+		{
+			Eigen::Matrix3d gradient_derivative;
+			for (int component = 0; component < 3; ++component)
+				gradient_derivative.row(component) = hessian[component].row(direction) / 80.0;
+			const Eigen::Matrix3d strain_derivative = (gradient_derivative + gradient_derivative.transpose()) / 2.0;
+			const Eigen::Matrix3d material_strain = rotation.transpose() * strain_derivative * rotation;
+			Eigen::Matrix3d material_stress = 2 * G * material_strain;
+			material_stress.diagonal() = normal_stiffness * material_strain.diagonal();
+			divergence += (rotation * material_stress * rotation.transpose()).col(direction);
+		}
+		return divergence;
+	};
+
+	SECTION("unrotated and explicit identity")
+	{
+		const auto expected = expected_divergence(Eigen::Matrix3d::Identity());
+		problem->rhs(hooke, point, 0, rhs);
+		CHECK(rhs.row(0).transpose().isApprox(expected, 1e-12));
+
+		json rotated = material;
+		rotated["fiber_direction"] = identity;
+		hooke.set_materials({0, 0}, rotated, Units(), test_resources());
+		problem->rhs(hooke, point, 0, rhs);
+		CHECK(rhs.row(0).transpose().isApprox(expected, 1e-12));
+	}
+
+	SECTION("90 degree rotation")
+	{
+		json rotated = material;
+		rotated["fiber_direction"] = quarter_turn;
+		hooke.set_materials({0, 0}, rotated, Units(), test_resources());
+		Eigen::Matrix3d rotation;
+		rotation << 0, -1, 0, 1, 0, 0, 0, 0, 1;
+		problem->rhs(hooke, point, 0, rhs);
+		CHECK(rhs.row(0).transpose().isApprox(expected_divergence(rotation), 1e-12));
+	}
+
+	SECTION("spatial or time dependence needs an explicit RHS")
+	{
+		const std::string variable = GENERATE("x", "t");
+		json rotated = material;
+		rotated["fiber_direction"] = {{"cos(" + variable + ")", "-sin(" + variable + ")", 0},
+									  {"sin(" + variable + ")", "cos(" + variable + ")", 0},
+									  {0, 0, 1}};
+		hooke.set_materials({0, 0}, rotated, Units(), test_resources());
+		CHECK_THROWS_WITH(problem->rhs(hooke, point, 0, rhs), Catch::Matchers::ContainsSubstring("constant fiber_direction rotation"));
+	}
+
+	SECTION("different element rotations need an explicit RHS")
+	{
+		json first = material, second = material;
+		first["id"] = 1;
+		first["fiber_direction"] = identity;
+		second["id"] = 2;
+		second["fiber_direction"] = quarter_turn;
+		hooke.set_materials({1, 2}, json::array({first, second}), Units(), test_resources());
+		CHECK_THROWS_WITH(problem->rhs(hooke, point, 0, rhs), Catch::Matchers::ContainsSubstring("constant fiber_direction rotation"));
+	}
+
+	SECTION("only the first body supplies a rotation")
+	{
+		const bool explicit_identity_default = GENERATE(false, true);
+		json first = material, second = material;
+		first["id"] = 1;
+		first["fiber_direction"] = quarter_turn;
+		second["id"] = 2;
+		if (explicit_identity_default)
+			second["fiber_direction"] = json::array();
+		hooke.set_materials({1, 2}, json::array({first, second}), Units(), test_resources());
+		CHECK_THROWS_WITH(problem->rhs(hooke, point, 0, rhs), Catch::Matchers::ContainsSubstring("constant fiber_direction rotation"));
 	}
 }
 

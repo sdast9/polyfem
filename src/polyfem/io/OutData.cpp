@@ -3443,7 +3443,8 @@ namespace polyfem::io
 			// errors.push_back(err(i));
 
 			linf_err = std::max(linf_err, err.maxCoeff());
-			grad_max_err = std::max(linf_err, err_grad.maxCoeff());
+			// Maximum gradient-error norm over the element quadrature points.
+			grad_max_err = std::max(grad_max_err, err_grad.maxCoeff());
 
 			// {
 			// 	const auto &mesh3d = *dynamic_cast<Mesh3D *>(mesh.get());
