@@ -40,6 +40,7 @@
 #include <ipc/broad_phase/hash_grid.hpp>
 #include <ipc/potentials/barrier_potential.hpp>
 #include <polysolve/nonlinear/PostStepData.hpp>
+#include <tbb/global_control.h>
 
 #include <algorithm>
 #include <array>
@@ -1583,6 +1584,9 @@ TEST_CASE("PF4 ESP friction uses the normal potential normalization policy", "[p
 
 TEST_CASE("PF4 ESP rollback restores collision cache and base state exactly", "[pf4][rollback][contact_form]")
 {
+	// ESP's parallel derivative reductions can round differently even when the
+	// cache never changes. Use a fixed summation order for this exact-state test.
+	const tbb::global_control serial(tbb::global_control::max_allowed_parallelism, 1);
 	auto mesh = make_corner(true, .1, .2);
 	json params = {{"quadrature_order", 5}, {"dbar_factor", 1.0}, {"normalize_weights", false}, {"area_weights", true}};
 	ESPContactForm contact(mesh, 1, 1, params, false, nullptr, false, false, false, false, ipc::BroadPhaseMethod::HASH_GRID, 1e-8, 1000000, 1e-9);
@@ -1598,12 +1602,18 @@ TEST_CASE("PF4 ESP rollback restores collision cache and base state exactly", "[
 	contact.first_derivative(a, gradient);
 	contact.second_derivative(a, hessian);
 	const auto snapshot = contact.save_state();
+	const auto &saved_cache = dynamic_cast<const ESPContactForm::State &>(*snapshot);
 	for (int i = 0; i < 2; ++i)
 	{
 		contact.set_barrier_stiffness(9);
 		contact.update_quantities(0, b);
 		REQUIRE(contact.value(b) != value);
+		REQUIRE(&contact.collision_set() != saved_cache.collision_set.get());
 		contact.restore_state(*snapshot, a);
+		const auto restored = contact.save_state();
+		const auto &restored_cache = dynamic_cast<const ESPContactForm::State &>(*restored);
+		CHECK(restored_cache.collision_set == saved_cache.collision_set);
+		CHECK(restored_cache.displaced_surface == saved_cache.displaced_surface);
 		CHECK(contact.barrier_stiffness() == 3);
 		CHECK(contact.value(a) == value);
 		Eigen::VectorXd restored_gradient;
