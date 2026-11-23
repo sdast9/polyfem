@@ -367,10 +367,20 @@ namespace polyfem::assembler
 
 		T energy = T(0.0);
 
+		const bool rotate = fiber_direction_.has_rotation();
 		const int n_pts = data.da.size();
 		for (long p = 0; p < n_pts; ++p)
 		{
 			compute_disp_grad_at_quad(data, local_disp, p, size(), disp_grad);
+
+			ElasticityTensor rotated;
+			if (rotate)
+			{
+				rotated = elasticity_tensor_;
+				rotated.rotate_stiffness(fiber_direction_.stiffness_rotation_voigt(
+					data.vals.quadrature.points.row(p), data.vals.val.row(p), data.t, data.vals.element_id));
+			}
+			const auto &tensor = rotate ? rotated : elasticity_tensor_;
 
 			AutoDiffGradMat strain = strain_from_disp_grad(disp_grad);
 			AutoDiffGradMat stress_tensor(size(), size());
@@ -382,8 +392,8 @@ namespace polyfem::assembler
 				eps[1] = strain(1, 1);
 				eps[2] = 2 * strain(0, 1);
 
-				stress_tensor << stress(elasticity_tensor_, eps, 0), stress(elasticity_tensor_, eps, 2),
-					stress(elasticity_tensor_, eps, 2), stress(elasticity_tensor_, eps, 1);
+				stress_tensor << stress(tensor, eps, 0), stress(tensor, eps, 2),
+					stress(tensor, eps, 2), stress(tensor, eps, 1);
 			}
 			else
 			{
@@ -395,9 +405,9 @@ namespace polyfem::assembler
 				eps[4] = 2 * strain(0, 2);
 				eps[5] = 2 * strain(0, 1);
 
-				stress_tensor << stress(elasticity_tensor_, eps, 0), stress(elasticity_tensor_, eps, 5), stress(elasticity_tensor_, eps, 4),
-					stress(elasticity_tensor_, eps, 5), stress(elasticity_tensor_, eps, 1), stress(elasticity_tensor_, eps, 3),
-					stress(elasticity_tensor_, eps, 4), stress(elasticity_tensor_, eps, 3), stress(elasticity_tensor_, eps, 2);
+				stress_tensor << stress(tensor, eps, 0), stress(tensor, eps, 5), stress(tensor, eps, 4),
+					stress(tensor, eps, 5), stress(tensor, eps, 1), stress(tensor, eps, 3),
+					stress(tensor, eps, 4), stress(tensor, eps, 3), stress(tensor, eps, 2);
 			}
 
 			energy += (stress_tensor * strain).trace() * data.da(p);

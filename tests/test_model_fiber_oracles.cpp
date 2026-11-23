@@ -52,9 +52,9 @@ namespace
 		CHECK(max_error <= absolute_tolerance + relative_tolerance * scale);
 	}
 
-	// P1 simplex with X0 = 0 and Xi = e_i. The Jacobian is I, the centroid
-	// integrates all these spatially constant densities exactly, and every row
-	// of grad(N) is known. Local DOFs are node-major, then displacement component.
+	// Unit P1 simplex, optionally translated. The Jacobian is I, every row of
+	// grad(N) is known, and the default centroid rule integrates constant
+	// densities exactly. The local DOF order is node, then component.
 	struct AffineSimplex
 	{
 		const int dim;
@@ -70,20 +70,31 @@ namespace
 			grad_N.bottomRows(dim).setIdentity();
 			vals.element_id = el_id;
 			vals.is_volume_ = dim == 3;
-			vals.quadrature.points = Eigen::MatrixXd::Constant(1, dim, 1.0 / (dim + 1));
-			vals.val = vals.quadrature.points;
-			vals.det = Eigen::VectorXd::Ones(1);
-			vals.jac_it = {Eigen::MatrixXd::Identity(dim, dim)};
-			weights = QuadratureVector::Constant(1, dim == 3 ? 1.0 / 6.0 : 0.5);
+			set_quadrature(Eigen::MatrixXd::Constant(1, dim, 1.0 / (dim + 1)),
+						   QuadratureVector::Constant(1, dim == 3 ? 1.0 / 6.0 : 0.5), Eigen::RowVectorXd::Zero(dim));
+		}
+
+		void set_quadrature(const Eigen::MatrixXd &points, const QuadratureVector &quadrature_weights, const Eigen::RowVectorXd &offset)
+		{
+			vals.quadrature.points = points;
+			vals.val = points.rowwise() + offset;
+			vals.det = Eigen::VectorXd::Ones(points.rows());
+			vals.jac_it.assign(points.rows(), Eigen::MatrixXd::Identity(dim, dim));
+			weights = quadrature_weights;
 			vals.quadrature.weights = weights;
 			vals.basis_values.resize(dim + 1);
 			for (int i = 0; i <= dim; ++i)
 			{
 				auto &b = vals.basis_values[i];
-				const Eigen::RowVectorXd vertex = i == 0 ? Eigen::RowVectorXd::Zero(dim).eval() : grad_N.row(i).eval();
+				Eigen::RowVectorXd vertex = offset;
+				if (i > 0)
+					vertex(i - 1) += 1;
 				b.global = {basis::Local2Global(i, vertex, 1.0)};
-				b.val = Eigen::MatrixXd::Constant(1, 1, 1.0 / (dim + 1));
-				b.grad = grad_N.row(i);
+				if (i == 0)
+					b.val = 1.0 - points.rowwise().sum().array();
+				else
+					b.val = points.col(i - 1);
+				b.grad = grad_N.row(i).replicate(points.rows(), 1);
 				b.grad_t_m = b.grad;
 			}
 		}
@@ -99,8 +110,9 @@ namespace
 		Eigen::VectorXd nodal_gradient(const Eigen::MatrixXd &stress) const
 		{
 			Eigen::VectorXd g(zero.rows());
+			const double measure = weights.sum();
 			for (int i = 0; i <= dim; ++i)
-				g.segment(i * dim, dim) = weights(0) * stress * grad_N.row(i).transpose();
+				g.segment(i * dim, dim) = measure * stress * grad_N.row(i).transpose();
 			return g;
 		}
 	};
@@ -219,14 +231,14 @@ namespace
 		return R * stress * R.transpose();
 	}
 
-	Eigen::MatrixXd hooke_stiffness(const HookeLinearElasticity &law, const AffineSimplex &element)
+	Eigen::MatrixXd hooke_stiffness(const HookeLinearElasticity &law, const AffineSimplex &element, double t = 0)
 	{
 		const int d = element.dim;
 		Eigen::MatrixXd K(d * (d + 1), d * (d + 1));
 		for (int i = 0; i <= d; ++i)
 			for (int j = 0; j <= d; ++j)
 			{
-				const auto block = law.assemble(LinearAssemblerData(element.vals, 0, i, j, element.weights));
+				const auto block = law.assemble(LinearAssemblerData(element.vals, t, i, j, element.weights));
 				K.block(i * d, j * d, d, d) = Eigen::Map<const Eigen::MatrixXd>(block.data(), d, d);
 			}
 		return K;
@@ -247,6 +259,56 @@ namespace
 		check_matrix(K * u, element.nodal_gradient(stress));
 		check_scalar(0.5 * u.dot(K * u), element.weights(0) * density);
 		check_matrix(K, K.transpose());
+	}
+
+	void check_hooke_nonlinear(const HookeLinearElasticity &law, const EngineeringConstants &mat,
+							   const AffineSimplex &element, const Eigen::MatrixXd &grad_u,
+							   const std::vector<Eigen::MatrixXd> &frames, double t = 0)
+	{
+		const int dim = element.dim;
+		const double measure = element.weights.sum();
+		// The P1 gradient is constant. Integrate the physical stress with the
+		// independently specified reference frame at each quadrature point.
+		const auto average_stress = [&](const Eigen::MatrixXd &gradient) -> Eigen::MatrixXd {
+			Eigen::MatrixXd stress = Eigen::MatrixXd::Zero(dim, dim);
+			for (int q = 0; q < element.weights.size(); ++q)
+				stress += element.weights(q) * orthotropic_stress(mat, frames.at(q), gradient);
+			return stress / measure;
+		};
+		const Eigen::MatrixXd stress = average_stress(grad_u);
+		const double expected_energy = 0.5 * measure * stress.cwiseProduct(grad_u).sum();
+		const Eigen::MatrixXd u = element.displacement(grad_u);
+		const Eigen::VectorXd expected_gradient = element.nodal_gradient(stress);
+		Eigen::MatrixXd expected_hessian(u.size(), u.size());
+		for (int i = 0; i <= dim; ++i)
+			for (int component = 0; component < dim; ++component)
+			{
+				// Differentiate the linear stress law in one nodal direction.
+				Eigen::MatrixXd increment = Eigen::MatrixXd::Zero(dim, dim);
+				increment.row(component) = element.grad_N.row(i);
+				expected_hessian.col(i * dim + component) = element.nodal_gradient(average_stress(increment));
+			}
+
+		const NonLinearAssemblerData data(element.vals, t, 0, u, element.zero, element.weights);
+		LocalHessian hessian;
+		law.assemble_hessian(data, hessian);
+		const Eigen::MatrixXd actual_hessian = hessian.visit([](const auto &H) -> Eigen::MatrixXd { return H; });
+		check_scalar(law.compute_energy(data), expected_energy);
+		check_matrix(law.assemble_gradient(data), expected_gradient);
+		check_matrix(actual_hessian, expected_hessian);
+		check_matrix(hooke_stiffness(law, element, t), expected_hessian);
+	}
+
+	void check_constant_hooke_nonlinear(const EngineeringConstants &mat, const Eigen::MatrixXd &R,
+										const Eigen::MatrixXd &grad_u, bool specify_frame = true)
+	{
+		json params = {{"elasticity_tensor", mat.json_entries}};
+		if (specify_frame)
+			params["fiber_direction"] = frame_json(R);
+		HookeLinearElasticity law;
+		law.set_size(R.rows());
+		law.add_multimaterial(0, params, si_units, resources);
+		check_hooke_nonlinear(law, mat, AffineSimplex(R.rows()), grad_u, {R});
 	}
 
 	struct Invariant
@@ -383,6 +445,69 @@ TEST_CASE("orthotropic Hooke mixed strains in a fully rotated 3D frame", "[model
 {
 	const Eigen::Matrix3d grad_u = 0.06 * increment_3d();
 	check_rotated_hooke(volume_constants(), spatial_rotation(), grad_u);
+}
+
+TEST_CASE("Hooke nonlinear tetrahedron uses the rotated shear modulus", "[hooke_nonlinear][orthotropic]")
+{
+	Eigen::Matrix3d grad_u = Eigen::Matrix3d::Zero();
+	grad_u(0, 2) = 0.01;
+	const auto mat = volume_constants();
+	SECTION("orientation omitted")
+	{
+		check_constant_hooke_nonlinear(mat, Eigen::Matrix3d::Identity(), grad_u, false);
+	}
+	SECTION("explicit identity")
+	{
+		check_constant_hooke_nonlinear(mat, Eigen::Matrix3d::Identity(), grad_u);
+	}
+	SECTION("90 degrees about z")
+	{
+		Eigen::Matrix3d R;
+		R << 0, -1, 0, 1, 0, 0, 0, 0, 1;
+		// Global XZ is material YZ. The 3.8 MPa modulus gives
+		// 190 J/m^3 and 31 2/3 J on the unit reference tetrahedron.
+		check_constant_hooke_nonlinear(mat, R, grad_u);
+	}
+}
+
+TEST_CASE("Hooke nonlinear derivatives use oblique 2D and 3D material axes", "[hooke_nonlinear][orthotropic]")
+{
+	SECTION("2D plane stress")
+	{
+		Eigen::Matrix2d R, grad_u;
+		R << 0.8, -0.6, 0.6, 0.8;
+		grad_u << 0.013, 0.017, -0.003, -0.007;
+		check_constant_hooke_nonlinear(plane_stress_constants(), R, grad_u);
+	}
+	SECTION("3D")
+	{
+		check_constant_hooke_nonlinear(volume_constants(), spatial_rotation(), 0.06 * increment_3d());
+	}
+}
+
+TEST_CASE("Hooke nonlinear rotation uses the quadrature position, time, and element", "[hooke_nonlinear][orthotropic]")
+{
+	const auto mat = plane_stress_constants();
+	HookeLinearElasticity law;
+	law.set_size(2);
+	law.add_multimaterial(0, {{"elasticity_tensor", mat.json_entries}, {"fiber_direction", frame_json(Eigen::Matrix2d::Identity())}}, si_units, resources);
+	const auto axes = json::array({"cos(pi*(x+t)/2)", "-sin(pi*(x+t)/2)", "sin(pi*(x+t)/2)", "cos(pi*(x+t)/2)"});
+	law.add_multimaterial(1, {{"elasticity_tensor", mat.json_entries}, {"fiber_direction", axes}}, si_units, resources);
+
+	AffineSimplex element(2, 1);
+	Eigen::Matrix2d points, grad_u;
+	points << 0.15, 0.25, 0.65, 0.20;
+	grad_u << 0.013, 0.017, -0.003, -0.007;
+	QuadratureVector weights(2);
+	weights << 0.125, 0.375;
+	element.set_quadrature(points, weights, Eigen::RowVector2d(0.1, 0.2));
+	// At t=0.25, the physical x coordinates 0.25 and 0.75 give 45 and
+	// 90 degrees. Check the prescribed weighted sum of the two samples.
+	const double c = std::sqrt(0.5);
+	Eigen::Matrix2d R45, R90;
+	R45 << c, -c, c, c;
+	R90 << 0, -1, 1, 0;
+	check_hooke_nonlinear(law, mat, element, grad_u, {R45, R90}, 0.25);
 }
 
 TEST_CASE("HGOFiber one-sided cutoff and tangent in 2D and 3D", "[model_oracle][fiber]")
