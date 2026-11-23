@@ -3,7 +3,7 @@
 import sys
 
 from test_simulation_oracles import (
-    A, B, dynamics, hooke, isotropic, loaded_bodies, quasistatic_frames, restart, run_suite,
+    A, B, hooke, isotropic, loaded_bodies, quasistatic_frames, restart, run_suite,
 )
 
 
@@ -23,8 +23,6 @@ if __name__ == "__main__":
         "mixed_hooke_first": lambda c, s: mixed_materials(c, s, False),
         "mixed_hooke_last": lambda c, s: mixed_materials(c, s, True),
         "rotating_frame": rotating_frame,
-        "quasistatic_nodal_load": lambda c, s: quasistatic_frames(c, s, None, [12000, 12000], nodal=True),
-        "dynamic_nodal_load": lambda c, s: dynamics(c, s, False, nodal=True),
         "consistent_restart_initial_inertia": lambda c, s: restart(c, s, False, check_saved_inertia=True),
         "lumped_restart_initial_inertia": lambda c, s: restart(c, s, True, check_saved_inertia=True),
     }, __doc__))

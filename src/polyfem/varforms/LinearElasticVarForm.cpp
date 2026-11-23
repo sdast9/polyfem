@@ -247,7 +247,7 @@ namespace polyfem::varform
 			current_rhs *= -1;
 
 			rhs_assembler_->set_bc(
-				std::vector<mesh::LocalBoundary>(), std::vector<int>(), elastic_boundary_samples(),
+				boundary_.local_boundary, boundary_.boundary_nodes, elastic_boundary_samples(),
 				boundary_.local_neumann_boundary, current_rhs, sol, time);
 
 			// the scale and predictor of THIS step's equation: BDF's acceleration
@@ -260,20 +260,19 @@ namespace polyfem::varform
 			solve_data_.body_form->set_weight(step_scale);
 
 			const bool quasistatic = is_quasistatic();
+			Eigen::VectorXd b = current_rhs;
 			if (!quasistatic)
 			{
-				current_rhs *= step_scale;
-				current_rhs += mass_ * solve_data_.time_integrator->x_tilde();
+				b *= step_scale;
+				b += mass_ * solve_data_.time_integrator->x_tilde();
+				// These rows contain displacements. Only free rows represent forces.
+				for (const int dof : boundary_.boundary_nodes)
+					b(dof) = current_rhs(dof);
 			}
-
-			rhs_assembler_->set_bc(
-				boundary_.local_boundary, boundary_.boundary_nodes, elastic_boundary_samples(),
-				std::vector<mesh::LocalBoundary>(), current_rhs, sol, time);
 
 			// RB-11: `time/quasistatic` was ignored by the linear formulation (every
 			// time-dependent linear run carried the mass term); it now solves K u = f(t).
 			StiffnessMatrix A = quasistatic ? stiffness : StiffnessMatrix(stiffness * step_scale + mass_);
-			Eigen::VectorXd b = current_rhs;
 
 			solve_linear_system(solver, A, b, args["output"]["advanced"]["spectrum"].get<bool>() && t == 1, sol);
 			output_time_phase_ = OutputTimePhase::CurrentStepBeforeAdvance; // RBR-01: the callback's output describes the new endpoint

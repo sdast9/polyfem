@@ -268,48 +268,62 @@ def quasistatic_frames(case, solver, frame, moduli, nodal=False):
                   shear_fields(f / (VOLUME * g), g, (0, 0, 0, f) if nodal else (f, 0, f, f)))
 
 
-def dynamic_reference(lumped, nodal=False):
+def dynamic_reference(lumped, nodal=False, dt=DT, base_motion=0):
     # Integrals of N_i^2 and N_i N_j on a tetrahedron are V/10 and V/20.
     # Density 120 on volume 1/6 gives 2 kg at the diagonal and 1 kg elsewhere,
     # or 5 kg at the diagonal after row-sum lumping.
     mass_diag, mass_off = (5, 0) if lumped else (2, 1)
     g = 12000
     u = v = acceleration = 0
+    base_u = base_v = base_acceleration = 0
     reference = []
     for i in range(STEPS + 1):
-        f = 48 * i * DT
+        time = i * dt
+        f = 48 * time
         if i > 0:
-            next_u = (mass_diag * (u + DT * v) + DT**2 * f) / (mass_diag + DT**2 * VOLUME * g)
-            next_v = (next_u - u) / DT
-            acceleration = (next_v - v) / DT
+            next_base_u = base_motion * time**2
+            next_base_v = (next_base_u - base_u) / dt
+            base_acceleration = (next_base_v - base_v) / dt
+            base_u, base_v = next_base_u, next_base_v
+
+            stiffness = VOLUME * g
+            free_rhs = f + stiffness * base_u - 3 * mass_off * base_acceleration
+            next_u = (mass_diag * (u + dt * v) + dt**2 * free_rhs) / (mass_diag + dt**2 * stiffness)
+            next_v = (next_u - u) / dt
+            acceleration = (next_v - v) / dt
             u, v = next_u, next_v
-        reference.append(dict(shear_fields(u, g, (0, 0, 0, f) if nodal else (f, 0, f, f)),
-                              velocity=[(0, 0, 0)] * 3 + [(v, 0, 0)],
-                              acceleration=[(0, 0, 0)] * 3 + [(acceleration, 0, 0)],
-                              inertia_forces=[(-mass_off * acceleration, 0, 0)] * 3
-                              + [(-mass_diag * acceleration, 0, 0)]))
+        base_inertia = -(mass_diag + 2 * mass_off) * base_acceleration - mass_off * acceleration
+        apex_inertia = -mass_diag * acceleration - 3 * mass_off * base_acceleration
+        reference.append(dict(shear_fields(u - base_u, g, (0, 0, 0, f) if nodal else (f, 0, f, f)),
+                              solution=[(base_u, 0, 0)] * 3 + [(u, 0, 0)],
+                              velocity=[(base_v, 0, 0)] * 3 + [(v, 0, 0)],
+                              acceleration=[(base_acceleration, 0, 0)] * 3 + [(acceleration, 0, 0)],
+                              inertia_forces=[(base_inertia, 0, 0)] * 3
+                              + [(apex_inertia, 0, 0)]))
     return reference
 
 
-def transient(case, solver, lumped, checkpoints, nodal=False):
+def transient(case, solver, lumped, checkpoints, nodal=False, dt=DT, base_motion=0):
     load = {"nodal": [(A, "48*t")]} if nodal else {"tractions": [(10 * BODY_A + 3, "288*t")]}
     config = scene([A], [isotropic(A)], **load)
-    config["time"] = {"dt": DT, "time_steps": STEPS, "integrator": "ImplicitEuler"}
+    config["time"] = {"dt": dt, "time_steps": STEPS, "integrator": "ImplicitEuler"}
     config["solver"]["advanced"] = {"lump_mass_matrix": lumped}
+    if base_motion:
+        config["boundary_conditions"]["dirichlet_boundary"][0]["value"][0] = f"{base_motion}*t*t"
     if checkpoints:
         config["output"]["checkpoint"] = {"path": "state_{:d}.hdf5"}
     return solver.solve(case.folder / "run", [A], config)
 
 
-def check_transient(case, output, lumped, nodal=False):
-    check_timeline(case, "run", output, DT, 0, STEPS)
-    for i, expected in enumerate(dynamic_reference(lumped, nodal)):
+def check_transient(case, output, lumped, nodal=False, dt=DT, base_motion=0):
+    check_timeline(case, "run", output, dt, 0, STEPS)
+    for i, expected in enumerate(dynamic_reference(lumped, nodal, dt, base_motion)):
         check_tet(case, f"step{i}", output / f"step_{i}.vtu", A, expected)
 
 
-def dynamics(case, solver, lumped, nodal=False):
-    full = transient(case, solver, lumped, False, nodal)
-    check_transient(case, full, lumped, nodal)
+def dynamics(case, solver, lumped, nodal=False, dt=DT, base_motion=0):
+    full = transient(case, solver, lumped, False, nodal, dt, base_motion)
+    check_transient(case, full, lumped, nodal, dt, base_motion)
 
 
 def restart(case, solver, lumped, check_saved_inertia=False):
@@ -339,6 +353,11 @@ def default_cases():
         "two_face_traction": traction,
         "consistent_mass": lambda c, s: dynamics(c, s, False),
         "lumped_mass": lambda c, s: dynamics(c, s, True),
+        "quasistatic_nodal_load": lambda c, s: quasistatic_frames(c, s, None, [12000, 12000], nodal=True),
+        "dynamic_nodal_load": lambda c, s: dynamics(c, s, False, nodal=True),
+        "dynamic_nodal_load_half_dt": lambda c, s: dynamics(c, s, False, nodal=True, dt=DT / 2),
+        "dynamic_nodal_load_moving_support": lambda c, s: dynamics(c, s, False, nodal=True, dt=2 * DT, base_motion=0.02),
+        "dynamic_traction_moving_support": lambda c, s: dynamics(c, s, False, dt=2 * DT, base_motion=0.02),
         "consistent_restart": lambda c, s: restart(c, s, False),
         "lumped_restart": lambda c, s: restart(c, s, True),
         "static_frame_0": lambda c, s: quasistatic_frames(c, s, None, [12000, 12000]),
