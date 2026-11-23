@@ -638,11 +638,11 @@ TEST_CASE("HGOFiber global and body-local VTK rows drive the corresponding eleme
 	};
 	SECTION("four rows follow the interleaved global order")
 	{
-		check({{2, 0, 0}, {0, 3, 0}, {0, 0, -2}, {3, 0, 4}}, {0, 1, 2, 3});
+		check({{2, 0, 0}, {0, 3, 0}, {0, 0, -2}, {3, 0, 4}}, {{0, 1, 2, 3}});
 	}
 	SECTION("two rows are indexed independently within each body")
 	{
-		check({{2, 0, 0}, {0, 3, 0}}, {0, 0, 1, 1});
+		check({{2, 0, 0}, {0, 3, 0}}, {{0, 0, 1, 1}});
 	}
 }
 
