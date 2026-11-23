@@ -122,11 +122,16 @@ include(Catch)
 set(PARSE_CATCH_TESTS_ADD_TO_CONFIGURE_DEPENDS ON)
 catch_discover_tests(unit_tests ADD_TAGS_AS_LABELS EXTRA_ARGS --rng-seed 1)
 
-# RB-12: the executable's contract end to end (build identity, a public
-# smoke with its run manifest, the exit statuses of a resource failure and of
-# a refused input), through the real PolyFEM_bin. Standard-library Python.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND AND TARGET PolyFEM_bin)
+  add_test(NAME simulation_oracles
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_simulation_oracles.py"
+            --binary "$<TARGET_FILE:PolyFEM_bin>")
+  set_tests_properties(simulation_oracles PROPERTIES LABELS "cli;simulation_oracles" TIMEOUT 180)
+
+  # RB-12: the executable's contract end to end (build identity, a public
+  # smoke with its run manifest, the exit statuses of a resource failure and of
+  # a refused input), through the real PolyFEM_bin. Standard-library Python.
   add_test(NAME cli_contract
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/rb12/cli_check.py"
             --binary "$<TARGET_FILE:PolyFEM_bin>"
