@@ -56,6 +56,8 @@ namespace polyfem::solver
 		/// @param t New time
 		/// @param x Solution at time t
 		void update_quantities(const double t, const Eigen::VectorXd &x) override;
+		/// Physical load for an output frame even when the solve cache is at the next step.
+		Eigen::VectorXd force_at_output_time(double time, const Eigen::VectorXd &x) const;
 		std::unique_ptr<FormState> save_state() const override;
 		void restore_state(const FormState &state, const Eigen::VectorXd &x) override;
 
@@ -97,5 +99,6 @@ namespace polyfem::solver
 
 		/// @brief Update current_rhs
 		void update_current_rhs(const Eigen::VectorXd &x);
+		void assemble_force(double time, const Eigen::VectorXd &x, Eigen::MatrixXd &force) const;
 	};
 } // namespace polyfem::solver

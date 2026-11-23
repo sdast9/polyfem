@@ -83,25 +83,38 @@ namespace polyfem::solver
 		energy_rhs_initialized_ = body.energy_rhs_initialized;
 	}
 
-	void BodyForm::update_current_rhs(const Eigen::VectorXd &x)
+	void BodyForm::assemble_force(const double time, const Eigen::VectorXd &x, Eigen::MatrixXd &force) const
 	{
 		rhs_assembler_.compute_energy_grad(
 			local_boundary_, boundary_nodes_, density_,
 			n_boundary_samples_, local_neumann_boundary_,
-			rhs_, t_, current_rhs_);
+			rhs_, time, force);
 
-		if (is_formulation_mixed_ && current_rhs_.size() < ndof_)
+		if (is_formulation_mixed_ && force.size() < ndof_)
 		{
-			current_rhs_.conservativeResize(
-				current_rhs_.rows() + n_pressure_bases_, current_rhs_.cols());
-			current_rhs_.bottomRows(n_pressure_bases_).setZero();
+			force.conservativeResize(force.rows() + n_pressure_bases_, force.cols());
+			force.bottomRows(n_pressure_bases_).setZero();
 		}
 
 		// Apply Neumann boundary conditions
 		rhs_assembler_.set_bc(
 			std::vector<mesh::LocalBoundary>(), std::vector<int>(),
 			n_boundary_samples_, local_neumann_boundary_,
-			current_rhs_, x, t_);
+			force, x, time);
+	}
+
+	Eigen::VectorXd BodyForm::force_at_output_time(const double time, const Eigen::VectorXd &x) const
+	{
+		if (time == t_)
+			return current_rhs_;
+		Eigen::MatrixXd force;
+		assemble_force(time, x, force);
+		return force;
+	}
+
+	void BodyForm::update_current_rhs(const Eigen::VectorXd &x)
+	{
+		assemble_force(t_, x, current_rhs_);
 		if (rhs_assembler_.problem().is_constant_in_time() && rhs_assembler_.is_rhs_time_dependent(density_))
 		{
 			// The gradient's supplied static RHS may have been assembled at a

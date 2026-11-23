@@ -693,7 +693,7 @@ namespace polyfem::varform
 	{
 		auto elastic_fields = snapshot_elastic_output_fields(solution, opts, space.obstacle,
 															 solve_data_.time_integrator.get(), solve_data_.named_forms(),
-															 solve_data_.elastic_form.get(), solve_data_.contact_form.get());
+															 solve_data_.elastic_form.get(), solve_data_.contact_form.get(), time);
 		std::vector<io::OutputField> contact_fields;
 		if (space.collision_mesh && (opts.contact_forces || opts.friction_forces || opts.normal_adhesion_forces || opts.tangential_adhesion_forces || (!opts.fields.empty() && opts.export_field("adaptive_dhat"))))
 		{
@@ -763,17 +763,8 @@ namespace polyfem::varform
 				if (!options.export_field(field_name))
 					continue;
 
-				Eigen::VectorXd force;
-				if (form && form->enabled())
-				{
-					form->first_derivative(solution, force);
-					force *= -1.0 / s;
-				}
-				else
-				{
-					force.setZero(solution.size());
-				}
-				append_collision_dof_field(field_name, force);
+				append_collision_dof_field(field_name, nodal_output_force(
+														   name, form.get(), solve_data_.time_integrator.get(), solution, sample.time, s));
 			}
 		}
 
@@ -2199,9 +2190,9 @@ namespace polyfem::varform
 		{
 			solve_data_.time_integrator = nullptr;
 		}
-		// RBR-01: the initial output describes the history head (the supplied
-		// initial velocity and acceleration).
-		output_time_phase_ = OutputTimePhase::HistoryHead;
+		// The first output describes the current history head. The forms
+		// initialized below may already be prepared for the next step.
+		output_time_phase_ = solve_data_.time_integrator ? OutputTimePhase::InitialHistoryHead : OutputTimePhase::HistoryHead;
 
 		// --------------------------------------------------------------------
 		// Initialize forms
@@ -3012,7 +3003,7 @@ namespace polyfem::varform
 		{
 			const auto &integrator = *solve_data_.time_integrator;
 			fingerprint["history"] = {{"steps", integrator.steps()}, {"x_prev_norm", integrator.x_prev().norm()}, {"v_prev_norm", integrator.v_prev().norm()}, {"a_prev_norm", integrator.a_prev().norm()}, {"dt", integrator.dt()}};
-			fingerprint["output_time_phase"] = output_time_phase_ == OutputTimePhase::HistoryHead ? "history_head" : "current_step_before_advance"; // RBR-01
+			fingerprint["output_time_phase"] = output_time_phase_ == OutputTimePhase::CurrentStepBeforeAdvance ? "current_step_before_advance" : "history_head"; // RBR-01
 		}
 		return fingerprint;
 	}

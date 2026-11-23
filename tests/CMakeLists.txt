@@ -130,6 +130,11 @@ if(Python3_Interpreter_FOUND AND TARGET PolyFEM_bin)
             --binary "$<TARGET_FILE:PolyFEM_bin>")
   set_tests_properties(simulation_oracles PROPERTIES LABELS "cli;simulation_oracles" TIMEOUT 180)
 
+  add_test(NAME nonlinear_transient_oracles
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_nonlinear_transient_oracles.py"
+            --binary "$<TARGET_FILE:PolyFEM_bin>")
+  set_tests_properties(nonlinear_transient_oracles PROPERTIES LABELS "cli;nonlinear_transient_oracles" TIMEOUT 120)
+
   # RB-12: the executable's contract end to end (build identity, a public
   # smoke with its run manifest, the exit statuses of a resource failure and of
   # a refused input), through the real PolyFEM_bin. Standard-library Python.

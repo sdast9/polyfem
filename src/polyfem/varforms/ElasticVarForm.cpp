@@ -21,6 +21,7 @@
 
 #include <polyfem/refinement/APriori.hpp>
 
+#include <polyfem/solver/forms/BodyForm.hpp>
 #include <polyfem/solver/forms/ContactForm.hpp>
 
 #include <polyfem/time_integrator/ImplicitTimeIntegrator.hpp>
@@ -497,17 +498,23 @@ namespace polyfem::varform
 		const solver::Form *form,
 		const time_integrator::ImplicitTimeIntegrator *time_integrator,
 		const Eigen::VectorXd &solution,
+		const double time,
 		const double scaling) const
 	{
 		if (!form || !form->enabled())
 			return Eigen::VectorXd::Zero(solution.size());
 
-		if (output_time_phase_ == OutputTimePhase::InitialHistoryHead && name == "inertia")
+		if (output_time_phase_ == OutputTimePhase::InitialHistoryHead)
 		{
-			// The initial frame has no associated solve predictor. Its inertia
-			// comes from the acceleration already provided or restored there.
-			assert(time_integrator && time_integrator->a_prev().size() == mass_.cols());
-			return -(mass_ * time_integrator->a_prev());
+			if (name == "inertia")
+			{
+				// The initial frame has no associated solve predictor. Use
+				// its supplied or restored acceleration.
+				assert(time_integrator && time_integrator->a_prev().size() == mass_.cols());
+				return -(mass_ * time_integrator->a_prev());
+			}
+			if (const auto *body = dynamic_cast<const solver::BodyForm *>(form))
+				return body->force_at_output_time(time, solution);
 		}
 
 		Eigen::VectorXd force;
@@ -521,7 +528,7 @@ namespace polyfem::varform
 		const mesh::Obstacle *obstacle,
 		const time_integrator::ImplicitTimeIntegrator *time_integrator,
 		const std::vector<std::pair<std::string, std::shared_ptr<solver::Form>>> &named_forms,
-		const solver::Form *elastic_form, const solver::ContactForm *contact_form, const double force_scale) const
+		const solver::Form *elastic_form, const solver::ContactForm *contact_form, const double time, const double force_scale) const
 	{
 		auto state = std::make_shared<ElasticOutputState>();
 		const io::OutputFieldOptions options{opts.fields};
@@ -546,7 +553,7 @@ namespace polyfem::varform
 				const std::string field_name = name + "_forces";
 				if (!options.export_field(field_name))
 					continue;
-				state->forces.push_back({field_name, nodal_output_force(name, form.get(), time_integrator, solution, scaling)});
+				state->forces.push_back({field_name, nodal_output_force(name, form.get(), time_integrator, solution, time, scaling)});
 			}
 		}
 		if (!opts.fields.empty() && options.export_field("gradient_of_elastic_potential") && elastic_form)
@@ -1213,7 +1220,7 @@ namespace polyfem::varform
 				if (!options.export_field(field_name))
 					continue;
 
-				append_sampled_dof_field(field_name, nodal_output_force(name, form.get(), time_integrator, solution, s), actual_dim);
+				append_sampled_dof_field(field_name, nodal_output_force(name, form.get(), time_integrator, solution, sample.time, s), actual_dim);
 			}
 		}
 

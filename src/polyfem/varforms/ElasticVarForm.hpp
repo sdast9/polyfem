@@ -34,8 +34,8 @@ namespace polyfem::varform
 	/// reported the previous step's kinematics for it.
 	enum class OutputTimePhase
 	{
-		/// Initial or restored linear state. There is stored acceleration but
-		/// the inertia form has the predictor for the next step.
+		/// Initial or restored state. There is stored acceleration but the
+		/// inertia form has the predictor for the next step.
 		InitialHistoryHead,
 		/// The history was initialized at, or advanced to, the exported
 		/// solution: x_prev() is that solution and v_prev()/a_prev() are its
@@ -96,7 +96,7 @@ namespace polyfem::varform
 			const mesh::Obstacle *obstacle,
 			const time_integrator::ImplicitTimeIntegrator *time_integrator,
 			const std::vector<std::pair<std::string, std::shared_ptr<solver::Form>>> &named_forms,
-			const solver::Form *elastic_form, const solver::ContactForm *contact_form = nullptr,
+			const solver::Form *elastic_form, const solver::ContactForm *contact_form, double time,
 			const double force_scale = -1.0) const;
 		void reset() override;
 		void load_mesh(const mesh::Mesh &mesh, const json &args) override;
@@ -144,6 +144,7 @@ namespace polyfem::varform
 			const solver::Form *form,
 			const time_integrator::ImplicitTimeIntegrator *time_integrator,
 			const Eigen::VectorXd &solution,
+			double time,
 			double scaling) const;
 		void append_primary_output_fields(
 			std::vector<io::OutputField> &fields,

@@ -27,6 +27,7 @@ VERTICES = ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1))
 FIELD_TOLERANCES = {
     "solution": 2e-8, "velocity": 2e-7, "acceleration": 2e-6,
     "elastic_forces": 5e-5, "body_forces": 2e-8, "inertia_forces": 5e-5,
+    "contact_forces": 2e-8,
     "cauchy_stess_1": 3e-4, "cauchy_stess_2": 3e-4, "cauchy_stess_3": 3e-4,
     "energy": 2e-5, "body_ids": 0, "HookeLinearElasticity/C_44": 1e-8, "C_44": 1e-8,
 }
@@ -265,18 +266,24 @@ def traction(case, solver):
     check_tet(case, "static", out / "sim.vtu", A, shear_fields(0.005, 12000, (-10, 20, 10, 10)))
 
 
-def check_timeline(case, label, out, dt, first, last, t0=0):
+def check_timeline(case, label, out, dt, first, last, t0=0, contact_surface=False):
     entries = ET.parse(out / "sim.pvd").findall("./Collection/DataSet")
     times = [float(entry.attrib["timestep"]) for entry in entries]
     # The collection uses the original global time origin, including on a resume.
     case.compare(f"{label}.pvd_time", times, [t0 + i * dt for i in range(last + 1)], 1e-12)
     require([entry.attrib["file"] for entry in entries] == [f"step_{i}.vtm" for i in range(last + 1)], out)
     expected = {f"step_{i}.vtu" for i in range(first, last + 1)}
+    if contact_surface:
+        expected.update(f"step_{i}_surf_contact.vtu" for i in range(first, last + 1))
     require({path.name for path in out.glob("step_*.vtu")} == expected, (out, expected))
     for i in range(first, last + 1):
         vtm = out / f"step_{i}.vtm"
-        volume = ET.parse(vtm).find("./vtkMultiBlockDataSet/Block[@name='Volume']/DataSet")
+        tree = ET.parse(vtm)
+        volume = tree.find("./vtkMultiBlockDataSet/Block[@name='Volume']/DataSet")
         require(volume is not None and volume.attrib["file"] == f"step_{i}.vtu", vtm)
+        if contact_surface:
+            contact = tree.find("./vtkMultiBlockDataSet/Block[@name='Contact']/DataSet")
+            require(contact is not None and contact.attrib["file"] == f"step_{i}_surf_contact.vtu", vtm)
 
 
 def quasistatic_frames(case, solver, frame, moduli, nodal=False, t0=0, contact=False):
