@@ -306,7 +306,8 @@ namespace polyfem::solver
 			{
 				for (typename StiffnessMatrix::InnerIterator it(tmp, i); it; ++it)
 				{
-					Ae.emplace_back(index + it.row(), it.col(), it.value());
+					if (it.value() != 0)
+						Ae.emplace_back(index + it.row(), it.col(), it.value());
 				}
 			}
 			index += tmp.rows();
@@ -323,6 +324,22 @@ namespace polyfem::solver
 		}
 
 		num_penalty_constraints_ = A.rows();
+		const std::vector<std::shared_ptr<Form>> forms(penalty_forms_.begin(), penalty_forms_.end());
+		penalty_problem_ = std::make_shared<FullNLProblem>(forms);
+
+		if (A.nonZeros() == 0)
+		{
+			// An empty coefficient matrix has an identity null-space basis.
+			// Keep the rows so that incompatible right-hand sides are still detected.
+			reduced_size_ = full_size_;
+			Q2_.resize(full_size_, full_size_);
+			Q2_.setIdentity();
+			Q2t_ = Q2_;
+			R1_.resize(0, A.rows());
+			update_constraint_values();
+			return;
+		}
+
 #ifdef POLYSOLVE_WITH_SPQR
 		SuiteSparseMatrix At = A.transpose();
 #else
@@ -468,10 +485,6 @@ namespace polyfem::solver
 
 		// assert((Q1_ * R1_ - At * P_).norm() < 1e-10);
 
-		std::vector<std::shared_ptr<Form>> tmp;
-		tmp.insert(tmp.end(), penalty_forms_.begin(), penalty_forms_.end());
-		penalty_problem_ = std::make_shared<FullNLProblem>(tmp);
-
 		update_constraint_values();
 	}
 
@@ -500,6 +513,13 @@ namespace polyfem::solver
 		{
 			constraint_values.segment(index, f->constraint_value().rows()) = f->constraint_value();
 			index += f->constraint_value().rows();
+		}
+		if (R1_.rows() == 0)
+		{
+			if ((constraint_values.array() != 0).any())
+				log_and_throw_error("Rank-zero constraints require zero right-hand sides");
+			Q1R1iTb_.setZero(full_size_);
+			return;
 		}
 		constraint_values = P_.transpose() * constraint_values;
 

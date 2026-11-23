@@ -24,6 +24,7 @@ set(test_sources
   test_linear_elastic_time.cpp
   test_output_kinematics.cpp
   test_fully_prescribed.cpp
+  test_constraint_rank.cpp
   test_run_manifest.cpp
   test_assembler.cpp
   test_bases.cpp
