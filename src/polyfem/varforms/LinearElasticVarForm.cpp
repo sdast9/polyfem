@@ -1,5 +1,7 @@
 #include "LinearElasticVarForm.hpp"
 
+#include <polyfem/assembler/HookeLinearElasticity.hpp>
+
 #include <polyfem/solver/forms/BodyForm.hpp>
 #include <polyfem/solver/forms/ElasticForm.hpp>
 #include <polyfem/solver/forms/InertiaForm.hpp>
@@ -59,14 +61,14 @@ namespace polyfem::varform
 											  solve_data_.elastic_form.get(), nullptr, solved_step_scale_);
 	}
 
-	void LinearElasticVarForm::build_stiffness_mat(StiffnessMatrix &stiffness)
+	void LinearElasticVarForm::build_stiffness_mat(StiffnessMatrix &stiffness, const double time)
 	{
 		igl::Timer timer;
 		timer.start();
 		logger().info("Assembling stiffness mat...");
 		assert(primary_assembler_->is_linear());
 
-		primary_assembler_->assemble(mesh_->is_volume(), space_.n_bases, space_.basis_list(), space_.geometry_basis_list(), ass_vals_cache_, 0, stiffness);
+		primary_assembler_->assemble(mesh_->is_volume(), space_.n_bases, space_.basis_list(), space_.geometry_basis_list(), ass_vals_cache_, time, stiffness);
 
 		timer.stop();
 		timings.assembling_stiffness_mat_time = timer.getElapsedTime();
@@ -228,8 +230,13 @@ namespace polyfem::varform
 		auto solver = polysolve::linear::Solver::create(args["solver"]["linear"], logger());
 		logger().info("{}...", solver->name());
 
+		const auto *hooke = dynamic_cast<const assembler::HookeLinearElasticity *>(primary_assembler_.get());
+		const bool variable_stiffness = hooke && hooke->has_variable_frame();
+
 		// the initial state is exported with the load of t0, not of the first step
 		solve_data_.body_form->update_quantities(t0, sol);
+		if (variable_stiffness)
+			solve_data_.elastic_form->update_quantities(t0, sol);
 		save_timestep(t0, 0, t0, dt, sol);
 		if (post_step)
 			post_step(0, sol);
@@ -237,11 +244,17 @@ namespace polyfem::varform
 		Eigen::MatrixXd current_rhs = rhs_;
 
 		StiffnessMatrix stiffness;
-		build_stiffness_mat(stiffness);
+		if (!variable_stiffness)
+			build_stiffness_mat(stiffness);
 
 		for (int t = 1; t <= time_steps; ++t)
 		{
 			const double time = t0 + t * dt;
+			if (variable_stiffness)
+			{
+				build_stiffness_mat(stiffness, time);
+				solve_data_.elastic_form->update_quantities(time, sol);
+			}
 
 			rhs_assembler_->assemble(mass_assembler_->density(), current_rhs, time);
 			current_rhs *= -1;

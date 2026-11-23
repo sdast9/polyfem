@@ -265,11 +265,11 @@ def traction(case, solver):
     check_tet(case, "static", out / "sim.vtu", A, shear_fields(0.005, 12000, (-10, 20, 10, 10)))
 
 
-def check_timeline(case, label, out, dt, first, last):
+def check_timeline(case, label, out, dt, first, last, t0=0):
     entries = ET.parse(out / "sim.pvd").findall("./Collection/DataSet")
     times = [float(entry.attrib["timestep"]) for entry in entries]
     # The collection uses the original global time origin, including on a resume.
-    case.compare(f"{label}.pvd_time", times, [i * dt for i in range(last + 1)], 1e-12)
+    case.compare(f"{label}.pvd_time", times, [t0 + i * dt for i in range(last + 1)], 1e-12)
     require([entry.attrib["file"] for entry in entries] == [f"step_{i}.vtm" for i in range(last + 1)], out)
     expected = {f"step_{i}.vtu" for i in range(first, last + 1)}
     require({path.name for path in out.glob("step_*.vtu")} == expected, (out, expected))
@@ -279,17 +279,30 @@ def check_timeline(case, label, out, dt, first, last):
         require(volume is not None and volume.attrib["file"] == f"step_{i}.vtu", vtm)
 
 
-def quasistatic_frames(case, solver, frame, moduli, nodal=False):
+def quasistatic_frames(case, solver, frame, moduli, nodal=False, t0=0, contact=False):
     # The x=0 face has area 1/2. A uniform 6*f Pa gives its three nodes f N each.
     f = 24
     load = {"nodal": [(A, f)]} if nodal else {"tractions": [(10 * BODY_A + 3, 6 * f)]}
     config = scene([A], [hooke(frame)], **load)
-    config["time"] = {"dt": 1, "time_steps": len(moduli), "quasistatic": True}
+    config["time"] = {"dt": 1, "t0": t0, "time_steps": len(moduli), "quasistatic": True}
+    if contact:
+        # Select the nonlinear elastic/contact formulation on the same tet.
+        # No nonadjacent features are within the 1 mm activation distance.
+        config["contact"] = {"enabled": True, "dhat": 0.001}
     out = solver.solve(case.folder / "run", [A], config)
-    check_timeline(case, "run", out, 1, 0, len(moduli))
+    check_timeline(case, "run", out, 1, 0, len(moduli), t0)
     for index, g in enumerate(moduli, 1):
         check_tet(case, f"step{index}", out / f"step_{index}.vtu", A,
                   shear_fields(f / (VOLUME * g), g, (0, 0, 0, f) if nodal else (f, 0, f, f)))
+
+
+def rotating_frame(case, solver, t0=0, contact=False):
+    # At odd seconds, the global XZ shear uses material YZ. At even
+    # seconds, the local ZX modulus governs.
+    c, s = "cos(pi*t/2)", "sin(pi*t/2)"
+    frame = [c, "-" + s, 0, s, c, 0, 0, 0, 1]
+    moduli = [5000 if t % 2 else 12000 for t in (t0 + 1, t0 + 2)]
+    quasistatic_frames(case, solver, frame, moduli, t0=t0, contact=contact)
 
 
 def dynamic_reference(lumped, nodal=False, dt=DT, base_motion=0):
@@ -393,7 +406,11 @@ def default_cases():
         "consistent_restart": lambda c, s: restart(c, s, False),
         "lumped_restart": lambda c, s: restart(c, s, True),
         "static_frame_0": lambda c, s: quasistatic_frames(c, s, None, [12000, 12000]),
+        "static_frame_identity": lambda c, s: quasistatic_frames(c, s, [1, 0, 0, 0, 1, 0, 0, 0, 1], [12000, 12000]),
         "static_frame_90": lambda c, s: quasistatic_frames(c, s, ROTATION_90, [5000, 5000]),
+        "rotating_frame": rotating_frame,
+        "rotating_frame_offset": lambda c, s: rotating_frame(c, s, t0=1),
+        "rotating_frame_inactive_contact": lambda c, s: rotating_frame(c, s, contact=True),
     }
 
 

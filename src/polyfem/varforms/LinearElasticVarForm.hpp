@@ -44,7 +44,7 @@ namespace polyfem::varform
 			const InitialConditionOverride *initial_condition_override,
 			const ForwardStepCallback &post_step) override;
 		void init_linear_solve(Eigen::MatrixXd &sol, const double t, const InitialConditionOverride *initial_condition_override);
-		void build_stiffness_mat(StiffnessMatrix &stiffness);
+		void build_stiffness_mat(StiffnessMatrix &stiffness, double time = 0.0);
 		void solve_linear_system(
 			const std::unique_ptr<polysolve::linear::Solver> &solver,
 			StiffnessMatrix &A,

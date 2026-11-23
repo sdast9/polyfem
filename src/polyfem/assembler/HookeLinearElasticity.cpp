@@ -3,6 +3,8 @@
 #include <polyfem/autogen/auto_elasticity_rhs.hpp>
 #include <polyfem/utils/Logger.hpp>
 
+#include <algorithm>
+
 namespace polyfem::assembler
 {
 	using namespace basis;
@@ -42,6 +44,15 @@ namespace polyfem::assembler
 				res += elasticity_tensor(j, k) * strain[k];
 
 			return res;
+		}
+
+		bool numeric_frame(const json &frame)
+		{
+			return frame.is_array() && std::all_of(frame.begin(), frame.end(), [](const json &row) {
+					   return row.is_number() || (row.is_array() && std::all_of(row.begin(), row.end(), [](const json &entry) {
+													  return entry.is_number();
+												  }));
+				   });
 		}
 	} // namespace
 
@@ -97,7 +108,12 @@ namespace polyfem::assembler
 					value.tensor.set_from_lambda_mu(params["lambda"], params["mu"], stress_unit, resources);
 			}
 			if (definition.contains("fiber_direction"))
+			{
 				value.frame.add_multimaterial(0, params["fiber_direction"], length_unit, resources, params);
+				// The parsed frame can contain expressions, tables, or callbacks.
+				// Reevaluate those frames without inferring constancy from a sample.
+				value.variable_frame = value.frame.has_rotation() && !numeric_frame(params["fiber_direction"]);
+			}
 
 			const std::size_t slot = material_slots_.empty() ? 0 : materials_.size();
 			if (slot == 0)
@@ -122,6 +138,11 @@ namespace polyfem::assembler
 	const ElasticityTensor &HookeLinearElasticity::elasticity_tensor(const int element_id) const
 	{
 		return material(element_id).tensor;
+	}
+
+	bool HookeLinearElasticity::has_variable_frame() const
+	{
+		return std::any_of(materials_.begin(), materials_.end(), [](const Material &value) { return value.variable_frame; });
 	}
 
 	void HookeLinearElasticity::set_size(const int size)

@@ -37,6 +37,7 @@ namespace polyfem::assembler
 		void add_multimaterial(const int index, const json &params, const Units &units, const io::ResourceIO &resources) override;
 
 		const ElasticityTensor &elasticity_tensor(int element_id = 0) const;
+		bool has_variable_frame() const;
 
 		virtual bool is_linear() const override { return true; }
 		bool allow_inversion() const override { return true; }
@@ -51,6 +52,7 @@ namespace polyfem::assembler
 		{
 			ElasticityTensor tensor;
 			FiberDirection frame;
+			bool variable_frame = false;
 		};
 
 		const Material &material(int element_id) const;

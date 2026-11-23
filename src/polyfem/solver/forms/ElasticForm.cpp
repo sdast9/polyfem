@@ -3,6 +3,7 @@
 #include <polyfem/quadrature/TriQuadrature.hpp>
 #include <polyfem/quadrature/TetQuadrature.hpp>
 #include <polyfem/assembler/AssemblerUtils.hpp>
+#include <polyfem/assembler/HookeLinearElasticity.hpp>
 #include <polyfem/basis/ElementBases.hpp>
 #include <polyfem/assembler/MatParams.hpp>
 #include <polyfem/utils/Logger.hpp>
@@ -303,8 +304,13 @@ namespace polyfem::solver
 
 		if (assembler_.is_linear())
 		{
-			assert(cached_stiffness_.rows() == x.size() && cached_stiffness_.cols() == x.size());
-			hessian = cached_stiffness_;
+			if (cached_stiffness_.size() == 0)
+				assembler_.assemble(is_volume_, n_bases_, bases_, geom_bases_, ass_vals_cache_, t_, hessian);
+			else
+			{
+				assert(cached_stiffness_.rows() == x.size() && cached_stiffness_.cols() == x.size());
+				hessian = cached_stiffness_;
+			}
 		}
 		else
 		{
@@ -426,7 +432,8 @@ namespace polyfem::solver
 
 	void ElasticForm::compute_cached_stiffness()
 	{
-		if (assembler_.is_linear() && cached_stiffness_.size() == 0)
+		const auto *hooke = dynamic_cast<const HookeLinearElasticity *>(&assembler_);
+		if (assembler_.is_linear() && cached_stiffness_.size() == 0 && !(hooke && hooke->has_variable_frame()))
 		{
 			assembler_.assemble(is_volume_, n_bases_, bases_, geom_bases_,
 								ass_vals_cache_, t_, cached_stiffness_);
