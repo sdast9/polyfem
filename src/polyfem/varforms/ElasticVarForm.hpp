@@ -34,6 +34,9 @@ namespace polyfem::varform
 	/// reported the previous step's kinematics for it.
 	enum class OutputTimePhase
 	{
+		/// Initial or restored linear state. There is stored acceleration but
+		/// the inertia form has the predictor for the next step.
+		InitialHistoryHead,
 		/// The history was initialized at, or advanced to, the exported
 		/// solution: x_prev() is that solution and v_prev()/a_prev() are its
 		/// kinematics. The initial output of every loop; the linear,
@@ -136,6 +139,12 @@ namespace polyfem::varform
 			const solver::ContactForm *contact_form = nullptr,
 			const double force_scale = -1.0,
 			const ElasticOutputState *output_state = nullptr) const;
+		Eigen::VectorXd nodal_output_force(
+			const std::string &name,
+			const solver::Form *form,
+			const time_integrator::ImplicitTimeIntegrator *time_integrator,
+			const Eigen::VectorXd &solution,
+			double scaling) const;
 		void append_primary_output_fields(
 			std::vector<io::OutputField> &fields,
 			const io::OutputSample &sample,

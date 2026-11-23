@@ -43,6 +43,13 @@ four nodal forces follow directly from `-V sigma grad(N_i)`.
   stresses of `+144 Pa` and `-180 Pa`, respectively. The test selects
   each reference vertex by coordinate and checks the exported body ID,
   displacement, stress, energy and forces there.
+- The mixed Hooke/isotropic cases independently permute geometry and material
+  arrays. In the prescribed-shear cases, both bodies move 10 mm at the apex
+  and give shear stresses of 120 Pa and 200 Pa and apex elastic forces of
+  -20 N and -33.333333333 N. The two-Hooke cases use an aligned first tensor
+  and a 90° frame on the second. Its local `C_44` is 26 kPa and its global
+  XZ shear modulus is 20 kPa, so the material output, stress and reaction
+  distinguish the tensor coefficients from their axes.
 - `two_face_traction` applies x tractions of `120/sqrt(3) Pa` on the
   sloping face and `-60 Pa` on the `x = 0` face. A uniform traction on
   a P1 face gives `T area/3` at each corner. The areas are
@@ -61,19 +68,37 @@ four nodal forces follow directly from `-V sigma grad(N_i)`.
   `v_next = (q_next - q)/h`, and `a_next = (v_next - v)/h`.
   This predicts each vertex's inertia force `-M_ia a_next`, including
   the nonzero x force on clamped vertices with consistent mass.
+- The nodal load cases use the same apex load, with additional steps of
+  `1/16 s` and `1/4 s`. The prescribed-support cases move all three base
+  vertices by `d(t) = 0.02 t² m` and repeat the same free-DOF load as a
+  nodal force and a surface traction. The elastic force is
+  `K (q - d)` and the apex inertia includes the three off-diagonal
+  contributions `M_ai a_base`. The first two discrete base accelerations
+  are 0.02 and 0.04 m/s² for Implicit Euler from rest. The quasistatic
+  nodal load gives `q = F/K` at both steps.
 - `consistent_restart` and `lumped_restart` use the same analytical
   trajectory for the original run and a fresh CLI process started with
   `--checkpoint state_2.hdf5`. They check the global PVD times and VTM
-  volume links, the restored step's displacement, velocity, acceleration,
-  stress and elastic and applied forces, and all fields in the newly
-  solved frames. The resumed file indices start at 2 and checkpoints
-  continue at 3. The PVD retains the original time origin and still
-  lists steps 0 and 1. Those files belong to the original run directory.
-- `static_frame_0` and `static_frame_90` hold the frame constant across
-  both quasistatic increments with a `24 N` apex load delivered by
-  surface traction. An aligned Hooke tensor uses `G_zx = 12 kPa`.
+  volume links and every field, including inertia, at the repeated
+  checkpoint frame and at each newly solved step. The `_sync` cases
+  exercise the synchronous writer with the same oracle. The resumed file
+  indices start at 2 and checkpoints continue at 3. The PVD retains
+  the original time origin and still lists steps 0 and 1. Those files
+  belong to the original run directory.
+- `initial_prescribed_inertia` sets the initial apex velocity to 0.1 m/s
+  and acceleration to -0.04 m/s². The initial inertia is +0.08 N at the
+  apex and +0.04 N at each clamped vertex with consistent mass. The next
+  step follows the usual Implicit Euler update with the specified velocity.
+- The static-frame cases keep the frame constant across both quasistatic
+  increments with a `24 N` apex load delivered by surface traction.
+  The omitted and identity axes both use `G_zx = 12 kPa`.
   A 90° rotation about z gives `G_yz = 5 kPa` in the same global shear.
   The expected apex displacements are `12 mm` and `28.8 mm`.
+- The rotating cases use rows `(cos(theta), -sin(theta), 0)`,
+  `(sin(theta), cos(theta), 0)` and `(0, 0, 1)` with `theta = pi t/2`.
+  The moduli alternate between 5 and 12 kPa at odd and even seconds.
+  A nonzero start time exercises the simulation clock. A contact-enabled
+  case selects the nonlinear form with no active barrier on the mesh.
 
 Forces are compared as vector components, with zero transverse and fixed
 displacement components checked explicitly. Absolute tolerances are
@@ -83,30 +108,29 @@ forces. The tolerances allow cross-platform assembly differences and
 the mixed-law convergence threshold while remaining far below the case
 separations. IDs compare exactly and PVD times use `1e-12 s`.
 
-On PolyFEM `4c5c45aa40f9350e4135ff0f1cdd811072395003` with AppleClang
-RelWithDebInfo, all 11 cases passed 1,824 numerical checks. The
-first-step apex displacements were `2.819548872 mm` with consistent
-mass and `2.586206897 mm` with lumped mass. At step 5, the original
-and resumed runs both gave `14.999780576 mm` and `15.002761425 mm`,
-respectively. Summing the negative of the base nodal forces gives
-`-89.998902878 N` and `-90.005522850 N` in x in both runs. The
-maximum absolute errors for displacement, stress and applied force
-over the passing cases were below `4e-18 m`, `3e-14 Pa` and
-`1.5e-14 N`. These tests cover straight P1 tets, two constant mass
-policies and one time integrator.
+For the surface-traction transient, the first-step apex displacements
+are `2.819548872 mm` with consistent mass and `2.586206897 mm` with
+lumped mass. At step 5, the reference displacements are
+`14.999780576 mm` and `15.002761425 mm`, respectively. The matching
+base reactions are `-89.998902878 N` and `-90.005522850 N` in x.
+The fixtures cover straight P1 tets, two constant mass policies
+and one analytical time integrator.
 
-## Strict defect reproductions
+## Baseline regression measurements
 
 ```sh
-python3 tests/repro_simulation_oracles.py \
-  --binary /absolute/path/to/PolyFEM_bin \
-  --expect-commit FULL_SOLVER_COMMIT \
-  --output /absolute/path/to/unused-reproduction-directory
+python3 tests/test_simulation_oracles.py \
+  --binary /absolute/path/to/pre-fix/PolyFEM_bin \
+  --expect-commit 4c5c45aa40f9350e4135ff0f1cdd811072395003 \
+  --output /absolute/path/to/unused-reproduction-directory \
+  --case quasistatic_nodal_load --case dynamic_nodal_load \
+  --case mixed_hooke_first --case mixed_hooke_last --case rotating_frame \
+  --case consistent_restart --case lumped_restart
 ```
 
-These use the same analytical checks and exit 1 for mismatches. They are
-run explicitly, outside the CTest target. At the published revision, six
-of the seven cases fail and the reverse-order mixed-material control passes.
+These cases now run by default. The command above reproduces their failures
+on the original published solver. The reverse-order mixed-material control
+also passes on that revision.
 
 | Case | Analytical expectation | Observed |
 | --- | --- | --- |
@@ -115,42 +139,43 @@ of the seven cases fail and the reverse-order mixed-material control passes.
 | `mixed_hooke_first` | Body 17 reports `C_44 = 12 kPa` and `u_x = 12 mm`. | `20 kPa` and `7.2 mm`. |
 | `mixed_hooke_last` | The same Hooke parameters and load survive geometry reversal. | `12 kPa` and `12 mm`. |
 | `rotating_frame` | The `24 N` apex load gives `28.8 mm` at 90° and `12 mm` at 180°. | `12 mm` at both frames. Apex elastic force was `-10 N` in each frame against `-24 N` expected. |
-| `consistent_restart_initial_inertia` | The restored apex inertia at 0.25 s is `-0.043416813 N`. | `+0.404319068 N`. |
-| `lumped_restart_initial_inertia` | The restored apex inertia at 0.25 s is `-0.228299643 N`. | `+1.055885850 N`. |
+| `consistent_restart` | The restored apex inertia at 0.25 s is `-0.043416813 N`. | `+0.404319068 N`. |
+| `lumped_restart` | The restored apex inertia at 0.25 s is `-0.228299643 N`. | `+1.055885850 N`. |
 
-**Linear transient nodal load.** `LinearElasticVarForm::solve_transient_linear`
-calls `RhsAssembler::set_bc` before and after the time-integrator scaling.
-Both calls add the free nodal Neumann term. The first call also supplies
+**Linear transient nodal load.** The original
+`LinearElasticVarForm::solve_transient_linear` called
+`RhsAssembler::set_bc` before and after the time-integrator scaling.
+Both calls added the free nodal Neumann term. The first call also supplied
 surface Neumann faces and the second supplies Dirichlet nodes.
-`RhsAssembler` still visits its stored nodal Neumann list in both calls.
-This doubles the quasistatic RHS and gives the numerical factor
+`RhsAssembler` visited its stored nodal Neumann list in both calls.
+This doubled the quasistatic RHS and gave the numerical factor
 `(h² + 1)/h² = 65` at `h = 1/8 s` in dynamics. The default
 traction controls supply the same free-DOF load and match the analytical
-solutions. Static nodal loads also match.
+solutions. The repair applies the boundary conditions in one call and
+keeps prescribed displacements in units of length after forming the
+mass-weighted dynamic RHS.
 
 **Mixed-law material parameters.** `AllElasticMaterials::add_multimaterial`
-forwards the second body's numeric `E` and `nu` to the Hooke assembler.
-`HookeLinearElasticity::add_multimaterial` stores a single stiffness tensor
-and overwrites it with the isotropic constants. The other body remains
-correct. Geometry reversal makes the Hooke tensor the final write.
-Equilibrium alone cannot detect this overwrite because the softer or
-stiffer solution still balances the same load. The displacement, energy
-and material field checks distinguish it.
+forwarded the second body's numeric `E` and `nu` to the Hooke assembler.
+`HookeLinearElasticity::add_multimaterial` stored a single stiffness tensor
+and overwrote it with the isotropic constants. Geometry reversal made
+the Hooke tensor the final write. The repair binds each Hooke element
+to its material tensor and frame. The prescribed-shear stresses and
+reactions distinguish the moduli even when force-controlled solutions
+would balance the same load.
 
-**Time-dependent Hooke frame.** The rows of the input matrix are
-`(cos(theta), -sin(theta), 0)`, `(sin(theta), cos(theta), 0)` and
-`(0, 0, 1)` with `theta = pi t/2`. The linear solve assembles stiffness
-once at time 0. The elastic force form is constructed at `t0 + dt` and
-keeps that first-step frame. Pointwise Cauchy stress uses the saved
-sample time and changes from `60 Pa` at step 1 to `144 Pa` at step 2
-at the observed displacement. The constant-frame cases distinguish
-both moduli with the same traction and constraints.
+**Time-dependent Hooke frame.** The linear solve assembled stiffness
+once at time 0. The elastic force form was constructed at `t0 + dt` and
+kept that first-step frame. Pointwise Cauchy stress used the saved sample
+time. The repair evaluates expression-based frame stiffness and force
+output at the solve time. Explicit numerical and absent frames retain
+one stiffness assembly per linear schedule.
 
 **Repeated checkpoint frame.** The initial frame after resume contains
 the restored acceleration `a_2`. Its physical inertia force is
-`-M a_2`. The newly constructed inertia form uses the next-step
+`-M a_2`. The newly constructed inertia form used the next-step
 predictor, `q_2 + h v_2`, and evaluates the restored position against
-that predictor. This gives `+M v_2/h` at the repeated frame. The
-default restart cases check the other restored fields there and all
-fields, including inertia, at every newly solved step. The uninterrupted
-runs check inertia at the saved step as well.
+that predictor. This gave `+M v_2/h` at the repeated frame. The repair
+reports the initial or restored acceleration directly for inertia
+output. The integrator continues to build the predictor for the next
+solve from the original history.

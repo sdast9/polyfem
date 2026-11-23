@@ -168,7 +168,7 @@ namespace polyfem::varform
 			restore_checkpoint_integrator(
 				solve_data_.time_integrator, "/checkpoint/state/primary_integrator", dt,
 				"primary", space_, mesh_->dimension());
-			output_time_phase_ = OutputTimePhase::HistoryHead; // RBR-01: the initial output describes the head
+			output_time_phase_ = OutputTimePhase::InitialHistoryHead;
 			// RB-11: InertiaForm reads x_tilde from the integrator in its constructor
 			// (upstream #508), so it must be built after init: before, the history is
 			// empty and x_prev() dereferences an empty deque (a segfault on every

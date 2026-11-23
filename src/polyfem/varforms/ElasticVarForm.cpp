@@ -464,6 +464,7 @@ namespace polyfem::varform
 
 		switch (phase)
 		{
+		case OutputTimePhase::InitialHistoryHead:
 		case OutputTimePhase::HistoryHead:
 			// The history was initialized at or advanced to this solution:
 			// the stored values are its kinematics.
@@ -489,6 +490,30 @@ namespace polyfem::varform
 		if (solved_step_scale > 0)
 			return solved_step_scale;
 		return time_integrator ? time_integrator->acceleration_scaling() : 1;
+	}
+
+	Eigen::VectorXd ElasticVarForm::nodal_output_force(
+		const std::string &name,
+		const solver::Form *form,
+		const time_integrator::ImplicitTimeIntegrator *time_integrator,
+		const Eigen::VectorXd &solution,
+		const double scaling) const
+	{
+		if (!form || !form->enabled())
+			return Eigen::VectorXd::Zero(solution.size());
+
+		if (output_time_phase_ == OutputTimePhase::InitialHistoryHead && name == "inertia")
+		{
+			// The initial frame has no associated solve predictor. Its inertia
+			// comes from the acceleration already provided or restored there.
+			assert(time_integrator && time_integrator->a_prev().size() == mass_.cols());
+			return -(mass_ * time_integrator->a_prev());
+		}
+
+		Eigen::VectorXd force;
+		form->first_derivative(solution, force);
+		force *= -1.0 / scaling;
+		return force;
 	}
 
 	io::OutputFieldFunction ElasticVarForm::snapshot_elastic_output_fields(
@@ -521,15 +546,7 @@ namespace polyfem::varform
 				const std::string field_name = name + "_forces";
 				if (!options.export_field(field_name))
 					continue;
-				Eigen::VectorXd force;
-				if (form && form->enabled())
-				{
-					form->first_derivative(solution, force);
-					force *= -1.0 / scaling;
-				}
-				else
-					force.setZero(solution.size());
-				state->forces.push_back({field_name, std::move(force)});
+				state->forces.push_back({field_name, nodal_output_force(name, form.get(), time_integrator, solution, scaling)});
 			}
 		}
 		if (!opts.fields.empty() && options.export_field("gradient_of_elastic_potential") && elastic_form)
@@ -1196,17 +1213,7 @@ namespace polyfem::varform
 				if (!options.export_field(field_name))
 					continue;
 
-				Eigen::VectorXd force;
-				if (form && form->enabled())
-				{
-					form->first_derivative(solution, force);
-					force *= -1.0 / s;
-				}
-				else
-				{
-					force.setZero(solution.size());
-				}
-				append_sampled_dof_field(field_name, force, actual_dim);
+				append_sampled_dof_field(field_name, nodal_output_force(name, form.get(), time_integrator, solution, s), actual_dim);
 			}
 		}
 

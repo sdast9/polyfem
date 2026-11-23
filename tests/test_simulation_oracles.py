@@ -305,13 +305,14 @@ def rotating_frame(case, solver, t0=0, contact=False):
     quasistatic_frames(case, solver, frame, moduli, t0=t0, contact=contact)
 
 
-def dynamic_reference(lumped, nodal=False, dt=DT, base_motion=0):
+def dynamic_reference(lumped, nodal=False, dt=DT, base_motion=0, initial_kinematics=(0, 0)):
     # Integrals of N_i^2 and N_i N_j on a tetrahedron are V/10 and V/20.
     # Density 120 on volume 1/6 gives 2 kg at the diagonal and 1 kg elsewhere,
     # or 5 kg at the diagonal after row-sum lumping.
     mass_diag, mass_off = (5, 0) if lumped else (2, 1)
     g = 12000
-    u = v = acceleration = 0
+    u = 0
+    v, acceleration = initial_kinematics
     base_u = base_v = base_acceleration = 0
     reference = []
     for i in range(STEPS + 1):
@@ -340,42 +341,43 @@ def dynamic_reference(lumped, nodal=False, dt=DT, base_motion=0):
     return reference
 
 
-def transient(case, solver, lumped, checkpoints, nodal=False, dt=DT, base_motion=0):
+def transient(case, solver, lumped, checkpoints, nodal=False, dt=DT, base_motion=0,
+              initial_kinematics=(0, 0), asynchronous=True):
     load = {"nodal": [(A, "48*t")]} if nodal else {"tractions": [(10 * BODY_A + 3, "288*t")]}
     config = scene([A], [isotropic(A)], **load)
     config["time"] = {"dt": dt, "time_steps": STEPS, "integrator": "ImplicitEuler"}
     config["solver"]["advanced"] = {"lump_mass_matrix": lumped}
+    config["output"]["paraview"]["async"] = asynchronous
     if base_motion:
         config["boundary_conditions"]["dirichlet_boundary"][0]["value"][0] = f"{base_motion}*t*t"
+    if any(initial_kinematics):
+        config["initial_conditions"] = {
+            name: [{"id": BODY_A, "value": [f"{value}*z", 0, 0]}]
+            for name, value in zip(("velocity", "acceleration"), initial_kinematics)
+        }
     if checkpoints:
         config["output"]["checkpoint"] = {"path": "state_{:d}.hdf5"}
     return solver.solve(case.folder / "run", [A], config)
 
 
-def check_transient(case, output, lumped, nodal=False, dt=DT, base_motion=0):
+def check_transient(case, output, lumped, nodal=False, dt=DT, base_motion=0, initial_kinematics=(0, 0)):
     check_timeline(case, "run", output, dt, 0, STEPS)
-    for i, expected in enumerate(dynamic_reference(lumped, nodal, dt, base_motion)):
+    for i, expected in enumerate(dynamic_reference(lumped, nodal, dt, base_motion, initial_kinematics)):
         check_tet(case, f"step{i}", output / f"step_{i}.vtu", A, expected)
 
 
-def dynamics(case, solver, lumped, nodal=False, dt=DT, base_motion=0):
-    full = transient(case, solver, lumped, False, nodal, dt, base_motion)
-    check_transient(case, full, lumped, nodal, dt, base_motion)
+def dynamics(case, solver, lumped, nodal=False, dt=DT, base_motion=0, initial_kinematics=(0, 0)):
+    full = transient(case, solver, lumped, False, nodal, dt, base_motion, initial_kinematics)
+    check_transient(case, full, lumped, nodal, dt, base_motion, initial_kinematics)
 
 
-def restart(case, solver, lumped, check_saved_inertia=False):
-    full = transient(case, solver, lumped, True)
+def restart(case, solver, lumped, asynchronous=True):
+    full = transient(case, solver, lumped, True, asynchronous=asynchronous)
     check_transient(case, full, lumped)
     resumed = solver.solve(case.folder / "resume", checkpoint=full / f"state_{SPLIT}.hdf5")
     check_timeline(case, "resume", resumed, DT, SPLIT, STEPS)
     reference = dynamic_reference(lumped)
-    # The strict reproducer also checks the repeated frame's inertia force.
-    # That field currently uses the next-step predictor at restart.
-    saved = reference[SPLIT].copy()
-    if not check_saved_inertia:
-        del saved["inertia_forces"]
-    check_tet(case, f"resumed_step{SPLIT}", resumed / f"step_{SPLIT}.vtu", A, saved)
-    for i in range(SPLIT + 1, STEPS + 1):
+    for i in range(SPLIT, STEPS + 1):
         check_tet(case, f"resumed_step{i}", resumed / f"step_{i}.vtu", A, reference[i])
     renewed = {path.name for path in resumed.glob("state_*.hdf5")}
     require(renewed == {f"state_{i}.hdf5" for i in range(SPLIT + 1, STEPS + 1)}, (resumed, renewed))
@@ -405,6 +407,9 @@ def default_cases():
         "dynamic_traction_moving_support": lambda c, s: dynamics(c, s, False, dt=2 * DT, base_motion=0.02),
         "consistent_restart": lambda c, s: restart(c, s, False),
         "lumped_restart": lambda c, s: restart(c, s, True),
+        "consistent_restart_sync": lambda c, s: restart(c, s, False, asynchronous=False),
+        "lumped_restart_sync": lambda c, s: restart(c, s, True, asynchronous=False),
+        "initial_prescribed_inertia": lambda c, s: dynamics(c, s, False, initial_kinematics=(0.1, -0.04)),
         "static_frame_0": lambda c, s: quasistatic_frames(c, s, None, [12000, 12000]),
         "static_frame_identity": lambda c, s: quasistatic_frames(c, s, [1, 0, 0, 0, 1, 0, 0, 0, 1], [12000, 12000]),
         "static_frame_90": lambda c, s: quasistatic_frames(c, s, ROTATION_90, [5000, 5000]),
