@@ -64,6 +64,15 @@ namespace polyfem::assembler
 	{
 		assert(size() == 2 || size() == 3);
 
+		// Assembler::set_materials starts at element zero. Rebinding a
+		// material must replace the previous tensor and frame assignments.
+		if (index == 0 && params.contains(MATERIAL_ELEMENT_COUNTS))
+		{
+			material_slots_.clear();
+			element_materials_.clear();
+			materials_.resize(1);
+		}
+
 		// One tensor and frame per distinct definition, with a slot per element.
 		// The binding index changes per element and is not part of the definition.
 		const auto stress_unit = units.stress();
