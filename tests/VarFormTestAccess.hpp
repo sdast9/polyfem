@@ -152,7 +152,7 @@ namespace polyfem::test
 			const std::vector<std::pair<std::string, std::shared_ptr<solver::Form>>> &forms)
 		{
 			const auto space = form.output_space();
-			return form.snapshot_elastic_output_fields(solution, form.export_options(space), nullptr, integrator, forms, nullptr);
+			return form.snapshot_elastic_output_fields(solution, form.export_options(space), nullptr, integrator, forms, nullptr, nullptr, 0.0);
 		}
 
 		/// The mesh of the form, also before prepare().
