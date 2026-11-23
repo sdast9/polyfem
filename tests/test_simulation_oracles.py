@@ -28,7 +28,7 @@ FIELD_TOLERANCES = {
     "solution": 2e-8, "velocity": 2e-7, "acceleration": 2e-6,
     "elastic_forces": 5e-5, "body_forces": 2e-8, "inertia_forces": 5e-5,
     "cauchy_stess_1": 3e-4, "cauchy_stess_2": 3e-4, "cauchy_stess_3": 3e-4,
-    "energy": 2e-5, "body_ids": 0, "HookeLinearElasticity/C_44": 1e-8,
+    "energy": 2e-5, "body_ids": 0, "HookeLinearElasticity/C_44": 1e-8, "C_44": 1e-8,
 }
 
 
@@ -219,17 +219,41 @@ def check_tet(case, label, path, tet, expected):
                          arrays[field][ids[0]], rows[vertex], FIELD_TOLERANCES[field])
 
 
-def loaded_bodies(case, solver, tets, materials):
+def loaded_bodies(case, solver, tets, materials, prescribed=False):
     loads = [(A, 24), (B, -30)]
-    config = scene(tets, materials, nodal=loads)
-    first_has_hooke = any(m["id"] == BODY_A and m["type"] == "HookeLinearElasticity" for m in materials)
-    config["output"]["paraview"]["options"]["material"] = first_has_hooke
+    config = scene(tets, materials, nodal=() if prescribed else loads)
+    local_shear = {m["id"]: m["elasticity_tensor"][7] for m in materials if m["type"] == "HookeLinearElasticity"}
+    config["output"]["paraview"]["options"]["material"] = bool(local_shear)
+    if prescribed:
+        for clamp in config["boundary_conditions"]["dirichlet_boundary"]:
+            if clamp["id"] % 10 == 2:
+                clamp["value"] = ["0.01*z", 0, 0]
+                clamp["dimension"] = [True, True, True]
     out = solver.solve(case.folder / "run", tets, config)
     for (tet, f), g in zip(loads, (12000, 20000)):
-        expected = shear_fields(f / (VOLUME * g), g, (0, 0, 0, f))
-        if tet == A and first_has_hooke:
-            expected["HookeLinearElasticity/C_44"] = [(g,)] * 4
+        u = 0.01 if prescribed else f / (VOLUME * g)
+        expected = shear_fields(u, g, (0, 0, 0, 0 if prescribed else f))
+        if tet.body_id in local_shear:
+            name = "C_44" if len(local_shear) == len(materials) else "HookeLinearElasticity/C_44"
+            expected[name] = [(local_shear[tet.body_id],)] * 4
         check_tet(case, "static", out / "sim.vtu", tet, expected)
+
+
+def mixed_bodies(case, solver, reverse_geometry=False, reverse_materials=False, prescribed=False):
+    tets = [B, A] if reverse_geometry else [A, B]
+    materials = [hooke(), isotropic(B)]
+    loaded_bodies(case, solver, tets, materials[::-1] if reverse_materials else materials, prescribed)
+
+
+def two_hooke_bodies(case, solver, reversed_order=False):
+    # A is aligned, B is rotated 90 degrees about z. Its local Gzx differs
+    # from the Gyz that carries the prescribed global xz shear.
+    other = dict(hooke(ROTATION_90), id=BODY_B,
+                 elasticity_tensor=[90000, 85000, 75000, 0.2, 0.17, 0.13, 20000, 26000, 15000])
+    if reversed_order:
+        loaded_bodies(case, solver, [B, A], [other, hooke()], prescribed=True)
+    else:
+        loaded_bodies(case, solver, [A, B], [hooke(), other], prescribed=True)
 
 
 def traction(case, solver):
@@ -350,6 +374,14 @@ def default_cases():
         "isotropic_ba_ba": lambda c, s: loaded_bodies(c, s, [B, A], [isotropic(B), isotropic(A)]),
         "isotropic_ab_ba": lambda c, s: loaded_bodies(c, s, [A, B], [isotropic(B), isotropic(A)]),
         "isotropic_ba_ab": lambda c, s: loaded_bodies(c, s, [B, A], [isotropic(A), isotropic(B)]),
+        "mixed_hooke_first": mixed_bodies,
+        "mixed_hooke_last": lambda c, s: mixed_bodies(c, s, reverse_geometry=True),
+        "mixed_hooke_first_reversed_materials": lambda c, s: mixed_bodies(c, s, reverse_materials=True),
+        "mixed_hooke_last_reversed_materials": lambda c, s: mixed_bodies(c, s, True, True),
+        "mixed_hooke_prescribed": lambda c, s: mixed_bodies(c, s, prescribed=True),
+        "mixed_hooke_prescribed_reversed": lambda c, s: mixed_bodies(c, s, True, True, prescribed=True),
+        "two_hooke_bodies": two_hooke_bodies,
+        "two_hooke_bodies_reversed": lambda c, s: two_hooke_bodies(c, s, reversed_order=True),
         "two_face_traction": traction,
         "consistent_mass": lambda c, s: dynamics(c, s, False),
         "lumped_mass": lambda c, s: dynamics(c, s, True),

@@ -53,38 +53,86 @@ namespace polyfem::assembler
 	{
 		assert(size() == 2 || size() == 3);
 
-		if (!params.contains("elasticity_tensor") || params["elasticity_tensor"].empty())
+		// One tensor and frame per distinct definition, with a slot per element.
+		// The binding index changes per element and is not part of the definition.
+		const auto stress_unit = units.stress();
+		const auto length_unit = units.length();
+		json definition = {{"stress_unit", stress_unit}, {"length_unit", length_unit}};
+		for (const char *key : {"elasticity_tensor", "young", "E", "nu", "lambda", "mu", "fiber_direction"})
+			if (params.contains(key) && !params[key].empty())
+				definition[key] = params[key];
+		if (definition.contains("fiber_direction"))
 		{
-			if (params.count("young"))
+			if (params.contains(MATERIAL_ELEMENT_INDEX))
+				definition["per_element_frame"] = true;
+			const auto &frame = definition["fiber_direction"];
+			if (frame.is_object() && frame.value("type", "") == std::string("per_element_file"))
+			{
+				if (params.contains(MATERIAL_ELEMENT_COUNTS))
+					definition[MATERIAL_ELEMENT_COUNTS] = params[MATERIAL_ELEMENT_COUNTS];
+			}
+		}
+
+		auto it = material_slots_.find(definition);
+		if (it == material_slots_.end())
+		{
+			Material value;
+			value.tensor.resize(size());
+			value.frame.resize(size());
+			if (definition.contains("elasticity_tensor"))
+				value.tensor.set_from_entries(params["elasticity_tensor"].get<std::vector<double>>(), stress_unit, resources);
+			else if (params.contains("young"))
 			{
 				if (params["young"].is_number() && params["nu"].is_number())
-					elasticity_tensor_.set_from_young_poisson(params["young"], params["nu"], units.stress(), resources);
+					value.tensor.set_from_young_poisson(params["young"], params["nu"], stress_unit, resources);
 			}
-			else if (params.count("E"))
+			else if (params.contains("E"))
 			{
 				if (params["E"].is_number() && params["nu"].is_number())
-					elasticity_tensor_.set_from_young_poisson(params["E"], params["nu"], units.stress(), resources);
+					value.tensor.set_from_young_poisson(params["E"], params["nu"], stress_unit, resources);
 			}
-			else if (params.count("lambda"))
+			else if (params.contains("lambda"))
 			{
 				if (params["lambda"].is_number() && params["mu"].is_number())
-					elasticity_tensor_.set_from_lambda_mu(params["lambda"], params["mu"], units.stress(), resources);
+					value.tensor.set_from_lambda_mu(params["lambda"], params["mu"], stress_unit, resources);
 			}
+			if (definition.contains("fiber_direction"))
+				value.frame.add_multimaterial(0, params["fiber_direction"], length_unit, resources, params);
+
+			const std::size_t slot = material_slots_.empty() ? 0 : materials_.size();
+			if (slot == 0)
+				materials_.front() = std::move(value);
+			else
+				materials_.push_back(std::move(value));
+			it = material_slots_.emplace(std::move(definition), slot).first;
 		}
-		else
-		{
-			std::vector<double> entries = params["elasticity_tensor"];
-			elasticity_tensor_.set_from_entries(entries, units.stress(), resources);
-		}
-		if (params.contains("fiber_direction"))
-			fiber_direction_.add_multimaterial(index, params["fiber_direction"], units.length(), resources, params);
+		if (index >= element_materials_.size())
+			element_materials_.resize(index + 1, 0);
+		element_materials_[index] = it->second;
+	}
+
+	const HookeLinearElasticity::Material &HookeLinearElasticity::material(const int element_id) const
+	{
+		if (element_materials_.empty())
+			return materials_.front();
+		const int index = element_materials_.size() == 1 || element_id < 0 ? 0 : element_id;
+		return materials_[element_materials_.at(index)];
+	}
+
+	const ElasticityTensor &HookeLinearElasticity::elasticity_tensor(const int element_id) const
+	{
+		return material(element_id).tensor;
 	}
 
 	void HookeLinearElasticity::set_size(const int size)
 	{
 		Assembler::set_size(size);
-		elasticity_tensor_.resize(size);
-		fiber_direction_.resize(size);
+		material_slots_.clear();
+		element_materials_.clear();
+		materials_.clear();
+		auto &value = materials_.emplace_back();
+		value.tensor.resize(size);
+		value.frame.resize(size);
 	}
 
 	Eigen::Matrix<double, Eigen::Dynamic, 1, 0, 9, 1>
@@ -100,22 +148,19 @@ namespace polyfem::assembler
 		assert(gradj.cols() == size());
 		assert(size_t(gradi.rows()) == data.vals.jac_it.size());
 
+		const auto &value = material(data.vals.element_id);
+		const bool rotate = value.frame.has_rotation();
 		for (long k = 0; k < gradi.rows(); ++k)
 		{
 			Eigen::Matrix<double, Eigen::Dynamic, 1, 0, 9, 1> res_k(size() * size());
 
-			ElasticityTensor elasticity_tensor;
-			if (fiber_direction_.has_rotation())
+			ElasticityTensor rotated;
+			if (rotate)
 			{
-				const auto fdir_mtx_voigt = fiber_direction_.stiffness_rotation_voigt(data.vals.quadrature.points.row(k), data.vals.val.row(k), data.t, data.vals.element_id);
-
-				elasticity_tensor = elasticity_tensor_;
-				elasticity_tensor.rotate_stiffness(fdir_mtx_voigt);
+				rotated = value.tensor;
+				rotated.rotate_stiffness(value.frame.stiffness_rotation_voigt(data.vals.quadrature.points.row(k), data.vals.val.row(k), data.t, data.vals.element_id));
 			}
-			else
-			{
-				elasticity_tensor = elasticity_tensor_;
-			}
+			const auto &elasticity_tensor = rotate ? rotated : value.tensor;
 
 			if (size() == 2)
 			{
@@ -219,19 +264,15 @@ namespace polyfem::assembler
 	{
 		const auto &local_pts = data.local_pts;
 		const auto el_id = data.el_id;
-		const auto t = data.t;
-		ElasticityTensor elasticity_tensor;
-		if (fiber_direction_.has_rotation())
+		const auto &value = material(el_id);
+		const bool rotate = value.frame.has_rotation();
+		ElasticityTensor rotated;
+		if (rotate)
 		{
-			const auto fdir_mtx_voigt = fiber_direction_.stiffness_rotation_voigt(local_pts.row(p), vals.val.row(p), data.t, el_id);
-
-			elasticity_tensor = elasticity_tensor_;
-			elasticity_tensor.rotate_stiffness(fdir_mtx_voigt);
+			rotated = value.tensor;
+			rotated.rotate_stiffness(value.frame.stiffness_rotation_voigt(local_pts.row(p), vals.val.row(p), data.t, el_id));
 		}
-		else
-		{
-			elasticity_tensor = elasticity_tensor_;
-		}
+		const auto &elasticity_tensor = rotate ? rotated : value.tensor;
 
 		MatrixNd strain = (displacement_grad + displacement_grad.transpose()) / 2;
 		MatrixNd sigma(size(), size());
@@ -274,18 +315,21 @@ namespace polyfem::assembler
 		Eigen::Matrix<double, Eigen::Dynamic, 1, 0, 3, 1> res;
 
 		// The generated divergence operator differentiates displacement only.
-		if (!fiber_direction_.has_uniform_rotation())
+		const auto &value = material(0);
+		if (!value.frame.has_uniform_rotation())
 			log_and_throw_error("HookeLinearElasticity manufactured RHS requires a constant fiber_direction rotation shared by all elements. "
 								"Supply an explicit RHS for spatially varying, time-dependent, or per-element rotations.");
+		if (materials_.size() > 1)
+			log_and_throw_error("HookeLinearElasticity manufactured RHS requires a shared material tensor. Supply an explicit RHS for multiple materials.");
 
-		const bool rotate = fiber_direction_.has_rotation();
+		const bool rotate = value.frame.has_rotation();
 		ElasticityTensor rotated;
 		if (rotate)
 		{
-			rotated = elasticity_tensor_;
-			rotated.rotate_stiffness(fiber_direction_.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0));
+			rotated = value.tensor;
+			rotated.rotate_stiffness(value.frame.stiffness_rotation_voigt(0, 0, 0, 0, 0, 0, 0, 0));
 		}
-		const auto &tensor = rotate ? rotated : elasticity_tensor_;
+		const auto &tensor = rotate ? rotated : value.tensor;
 		if (size() == 2)
 			autogen::hooke_2d_function(pt, tensor, res);
 		else if (size() == 3)
@@ -299,15 +343,14 @@ namespace polyfem::assembler
 	std::map<std::string, Assembler::ParamFunc> HookeLinearElasticity::parameters() const
 	{
 		std::map<std::string, ParamFunc> res;
-		const auto &elast_tensor = elasticity_tensor();
 		const int size = this->size() == 2 ? 3 : 6;
 
 		for (int i = 0; i < size; ++i)
 		{
 			for (int j = i; j < size; ++j)
 			{
-				res[fmt::format("C_{}{}", i, j)] = [&elast_tensor, i, j](const RowVectorNd &, const RowVectorNd &, double, int) {
-					return elast_tensor(i, j);
+				res[fmt::format("C_{}{}", i, j)] = [this, i, j](const RowVectorNd &, const RowVectorNd &, double, int element_id) {
+					return elasticity_tensor(element_id)(i, j);
 				};
 			}
 		}
@@ -367,7 +410,8 @@ namespace polyfem::assembler
 
 		T energy = T(0.0);
 
-		const bool rotate = fiber_direction_.has_rotation();
+		const auto &value = material(data.vals.element_id);
+		const bool rotate = value.frame.has_rotation();
 		const int n_pts = data.da.size();
 		for (long p = 0; p < n_pts; ++p)
 		{
@@ -376,11 +420,11 @@ namespace polyfem::assembler
 			ElasticityTensor rotated;
 			if (rotate)
 			{
-				rotated = elasticity_tensor_;
-				rotated.rotate_stiffness(fiber_direction_.stiffness_rotation_voigt(
+				rotated = value.tensor;
+				rotated.rotate_stiffness(value.frame.stiffness_rotation_voigt(
 					data.vals.quadrature.points.row(p), data.vals.val.row(p), data.t, data.vals.element_id));
 			}
-			const auto &tensor = rotate ? rotated : elasticity_tensor_;
+			const auto &tensor = rotate ? rotated : value.tensor;
 
 			AutoDiffGradMat strain = strain_from_disp_grad(disp_grad);
 			AutoDiffGradMat stress_tensor(size(), size());

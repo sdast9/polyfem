@@ -2,14 +2,7 @@
 
 import sys
 
-from test_simulation_oracles import (
-    A, B, hooke, isotropic, loaded_bodies, quasistatic_frames, restart, run_suite,
-)
-
-
-def mixed_materials(case, solver, reversed_geometry):
-    tets = [B, A] if reversed_geometry else [A, B]
-    loaded_bodies(case, solver, tets, [hooke(), isotropic(B)])
+from test_simulation_oracles import quasistatic_frames, restart, run_suite
 
 
 def rotating_frame(case, solver):
@@ -20,8 +13,6 @@ def rotating_frame(case, solver):
 
 if __name__ == "__main__":
     sys.exit(run_suite({
-        "mixed_hooke_first": lambda c, s: mixed_materials(c, s, False),
-        "mixed_hooke_last": lambda c, s: mixed_materials(c, s, True),
         "rotating_frame": rotating_frame,
         "consistent_restart_initial_inertia": lambda c, s: restart(c, s, False, check_saved_inertia=True),
         "lumped_restart_initial_inertia": lambda c, s: restart(c, s, True, check_saved_inertia=True),

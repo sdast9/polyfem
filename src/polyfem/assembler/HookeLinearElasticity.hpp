@@ -36,7 +36,7 @@ namespace polyfem::assembler
 		// sets the elasticty tensor
 		void add_multimaterial(const int index, const json &params, const Units &units, const io::ResourceIO &resources) override;
 
-		const ElasticityTensor &elasticity_tensor() const { return elasticity_tensor_; }
+		const ElasticityTensor &elasticity_tensor(int element_id = 0) const;
 
 		virtual bool is_linear() const override { return true; }
 		bool allow_inversion() const override { return true; }
@@ -47,8 +47,17 @@ namespace polyfem::assembler
 								   Eigen::Index point, const MatrixNd &displacement_gradient, OutputStress &stress) const override;
 
 	private:
-		ElasticityTensor elasticity_tensor_;
-		FiberDirection fiber_direction_;
+		struct Material
+		{
+			ElasticityTensor tensor;
+			FiberDirection frame;
+		};
+
+		const Material &material(int element_id) const;
+
+		std::vector<Material> materials_;
+		std::vector<std::size_t> element_materials_;
+		std::map<json, std::size_t> material_slots_;
 
 		// aux function that computes energy
 		// double compute_energy is the same with T=double
