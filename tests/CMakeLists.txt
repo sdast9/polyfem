@@ -48,6 +48,7 @@ set(test_sources
   test_output.cpp
   test_periodic_boundary.cpp
   test_problem.cpp
+  test_physics_oracles.cpp
   test_quadrature.cpp
   test_rbf.cpp
   test_tbb.cpp
